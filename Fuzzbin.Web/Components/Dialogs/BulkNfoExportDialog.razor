@@ -1,0 +1,216 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@using System.IO
+@inject INfoExportService NfoExportService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.body1" Class="mb-3">
+                    Export NFO files for @SelectedVideos.Count video(s)
+                </MudText>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudRadioGroup @bind-Value="exportLocation">
+                    <MudRadio Value="@ExportLocation.NextToVideo" Color="Color.Primary">
+                        Export NFO files next to video files
+                    </MudRadio>
+                    <MudRadio Value="@ExportLocation.CustomDirectory" Color="Color.Primary">
+                        Export to custom directory
+                    </MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+            
+            @if (exportLocation == ExportLocation.CustomDirectory)
+            {
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="customDirectory"
+                                Label="Export Directory"
+                                Variant="Variant.Outlined"
+                                HelperText="Directory where NFO files will be saved"
+                                Adornment="Adornment.End"
+                                AdornmentIcon="@Icons.Material.Filled.Folder" />
+                </MudItem>
+            }
+            
+            <MudItem xs="12">
+                <MudExpansionPanels Elevation="0">
+                    <MudExpansionPanel Text="NFO Preview" Icon="@Icons.Material.Filled.Preview">
+                        @if (SelectedVideos.Any())
+                        {
+                            <MudText Typo="Typo.caption" Class="mb-2">
+                                Preview for: @SelectedVideos.First().Title
+                            </MudText>
+                            <MudPaper Elevation="1" Class="pa-2">
+                                <pre style="font-size: 0.8rem; overflow-x: auto;">@previewContent</pre>
+                            </MudPaper>
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    <MudText Typo="Typo.caption">
+                        NFO files contain metadata that can be read by media center applications like Kodi, Plex, and Jellyfin.
+                    </MudText>
+                </MudAlert>
+            </MudItem>
+            
+            @if (isExporting)
+            {
+                <MudItem xs="12">
+                    <MudProgressLinear Value="@exportProgress" Max="@SelectedVideos.Count" Color="Color.Primary" Striped="true">
+                        <MudText Typo="Typo.caption">
+                            Exporting @exportProgress of @SelectedVideos.Count files...
+                        </MudText>
+                    </MudProgressLinear>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@isExporting">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled" 
+                   OnClick="Export"
+                   Disabled="@(isExporting || (exportLocation == ExportLocation.CustomDirectory && string.IsNullOrWhiteSpace(customDirectory)))"
+                   StartIcon="@(isExporting ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.Save)">
+            @if (isExporting)
+            {
+                <text>Exporting...</text>
+            }
+            else
+            {
+                <text>Export NFO Files</text>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public List<Video> SelectedVideos { get; set; } = new();
+    
+    private enum ExportLocation
+    {
+        NextToVideo,
+        CustomDirectory
+    }
+    
+    private ExportLocation exportLocation = ExportLocation.NextToVideo;
+    private string customDirectory = "";
+    private string previewContent = "";
+    private bool isExporting = false;
+    private int exportProgress = 0;
+    
+    protected override void OnInitialized()
+    {
+        // Generate preview content for the first video
+        if (SelectedVideos.Any())
+        {
+            previewContent = NfoExportService.GenerateNfoContent(SelectedVideos.First());
+        }
+        
+        // Set default export directory
+        customDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Fuzzbin", "NFO Export");
+    }
+    
+    private async Task Export()
+    {
+        if (!SelectedVideos.Any()) 
+        {
+            Cancel();
+            return;
+        }
+        
+        isExporting = true;
+        exportProgress = 0;
+        
+        try
+        {
+            int successCount = 0;
+            
+            if (exportLocation == ExportLocation.NextToVideo)
+            {
+                // Export NFO files next to video files
+                foreach (var video in SelectedVideos)
+                {
+                    if (!string.IsNullOrEmpty(video.FilePath))
+                    {
+                        var nfoPath = Path.ChangeExtension(video.FilePath, ".nfo");
+                        if (await NfoExportService.ExportNfoAsync(video, nfoPath))
+                        {
+                            successCount++;
+                        }
+                    }
+                    exportProgress++;
+                    StateHasChanged();
+                    await Task.Delay(10); // Small delay for UI update
+                }
+            }
+            else
+            {
+                // Export to custom directory
+                if (!Directory.Exists(customDirectory))
+                {
+                    Directory.CreateDirectory(customDirectory);
+                }
+                
+                foreach (var video in SelectedVideos)
+                {
+                    var filename = SanitizeFileName($"{video.Artist} - {video.Title}.nfo");
+                    var nfoPath = Path.Combine(customDirectory, filename);
+                    
+                    if (await NfoExportService.ExportNfoAsync(video, nfoPath))
+                    {
+                        successCount++;
+                    }
+                    
+                    exportProgress++;
+                    StateHasChanged();
+                    await Task.Delay(10); // Small delay for UI update
+                }
+            }
+            
+            Snackbar.Add($"Successfully exported {successCount} of {SelectedVideos.Count} NFO files", 
+                successCount == SelectedVideos.Count ? Severity.Success : Severity.Warning);
+            
+            MudDialog?.Close(DialogResult.Ok(successCount));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error during export: {ex.Message}", Severity.Error);
+            isExporting = false;
+        }
+    }
+    
+    private void Cancel()
+    {
+        MudDialog?.Cancel();
+    }
+    
+    private string SanitizeFileName(string filename)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new System.Text.StringBuilder(filename.Length);
+        
+        foreach (char c in filename)
+        {
+            if (Array.IndexOf(invalidChars, c) < 0)
+            {
+                sanitized.Append(c);
+            }
+            else
+            {
+                sanitized.Append('_');
+            }
+        }
+        
+        return sanitized.ToString();
+    }
+}

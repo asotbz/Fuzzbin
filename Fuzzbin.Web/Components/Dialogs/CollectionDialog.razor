@@ -1,0 +1,290 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@inject ICollectionService CollectionService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isFormValid">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="collectionModel.Name" 
+                                Label="Collection Name" 
+                                Required="true"
+                                RequiredError="Collection name is required"
+                                Variant="Variant.Outlined"
+                                Immediate="true" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="collectionModel.Description" 
+                                Label="Description" 
+                                Lines="3"
+                                Variant="Variant.Outlined" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="collectionModel.Type" 
+                             Label="Collection Type" 
+                             Variant="Variant.Outlined"
+                             Required="true"
+                             RequiredError="Collection type is required">
+                        <MudSelectItem Value="CollectionType.Manual">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.PlaylistAdd" Class="mr-2" Size="Size.Small" />
+                                Manual - Add videos manually
+                            </div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Smart">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" Size="Size.Small" />
+                                Smart - Auto-populate based on criteria
+                            </div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Playlist">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.QueueMusic" Class="mr-2" Size="Size.Small" />
+                                Playlist - Music video playlist
+                            </div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Series">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Tv" Class="mr-2" Size="Size.Small" />
+                                Series - TV show or web series
+                            </div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Album">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Album" Class="mr-2" Size="Size.Small" />
+                                Album - Music album videos
+                            </div>
+                        </MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                @if (collectionModel.Type == CollectionType.Smart)
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="collectionModel.SmartCriteria" 
+                                    Label="Smart Criteria" 
+                                    HelperText="Example: year:2023 artist:madonna rating:4"
+                                    Lines="2"
+                                    Variant="Variant.Outlined" />
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            <MudText Typo="Typo.caption">
+                                Smart collections automatically include videos matching your criteria.
+                                Supported filters: year:[yyyy], artist:[name], rating:[1-5], genre:[name], tag:[name]
+                            </MudText>
+                        </MudAlert>
+                    </MudItem>
+                }
+                
+                <MudItem xs="6">
+                    <MudSwitch @bind-Value="collectionModel.IsPublic" 
+                             Label="Public" 
+                             Color="Color.Info" />
+                </MudItem>
+                
+                <MudItem xs="6">
+                    <MudSwitch @bind-Value="collectionModel.IsFavorite" 
+                             Label="Favorite" 
+                             Color="Color.Warning" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudNumericField @bind-Value="collectionModel.SortOrder" 
+                                   Label="Sort Order" 
+                                   Min="0"
+                                   Max="999"
+                                   HelperText="Lower numbers appear first"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+                
+                @if (IsEditMode && Collection != null)
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Created: @Collection.CreatedAt.ToString("g")<br />
+                            Modified: @Collection.UpdatedAt.ToString("g")<br />
+                            Videos: @Collection.VideoCount<br />
+                            Duration: @FormatDuration(Collection.TotalDuration)
+                        </MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                 Disabled="@(!isFormValid || isProcessing)"
+                 OnClick="Save">
+            @if (isProcessing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Saving...</MudText>
+            }
+            else
+            {
+                @(IsEditMode ? "Update" : "Create")
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Collection? Collection { get; set; }
+    
+    private MudForm form = null!;
+    private bool isFormValid;
+    private bool isProcessing = false;
+    private CollectionModel collectionModel = new();
+    
+    private bool IsEditMode => Collection != null;
+    
+    protected override void OnInitialized()
+    {
+        if (Collection != null)
+        {
+            // Edit mode - populate from existing collection
+            collectionModel = new CollectionModel
+            {
+                Name = Collection.Name,
+                Description = Collection.Description,
+                Type = Collection.Type,
+                SmartCriteria = Collection.SmartCriteria,
+                IsPublic = Collection.IsPublic,
+                IsFavorite = Collection.IsFavorite,
+                SortOrder = Collection.SortOrder
+            };
+        }
+        else
+        {
+            // Create mode - set defaults
+            collectionModel = new CollectionModel
+            {
+                Type = CollectionType.Manual,
+                IsPublic = true,
+                IsFavorite = false,
+                SortOrder = 0
+            };
+        }
+    }
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private async Task Save()
+    {
+        if (!isFormValid) return;
+        
+        isProcessing = true;
+        
+        try
+        {
+            if (IsEditMode)
+            {
+                // Update existing collection
+                Collection!.Name = collectionModel.Name;
+                Collection.Description = collectionModel.Description;
+                Collection.Type = collectionModel.Type;
+                Collection.SmartCriteria = collectionModel.SmartCriteria;
+                Collection.IsPublic = collectionModel.IsPublic;
+                Collection.IsFavorite = collectionModel.IsFavorite;
+                Collection.SortOrder = collectionModel.SortOrder;
+                
+                var success = await CollectionService.UpdateCollectionAsync(Collection);
+                if (success)
+                {
+                    Snackbar.Add("Collection updated successfully", Severity.Success);
+                    
+                    // If it's a smart collection, refresh it with new criteria
+                    if (Collection.Type == CollectionType.Smart && !string.IsNullOrEmpty(Collection.SmartCriteria))
+                    {
+                        await CollectionService.RefreshSmartCollectionAsync(Collection.Id);
+                    }
+                    
+                    MudDialog.Close(DialogResult.Ok(Collection));
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update collection", Severity.Error);
+                }
+            }
+            else
+            {
+                // Create new collection
+                var newCollection = await CollectionService.CreateCollectionAsync(
+                    collectionModel.Name,
+                    collectionModel.Description,
+                    collectionModel.Type);
+                
+                if (newCollection != null)
+                {
+                    // Update additional properties
+                    newCollection.SmartCriteria = collectionModel.SmartCriteria;
+                    newCollection.IsPublic = collectionModel.IsPublic;
+                    newCollection.IsFavorite = collectionModel.IsFavorite;
+                    newCollection.SortOrder = collectionModel.SortOrder;
+                    
+                    await CollectionService.UpdateCollectionAsync(newCollection);
+                    
+                    // If it's a smart collection, populate it
+                    if (newCollection.Type == CollectionType.Smart && !string.IsNullOrEmpty(newCollection.SmartCriteria))
+                    {
+                        await CollectionService.RefreshSmartCollectionAsync(newCollection.Id);
+                    }
+                    
+                    Snackbar.Add("Collection created successfully", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(newCollection));
+                }
+                else
+                {
+                    Snackbar.Add("Failed to create collection", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+    
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalDays >= 1)
+        {
+            return $"{(int)duration.TotalDays}d {duration.Hours}h {duration.Minutes}m";
+        }
+        else if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        }
+        else
+        {
+            return $"{(int)duration.TotalMinutes}m";
+        }
+    }
+    
+    private class CollectionModel
+    {
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public CollectionType Type { get; set; }
+        public string? SmartCriteria { get; set; }
+        public bool IsPublic { get; set; }
+        public bool IsFavorite { get; set; }
+        public int SortOrder { get; set; }
+    }
+}

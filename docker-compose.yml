@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  fuzzbin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fuzzbin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./media:/app/media
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+    restart: unless-stopped
+    networks:
+      - fuzzbin-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+networks:
+  fuzzbin-network:
+    driver: bridge

@@ -1,0 +1,13 @@
+@page "/auth/access-denied"
+@attribute [AllowAnonymous]
+
+<PageTitle>Access Denied - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+    <MudAlert Severity="Severity.Error" Elevation="0">
+        You don't have permission to view this resource. If you believe this is a mistake, contact an administrator.
+    </MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/" Class="mt-4">
+        Return home
+    </MudButton>
+</MudContainer>

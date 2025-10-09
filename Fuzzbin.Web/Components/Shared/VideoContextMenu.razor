@@ -1,0 +1,368 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@using static Fuzzbin.Services.Interfaces.IPlaylistService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IPlaylistService PlaylistService
+@inject ICollectionService CollectionService
+@inject IJSRuntime JS
+@inject IVideoService VideoService
+
+<MudPopover @ref="_popover" 
+            Open="_isOpen" 
+            Fixed="false"
+            AnchorOrigin="Origin.TopLeft" 
+            TransformOrigin="Origin.TopLeft">
+    <MudPaper Class="pa-2" Elevation="8">
+        @if (Video != null)
+        {
+            <MudList T="string" Dense="true" Clickable="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.PlayArrow" OnClick="PlayNow">
+                    Play Now
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.SkipNext" OnClick="PlayNext">
+                    Play Next
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.PlaylistAdd" OnClick="AddToQueue">
+                    Add to Queue
+                </MudListItem>
+                <MudDivider />
+                
+                <MudListItem T="string" Icon="@Icons.Material.Filled.LibraryAdd" OnClick="ToggleCollectionsMenu">
+                    Add to Collection
+                    @if (_showCollectionsMenu)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowRight" />
+                    }
+                </MudListItem>
+                
+                @if (_showCollectionsMenu)
+                {
+                    <MudList T="string" Dense="true" Class="ml-4">
+                        @if (_collections.Any())
+                        {
+                            @foreach (var collection in _collections.Take(5))
+                            {
+                                <MudListItem T="string" OnClick="@(() => AddToCollection(collection))">
+                                    @collection.Name
+                                </MudListItem>
+                            }
+                            @if (_collections.Count > 5)
+                            {
+                                <MudDivider />
+                                <MudListItem T="string" OnClick="ShowMoreCollections">
+                                    More...
+                                </MudListItem>
+                            }
+                        }
+                        else
+                        {
+                            <MudListItem T="string" Disabled="true">
+                                No collections available
+                            </MudListItem>
+                        }
+                        <MudDivider />
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Add" OnClick="CreateNewCollection">
+                            Create New Collection
+                        </MudListItem>
+                    </MudList>
+                }
+                
+                <MudDivider />
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Info" OnClick="ShowDetails">
+                    View Details
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Edit" OnClick="EditVideo">
+                    Edit Metadata
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.ContentCopy" OnClick="CopyPath">
+                    Copy File Path
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.FileDownload" OnClick="ExportNfo">
+                    Export NFO
+                </MudListItem>
+                
+                <MudDivider />
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="DeleteVideo">
+                    <MudText Color="Color.Error">Delete</MudText>
+                </MudListItem>
+            </MudList>
+        }
+    </MudPaper>
+</MudPopover>
+
+@code {
+    [Parameter] public Video? Video { get; set; }
+    [Parameter] public Guid? SessionId { get; set; }
+    [Parameter] public EventCallback<Video> OnVideoDeleted { get; set; }
+    [Parameter] public EventCallback<Video> OnVideoUpdated { get; set; }
+    
+    private MudPopover? _popover;
+    private bool _isOpen = false;
+    private bool _showCollectionsMenu = false;
+    private List<Collection> _collections = new();
+    private PlaylistSession? _currentSession;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCollections();
+        if (SessionId.HasValue)
+        {
+            _currentSession = await PlaylistService.GetSessionAsync(SessionId.Value);
+        }
+    }
+    
+    public void Open(int x, int y)
+    {
+        _isOpen = true;
+        _showCollectionsMenu = false;
+        StateHasChanged();
+    }
+    
+    public void Close()
+    {
+        _isOpen = false;
+        _showCollectionsMenu = false;
+        StateHasChanged();
+    }
+    
+    private void ToggleCollectionsMenu()
+    {
+        _showCollectionsMenu = !_showCollectionsMenu;
+        StateHasChanged();
+    }
+    
+    private async Task LoadCollections()
+    {
+        _collections = (await CollectionService.GetAllCollectionsAsync())
+            .OrderBy(c => c.Name)
+            .ToList();
+    }
+    
+    private async Task PlayNow()
+    {
+        if (Video == null) return;
+        
+        var session = await PlaylistService.CreateFromVideosAsync(new List<Guid> { Video.Id });
+        Navigation.NavigateTo($"/player?session={session.SessionId}");
+        Close();
+    }
+    
+    private async Task PlayNext()
+    {
+        if (Video == null) return;
+        
+        if (_currentSession == null)
+        {
+            _currentSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { Video.Id });
+            Snackbar.Add($"Started new playlist with '{Video.Title}'", Severity.Success);
+            Navigation.NavigateTo($"/player?session={_currentSession.SessionId}");
+        }
+        else
+        {
+            var currentIndex = _currentSession.CurrentIndex;
+            _currentSession.Videos.Insert(currentIndex + 1, Video);
+            await PlaylistService.UpdateSessionAsync(_currentSession);
+            Snackbar.Add($"'{Video.Title}' will play next", Severity.Success);
+        }
+        Close();
+    }
+    
+    private async Task AddToQueue()
+    {
+        if (Video == null) return;
+        
+        if (_currentSession == null)
+        {
+            _currentSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { Video.Id });
+            Snackbar.Add($"Started new playlist with '{Video.Title}'", Severity.Success);
+        }
+        else
+        {
+            await PlaylistService.AddVideosAsync(_currentSession, new List<Guid> { Video.Id });
+            Snackbar.Add($"'{Video.Title}' added to queue", Severity.Success);
+        }
+        Close();
+    }
+    
+    private async Task AddToCollection(Collection collection)
+    {
+        if (Video == null) return;
+        
+        try
+        {
+            await CollectionService.AddVideoToCollectionAsync(collection.Id, Video.Id);
+            Snackbar.Add($"Added '{Video.Title}' to '{collection.Name}'", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to add to collection: {ex.Message}", Severity.Error);
+        }
+        Close();
+    }
+    
+    private async Task ShowMoreCollections()
+    {
+        if (Video == null) return;
+        
+        var parameters = new DialogParameters
+        {
+            { "VideoIds", new List<Guid> { Video.Id } },
+            { "Collections", _collections }
+        };
+        
+        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.CollectionDialog>(
+            "Add to Collection", 
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small });
+        
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            Close();
+        }
+    }
+    
+    private async Task CreateNewCollection()
+    {
+        if (Video == null) return;
+        
+        var parameters = new DialogParameters
+        {
+            { "VideoIds", new List<Guid> { Video.Id } }
+        };
+        
+        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.CollectionDialog>(
+            "Create Collection", 
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small });
+        
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            await LoadCollections();
+            Close();
+        }
+    }
+    
+    private void ShowDetails()
+    {
+        if (Video == null) return;
+        
+        Navigation.NavigateTo($"/videos/{Video.Id}");
+        Close();
+    }
+    
+    private async Task EditVideo()
+    {
+        if (Video == null) return;
+
+        var parameters = new DialogParameters
+        {
+            { nameof(Fuzzbin.Web.Components.Dialogs.VideoEditorDialog.Video), Video }
+        };
+
+        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.VideoEditorDialog>(
+            "Edit Video",
+            parameters,
+            new DialogOptions
+            {
+                FullWidth = true,
+                MaxWidth = MaxWidth.Small
+            });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Video updated })
+        {
+            await OnVideoUpdated.InvokeAsync(updated);
+        }
+
+        Close();
+    }
+    
+    private async Task CopyPath()
+    {
+        if (Video == null || string.IsNullOrEmpty(Video.FilePath)) return;
+        
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Video.FilePath);
+            Snackbar.Add("File path copied to clipboard", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Failed to copy file path", Severity.Error);
+        }
+        Close();
+    }
+    
+    private async Task ExportNfo()
+    {
+        if (Video == null) return;
+        
+        var parameters = new DialogParameters
+        {
+            { "SelectedVideos", new List<Video> { Video } }
+        };
+        
+        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.BulkNfoExportDialog>(
+            "Export NFO", 
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        
+        await dialog.Result;
+        Close();
+    }
+    
+    private async Task DeleteVideo()
+    {
+        if (Video == null) return;
+        
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete '{Video.Title}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+        
+        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.ConfirmDialog>(
+            "Delete Video", 
+            parameters);
+        
+        var result = await dialog.Result;
+        
+        var video = Video;
+        if (video == null)
+        {
+            Close();
+            return;
+        }
+
+        if (result is { Canceled: false })
+        {
+            try
+            {
+                await VideoService.DeleteVideoAsync(video.Id);
+
+                if (!string.IsNullOrEmpty(video.FilePath) && File.Exists(video.FilePath))
+                {
+                    File.Delete(video.FilePath);
+                }
+                
+                Snackbar.Add($"'{video.Title}' has been deleted", Severity.Success);
+                await OnVideoDeleted.InvokeAsync(video);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting video: {ex.Message}", Severity.Error);
+            }
+        }
+        Close();
+    }
+}

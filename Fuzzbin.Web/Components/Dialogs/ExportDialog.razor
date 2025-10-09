@@ -1,0 +1,175 @@
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@inject ICollectionService CollectionService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.body1" Class="mb-3">
+                    Export collection <strong>@CollectionName</strong> to:
+                </MudText>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudRadioGroup @bind-Value="exportFormat">
+                    <MudRadio Value="@("m3u")" Color="Color.Primary">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body1">M3U Playlist</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Standard playlist format compatible with most media players
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                    <MudRadio Value="@("json")" Color="Color.Primary">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body1">JSON</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Complete collection data including metadata
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                    <MudRadio Value="@("csv")" Color="Color.Primary">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body1">CSV</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Spreadsheet-compatible format for data analysis
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudTextField @bind-Value="exportPath" 
+                            Label="Export Path" 
+                            Variant="Variant.Outlined"
+                            HelperText="Relative to the export directory"
+                            Required="true"
+                            RequiredError="Export path is required" />
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="includeMetadata" 
+                         Label="Include metadata" 
+                         Color="Color.Info"
+                         Disabled="@(exportFormat == "csv")" />
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="useAbsolutePaths" 
+                         Label="Use absolute file paths" 
+                         Color="Color.Info"
+                         Disabled="@(exportFormat != "m3u")" />
+            </MudItem>
+            
+            @if (exportFormat == "json")
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        <MudText Typo="Typo.caption">
+                            JSON export includes all collection metadata and can be used for backup or migration.
+                        </MudText>
+                    </MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                 Disabled="@(isExporting || string.IsNullOrWhiteSpace(exportPath))"
+                 OnClick="Export">
+            @if (isExporting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Exporting...</MudText>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Download" Class="mr-2" />
+                @("Export")
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid CollectionId { get; set; }
+    [Parameter] public string CollectionName { get; set; } = "";
+    
+    private string exportFormat = "m3u";
+    private string exportPath = "";
+    private bool includeMetadata = true;
+    private bool useAbsolutePaths = false;
+    private bool isExporting = false;
+    
+    protected override void OnInitialized()
+    {
+        // Set default export path based on collection name
+        var safeName = string.Join("_", CollectionName.Split(Path.GetInvalidFileNameChars()));
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        exportPath = $"{safeName}_{timestamp}";
+    }
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private async Task Export()
+    {
+        if (string.IsNullOrWhiteSpace(exportPath)) return;
+        
+        isExporting = true;
+        
+        try
+        {
+            // Add appropriate file extension if not present
+            var fullPath = exportPath;
+            var expectedExtension = exportFormat switch
+            {
+                "m3u" => ".m3u",
+                "json" => ".json",
+                "csv" => ".csv",
+                _ => ""
+            };
+            
+            if (!fullPath.EndsWith(expectedExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                fullPath += expectedExtension;
+            }
+            
+            // Ensure export directory exists
+            var exportDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "exports");
+            if (!Directory.Exists(exportDirectory))
+            {
+                Directory.CreateDirectory(exportDirectory);
+            }
+            
+            var finalPath = Path.Combine(exportDirectory, fullPath);
+            
+            var success = await CollectionService.ExportCollectionAsync(CollectionId, finalPath, exportFormat);
+            
+            if (success)
+            {
+                Snackbar.Add($"Collection exported successfully to {fullPath}", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(finalPath));
+            }
+            else
+            {
+                Snackbar.Add("Failed to export collection", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting collection: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+}

@@ -1,0 +1,650 @@
+@page "/setup"
+@attribute [AllowAnonymous]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Logging
+@using MudBlazor
+@using System.ComponentModel.DataAnnotations
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject ILogger<Setup> Logger
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole<Guid>> RoleManager
+
+<PageTitle>Initial Setup - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+    <MudCard>
+        <MudCardContent>
+            <MudText Typo="Typo.h4" Class="mb-4">Welcome to Fuzzbin</MudText>
+            <MudText Typo="Typo.body1" Class="mb-6">
+                Let's configure your video library settings to get started.
+            </MudText>
+
+            <!-- Progress Indicator -->
+            <MudProgressLinear Value="@(_currentStep * (100.0 / _totalSteps))" Class="mb-4" Color="Color.Primary" />
+            
+            <!-- Step Indicator -->
+            <MudText Typo="Typo.h6" Class="mb-4">
+                Step @_currentStep of @_totalSteps: @GetStepTitle()
+            </MudText>
+
+            <!-- Step 1: Library Settings -->
+            @if (_currentStep == 1)
+            {
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_libraryPath" 
+                                    Label="Library Path" 
+                                    HelperText="Where your video files will be stored"
+                                    Variant="Variant.Outlined"
+                                    Adornment="Adornment.End"
+                                    AdornmentIcon="@Icons.Material.Filled.Folder"
+                                    FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_downloadsPath" 
+                                    Label="Downloads Path" 
+                                    HelperText="Temporary location for downloads"
+                                    Variant="Variant.Outlined"
+                                    Adornment="Adornment.End"
+                                    AdornmentIcon="@Icons.Material.Filled.Download"
+                                    FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_namingPattern" 
+                                    Label="File Naming Pattern" 
+                                    HelperText="How files should be organized (e.g., {artist}/{year} - {title}.{format})"
+                                    Variant="Variant.Outlined"
+                                    Lines="2"
+                                    FullWidth="true" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <!-- Step 2: Download Settings -->
+            @if (_currentStep == 2)
+            {
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudSelect @bind-Value="_defaultVideoFormat" 
+                                 Label="Preferred Video Format"
+                                 Variant="Variant.Outlined"
+                                 HelperText="Default format for video downloads">
+                            <MudSelectItem Value="@("mp4")">MP4 (Universal compatibility)</MudSelectItem>
+                            <MudSelectItem Value="@("webm")">WebM (Better compression)</MudSelectItem>
+                            <MudSelectItem Value="@("mkv")">MKV (Best quality)</MudSelectItem>
+                            <MudSelectItem Value="@("best")">Best Available</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudSelect @bind-Value="_defaultVideoQuality" 
+                                 Label="Preferred Video Quality"
+                                 Variant="Variant.Outlined"
+                                 HelperText="Maximum video quality to download">
+                            <MudSelectItem Value="@("2160p")">4K (2160p)</MudSelectItem>
+                            <MudSelectItem Value="@("1440p")">2K (1440p)</MudSelectItem>
+                            <MudSelectItem Value="@("1080p")">Full HD (1080p)</MudSelectItem>
+                            <MudSelectItem Value="@("720p")">HD (720p)</MudSelectItem>
+                            <MudSelectItem Value="@("480p")">SD (480p)</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="_maxConcurrentDownloads" 
+                                       Label="Max Concurrent Downloads" 
+                                       Min="1" Max="10"
+                                       Variant="Variant.Outlined"
+                                       HelperText="Number of simultaneous downloads" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="_downloadRetries" 
+                                       Label="Download Retries" 
+                                       Min="0" Max="10"
+                                       Variant="Variant.Outlined"
+                                       HelperText="Retry attempts for failed downloads" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox @bind-Value="_extractMetadata" 
+                                   Label="Extract metadata from downloads" 
+                                   Color="Color.Primary" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox @bind-Value="_generateNfo" 
+                                   Label="Generate NFO files for media center compatibility" 
+                                   Color="Color.Primary" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <!-- Step 3: API Settings -->
+            @if (_currentStep == 3)
+            {
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Class="mb-4">
+                            These settings are optional. You can configure them later if needed.
+                        </MudAlert>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_imvdbApiKey" 
+                                    Label="IMVDb API Key" 
+                                    HelperText="For fetching music video metadata"
+                                    Variant="Variant.Outlined"
+                                    InputType="InputType.Password"
+                                    Adornment="Adornment.End"
+                                    AdornmentIcon="@Icons.Material.Filled.Key"
+                                    FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_musicBrainzUserAgent" 
+                                    Label="MusicBrainz User Agent" 
+                                    HelperText="Your app identifier for MusicBrainz API"
+                                    Variant="Variant.Outlined"
+                                    FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox @bind-Value="_enableOnlineMetadata" 
+                                   Label="Enable online metadata fetching" 
+                                   Color="Color.Primary" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <!-- Step 4: Administrator Account -->
+            @if (_currentStep == 4)
+            {
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Create administrator account</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-4">
+                            This account will have full access to system settings. Fuzzbin supports a single user account.
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_adminUsername"
+                                      Label="Username"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_adminDisplayName"
+                                      Label="Display name"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_adminPassword"
+                                      Label="Password"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Password"
+                                      Required="true"
+                                      FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_adminPasswordConfirm"
+                                      Label="Confirm password"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Password"
+                                      Required="true"
+                                      Error="@_passwordMismatch"
+                                      ErrorText="Passwords do not match"
+                                      FullWidth="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Elevation="0">
+                            Your password must be at least 8 characters long. Consider using a passphrase for better security.
+                        </MudAlert>
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <!-- Step 4: Review Settings -->
+            @if (_currentStep == 5)
+            {
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-4">Review Your Settings</MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudSimpleTable Hover="true" Bordered="true" Dense="true">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Library Path</strong></td>
+                                    <td>@_libraryPath</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Downloads Path</strong></td>
+                                    <td>@_downloadsPath</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Naming Pattern</strong></td>
+                                    <td>@_namingPattern</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Video Format</strong></td>
+                                    <td>@_defaultVideoFormat</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Video Quality</strong></td>
+                                    <td>@_defaultVideoQuality</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Concurrent Downloads</strong></td>
+                                    <td>@_maxConcurrentDownloads</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Extract Metadata</strong></td>
+                                    <td>@(_extractMetadata ? "Yes" : "No")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Generate NFO Files</strong></td>
+                                    <td>@(_generateNfo ? "Yes" : "No")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Admin Username</strong></td>
+                                    <td>@_adminUsername</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Admin Display Name</strong></td>
+                                    <td>@_adminDisplayName</td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <!-- Navigation Buttons -->
+            <MudGrid Class="mt-4">
+                <MudItem xs="6">
+                    @if (_currentStep > 1)
+                    {
+                        <MudButton Variant="Variant.Text" ButtonType="ButtonType.Button" OnClick="@PreviousStep">
+                            Previous
+                        </MudButton>
+                    }
+                </MudItem>
+                <MudItem xs="6" Class="d-flex justify-end">
+                    @if (_currentStep < _totalSteps)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" ButtonType="ButtonType.Button" OnClick="@NextStep">
+                            Next
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" 
+                                 Color="Color.Success" 
+                                 StartIcon="@Icons.Material.Filled.Save"
+                                 OnClick="CompleteSetup"
+                                 Disabled="@_isSaving">
+                            @if (_isSaving)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>Complete Setup</span>
+                            }
+                        </MudButton>
+                    }
+                </MudItem>
+            </MudGrid>
+
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private bool _isSaving = false;
+    private int _currentStep = 1;
+    private const int _totalSteps = 5;
+    
+    // Library Settings
+    private string _libraryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Fuzzbin", "Library");
+    private string _downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Fuzzbin", "Downloads");
+    private string _namingPattern = "{artist}/{year} - {title}.{format}";
+    
+    // Download Settings
+    private string _defaultVideoFormat = "mp4";
+    private string _defaultVideoQuality = "1080p";
+    private int _maxConcurrentDownloads = 2;
+    private int _downloadRetries = 3;
+    private bool _extractMetadata = true;
+    private bool _generateNfo = true;
+    
+    // API Settings
+    private string? _imvdbApiKey;
+    private string _musicBrainzUserAgent = "Fuzzbin/1.0";
+    private bool _enableOnlineMetadata = true;
+
+    // Administrator account
+    private string _adminUsername = "admin";
+    private string _adminDisplayName = "Administrator";
+    private string _adminPassword = string.Empty;
+    private string _adminPasswordConfirm = string.Empty;
+
+    private bool _passwordMismatch => !string.IsNullOrEmpty(_adminPassword) && !string.Equals(_adminPassword, _adminPasswordConfirm, StringComparison.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("Setup component initialized at step {Step}", _currentStep);
+
+        // Check if setup has already been completed
+        var setupComplete = await UnitOfWork.Configurations
+            .FirstOrDefaultAsync(c => c.Key == "SetupComplete" && c.Category == "System");
+        
+        if (setupComplete?.Value == "true")
+        {
+            Logger.LogInformation("Setup already completed; redirecting to home.");
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task CompleteSetup()
+    {
+        _isSaving = true;
+        
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_adminUsername) ||
+                string.IsNullOrWhiteSpace(_adminDisplayName) ||
+                string.IsNullOrWhiteSpace(_adminPassword))
+            {
+                Snackbar.Add("Please complete the administrator account details.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            _adminUsername = _adminUsername.Trim();
+            _adminDisplayName = _adminDisplayName.Trim();
+
+            if (_passwordMismatch)
+            {
+                Snackbar.Add("Administrator passwords do not match.", Severity.Error);
+                _isSaving = false;
+                return;
+            }
+
+            if (_adminPassword.Length < 8)
+            {
+                Snackbar.Add("Administrator password must be at least 8 characters.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            await UpsertConfigurationAsync("LibraryPath", "Storage", _libraryPath, "Main library path for organized videos");
+            await UpsertConfigurationAsync("DownloadsPath", "Storage", _downloadsPath, "Temporary path for downloads");
+            await UpsertConfigurationAsync("NamingPattern", "Organization", _namingPattern, "File naming pattern for organized videos");
+
+            await UpsertConfigurationAsync("DefaultVideoFormat", "Download", _defaultVideoFormat, "Preferred video format for downloads");
+            await UpsertConfigurationAsync("DefaultVideoQuality", "Download", _defaultVideoQuality, "Maximum video quality for downloads");
+            await UpsertConfigurationAsync("MaxConcurrentDownloads", "Download", _maxConcurrentDownloads.ToString(), "Maximum number of concurrent downloads");
+            await UpsertConfigurationAsync("DownloadRetries", "Download", _downloadRetries.ToString(), "Number of retry attempts for failed downloads");
+            await UpsertConfigurationAsync("ExtractMetadata", "Download", _extractMetadata.ToString(), "Extract metadata from downloaded files");
+            await UpsertConfigurationAsync("GenerateNfo", "Metadata", _generateNfo.ToString(), "Generate NFO files for media center compatibility");
+
+            await UpsertConfigurationAsync("EnableOnlineMetadata", "Metadata", _enableOnlineMetadata.ToString(), "Enable fetching metadata from online sources");
+            await UpsertConfigurationAsync("MusicBrainzUserAgent", "API", _musicBrainzUserAgent, "User agent for MusicBrainz API requests");
+
+            await UpsertConfigurationAsync("IsFirstRun", "System", "false", "Indicates if this is the first run", isSystem: true);
+            await UpsertConfigurationAsync("SetupComplete", "System", "true", "Indicates whether initial setup has been completed", isSystem: true);
+
+            if (!string.IsNullOrWhiteSpace(_imvdbApiKey))
+            {
+                await UpsertConfigurationAsync("ImvdbApiKey", "API", _imvdbApiKey, "API key for IMVDb service", isEncrypted: true);
+            }
+
+            await UnitOfWork.SaveChangesAsync();
+            Logger.LogInformation("Setup configuration values saved for library path {LibraryPath} and downloads path {DownloadsPath}.", _libraryPath, _downloadsPath);
+            
+            // Create directories
+            Directory.CreateDirectory(_libraryPath);
+            Directory.CreateDirectory(_downloadsPath);
+
+            var adminUser = await EnsureAdministratorAccountAsync();
+            if (adminUser is null)
+            {
+                _isSaving = false;
+                return;
+            }
+
+            var signInToken = Guid.NewGuid().ToString("N");
+            await UpsertConfigurationAsync("SetupSignInToken", "System", $"{signInToken}|{adminUser.Id}", "Temporary sign-in token for initial administrator bootstrap", isSystem: true);
+            await UnitOfWork.SaveChangesAsync();
+
+            Logger.LogInformation("Generated setup sign-in token for administrator {AdminUsername}", adminUser.UserName);
+            Snackbar.Add("Setup completed successfully!", Severity.Success);
+            _isSaving = false;
+            await InvokeAsync(() => Navigation.NavigateTo($"/auth/setup-complete?token={signInToken}", forceLoad: true));
+            return;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving configuration: {ex.Message}", Severity.Error);
+            Logger.LogError(ex, "Setup wizard failed while finalizing configuration");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void NextStep(MouseEventArgs _)
+    {
+        Logger.LogInformation("NextStep invoked while on step {Step}", _currentStep);
+
+        if (_currentStep < _totalSteps)
+        {
+            _currentStep++;
+            Logger.LogInformation("Advanced to step {Step}", _currentStep);
+        }
+        else
+        {
+            Logger.LogInformation("NextStep ignored because current step is at maximum ({Step})", _currentStep);
+        }
+    }
+
+    private void PreviousStep(MouseEventArgs _)
+    {
+        Logger.LogInformation("PreviousStep invoked while on step {Step}", _currentStep);
+
+        if (_currentStep > 1)
+        {
+            _currentStep--;
+            Logger.LogInformation("Returned to step {Step}", _currentStep);
+        }
+        else
+        {
+            Logger.LogInformation("PreviousStep ignored because current step is at minimum ({Step})", _currentStep);
+        }
+    }
+
+    private string GetStepTitle()
+    {
+        return _currentStep switch
+        {
+            1 => "Library Settings",
+            2 => "Download Settings",
+            3 => "API Settings (Optional)",
+            4 => "Administrator Account",
+            5 => "Review & Complete",
+            _ => ""
+        };
+    }
+
+    private async Task UpsertConfigurationAsync(string key, string category, string value, string? description = null, bool isEncrypted = false, bool isSystem = false)
+    {
+        var existing = await UnitOfWork.Configurations.FirstOrDefaultAsync(c => c.Key == key && c.Category == category);
+
+        if (existing is null)
+        {
+            var configuration = new Configuration
+            {
+                Key = key,
+                Category = category,
+                Value = value,
+                Description = description,
+                IsEncrypted = isEncrypted,
+                IsSystem = isSystem,
+                IsActive = true
+            };
+
+            await UnitOfWork.Configurations.AddAsync(configuration);
+        }
+        else
+        {
+            existing.Value = value;
+            existing.Description = description;
+            existing.IsEncrypted = isEncrypted;
+            existing.IsSystem = isSystem;
+            existing.IsActive = true;
+
+            await UnitOfWork.Configurations.UpdateAsync(existing);
+        }
+    }
+
+    private async Task<ApplicationUser?> EnsureAdministratorAccountAsync()
+    {
+        const string adminRoleName = "Admin";
+
+        // Enforce single-user mode: prevent creating additional users
+        var existingUserCount = await UserManager.Users.CountAsync();
+        if (existingUserCount > 0)
+        {
+            var existingUser = await UserManager.Users.FirstOrDefaultAsync();
+            if (existingUser != null)
+            {
+                Logger.LogWarning("Single-user mode: User already exists. Setup attempted to create additional user.");
+                Snackbar.Add($"A user account already exists (Username: {existingUser.UserName}). Fuzzbin is configured for single-user mode.", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add("A user account already exists. Fuzzbin is configured for single-user mode.", Severity.Warning);
+            }
+            return null;
+        }
+
+        if (!await RoleManager.RoleExistsAsync(adminRoleName))
+        {
+            var roleResult = await RoleManager.CreateAsync(new IdentityRole<Guid>(adminRoleName));
+            if (!roleResult.Succeeded)
+            {
+                foreach (var error in roleResult.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+                return null;
+            }
+            Logger.LogInformation("Created administrator role {RoleName}", adminRoleName);
+        }
+
+        var adminUsername = _adminUsername.Trim();
+        var adminDisplayName = _adminDisplayName.Trim();
+
+        var adminUser = await UserManager.FindByNameAsync(adminUsername);
+        if (adminUser is null)
+        {
+            adminUser = new ApplicationUser
+            {
+                UserName = adminUsername,
+                Email = $"{adminUsername}@localhost",
+                DisplayName = adminDisplayName,
+                EmailConfirmed = true,
+                IsActive = true,
+                LockoutEnabled = false,
+                LastLoginAt = DateTime.UtcNow
+            };
+
+            var createResult = await UserManager.CreateAsync(adminUser, _adminPassword);
+            if (!createResult.Succeeded)
+            {
+                foreach (var error in createResult.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+                return null;
+            }
+            Logger.LogInformation("Created administrator account {AdminUsername}", adminUsername);
+        }
+        else
+        {
+            adminUser.DisplayName = adminDisplayName;
+            adminUser.EmailConfirmed = true;
+            adminUser.IsActive = true;
+            adminUser.LockoutEnabled = false;
+            adminUser.LockoutEnd = null;
+            adminUser.LastLoginAt = DateTime.UtcNow;
+
+            var updateResult = await UserManager.UpdateAsync(adminUser);
+            if (!updateResult.Succeeded)
+            {
+                foreach (var error in updateResult.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+                return null;
+            }
+
+            var resetResult = await SetPasswordAsync(adminUser, _adminPassword);
+            if (!resetResult.Succeeded)
+            {
+                foreach (var error in resetResult.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+                return null;
+            }
+            Logger.LogInformation("Updated administrator account {AdminUsername}", adminUsername);
+        }
+
+        await UserManager.SetLockoutEnabledAsync(adminUser, false);
+        await UserManager.SetLockoutEndDateAsync(adminUser, null);
+        await UserManager.ResetAccessFailedCountAsync(adminUser);
+        Logger.LogInformation("Cleared lockout state for administrator {AdminUsername}", adminUsername);
+
+        var finalUpdate = await UserManager.UpdateAsync(adminUser);
+        if (!finalUpdate.Succeeded)
+        {
+            foreach (var error in finalUpdate.Errors)
+            {
+                Snackbar.Add(error.Description, Severity.Error);
+            }
+            return null;
+        }
+
+        if (!await UserManager.IsInRoleAsync(adminUser, adminRoleName))
+        {
+            var roleResult = await UserManager.AddToRoleAsync(adminUser, adminRoleName);
+            if (!roleResult.Succeeded)
+            {
+                foreach (var error in roleResult.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+                return null;
+            }
+            Logger.LogInformation("Assigned administrator role {RoleName} to {AdminUsername}", adminRoleName, adminUsername);
+        }
+
+        return adminUser;
+    }
+
+    private async Task<IdentityResult> SetPasswordAsync(ApplicationUser user, string password)
+    {
+        if (await UserManager.HasPasswordAsync(user))
+        {
+            var resetToken = await UserManager.GeneratePasswordResetTokenAsync(user);
+            return await UserManager.ResetPasswordAsync(user, resetToken, password);
+        }
+
+        return await UserManager.AddPasswordAsync(user, password);
+    }
+}

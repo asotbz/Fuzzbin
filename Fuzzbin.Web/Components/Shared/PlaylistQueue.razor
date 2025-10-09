@@ -1,0 +1,481 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Web.Components.Shared
+@using Fuzzbin.Web.Services
+@using static Fuzzbin.Services.Interfaces.IPlaylistService
+@inject IPlaylistService PlaylistService
+@inject IThumbnailService ThumbnailService
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<MudPaper Class="pa-4 fz-animate-fade-in" Style="height: 100%; overflow: hidden;">
+    <MudGrid>
+        <MudItem xs="12" Class="d-flex align-center justify-space-between">
+            <MudText Typo="Typo.h6">
+                @if (_session != null)
+                {
+                    <text>Now Playing (@(_session.Videos.Count) videos)</text>
+                }
+                else
+                {
+                    <text>Playlist Queue</text>
+                }
+            </MudText>
+            <div>
+                <MudTooltip Text="@(_session?.IsShuffled == true ? "Shuffle On" : "Shuffle Off")">
+                    <MudIconButton Icon="@Icons.Material.Filled.Shuffle" 
+                                   Color="@(_session?.IsShuffled == true ? Color.Primary : Color.Default)"
+                                   OnClick="ToggleShuffle" 
+                                   Disabled="@(_session == null)" />
+                </MudTooltip>
+                <MudTooltip Text="@GetRepeatTooltip()">
+                    <MudIconButton Icon="@GetRepeatIcon()" 
+                                   Color="@GetRepeatColor()"
+                                   OnClick="CycleRepeatMode" 
+                                   Disabled="@(_session == null)" />
+                </MudTooltip>
+                <MudTooltip Text="Clear Queue">
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear" 
+                                   OnClick="ClearQueue" 
+                                   Disabled="@(_session == null)" />
+                </MudTooltip>
+            </div>
+        </MudItem>
+    </MudGrid>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1 mb-3">
+        Keyboard tips: Space toggles play/pause, Alt+Q jumps here, and drag the handle to resequence tracks live.
+    </MudText>
+
+    <LoadingContent Profile="LoadingProfile.QueueList"
+                    IsLoading="@_isLoading"
+                    LoadingMessage="Preparing queue...">
+        @if (_session != null && _session.Videos.Any())
+        {
+            <MudText Typo="Typo.body2" Class="mt-2 mb-2">
+                Total Duration: @FormatDuration(_totalDuration) | 
+                Remaining: @FormatDuration(_remainingDuration)
+            </MudText>
+
+            <div @ref="_playlistContainer" class="playlist-container" id="playlist-sortable" style="height: calc(100% - 140px); overflow-y: auto;">
+                <MudList T="string" Clickable="true" Dense="true">
+                    @for (int i = 0; i < GetOrderedVideos().Count; i++)
+                    {
+                        var index = i;
+                        var video = GetOrderedVideos()[index];
+                        var isCurrentVideo = IsCurrentVideo(index);
+
+                        <MudListItem T="string"
+                                     @key="@($"item-{video.Id}-{index}")"
+                                     Class="@(isCurrentVideo ? "current-video playlist-item fz-animate-slide-up" : "playlist-item fz-animate-slide-up")"
+                                     data-index="@index"
+                                     OnClick="@(() => PlayVideoAtIndex(index))">
+                            <div class="d-flex align-center" style="width: 100%;">
+                                <MudTooltip Text="Drag to reorder">
+                                    <MudIcon Icon="@Icons.Material.Filled.DragHandle"
+                                             Class="drag-handle mr-2"
+                                             Style="cursor: move;"
+                                             Color="Color.Secondary" />
+                                </MudTooltip>
+                                <MudAvatar Class="mr-3" Size="Size.Small" Square="true">
+                                    <MudImage Src="@ThumbnailService.GetThumbnailUrl(video)"
+                                              Alt="@video.Title"
+                                              ObjectFit="ObjectFit.Cover" />
+                                </MudAvatar>
+
+                                <div style="flex: 1; min-width: 0;">
+                                    <MudText Typo="Typo.body2" Style="@(isCurrentVideo ? "font-weight: bold;" : "")">
+                                        @video.Title
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @video.Artist @(video.Duration.HasValue ? $"• {FormatDuration(TimeSpan.FromSeconds(video.Duration.Value))}" : "")
+                                    </MudText>
+                                </div>
+
+                                <div class="ml-2">
+                                    @if (isCurrentVideo && _session.IsPlaying)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Size="Size.Small" />
+                                    }
+                                    <MudTooltip Text="Remove from queue">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       OnClick="@(async (e) => await RemoveFromQueueWithStop(index, e))" />
+                                    </MudTooltip>
+                                </div>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </div>
+        }
+        else
+        {
+            <MudStack AlignItems="AlignItems.Center" Spacing="1" Class="mt-6 fz-animate-fade-in">
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    No videos in queue
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Add videos from your library to start playing
+                </MudText>
+            </MudStack>
+        }
+    </LoadingContent>
+</MudPaper>
+
+<style>
+    .playlist-container {
+        scrollbar-width: thin;
+        scrollbar-color: var(--mud-palette-primary) transparent;
+    }
+    
+    .playlist-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .playlist-container::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    .playlist-container::-webkit-scrollbar-thumb {
+        background-color: var(--mud-palette-primary);
+        border-radius: 4px;
+    }
+    
+    .current-video {
+        background-color: var(--mud-palette-action-default-hover);
+        border-left: 3px solid var(--mud-palette-primary);
+    }
+    
+    .mud-list-item:hover {
+        background-color: var(--mud-palette-action-default-hover);
+    }
+    
+    .sortable-ghost {
+        opacity: 0.4;
+        background-color: var(--mud-palette-primary-lighten);
+    }
+    
+    .sortable-chosen {
+        background-color: var(--mud-palette-action-selected);
+    }
+    
+    .sortable-drag {
+        opacity: 1 !important;
+    }
+    
+    .drag-handle {
+        opacity: 0.5;
+        transition: opacity 0.2s;
+    }
+    
+    .playlist-item:hover .drag-handle {
+        opacity: 1;
+    }
+</style>
+
+@code {
+    [Parameter] public Guid? SessionId { get; set; }
+    [Parameter] public EventCallback<Video> OnVideoSelected { get; set; }
+    [Parameter] public EventCallback<PlaylistSession> OnSessionUpdated { get; set; }
+    
+    private PlaylistSession? _session;
+    private TimeSpan _totalDuration;
+    private TimeSpan _remainingDuration;
+    private System.Threading.Timer? _refreshTimer;
+    private ElementReference _playlistContainer;
+    private DotNetObjectReference<PlaylistQueue>? _dotNetRef;
+    private bool _isDragDropInitialized = false;
+    private bool _isLoading = true;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        if (SessionId.HasValue)
+        {
+            await LoadSession();
+        }
+
+        // Set up timer to refresh durations
+        _refreshTimer = new System.Threading.Timer(async _ => 
+        {
+            await InvokeAsync(async () => 
+            {
+                await UpdateDurations();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+        }
+        
+        // Initialize drag and drop when session is loaded
+        if (_session != null && _session.Videos.Any() && !_isDragDropInitialized)
+        {
+            await InitializeDragDrop();
+        }
+        else if (_session == null && _isDragDropInitialized)
+        {
+            await DestroyDragDrop();
+        }
+    }
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        if (SessionId != _session?.SessionId)
+        {
+            await LoadSession();
+        }
+    }
+    
+    private async Task LoadSession()
+    {
+        _isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            if (SessionId.HasValue)
+            {
+                _session = await PlaylistService.GetSessionAsync(SessionId.Value);
+                await UpdateDurations();
+            }
+            else
+            {
+                _session = null;
+                _totalDuration = TimeSpan.Zero;
+                _remainingDuration = TimeSpan.Zero;
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    
+    private Task UpdateDurations()
+    {
+        if (_session != null)
+        {
+            _totalDuration = PlaylistService.GetTotalDuration(_session);
+            _remainingDuration = PlaylistService.GetRemainingDuration(_session);
+        }
+        return Task.CompletedTask;
+    }
+    
+    private List<Video> GetOrderedVideos()
+    {
+        if (_session == null) return new List<Video>();
+        
+        if (_session.IsShuffled && _session.ShuffleOrder.Any())
+        {
+            return _session.ShuffleOrder.Select(i => _session.Videos[i]).ToList();
+        }
+        
+        return _session.Videos;
+    }
+    
+    private bool IsCurrentVideo(int displayIndex)
+    {
+        if (_session == null) return false;
+        
+        if (_session.IsShuffled && _session.ShuffleOrder.Any())
+        {
+            return displayIndex == _session.CurrentIndex;
+        }
+        
+        return displayIndex == _session.CurrentIndex;
+    }
+    
+    private async Task PlayVideoAtIndex(int displayIndex)
+    {
+        if (_session == null) return;
+        
+        var video = await PlaylistService.JumpToIndexAsync(_session, displayIndex);
+        if (video != null)
+        {
+            _session.IsPlaying = true;
+            await PlaylistService.UpdateSessionAsync(_session);
+            await OnVideoSelected.InvokeAsync(video);
+            await OnSessionUpdated.InvokeAsync(_session);
+        }
+    }
+    
+    private async Task RemoveFromQueue(int displayIndex)
+    {
+        if (_session == null) return;
+        
+        var actualIndex = displayIndex;
+        if (_session.IsShuffled && _session.ShuffleOrder.Any())
+        {
+            actualIndex = _session.ShuffleOrder[displayIndex];
+        }
+        
+        await PlaylistService.RemoveVideoAsync(_session, actualIndex);
+        await UpdateDurations();
+        await OnSessionUpdated.InvokeAsync(_session);
+    }
+    
+    private async Task RemoveFromQueueWithStop(int displayIndex, Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        await RemoveFromQueue(displayIndex);
+    }
+    
+    private async Task ToggleShuffle()
+    {
+        if (_session == null) return;
+        
+        await PlaylistService.ToggleShuffleAsync(_session);
+        await OnSessionUpdated.InvokeAsync(_session);
+    }
+    
+    private async Task CycleRepeatMode()
+    {
+        if (_session == null) return;
+        
+        var nextMode = _session.RepeatMode switch
+        {
+            RepeatMode.None => RepeatMode.RepeatAll,
+            RepeatMode.RepeatAll => RepeatMode.RepeatOne,
+            RepeatMode.RepeatOne => RepeatMode.None,
+            _ => RepeatMode.None
+        };
+        
+        await PlaylistService.SetRepeatModeAsync(_session, nextMode);
+        await OnSessionUpdated.InvokeAsync(_session);
+    }
+    
+    private async Task ClearQueue()
+    {
+        if (_session == null) return;
+        
+        await PlaylistService.ClearAsync(_session);
+        await UpdateDurations();
+        await OnSessionUpdated.InvokeAsync(_session);
+    }
+    
+    private string GetRepeatIcon()
+    {
+        return _session?.RepeatMode switch
+        {
+            RepeatMode.RepeatOne => Icons.Material.Filled.RepeatOne,
+            _ => Icons.Material.Filled.Repeat
+        };
+    }
+    
+    private Color GetRepeatColor()
+    {
+        return _session?.RepeatMode == RepeatMode.None ? Color.Default : Color.Primary;
+    }
+    
+    private string GetRepeatTooltip()
+    {
+        return _session?.RepeatMode switch
+        {
+            RepeatMode.None => "Repeat Off",
+            RepeatMode.RepeatAll => "Repeat All",
+            RepeatMode.RepeatOne => "Repeat One",
+            _ => "Repeat"
+        };
+    }
+    
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}";
+        }
+        return $"{(int)duration.TotalMinutes}:{duration.Seconds:D2}";
+    }
+    
+    private async Task InitializeDragDrop()
+    {
+        if (_isDragDropInitialized) return;
+        
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("dragDropInterop.initializeSortable", _playlistContainer, _dotNetRef);
+            _isDragDropInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to initialize drag and drop: {ex.Message}");
+        }
+    }
+    
+    private async Task DestroyDragDrop()
+    {
+        if (!_isDragDropInitialized) return;
+        
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("dragDropInterop.destroySortable", _playlistContainer);
+            _isDragDropInitialized = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to destroy drag and drop: {ex.Message}");
+        }
+    }
+    
+    [JSInvokable]
+    public async Task OnItemReordered(int oldIndex, int newIndex)
+    {
+        if (_session == null) return;
+        
+        // Reorder videos in the playlist
+        var videos = GetOrderedVideos();
+        if (oldIndex >= 0 && oldIndex < videos.Count && newIndex >= 0 && newIndex < videos.Count)
+        {
+            var video = videos[oldIndex];
+            videos.RemoveAt(oldIndex);
+            videos.Insert(newIndex, video);
+            
+            // Update session with new order
+            _session.Videos = videos;
+            
+            // Adjust current index if needed
+            if (_session.CurrentIndex == oldIndex)
+            {
+                _session.CurrentIndex = newIndex;
+            }
+            else if (oldIndex < _session.CurrentIndex && newIndex >= _session.CurrentIndex)
+            {
+                _session.CurrentIndex--;
+            }
+            else if (oldIndex > _session.CurrentIndex && newIndex <= _session.CurrentIndex)
+            {
+                _session.CurrentIndex++;
+            }
+            
+            // Update shuffle order if shuffled
+            if (_session.IsShuffled)
+            {
+                _session.ShuffleOrder.Clear();
+                _session.IsShuffled = false;
+            }
+            
+            await PlaylistService.UpdateSessionAsync(_session);
+            await OnSessionUpdated.InvokeAsync(_session);
+            StateHasChanged();
+        }
+    }
+    
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_isDragDropInitialized)
+        {
+            await DestroyDragDrop();
+        }
+        _dotNetRef?.Dispose();
+        Dispose();
+    }
+}

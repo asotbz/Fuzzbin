@@ -1,0 +1,227 @@
+﻿@using Fuzzbin.Web.Services
+@using Fuzzbin.Web.Components.Dialogs
+@using Fuzzbin.Web.Components.Shared
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject KeyboardShortcutService KeyboardService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject Fuzzbin.Web.Services.ThemeService ThemeService
+@inject Fuzzbin.Web.Services.OnboardingService OnboardingService
+@inherits LayoutComponentBase
+
+<MudLayout>
+    <MudAppBar Elevation="1" Class="fz-animate-slide-up">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h5" Class="ml-3">Fuzzbin</MudText>
+        <MudSpacer />
+        <MudTooltip Text="Toggle light/dark theme (Alt+T)">
+            <MudIconButton Icon="@GetThemeIcon()" Color="Color.Inherit" OnClick="@ToggleTheme" />
+        </MudTooltip>
+        <MudTooltip Text="Launch onboarding tour (Alt+O)">
+            <MudIconButton Icon="@Icons.Material.Filled.TipsAndUpdates" Color="Color.Inherit" OnClick="@ShowOnboardingTour" />
+        </MudTooltip>
+        <MudTooltip Text="Keyboard shortcuts (F1)">
+            <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Inherit" OnClick="ShowKeyboardShortcuts" />
+        </MudTooltip>
+        <AuthorizeView>
+            <Authorized Context="auth">
+                <MudMenu AnchorOrigin="Origin.BottomRight"
+                         TransformOrigin="Origin.TopRight"
+                         Elevation="4">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Text" Color="Color.Inherit">
+                            <MudAvatar Size="Size.Medium" Color="Color.Primary" Class="mr-2">
+                                @GetInitials(auth.User)
+                            </MudAvatar>
+                            <MudText Typo="Typo.body1">@GetDisplayName(auth.User)</MudText>
+                        </MudButton>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Href="/profile" Icon="@Icons.Material.Filled.ManageAccounts">Profile</MudMenuItem>
+                        <MudMenuItem Href="/settings" Icon="@Icons.Material.Filled.Settings">System settings</MudMenuItem>
+                        <MudMenuItem Href="/auth/logout" Icon="@Icons.Material.Filled.Logout">Sign out</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/auth/signin">
+                    Sign in
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Navigation</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/videos" Icon="@Icons.Material.Filled.VideoLibrary">Videos</MudNavLink>
+            <MudNavLink Href="/downloads" Icon="@Icons.Material.Filled.Download">Downloads</MudNavLink>
+            <MudNavLink Href="/import" Icon="@Icons.Material.Filled.Upload">Import</MudNavLink>
+            <MudNavGroup Title="Manage" Icon="@Icons.Material.Filled.Folder" Expanded="false">
+                <MudNavLink Href="/genres" Icon="@Icons.Material.Filled.Category">Genres</MudNavLink>
+                <MudNavLink Href="/tags" Icon="@Icons.Material.Filled.Label">Tags</MudNavLink>
+                <MudNavLink Href="/artists" Icon="@Icons.Material.Filled.Person">Artists</MudNavLink>
+            </MudNavGroup>
+            <MudNavLink Href="/collections" Icon="@Icons.Material.Filled.Collections">Collections</MudNavLink>
+            <MudNavLink Href="/search" Icon="@Icons.Material.Filled.Search">Search</MudNavLink>
+            <MudNavLink Href="/activity-log" Icon="@Icons.Material.Filled.History">Activity Log</MudNavLink>
+            <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 fz-animate-fade-in">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+<MudDrawerContainer>
+    <MiniPlayer />
+</MudDrawerContainer>
+
+<MudPopoverProvider />
+
+@code {
+    private bool _drawerOpen = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeService.ThemeChanged += OnThemeChanged;
+        await ThemeService.EnsureInitializedAsync();
+        _isDarkMode = ThemeService.IsDarkMode;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Initialize keyboard shortcuts
+            await KeyboardService.InitializeAsync();
+
+            // Register global shortcuts
+            KeyboardService.RegisterShortcut("F1", "Global", ShowKeyboardShortcuts, "Show keyboard shortcuts dialog");
+            KeyboardService.RegisterShortcut("Alt+H", "Global", () => Navigation.NavigateTo("/"), "Go to dashboard");
+            KeyboardService.RegisterShortcut("Alt+V", "Global", () => Navigation.NavigateTo("/videos"), "Open video library");
+            KeyboardService.RegisterShortcut("Alt+D", "Global", () => Navigation.NavigateTo("/downloads"), "Open downloads monitor");
+            KeyboardService.RegisterShortcut("Alt+I", "Global", () => Navigation.NavigateTo("/import"), "Open import workspace");
+            KeyboardService.RegisterShortcut("Alt+C", "Global", () => Navigation.NavigateTo("/collections"), "Open collections");
+            KeyboardService.RegisterShortcut("Alt+L", "Global", () => Navigation.NavigateTo("/activity-log"), "Open activity log");
+            KeyboardService.RegisterShortcut("Alt+S", "Global", () => Navigation.NavigateTo("/settings"), "Open settings");
+            KeyboardService.RegisterShortcut("Alt+T", "Global", () => _ = ToggleThemeAsync(), "Toggle light or dark theme");
+            KeyboardService.RegisterShortcut("Alt+O", "Global", () => _ = ShowOnboardingTourAsync(manualTrigger: true), "Launch onboarding tour");
+            KeyboardService.RegisterShortcut("Alt+Q", "Global", () => Navigation.NavigateTo("/player"), "Open player and queue");
+
+            if (await OnboardingService.ShouldShowAsync())
+            {
+                await ShowOnboardingTourAsync(manualTrigger: false);
+            }
+        }
+    }
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async void ShowKeyboardShortcuts()
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        await DialogService.ShowAsync<KeyboardShortcutsDialog>("Keyboard Shortcuts", parameters, options);
+    }
+
+    private async Task ShowOnboardingTourAsync(bool manualTrigger)
+    {
+        if (_onboardingDialogOpen)
+        {
+            return;
+        }
+
+        _onboardingDialogOpen = true;
+
+        try
+        {
+            var options = new DialogOptions { CloseButton = false, NoHeader = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+            var dialogReference = await DialogService.ShowAsync<OnboardingDialog>(string.Empty, new DialogParameters(), options);
+            await dialogReference.Result;
+
+            if (!manualTrigger)
+            {
+                await OnboardingService.MarkCompletedAsync();
+            }
+        }
+        finally
+        {
+            _onboardingDialogOpen = false;
+        }
+    }
+
+    private Task ShowOnboardingTour()
+    {
+        return ShowOnboardingTourAsync(manualTrigger: true);
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        await ThemeService.ToggleAsync();
+    }
+
+    private void ToggleTheme()
+    {
+        _ = ToggleThemeAsync();
+    }
+
+    private string GetThemeIcon() => _isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode;
+
+    private void OnThemeChanged()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        if (!_disposed)
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string GetDisplayName(ClaimsPrincipal principal)
+    {
+        return principal.Identity?.Name ?? principal.FindFirstValue("name") ?? "User";
+    }
+
+    private static string GetInitials(ClaimsPrincipal principal)
+    {
+        var claimInitials = principal.FindFirstValue("fz:initials");
+        if (!string.IsNullOrWhiteSpace(claimInitials))
+        {
+            return claimInitials;
+        }
+
+        var name = GetDisplayName(principal);
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return "U";
+        }
+
+        if (parts.Length == 1)
+        {
+            return char.ToUpperInvariant(parts[0][0]).ToString();
+        }
+
+        return string.Concat(char.ToUpperInvariant(parts[0][0]), char.ToUpperInvariant(parts[^1][0]));
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        ThemeService.ThemeChanged -= OnThemeChanged;
+        KeyboardService.Dispose();
+        _disposed = true;
+        return ValueTask.CompletedTask;
+    }
+
+    private bool _isDarkMode;
+    private bool _onboardingDialogOpen;
+    private bool _disposed;
+}

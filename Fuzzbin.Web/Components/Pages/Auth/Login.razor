@@ -1,0 +1,212 @@
+@page "/auth/signin"
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.WebUtilities
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager Navigation
+@inject ILogger<Login> Logger
+
+<PageTitle>Sign In - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+    <MudPaper Elevation="4" Class="pa-6">
+        <MudText Typo="Typo.h5" Class="mb-4">Sign in to Fuzzbin</MudText>
+
+        <form method="post" action="/auth/login">
+            @if (!string.IsNullOrEmpty(_antiforgeryToken))
+            {
+                <input type="hidden" name="@_antiforgeryFieldName" value="@_antiforgeryToken" />
+            }
+            <input type="hidden" name="ReturnUrl" value="@GetSafeReturnUrl()" />
+
+            @if (_alertVisible && !string.IsNullOrWhiteSpace(_alertMessage))
+            {
+                <MudAlert Severity="_alertSeverity" Class="mb-4">
+                    @_alertMessage
+                </MudAlert>
+            }
+
+            <MudTextField @bind-Value="_emailOrUsername"
+                          Label="Username"
+                          name="EmailOrUsername"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          @ref="_usernameField" />
+
+            <MudTextField @bind-Value="_password"
+                          Label="Password"
+                          name="Password"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          Class="mt-4" />
+
+            <MudCheckBox T="bool" 
+                         @bind-Value="_rememberMe"
+                         Label="Remember me"
+                         name="RememberMe"
+                         Class="mt-3" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Class="mt-4">
+                Sign In
+            </MudButton>
+        </form>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private string _emailOrUsername = string.Empty;
+    private string _password = string.Empty;
+    private bool _rememberMe;
+    private bool _alertVisible;
+    private string? _alertMessage;
+    private Severity _alertSeverity;
+    private string? _returnUrl;
+    private string? _antiforgeryFieldName;
+    private string? _antiforgeryToken;
+    private bool _queryAlertProcessed;
+    private MudTextField<string>? _usernameField;
+
+    [CascadingParameter] 
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ParseReturnUrl();
+
+        // Redirect if already authenticated
+        if (AuthenticationStateTask is not null)
+        {
+            var state = await AuthenticationStateTask;
+            if (state.User.Identity?.IsAuthenticated ?? false)
+            {
+                Navigation.NavigateTo(GetSafeReturnUrl(), true);
+                return;
+            }
+        }
+
+        await EnsureAntiforgeryTokenAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _usernameField is not null)
+        {
+            await _usernameField.FocusAsync();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        ParseReturnUrl();
+    }
+
+    private void ParseReturnUrl()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        
+        if (query.TryGetValue("returnUrl", out var value))
+        {
+            _returnUrl = value.ToString();
+        }
+
+        if (!_queryAlertProcessed && query.TryGetValue("error", out var errorCode))
+        {
+            _queryAlertProcessed = true;
+            ApplyQueryAlert(errorCode.ToString());
+        }
+
+        if (query.TryGetValue("identifier", out var identifierValue))
+        {
+            _emailOrUsername = identifierValue.ToString();
+        }
+    }
+
+    private Task EnsureAntiforgeryTokenAsync()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_antiforgeryToken))
+            {
+                return Task.CompletedTask;
+            }
+
+            var httpContext = HttpContextAccessor.HttpContext;
+            if (httpContext is null)
+            {
+                Logger.LogWarning("Unable to acquire antiforgery tokens because HttpContext is unavailable.");
+                return Task.CompletedTask;
+            }
+
+            var tokens = Antiforgery.GetAndStoreTokens(httpContext);
+            _antiforgeryFieldName = tokens.FormFieldName;
+            _antiforgeryToken = tokens.RequestToken;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to acquire antiforgery tokens for login form.");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private string GetSafeReturnUrl()
+    {
+        if (string.IsNullOrWhiteSpace(_returnUrl))
+        {
+            return "/";
+        }
+
+        // Prevent open redirect attacks
+        if (Uri.TryCreate(_returnUrl, UriKind.Absolute, out _))
+        {
+            return "/";
+        }
+
+        return _returnUrl.StartsWith('/') ? _returnUrl : $"/{_returnUrl}";
+    }
+
+    private void ShowAlert(string message, Severity severity)
+    {
+        _alertMessage = message;
+        _alertSeverity = severity;
+        _alertVisible = true;
+    }
+
+    private void ClearAlert()
+    {
+        _alertVisible = false;
+        _alertMessage = null;
+    }
+
+    private void ApplyQueryAlert(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return;
+        }
+
+        var normalized = code.Trim().ToLowerInvariant();
+        (string Message, Severity Severity)? alert = normalized switch
+        {
+            "missingcredentials" => ("Please enter your username and password.", Severity.Warning),
+            "invalidcredentials" => ("Invalid credentials.", Severity.Error),
+            "disabled" => ("This account has been disabled. Contact an administrator.", Severity.Error),
+            "lockedout" => ("Account temporarily locked. Try again later.", Severity.Error),
+            "notallowed" => ("This account is not allowed to sign in yet.", Severity.Error),
+            _ => null
+        };
+
+        if (alert is not null)
+        {
+            ShowAlert(alert.Value.Message, alert.Value.Severity);
+        }
+    }
+}

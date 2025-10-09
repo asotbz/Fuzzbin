@@ -1,0 +1,510 @@
+@page "/import"
+@using System.Linq
+@using System.Text.Json
+@using MudBlazor
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Services.Models
+@inject ILibraryImportService LibraryImportService
+@inject ILibraryPathManager LibraryPathManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Library Import</PageTitle>
+
+<MudGrid Class="my-4" GutterSize="3">
+    <MudItem xs="12" lg="4">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Class="mb-2">Start New Scan</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Scan your library directory to discover new videos and reconcile metadata.
+                </MudText>
+
+                <MudForm @ref="_form">
+                    <MudTextField @bind-Value="_request.RootPath" Label="Library Root" Variant="Variant.Outlined" Disabled="_isScanning" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Folder" />
+
+                    <MudSwitch @bind-Value="_request.IncludeSubdirectories" Label="Include subdirectories" Disabled="_isScanning" Class="mt-2" />
+                    <MudSwitch @bind-Value="_request.ComputeHashes" Label="Compute file hashes" Disabled="_isScanning" />
+                    <MudSwitch @bind-Value="_request.RefreshMetadata" Label="Refresh metadata with MediaInfo" Disabled="_isScanning" />
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_isScanning"
+                               OnClick="StartScanAsync"
+                               Class="mt-4"
+                               StartIcon="@Icons.Material.Filled.PlayArrow">
+                        @(_isScanning ? "Scanning..." : "Scan Library")
+                    </MudButton>
+                </MudForm>
+            </MudCardContent>
+        </MudCard>
+
+        <MudCard Class="mt-4">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">Recent Sessions</MudText>
+                @if (_recentSessions.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">No prior sessions yet.</MudText>
+                }
+                else
+                {
+                    <MudList T="LibraryImportSession" Dense="true">
+                        @foreach (var session in _recentSessions)
+                        {
+                            <MudListItem T="LibraryImportSession" OnClick="@(() => SwitchSession(session.Id))"
+                                         Class="@(session.Id == _currentSession?.Id ? "mud-selected-item" : string.Empty)"
+                                         Disabled="_isScanning">
+                                <MudIcon Icon="@Icons.Material.Filled.Inventory" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle2">@session.StartedAt.ToLocalTime().ToString("g")</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @session.Status.ToString()
+                                    </MudText>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" lg="8">
+        @if (_currentSession == null)
+        {
+            <MudCard Class="h-100">
+                <MudCardContent Class="d-flex flex-column justify-center align-center" Style="min-height: 320px;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Inventory" Style="font-size: 4rem;" Color="Color.Default" />
+                    <MudText Typo="Typo.h6" Class="mt-4">No session selected</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Start a scan to populate the review queue.</MudText>
+                </MudCardContent>
+            </MudCard>
+        }
+        else
+        {
+            <MudGrid GutterSize="2">
+                <MudItem xs="12">
+                    <MudPaper Class="pa-3">
+                        <MudStack Row="true" Alignment="Center" Justify="Justify.SpaceBetween">
+                            <div>
+                                <MudText Typo="Typo.h5">Review Queue</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Started @(_currentSession.StartedAt.ToLocalTime().ToString("g")) | Status: @_currentSession.Status
+                                </MudText>
+                            </div>
+                            <MudStack Row="true" Spacing="1" Alignment="Center">
+                                <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled">Pending @_summary.PendingReview</MudChip>
+                                <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined">Approved @_summary.Approved</MudChip>
+                                <MudChip T="string" Color="Color.Error" Variant="Variant.Outlined">Rejected @_summary.Rejected</MudChip>
+                                <MudChip T="string" Color="Color.Warning" Variant="Variant.Outlined">Duplicates @(_summary.PotentialDuplicates + _summary.ConfirmedDuplicates)</MudChip>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudDivider Class="my-2" />
+
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_isScanning || _currentSession.Status == LibraryImportStatus.Completed" OnClick="() => CommitAsync(false)" StartIcon="@Icons.Material.Filled.Check">
+                                Commit Approved
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Secondary" Disabled="_currentSession?.CreatedVideoIdsJson == null" OnClick="RollbackAsync" StartIcon="@Icons.Material.Filled.Undo">
+                                Rollback
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Disabled="_isScanning" OnClick="RefreshAsync" StartIcon="@Icons.Material.Filled.Refresh">
+                                Refresh
+                            </MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudPaper Style="overflow-x:auto;">
+                        <MudTable T="ImportItemViewModel" Items="FilteredItems" Hover="true" Dense="true" FixedHeader="true" Height="560px" Loading="_isScanning">
+                            <ToolBarContent>
+                                <MudText Typo="Typo.subtitle2">@_items.Count items</MudText>
+                                <MudSpacer />
+                                <MudTextField @bind-Value="SearchTerm" Placeholder="Filter" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Size="Size.Small" Class="mr-2" />
+                                <MudSelect @bind-Value="StatusFilter" Size="Size.Small" Variant="Variant.Outlined">
+                                    <MudSelectItem Value="@(string.Empty)">All statuses</MudSelectItem>
+                                    @foreach (var status in Enum.GetValues<LibraryImportItemStatus>())
+                                    {
+                                        <MudSelectItem Value="@status.ToString()">@status</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </ToolBarContent>
+                            <HeaderContent>
+                                <MudTh>File</MudTh>
+                                <MudTh>Artist</MudTh>
+                                <MudTh>Title</MudTh>
+                                <MudTh>Duration</MudTh>
+                                <MudTh>Confidence</MudTh>
+                                <MudTh>Duplicate</MudTh>
+                                <MudTh>Matches</MudTh>
+                                <MudTh>Status</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudText Typo="Typo.body2">@context.Item.FileName</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@(context.Item.RelativePath ?? "—")</MudText>
+                                </MudTd>
+                                <MudTd>@context.Item.Artist</MudTd>
+                                <MudTd>@context.Item.Title</MudTd>
+                                <MudTd>
+                                    @if (context.Item.DurationSeconds.HasValue)
+                                    {
+                                        var duration = TimeSpan.FromSeconds(context.Item.DurationSeconds.Value);
+                                        var format = duration.TotalHours >= 1 ? "hh\\:mm\\:ss" : "mm\\:ss";
+                                        <MudText>@duration.ToString(format)</MudText>
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    @if (context.Item.Confidence.HasValue)
+                                    {
+                                        <MudProgressLinear Class="mb-1" Value="@(context.Item.Confidence.Value * 100)" Color="Color.Primary"></MudProgressLinear>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@((context.Item.Confidence.Value * 100).ToString("0"))%</MudText>
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    @switch (context.Item.DuplicateStatus)
+                                    {
+                                        case LibraryImportDuplicateStatus.None:
+                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">Unique</MudChip>
+                                            break;
+                                        case LibraryImportDuplicateStatus.PotentialDuplicate:
+                                            <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small">Review</MudChip>
+                                            break;
+                                        case LibraryImportDuplicateStatus.ConfirmedDuplicate:
+                                            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">Duplicate</MudChip>
+                                            break;
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    <MudSelect T="Guid?" @bind-Value="context.ManualVideoId" Variant="Variant.Outlined" Dense="true" DisableUnderLine="true" Style="min-width:200px">
+                                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Auto suggestion</MudSelectItem>
+                                        @foreach (var candidate in context.Candidates)
+                                        {
+                                            <MudSelectItem T="Guid?" Value="@candidate.VideoId">@candidate.DisplayName (@(candidate.Confidence.ToString("0.00")))</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Color="@GetStatusColor(context.Item.Status)" Variant="Variant.Outlined" Size="Size.Small">@context.Item.Status</MudChip>
+                                </MudTd>
+                                <MudTd>
+                                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Disabled="context.Item.Status == LibraryImportItemStatus.Approved" OnClick="@(() => ApproveAsync(context))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.HighlightOff" Color="Color.Error" Size="Size.Small" Disabled="context.Item.Status == LibraryImportItemStatus.Rejected" OnClick="@(() => RejectAsync(context))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Flag" Color="Color.Warning" Size="Size.Small" Disabled="context.Item.Status == LibraryImportItemStatus.NeedsAttention" OnClick="@(() => NeedsAttentionAsync(context))" />
+                                </MudTd>
+                            </RowTemplate>
+                            <NoRecordsContent>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">No items match the current filters.</MudText>
+                            </NoRecordsContent>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private MudForm? _form;
+    private readonly LibraryImportRequest _request = new();
+    private readonly List<ImportItemViewModel> _items = new();
+    private readonly List<LibraryImportSession> _recentSessions = new();
+    private LibraryImportSession? _currentSession;
+    private LibraryImportSummary _summary = new();
+    private bool _isScanning;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string SearchTerm
+    {
+        get => _search;
+        set
+        {
+            _search = value ?? string.Empty;
+            ApplyFilterInternal();
+        }
+    }
+
+    private string StatusFilter
+    {
+        get => _statusFilter;
+        set
+        {
+            _statusFilter = value ?? string.Empty;
+            ApplyFilterInternal();
+        }
+    }
+    private IEnumerable<ImportItemViewModel> FilteredItems => _items.Where(item => item.Visible);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            _request.RootPath = await LibraryPathManager.GetLibraryRootAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to resolve library path: {ex.Message}", Severity.Error);
+        }
+
+        await LoadSessionsAsync();
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        _recentSessions.Clear();
+        var sessions = await LibraryImportService.GetRecentSessionsAsync(5);
+        _recentSessions.AddRange(sessions);
+
+        if (_currentSession == null && _recentSessions.Count > 0)
+        {
+            await SwitchSession(_recentSessions[0].Id);
+        }
+    }
+
+    private async Task SwitchSession(Guid sessionId)
+    {
+        if (_isScanning)
+        {
+            return;
+        }
+
+        var session = await LibraryImportService.GetSessionAsync(sessionId, includeItems: true);
+        if (session == null)
+        {
+            Snackbar.Add("Session could not be loaded.", Severity.Error);
+            return;
+        }
+
+        _currentSession = session;
+        HydrateItems(session.Items);
+        StateHasChanged();
+    }
+
+    private async Task StartScanAsync()
+    {
+        if (_form != null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            _isScanning = true;
+            StateHasChanged();
+
+            var session = await LibraryImportService.StartImportAsync(_request);
+            _currentSession = session;
+            HydrateItems(session.Items);
+            _recentSessions.RemoveAll(s => s.Id == session.Id);
+            _recentSessions.Insert(0, session);
+            _summary = LibraryImportSummary.FromItems(session.Items);
+
+            Snackbar.Add($"Scan complete: {session.Items.Count} files queued for review.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Scan failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isScanning = false;
+            await LoadSessionsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void HydrateItems(IEnumerable<LibraryImportItem> items)
+    {
+        var materialized = items.ToList();
+        _items.Clear();
+        foreach (var item in materialized)
+        {
+            if (!MatchesFilters(item))
+            {
+                // still add but filter later to keep summary accurate
+            }
+
+            var candidates = LibraryImportMatchCandidate.DeserializeList(item.CandidateMatchesJson);
+            _items.Add(new ImportItemViewModel(item, candidates));
+        }
+
+        _summary = LibraryImportSummary.FromItems(materialized);
+        ApplyFilterInternal();
+    }
+
+    private async Task ApproveAsync(ImportItemViewModel context)
+    {
+        await UpdateItemAsync(context, LibraryImportDecisionType.Approve);
+    }
+
+    private async Task RejectAsync(ImportItemViewModel context)
+    {
+        await UpdateItemAsync(context, LibraryImportDecisionType.Reject);
+    }
+
+    private async Task NeedsAttentionAsync(ImportItemViewModel context)
+    {
+        await UpdateItemAsync(context, LibraryImportDecisionType.NeedsAttention);
+    }
+
+    private async Task UpdateItemAsync(ImportItemViewModel context, LibraryImportDecisionType decisionType)
+    {
+        if (_currentSession == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var decision = new LibraryImportDecision
+            {
+                ItemId = context.Item.Id,
+                DecisionType = decisionType,
+                ManualVideoId = decisionType == LibraryImportDecisionType.Approve ? context.ManualVideoId : null
+            };
+
+            await LibraryImportService.UpdateItemDecisionAsync(_currentSession.Id, context.Item.Id, decision);
+            var refreshedSession = await LibraryImportService.GetSessionAsync(_currentSession.Id, includeItems: true);
+            if (refreshedSession != null)
+            {
+                _currentSession = refreshedSession;
+                HydrateItems(refreshedSession.Items);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to update item: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CommitAsync(bool silent)
+    {
+        if (_currentSession == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await LibraryImportService.CommitAsync(_currentSession.Id);
+            _currentSession = updated;
+            HydrateItems(updated.Items);
+            if (!silent)
+            {
+                Snackbar.Add("Import committed successfully.", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Commit failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RollbackAsync()
+    {
+        if (_currentSession == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await LibraryImportService.RollbackAsync(_currentSession.Id);
+            _currentSession = updated;
+            HydrateItems(updated.Items);
+            Snackbar.Add("Rollback completed.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Rollback failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_currentSession == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var refreshed = await LibraryImportService.RefreshSessionAsync(_currentSession.Id);
+            _currentSession = refreshed;
+            var items = await LibraryImportService.GetItemsAsync(_currentSession.Id);
+            HydrateItems(items);
+            Snackbar.Add("Session summary refreshed.", Severity.Normal);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Refresh failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ApplyFilterInternal()
+    {
+        foreach (var viewModel in _items)
+        {
+            viewModel.Visible = MatchesFilters(viewModel.Item);
+        }
+
+        StateHasChanged();
+    }
+
+    private bool MatchesFilters(LibraryImportItem item)
+    {
+        if (!string.IsNullOrWhiteSpace(_statusFilter) && !string.Equals(item.Status.ToString(), _statusFilter, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var haystack = $"{item.FileName} {item.Artist} {item.Title}".ToLowerInvariant();
+            if (!haystack.Contains(_search.ToLowerInvariant()))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private Color GetStatusColor(LibraryImportItemStatus status) => status switch
+    {
+        LibraryImportItemStatus.Approved => Color.Success,
+        LibraryImportItemStatus.Rejected => Color.Error,
+        LibraryImportItemStatus.NeedsAttention => Color.Warning,
+        _ => Color.Info
+    };
+
+    private sealed class ImportItemViewModel
+    {
+        public ImportItemViewModel(LibraryImportItem item, IReadOnlyList<LibraryImportMatchCandidate> candidates)
+        {
+            Item = item;
+            Candidates = candidates.ToList();
+            ManualVideoId = item.ManualVideoId
+                ?? item.SuggestedVideoId
+                ?? item.DuplicateVideoId;
+        }
+
+        public LibraryImportItem Item { get; }
+        public List<LibraryImportMatchCandidate> Candidates { get; }
+        public Guid? ManualVideoId { get; set; }
+        public bool Visible { get; set; } = true;
+    }
+}

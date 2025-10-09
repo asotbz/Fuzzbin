@@ -1,0 +1,151 @@
+@using MudBlazor
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model" OnValidSubmit="OnValidSubmit">
+            <MudText Typo="Typo.h6" Class="mb-3">Edit Video</MudText>
+            <MudTextField @bind-Value="_model.Title" Label="Title" Required="true" RequiredError="Title is required" />
+            <MudTextField @bind-Value="_model.Artist" Label="Artist" Required="true" RequiredError="Artist is required" />
+            <MudTextField @bind-Value="_model.Album" Label="Album" />
+            <MudNumericField T="int?" @bind-Value="_model.Year" Label="Year" Immediate="true" Min="1900" Max="2100" />
+            <MudNumericField T="int?" @bind-Value="_model.Duration" Label="Duration (seconds)" Immediate="true" Min="0" />
+            <MudTextField @bind-Value="_model.Format" Label="Format" />
+            <MudTextField @bind-Value="_model.Resolution" Label="Resolution" />
+            <MudTextField @bind-Value="_model.Description" Label="Description" Lines="3" TextArea="true" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Diameter="18" Indeterminate="true" Class="mr-2" />
+            }
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private readonly VideoEditModel _model = new();
+    private MudForm? _form;
+    private bool _isSaving;
+
+    [CascadingParameter]
+    private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter]
+    public Video Video { get; set; } = default!;
+
+    [Inject]
+    public IVideoService VideoService { get; set; } = default!;
+
+    [Inject]
+    public ISnackbar Snackbar { get; set; } = default!;
+
+    protected override void OnParametersSet()
+    {
+        if (Video == null)
+        {
+            throw new InvalidOperationException("Video cannot be null when opening the editor dialog.");
+        }
+
+        _model.LoadFrom(Video);
+    }
+
+    private async Task Submit()
+    {
+        if (_form == null)
+        {
+            return;
+        }
+
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        await SaveAsync();
+    }
+
+    private async Task OnValidSubmit()
+    {
+        await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var updated = _model.ToVideo(Video);
+            await VideoService.UpdateVideoAsync(updated);
+            Snackbar.Add("Video updated successfully", Severity.Success);
+            Dialog.Close(DialogResult.Ok(updated));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to update video: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private Task Cancel()
+    {
+        Dialog.Cancel();
+        return Task.CompletedTask;
+    }
+
+    private sealed class VideoEditModel
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string? Album { get; set; }
+        public int? Year { get; set; }
+        public int? Duration { get; set; }
+        public string? Format { get; set; }
+        public string? Resolution { get; set; }
+        public string? Description { get; set; }
+
+        public void LoadFrom(Video video)
+        {
+            Id = video.Id;
+            Title = video.Title;
+            Artist = video.Artist;
+            Album = video.Album;
+            Year = video.Year;
+            Duration = video.Duration;
+            Format = video.Format;
+            Resolution = video.Resolution;
+            Description = video.Description;
+        }
+
+        public Video ToVideo(Video original)
+        {
+            original.Title = Title.Trim();
+            original.Artist = Artist.Trim();
+            original.Album = string.IsNullOrWhiteSpace(Album) ? null : Album.Trim();
+            original.Year = Year;
+            original.Duration = Duration;
+            original.Format = string.IsNullOrWhiteSpace(Format) ? null : Format.Trim();
+            original.Resolution = string.IsNullOrWhiteSpace(Resolution) ? null : Resolution.Trim();
+            original.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+            original.UpdatedAt = DateTime.UtcNow;
+            return original;
+        }
+    }
+}

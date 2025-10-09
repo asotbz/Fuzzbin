@@ -1,0 +1,823 @@
+@page "/search"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Web.Components.Dialogs
+@using System.Text.Json
+@using Fuzzbin.Services
+@using Fuzzbin.Services.Models
+@inject Fuzzbin.Services.Interfaces.ISearchService SearchService
+@inject Fuzzbin.Services.Interfaces.IVideoService VideoService
+@inject Fuzzbin.Services.Interfaces.ICollectionService CollectionService
+@inject Fuzzbin.Services.Interfaces.IExternalSearchService ExternalSearchService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<PageTitle>Advanced Search - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-4">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudPaper Class="pa-4">
+                <MudGrid AlignItems="Center">
+                    <MudItem xs="8">
+                        <MudText Typo="Typo.h4" Class="mb-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
+                            Advanced Search
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="4" Class="text-right">
+                        @if (_savedSearches.Any())
+                        {
+                            <MudSelect T="Fuzzbin.Core.Entities.SavedSearch" Label="Load Saved Search" @bind-Value="_selectedSavedSearch"
+                                      Variant="Variant.Outlined" Dense="true" Class="mb-2"
+                                      ToStringFunc="@(s => s?.Name ?? string.Empty)">
+                                @foreach (var search in _savedSearches)
+                                {
+                                    <MudSelectItem Value="@search">
+                                        <MudChip T="string" Icon="@search.Icon" Color="Color.Primary" Size="Size.Small">
+                                            @search.Name
+                                        </MudChip>
+                                    </MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-4 mt-4">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.h6" Class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.TravelExplore" Class="mr-2" />
+                        External Sources
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Search IMVDb and YouTube for videos that are not yet in your library.
+                    </MudText>
+                </MudStack>
+
+                <MudGrid Class="mt-3" GutterSize="3">
+                    <MudItem xs="12" md="4">
+                        <MudTextField @bind-Value="_externalQuery.SearchText"
+                                      Label="Search Text"
+                                      Variant="Variant.Outlined"
+                                      Immediate="false" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_externalQuery.Artist"
+                                      Label="Artist"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_externalQuery.Title"
+                                      Label="Song Title"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="2">
+                        <MudNumericField T="int" @bind-Value="_externalQuery.MaxResults"
+                                         Label="Max Results"
+                                         Variant="Variant.Outlined"
+                                         Min="5" Max="20" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSwitch T="bool"
+                                   Checked="_externalQuery.IncludeImvdb"
+                                   CheckedChanged="(value) => _externalQuery.IncludeImvdb = value"
+                                   Color="Color.Primary"
+                                   Label="Include IMVDb" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSwitch T="bool"
+                                   Checked="_externalQuery.IncludeYtDlp"
+                                   CheckedChanged="(value) => _externalQuery.IncludeYtDlp = value"
+                                   Color="Color.Secondary"
+                                   Label="Include yt-dlp" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   OnClick="UseCurrentFiltersForExternal"
+                                   StartIcon="@Icons.Material.Filled.Link">
+                            Use Current Filters
+                        </MudButton>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   OnClick="@(async () => await PerformExternalSearch())"
+                                   Disabled="_isExternalSearching"
+                                   StartIcon="@Icons.Material.Filled.Search">
+                            @(_isExternalSearching ? "Searching..." : "Search External")
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+
+                @if (_isExternalSearching)
+                {
+                    <MudProgressLinear Class="mt-3" Color="Color.Primary" Indeterminate="true" />
+                }
+
+                @if (_externalResult?.Warnings?.Any() == true)
+                {
+                    foreach (var warning in _externalResult.Warnings)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@warning</MudAlert>
+                    }
+                }
+
+                @if (_externalResult?.Items?.Any() == true)
+                {
+                    <MudGrid Class="mt-3" GutterSize="3">
+                        @foreach (var item in _externalResult.Items)
+                        {
+                            <MudItem xs="12" sm="6" md="4" lg="3">
+                                <MudCard Class="external-result-card">
+                                    <MudCardMedia Image="@GetExternalThumbnail(item)" Height="180" />
+                                    <MudCardContent>
+                                        <MudStack Spacing="1">
+                                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                                <MudText Typo="Typo.subtitle2" Class="text-truncate">@item.Title</MudText>
+                                                <MudChip T="string" Size="Size.Small" Color="@GetSourceColor(item.Source)">
+                                                    @item.Source.ToString()
+                                                </MudChip>
+                                            </MudStack>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                @(!string.IsNullOrWhiteSpace(item.Artist) ? item.Artist : "Unknown Artist")
+                                            </MudText>
+                                            <MudProgressLinear Value="@(item.Confidence * 100)" Color="Color.Info" />
+
+                                            @if (item.Imvdb != null)
+                                            {
+                                                <MudStack Spacing="1" Class="mt-1">
+                                                    @if (item.Imvdb.ReleaseDate.HasValue)
+                                                    {
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                            Release: @item.Imvdb.ReleaseDate.Value.ToString("yyyy-MM-dd")
+                                                        </MudText>
+                                                    }
+                                                    @if (item.Imvdb.Genres.Any())
+                                                    {
+                                                        <MudStack Row="true" Spacing="1">
+                                                            @foreach (var genre in item.Imvdb.Genres)
+                                                            {
+                                                                <MudChip T="string" Size="Size.Small" Color="Color.Success">@genre</MudChip>
+                                                            }
+                                                        </MudStack>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(item.Imvdb.Description))
+                                                    {
+                                                        <MudText Typo="Typo.caption" Class="text-truncate" Title="@item.Imvdb.Description">
+                                                            @item.Imvdb.Description
+                                                        </MudText>
+                                                    }
+                                                </MudStack>
+                                            }
+
+                                            @if (item.YtDlp != null)
+                                            {
+                                                <MudStack Spacing="1" Class="mt-1">
+                                                    @if (item.YtDlp.Duration != null)
+                                                    {
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                            Duration: @item.YtDlp.Duration.Value.ToString()
+                                                        </MudText>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(item.YtDlp.Url))
+                                                    {
+                                                        <MudLink Href="@item.YtDlp.Url" Target="_blank">Open Source</MudLink>
+                                                    }
+                                                </MudStack>
+                                            }
+                                        </MudStack>
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else if (_externalResult != null && !_isExternalSearching)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-2">
+                        No matches found from external sources.
+                    </MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <!-- Search Filters -->
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Search Filters</MudText>
+                
+                <!-- Text Search -->
+                <MudTextField @bind-Value="_searchQuery.SearchText" Label="Search Text" 
+                             Variant="Variant.Outlined" FullWidth="true" Class="mb-3"
+                             Immediate="false" OnKeyUp="@(async (e) => { if (e.Key == "Enter") await PerformSearch(); })"
+                             Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" />
+
+                <!-- Artist Filter -->
+                <MudGrid>
+                    <MudItem xs="10">
+                        <MudAutocomplete T="string" Label="Artists" @bind-Value="_artistInput"
+                                        SearchFunc="@SearchArtists" Variant="Variant.Outlined"
+                                        Dense="true" />
+                    </MudItem>
+                    <MudItem xs="2">
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary"
+                                      OnClick="@(async () => await AddArtistAsync())" />
+                    </MudItem>
+                </MudGrid>
+                <MudChipSet AllClosable="true" OnClose="@((MudChip<string> chip) => RemoveArtist(chip))" Class="mb-3">
+                    @foreach (var artist in _searchQuery.Artists)
+                    {
+                        <MudChip Text="@artist" Color="Color.Primary" />
+                    }
+                </MudChipSet>
+
+                <!-- Genre Filter -->
+                <MudGrid>
+                    <MudItem xs="10">
+                        <MudAutocomplete T="string" Label="Genres" @bind-Value="_genreInput"
+                                        SearchFunc="@SearchGenres" Variant="Variant.Outlined"
+                                        Dense="true" />
+                    </MudItem>
+                    <MudItem xs="2">
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Secondary"
+                                      OnClick="@(async () => await AddGenreAsync())" />
+                    </MudItem>
+                </MudGrid>
+                <MudChipSet AllClosable="true" OnClose="@((MudChip<string> chip) => RemoveGenre(chip))" Class="mb-3">
+                    @foreach (var genre in _searchQuery.Genres)
+                    {
+                        <MudChip Text="@genre" Color="Color.Secondary" />
+                    }
+                </MudChipSet>
+
+                <!-- Year Range -->
+                <MudGrid>
+                    <MudItem xs="6">
+                        <MudNumericField @bind-Value="_searchQuery.YearFrom" Label="Year From" 
+                                        Variant="Variant.Outlined" Min="1900" Max="2100" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField @bind-Value="_searchQuery.YearTo" Label="Year To"
+                                        Variant="Variant.Outlined" Min="1900" Max="2100" />
+                    </MudItem>
+                </MudGrid>
+
+                <!-- Duration Range -->
+                <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Duration (seconds)</MudText>
+                <MudGrid>
+                    <MudItem xs="6">
+                        <MudNumericField @bind-Value="_searchQuery.DurationMin" Label="Min"
+                                        Variant="Variant.Outlined" Min="0" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField @bind-Value="_searchQuery.DurationMax" Label="Max"
+                                        Variant="Variant.Outlined" Min="0" />
+                    </MudItem>
+                </MudGrid>
+
+                <!-- Format Filter -->
+                <MudSelect T="string" Label="Formats" MultiSelection="true" 
+                          @bind-SelectedValues="_selectedFormats" Variant="Variant.Outlined" 
+                          Dense="true" Class="mt-3">
+                    @foreach (var format in _availableFormats)
+                    {
+                        <MudSelectItem Value="@format">@format</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <!-- Resolution Filter -->
+                <MudSelect T="string" Label="Resolutions" MultiSelection="true"
+                          @bind-SelectedValues="_selectedResolutions" Variant="Variant.Outlined"
+                          Dense="true" Class="mt-3">
+                    @foreach (var resolution in _availableResolutions)
+                    {
+                        <MudSelectItem Value="@resolution">@resolution</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <!-- Collection Filter -->
+                <MudSelect T="Guid" Label="Collections" MultiSelection="true"
+                          @bind-SelectedValues="_selectedCollectionIds" Variant="Variant.Outlined"
+                          Dense="true" Class="mt-3">
+                    @foreach (var collection in _availableCollections)
+                    {
+                        <MudSelectItem Value="@collection.Id">@collection.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <!-- Metadata Filters -->
+                <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Metadata</MudText>
+                <MudCheckBox T="bool?" @bind-Checked="_hasYouTubeId" Label="Has YouTube ID" Dense="true" />
+                <MudCheckBox T="bool?" @bind-Checked="_hasImvdbId" Label="Has IMVDb ID" Dense="true" />
+                <MudCheckBox T="bool?" @bind-Checked="_hasCollections" Label="In Collections" Dense="true" />
+
+                <!-- Date Filters -->
+                <MudDatePicker Label="Added After" @bind-Date="_addedAfter" 
+                              Variant="Variant.Outlined" Class="mt-3" />
+                <MudDatePicker Label="Added Before" @bind-Date="_addedBefore"
+                              Variant="Variant.Outlined" Class="mt-3" />
+
+                <!-- Search Actions -->
+                <MudStack Row="true" Class="mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.Search" 
+                              OnClick="PerformSearch" FullWidth="true">
+                        Search
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                              StartIcon="@Icons.Material.Filled.Clear"
+                              OnClick="ClearFilters">
+                        Clear
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Info"
+                              StartIcon="@Icons.Material.Filled.Save"
+                              OnClick="SaveSearch">
+                        Save
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Search Results -->
+        <MudItem xs="12" md="9">
+            <MudPaper Class="pa-4">
+                <!-- Results Header -->
+                <MudGrid AlignItems="Center" Class="mb-3">
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.h6">
+                            Results (@_searchResult?.TotalCount ?? 0 videos)
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="6" Class="text-right">
+                        <MudSelect T="string" Label="Sort By" @bind-Value="_searchQuery.SortBy" 
+                                  Variant="Variant.Outlined" Dense="true" Style="max-width: 200px;">
+                            <MudSelectItem Value="@("Title")">Title</MudSelectItem>
+                            <MudSelectItem Value="@("Artist")">Artist</MudSelectItem>
+                            <MudSelectItem Value="@("Year")">Year</MudSelectItem>
+                            <MudSelectItem Value="@("Duration")">Duration</MudSelectItem>
+                            <MudSelectItem Value="@("Created")">Date Added</MudSelectItem>
+                            <MudSelectItem Value="@("Modified")">Date Modified</MudSelectItem>
+                        </MudSelect>
+                        <MudIconButton Icon="@(_searchQuery.SortDescending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                                      OnClick="ToggleSortDirection" Color="Color.Primary" />
+                    </MudItem>
+                </MudGrid>
+
+                <!-- Loading State -->
+                @if (_isSearching)
+                {
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+                }
+
+                <!-- Results Grid -->
+                @if (_searchResult?.Videos?.Any() == true)
+                {
+                    <MudGrid>
+                        @foreach (var video in _searchResult.Videos)
+                        {
+                            <MudItem xs="12" sm="6" md="4" lg="3">
+                                <MudCard Class="video-card">
+                                    <MudCardMedia Image="@GetThumbnailUrl(video)" Height="180" />
+                                    <MudCardContent>
+                                        <MudText Typo="Typo.subtitle2" Class="text-truncate">
+                                            @video.Title
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            @(video.Artist ?? "Unknown Artist")
+                                        </MudText>
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            @if (video.Year.HasValue)
+                                            {
+                                                <MudChip T="string" Size="Size.Small">@video.Year.ToString()</MudChip>
+                                            }
+                                            @if (!string.IsNullOrEmpty(video.Resolution))
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@video.Resolution</MudChip>
+                                            }
+                                        </MudStack>
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                                      Color="Color.Primary" Size="Size.Small"
+                                                      OnClick="@(() => PlayVideo(video.Id))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                      Color="Color.Secondary" Size="Size.Small"
+                                                      OnClick="@(() => EditVideo(video.Id))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Info"
+                                                      Color="Color.Info" Size="Size.Small"
+                                                      OnClick="@(() => ViewVideoDetails(video.Id))" />
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+
+                    <!-- Pagination -->
+                    @if (_searchResult.TotalPages > 1)
+                    {
+                        <MudPagination Color="Color.Primary" Count="_searchResult.TotalPages"
+                                      Selected="_searchQuery.PageNumber"
+                                      SelectedChanged="OnPageChanged" Class="mt-4" />
+                    }
+                }
+                else if (!_isSearching && _hasSearched)
+                {
+                    <MudAlert Severity="Severity.Info">
+                        No videos found matching your search criteria.
+                    </MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private Fuzzbin.Services.Interfaces.SearchQuery _searchQuery = new();
+    private Fuzzbin.Services.Interfaces.SearchResult? _searchResult;
+    private List<Fuzzbin.Core.Entities.SavedSearch> _savedSearches = new();
+    private Fuzzbin.Core.Entities.SavedSearch? _selectedSavedSearch;
+    private bool _isSearching;
+    private bool _hasSearched;
+
+    private ExternalSearchQuery _externalQuery = new() { MaxResults = 8 };
+    private ExternalSearchResult? _externalResult;
+    private bool _isExternalSearching;
+
+    // Filter inputs
+    private string _artistInput = string.Empty;
+    private string _genreInput = string.Empty;
+    private IEnumerable<string> _selectedFormats = new HashSet<string>();
+    private IEnumerable<string> _selectedResolutions = new HashSet<string>();
+    private IEnumerable<Guid> _selectedCollectionIds = new HashSet<Guid>();
+    private bool? _hasYouTubeId;
+    private bool? _hasImvdbId;
+    private bool? _hasCollections;
+    private DateTime? _addedAfter;
+    private DateTime? _addedBefore;
+
+    // Available filter options
+    private List<string> _availableFormats = new() { "mp4", "webm", "mkv", "avi", "mov", "flv" };
+    private List<string> _availableResolutions = new() { "4K", "1080p", "720p", "480p", "360p" };
+    private List<Collection> _availableCollections = new();
+    private List<string> _availableArtists = new();
+    private List<string> _availableGenres = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFilterOptions();
+        await LoadSavedSearches();
+    }
+
+    private async Task LoadFilterOptions()
+    {
+        try
+        {
+            // Load collections
+            _availableCollections = (await CollectionService.GetAllCollectionsAsync()).ToList();
+
+            // Load unique artists and genres from videos
+            var videos = await VideoService.GetAllVideosAsync();
+            _availableArtists = videos
+                .Where(v => !string.IsNullOrEmpty(v.Artist))
+                .Select(v => v.Artist!)
+                .Distinct()
+                .OrderBy(a => a)
+                .ToList();
+
+            _availableGenres = videos
+                .SelectMany(v => v.Genres ?? new List<Genre>())
+                .Select(g => g.Name)
+                .Where(g => !string.IsNullOrEmpty(g))
+                .Distinct()
+                .OrderBy(g => g)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading filter options: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadSavedSearches()
+    {
+        try
+        {
+            _savedSearches = await SearchService.GetSavedSearchesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading saved searches: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchArtists(string value, CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask;
+        if (string.IsNullOrEmpty(value))
+            return _availableArtists.Take(10);
+
+        return _availableArtists
+            .Where(a => a.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Take(10);
+    }
+
+    private async Task<IEnumerable<string>> SearchGenres(string value, CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask;
+        if (string.IsNullOrEmpty(value))
+            return _availableGenres.Take(10);
+
+        return _availableGenres
+            .Where(g => g.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Take(10);
+    }
+
+    private Task AddArtistAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_artistInput) && !_searchQuery.Artists.Contains(_artistInput))
+        {
+            _searchQuery.Artists.Add(_artistInput);
+            _artistInput = string.Empty;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task RemoveArtist(MudChip<string> chip)
+    {
+        if (chip.Text != null)
+            _searchQuery.Artists.Remove(chip.Text);
+        return Task.CompletedTask;
+    }
+
+    private Task AddGenreAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_genreInput) && !_searchQuery.Genres.Contains(_genreInput))
+        {
+            _searchQuery.Genres.Add(_genreInput);
+            _genreInput = string.Empty;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task RemoveGenre(MudChip<string> chip)
+    {
+        if (chip.Text != null)
+            _searchQuery.Genres.Remove(chip.Text);
+        return Task.CompletedTask;
+    }
+
+    private async Task PerformSearch()
+    {
+        _isSearching = true;
+        _hasSearched = true;
+
+        try
+        {
+            // Update query from UI inputs
+            _searchQuery.Formats = _selectedFormats.ToList();
+            _searchQuery.Resolutions = _selectedResolutions.ToList();
+            _searchQuery.CollectionIds = _selectedCollectionIds.ToList();
+            _searchQuery.HasYouTubeId = _hasYouTubeId;
+            _searchQuery.HasImvdbId = _hasImvdbId;
+            _searchQuery.HasCollections = _hasCollections;
+            _searchQuery.AddedAfter = _addedAfter;
+            _searchQuery.AddedBefore = _addedBefore;
+
+            _searchResult = await SearchService.SearchAsync(_searchQuery);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Search failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSearching = false;
+        }
+    }
+
+    private void UseCurrentFiltersForExternal()
+    {
+        if (!string.IsNullOrWhiteSpace(_searchQuery.SearchText))
+        {
+            _externalQuery.SearchText = _searchQuery.SearchText!;
+        }
+
+        if (_searchQuery.Artists.Any())
+        {
+            _externalQuery.Artist = _searchQuery.Artists.First();
+        }
+        else if (!string.IsNullOrWhiteSpace(_artistInput))
+        {
+            _externalQuery.Artist = _artistInput;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_searchQuery.SearchText))
+        {
+            _externalQuery.Title = _searchQuery.SearchText;
+        }
+        else if (_searchQuery.Genres.Any())
+        {
+            _externalQuery.Title ??= _searchQuery.Genres.First();
+        }
+
+        _externalQuery.SearchText = _externalQuery.SearchText?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_externalQuery.SearchText))
+        {
+            var fallback = $"{_externalQuery.Artist ?? string.Empty} {_externalQuery.Title ?? string.Empty}".Trim();
+            _externalQuery.SearchText = fallback;
+        }
+    }
+
+    private async Task PerformExternalSearch()
+    {
+        if (_isExternalSearching)
+        {
+            return;
+        }
+
+        _isExternalSearching = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_externalQuery.SearchText))
+            {
+                UseCurrentFiltersForExternal();
+            }
+
+            _externalResult = await ExternalSearchService.SearchAsync(_externalQuery) ?? new ExternalSearchResult();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"External search failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isExternalSearching = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ClearFilters()
+    {
+        _searchQuery = new Fuzzbin.Services.Interfaces.SearchQuery();
+        _artistInput = string.Empty;
+        _genreInput = string.Empty;
+        _selectedFormats = new HashSet<string>();
+        _selectedResolutions = new HashSet<string>();
+        _selectedCollectionIds = new HashSet<Guid>();
+        _hasYouTubeId = null;
+        _hasImvdbId = null;
+        _hasCollections = null;
+        _addedAfter = null;
+        _addedBefore = null;
+        _searchResult = null;
+        _hasSearched = false;
+    }
+
+    private async Task SaveSearch()
+    {
+        var dialog = await DialogService.ShowAsync<SaveSearchDialog>("Save Search",
+            new DialogParameters { ["Query"] = _searchQuery });
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: Fuzzbin.Core.Entities.SavedSearch savedSearch })
+        {
+            try
+            {
+                savedSearch.Query = JsonSerializer.Serialize(_searchQuery);
+                await SearchService.SaveSearchAsync(savedSearch);
+                await LoadSavedSearches();
+                Snackbar.Add("Search saved successfully", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to save search: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void ToggleSortDirection()
+    {
+        _searchQuery.SortDescending = !_searchQuery.SortDescending;
+        _ = PerformSearch();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _searchQuery.PageNumber = page;
+        await PerformSearch();
+    }
+
+    private string GetThumbnailUrl(Video video)
+    {
+        // Return YouTube thumbnail if available
+        if (!string.IsNullOrEmpty(video.YouTubeId))
+            return $"https://img.youtube.com/vi/{video.YouTubeId}/mqdefault.jpg";
+
+        // Return placeholder
+        return "/images/video-placeholder.png";
+    }
+
+    private string GetExternalThumbnail(ExternalSearchItem item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.ArtworkUrl))
+        {
+            return item.ArtworkUrl;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.YtDlp?.ThumbnailUrl))
+        {
+            return item.YtDlp!.ThumbnailUrl!;
+        }
+
+        return "/images/video-placeholder.png";
+    }
+
+    private Color GetSourceColor(ExternalSearchSource source)
+    {
+        return source switch
+        {
+            ExternalSearchSource.Combined => Color.Primary,
+            ExternalSearchSource.Imvdb => Color.Success,
+            ExternalSearchSource.YtDlp => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private void PlayVideo(Guid videoId)
+    {
+        Navigation.NavigateTo($"/player?videoId={videoId}");
+    }
+
+    private void EditVideo(Guid videoId)
+    {
+        Navigation.NavigateTo($"/videos/edit/{videoId}");
+    }
+
+    private void ViewVideoDetails(Guid videoId)
+    {
+        Navigation.NavigateTo($"/videos/details/{videoId}");
+    }
+
+    private async Task LoadSavedSearch(Fuzzbin.Core.Entities.SavedSearch search)
+    {
+        if (search != null)
+        {
+            try
+            {
+                _searchQuery = JsonSerializer.Deserialize<Fuzzbin.Services.Interfaces.SearchQuery>(search.Query) ?? new Fuzzbin.Services.Interfaces.SearchQuery();
+                
+                // Update UI inputs from loaded query
+                _selectedFormats = new HashSet<string>(_searchQuery.Formats);
+                _selectedResolutions = new HashSet<string>(_searchQuery.Resolutions);
+                _selectedCollectionIds = new HashSet<Guid>(_searchQuery.CollectionIds);
+                _hasYouTubeId = _searchQuery.HasYouTubeId;
+                _hasImvdbId = _searchQuery.HasImvdbId;
+                _hasCollections = _searchQuery.HasCollections;
+                _addedAfter = _searchQuery.AddedAfter;
+                _addedBefore = _searchQuery.AddedBefore;
+
+                await PerformSearch();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to load saved search: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_selectedSavedSearch != null)
+        {
+            await LoadSavedSearch(_selectedSavedSearch);
+        }
+    }
+}
+
+<style>
+    .video-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .video-card .mud-card-content {
+        flex: 1;
+    }
+
+    .text-truncate {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>

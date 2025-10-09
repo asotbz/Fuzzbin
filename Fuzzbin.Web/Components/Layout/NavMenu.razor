@@ -1,0 +1,50 @@
+﻿@using MudBlazor
+
+<MudNavMenu>
+    <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+        Dashboard
+    </MudNavLink>
+    <MudNavLink Href="/videos" Icon="@Icons.Material.Filled.VideoLibrary">
+        Videos
+    </MudNavLink>
+    <MudNavLink Href="/search" Icon="@Icons.Material.Filled.Search">
+        Search
+    </MudNavLink>
+    <MudNavLink Href="/player" Icon="@Icons.Material.Filled.PlayCircle">
+        Player
+    </MudNavLink>
+    <MudNavLink Href="/downloads" Icon="@Icons.Material.Filled.CloudDownload">
+        Downloads
+    </MudNavLink>
+    <MudNavLink Href="/profile" Icon="@Icons.Material.Filled.ManageAccounts">
+        My Account
+    </MudNavLink>
+    <MudNavGroup Title="Manage" Icon="@Icons.Material.Filled.Folder" Expanded="false">
+        <MudNavLink Href="/collections" Icon="@Icons.Material.Filled.Collections">
+            Collections
+        </MudNavLink>
+        <MudNavLink Href="/genres" Icon="@Icons.Material.Filled.Category">
+            Genres
+        </MudNavLink>
+        <MudNavLink Href="/tags" Icon="@Icons.Material.Filled.Label">
+            Tags
+        </MudNavLink>
+        <MudNavLink Href="/thumbnails" Icon="@Icons.Material.Filled.Image">
+            Thumbnails
+        </MudNavLink>
+    </MudNavGroup>
+    <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">
+        Settings
+    </MudNavLink>
+    <MudNavLink Href="/about" Icon="@Icons.Material.Filled.Info">
+        About
+    </MudNavLink>
+</MudNavMenu>
+
+<MudSpacer />
+
+<div class="mud-nav-menu pa-2">
+    <MudText Typo="Typo.caption" Align="Align.Center">
+        Fuzzbin v1.0
+    </MudText>
+</div>

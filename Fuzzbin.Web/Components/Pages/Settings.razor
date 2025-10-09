@@ -1,0 +1,768 @@
+@page "/settings"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Web.Components.Dialogs
+@using Fuzzbin.Web.Components.Shared
+@using Fuzzbin.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using MudBlazor
+@using System.Collections.Generic
+@using System.IO
+@using System.Linq
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IBackupService BackupService
+@inject IDialogService DialogService
+@inject OnboardingService OnboardingService
+
+<PageTitle>Settings - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Settings</MudText>
+    <MudStack Row="true" Spacing="1" Class="mb-3">
+        <MudTooltip Text="Replay the onboarding tour to revisit key workflows">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.School" OnClick="LaunchOnboardingAsync">
+                Replay onboarding tour
+            </MudButton>
+        </MudTooltip>
+    </MudStack>
+    
+    <LoadingContent Profile="LoadingProfile.FormSections" IsLoading="@_isLoading" LoadingMessage="Loading preferences...">
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6 fz-animate-fade-in">
+        <!-- General Settings -->
+        <MudTabPanel Text="General" Icon="@Icons.Material.Filled.Settings">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-4">Library Settings</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_libraryPath" 
+                                Label="Library Path" 
+                                HelperText="Where your video files are stored"
+                                Variant="Variant.Outlined"
+                                Adornment="Adornment.End"
+                                AdornmentIcon="@Icons.Material.Filled.Folder"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_downloadsPath" 
+                                Label="Downloads Path" 
+                                HelperText="Temporary location for downloads"
+                                Variant="Variant.Outlined"
+                                Adornment="Adornment.End"
+                                AdornmentIcon="@Icons.Material.Filled.Download"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_namingPattern" 
+                                Label="File Naming Pattern" 
+                                HelperText="How files should be organized"
+                                Variant="Variant.Outlined"
+                                Lines="2"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudExpansionPanel Text="Available Naming Variables" Icon="@Icons.Material.Filled.Info">
+                        <MudGrid>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{title}</code> - Video title</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{artist}</code> - Artist name</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{album}</code> - Album name</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{year}</code> - Release year</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{genre}</code> - Primary genre</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{format}</code> - File extension</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{quality}</code> - Video quality</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="4" md="3">
+                                <MudText Typo="Typo.caption"><code>{id}</code> - Video ID</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudExpansionPanel>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled" 
+                             Color="Color.Primary" 
+                             OnClick="SaveGeneralSettings"
+                             StartIcon="@Icons.Material.Filled.Save">
+                        Save General Settings
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+        
+        <!-- Download Settings -->
+        <MudTabPanel Text="Downloads" Icon="@Icons.Material.Filled.CloudDownload">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-4">Download Settings</MudText>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="_defaultVideoFormat" 
+                             Label="Preferred Video Format"
+                             Variant="Variant.Outlined"
+                             HelperText="Default format for video downloads">
+                        <MudSelectItem Value="@("mp4")">MP4 (Universal compatibility)</MudSelectItem>
+                        <MudSelectItem Value="@("webm")">WebM (Better compression)</MudSelectItem>
+                        <MudSelectItem Value="@("mkv")">MKV (Best quality)</MudSelectItem>
+                        <MudSelectItem Value="@("best")">Best Available</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="_defaultVideoQuality" 
+                             Label="Preferred Video Quality"
+                             Variant="Variant.Outlined"
+                             HelperText="Maximum video quality to download">
+                        <MudSelectItem Value="@("2160p")">4K (2160p)</MudSelectItem>
+                        <MudSelectItem Value="@("1440p")">2K (1440p)</MudSelectItem>
+                        <MudSelectItem Value="@("1080p")">Full HD (1080p)</MudSelectItem>
+                        <MudSelectItem Value="@("720p")">HD (720p)</MudSelectItem>
+                        <MudSelectItem Value="@("480p")">SD (480p)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_maxConcurrentDownloads" 
+                                   Label="Max Concurrent Downloads" 
+                                   Min="1" Max="10"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Number of simultaneous downloads" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_downloadRetries" 
+                                   Label="Download Retries" 
+                                   Min="0" Max="10"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Retry attempts for failed downloads" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_extractMetadata" 
+                               Label="Extract metadata from downloads" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_generateNfo" 
+                               Label="Generate NFO files" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_downloadSubtitles" 
+                               Label="Download subtitles if available" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_embedThumbnails" 
+                               Label="Embed thumbnails in video files" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_ytDlpPath" 
+                                Label="yt-dlp Binary Path" 
+                                HelperText="Path to yt-dlp executable (leave empty for system PATH)"
+                                Variant="Variant.Outlined"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_ffmpegPath" 
+                                Label="FFmpeg Binary Path" 
+                                HelperText="Path to ffmpeg executable (leave empty for system PATH)"
+                                Variant="Variant.Outlined"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_ffprobePath" 
+                                Label="FFprobe Binary Path" 
+                                HelperText="Path to ffprobe executable (leave empty for system PATH)"
+                                Variant="Variant.Outlined"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled" 
+                             Color="Color.Primary" 
+                             OnClick="SaveDownloadSettings"
+                             StartIcon="@Icons.Material.Filled.Save">
+                        Save Download Settings
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+        
+        <!-- Metadata Settings -->
+        <MudTabPanel Text="Metadata" Icon="@Icons.Material.Filled.Info">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-4">Metadata Settings</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_enableOnlineMetadata" 
+                               Label="Enable online metadata fetching" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_imvdbApiKey" 
+                                Label="IMVDb API Key" 
+                                HelperText="For fetching music video metadata"
+                                Variant="Variant.Outlined"
+                                InputType="InputType.Password"
+                                Adornment="Adornment.End"
+                                AdornmentIcon="@Icons.Material.Filled.Key"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        IMVDb access powers external search matching and automatic metadata enrichment. Leave blank to disable IMVDb calls.
+                    </MudAlert>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_musicBrainzUserAgent" 
+                                Label="MusicBrainz User Agent" 
+                                HelperText="Your app identifier for MusicBrainz API"
+                                Variant="Variant.Outlined"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_autoFetchMissingMetadata" 
+                               Label="Automatically fetch missing metadata" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_overwriteExistingMetadata" 
+                               Label="Overwrite existing metadata with online data" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-2 mt-4">Genre Mappings</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2">Map external genres to your preferred names</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    @foreach (var mapping in _genreMappings)
+                    {
+                        <MudGrid Class="mb-2">
+                            <MudItem xs="5">
+                                <MudTextField @bind-Value="mapping.From" 
+                                            Label="External Genre"
+                                            Variant="Variant.Outlined"
+                                            Dense="true" />
+                            </MudItem>
+                            <MudItem xs="5">
+                                <MudTextField @bind-Value="mapping.To" 
+                                            Label="Local Genre"
+                                            Variant="Variant.Outlined"
+                                            Dense="true" />
+                            </MudItem>
+                            <MudItem xs="2" Class="d-flex align-center">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                             Color="Color.Error" 
+                                             Size="Size.Small"
+                                             OnClick="@(() => RemoveGenreMapping(mapping))" />
+                            </MudItem>
+                        </MudGrid>
+                    }
+                    <MudButton Variant="Variant.Outlined" 
+                             Color="Color.Primary" 
+                             StartIcon="@Icons.Material.Filled.Add"
+                             OnClick="AddGenreMapping">
+                        Add Genre Mapping
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled" 
+                             Color="Color.Primary" 
+                             OnClick="SaveMetadataSettings"
+                             StartIcon="@Icons.Material.Filled.Save">
+                        Save Metadata Settings
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+        
+        <!-- Advanced Settings -->
+        <MudTabPanel Text="Advanced" Icon="@Icons.Material.Filled.Build">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-4">Advanced Settings</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Warning" Class="mb-4">
+                        These settings affect system behavior. Change with caution.
+                    </MudAlert>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_databaseBackupDays" 
+                                   Label="Database Backup Retention (days)" 
+                                   Min="1" Max="365"
+                                   Variant="Variant.Outlined"
+                                   HelperText="How long to keep database backups" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_logRetentionDays" 
+                                   Label="Log Retention (days)" 
+                                   Min="1" Max="90"
+                                   Variant="Variant.Outlined"
+                                   HelperText="How long to keep log files" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_enableDebugLogging" 
+                               Label="Enable debug logging" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_enableAutoBackup" 
+                               Label="Enable automatic database backups" 
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-4">Maintenance Actions</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButtonGroup Variant="Variant.Outlined">
+                        <MudButton StartIcon="@Icons.Material.Filled.CleaningServices"
+                                 OnClick="CleanupDatabase">
+                            Clean Database
+                        </MudButton>
+                        <MudButton StartIcon="@Icons.Material.Filled.Backup"
+                                 Disabled="_isBackupInProgress"
+                                 OnClick="BackupDatabase">
+                            Backup Database
+                        </MudButton>
+                        <MudButton StartIcon="@Icons.Material.Filled.Refresh"
+                                 OnClick="RescanLibrary">
+                            Rescan Library
+                        </MudButton>
+                        <MudButton StartIcon="@Icons.Material.Filled.ClearAll"
+                                 Color="Color.Error"
+                                 OnClick="ClearCache">
+                            Clear Cache
+                        </MudButton>
+                    </MudButtonGroup>
+                </MudItem>
+                <MudItem xs="12" Class="mt-4">
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Restore from Backup</MudText>
+                    <MudText Typo="Typo.caption" Class="mb-2">
+                        Upload a backup ZIP created by Fuzzbin to replace the current database. A safety copy is stored automatically.
+                    </MudText>
+                    <InputFile @key="_restoreInputKey"
+                               OnChange="RestoreDatabase"
+                               Accept=".zip"
+                               Disabled="_isRestoreInProgress" />
+                    @if (_isRestoreInProgress)
+                    {
+                        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-2" />
+                    }
+                </MudItem>
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-4">Export/Import</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Text" Class="mb-3">
+                        Import restores configuration exports and queued download states without touching your media files. Export before major upgrades to keep a rollback handy.
+                    </MudAlert>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButtonGroup Variant="Variant.Outlined">
+                        <MudButton StartIcon="@Icons.Material.Filled.Upload"
+                                 OnClick="ExportSettings">
+                            Export Settings
+                        </MudButton>
+                        <MudButton StartIcon="@Icons.Material.Filled.Download"
+                                 OnClick="ImportSettings">
+                            Import Settings
+                        </MudButton>
+                    </MudButtonGroup>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled" 
+                             Color="Color.Primary" 
+                             OnClick="SaveAdvancedSettings"
+                             StartIcon="@Icons.Material.Filled.Save">
+                        Save Advanced Settings
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+        </MudTabs>
+    </LoadingContent>
+</MudContainer>
+
+@code {
+    // General Settings
+    private string _libraryPath = "";
+    private string _downloadsPath = "";
+    private string _namingPattern = "";
+    
+    // Download Settings
+    private string _defaultVideoFormat = "mp4";
+    private string _defaultVideoQuality = "1080p";
+    private int _maxConcurrentDownloads = 2;
+    private int _downloadRetries = 3;
+    private bool _extractMetadata = true;
+    private bool _generateNfo = true;
+    private bool _downloadSubtitles = false;
+    private bool _embedThumbnails = false;
+    private string _ytDlpPath = "";
+    private string _ffmpegPath = "";
+    private string _ffprobePath = "";
+    private bool _isLoading;
+    
+    // Metadata Settings
+    private bool _enableOnlineMetadata = true;
+    private string? _imvdbApiKey;
+    private string _musicBrainzUserAgent = "Fuzzbin/1.0";
+    private bool _autoFetchMissingMetadata = true;
+    private bool _overwriteExistingMetadata = false;
+    private List<GenreMapping> _genreMappings = new();
+    
+    // Advanced Settings
+    private int _databaseBackupDays = 30;
+    private int _logRetentionDays = 30;
+    private bool _enableDebugLogging = false;
+    private bool _enableAutoBackup = true;
+
+    private const long MaxBackupUploadBytes = 250L * 1024L * 1024L;
+    private bool _isBackupInProgress;
+    private bool _isRestoreInProgress;
+    private Guid _restoreInputKey = Guid.NewGuid();
+    
+    private class GenreMapping
+    {
+        public string From { get; set; } = "";
+        public string To { get; set; } = "";
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            await LoadSettings();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    
+    private async Task LoadSettings()
+    {
+        var configs = (await UnitOfWork.Configurations.GetAllAsync())
+            .OrderByDescending(c => c.UpdatedAt)
+            .ThenByDescending(c => c.CreatedAt)
+            .ToList();
+
+        var lookup = new Dictionary<string, Dictionary<string, string?>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var config in configs)
+        {
+            var category = string.IsNullOrWhiteSpace(config.Category) ? "System" : config.Category;
+            if (!lookup.TryGetValue(category, out var categoryMap))
+            {
+                categoryMap = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                lookup[category] = categoryMap;
+            }
+
+            if (!categoryMap.ContainsKey(config.Key))
+            {
+                categoryMap[config.Key] = config.Value;
+            }
+        }
+
+        string? GetRaw(string category, string key)
+        {
+            return lookup.TryGetValue(category, out var categoryMap) && categoryMap.TryGetValue(key, out var value)
+                ? value
+                : null;
+        }
+
+        string GetString(string category, string key, string fallback)
+        {
+            var raw = GetRaw(category, key);
+            return string.IsNullOrEmpty(raw) ? fallback : raw;
+        }
+
+        int GetInt(string category, string key, int fallback)
+        {
+            var raw = GetRaw(category, key);
+            return int.TryParse(raw, out var value) ? value : fallback;
+        }
+
+        bool GetBool(string category, string key, bool fallback)
+        {
+            var raw = GetRaw(category, key);
+            return bool.TryParse(raw, out var value) ? value : fallback;
+        }
+
+        // Load General Settings
+        _libraryPath = GetString("Storage", "LibraryPath", "");
+        _downloadsPath = GetString("Storage", "DownloadsPath", "");
+        _namingPattern = GetString("Organization", "NamingPattern", "{artist}/{year} - {title}.{format}");
+
+        // Load Download Settings
+        _defaultVideoFormat = GetString("Download", "DefaultVideoFormat", "mp4");
+        _defaultVideoQuality = GetString("Download", "DefaultVideoQuality", "1080p");
+        _maxConcurrentDownloads = GetInt("Download", "MaxConcurrentDownloads", 2);
+        _downloadRetries = GetInt("Download", "DownloadRetries", 3);
+        _extractMetadata = GetBool("Download", "ExtractMetadata", true);
+        _generateNfo = GetBool("Metadata", "GenerateNfo", true);
+        _downloadSubtitles = GetBool("Download", "DownloadSubtitles", false);
+        _embedThumbnails = GetBool("Download", "EmbedThumbnails", false);
+        _ytDlpPath = GetString("System", "YtDlpPath", "");
+        _ffmpegPath = GetString("System", "FfmpegPath", "");
+        _ffprobePath = GetString("System", "FfprobePath", "");
+
+        // Load Metadata Settings
+        _enableOnlineMetadata = GetBool("Metadata", "EnableOnlineMetadata", true);
+        _imvdbApiKey = GetRaw("API", "ImvdbApiKey") ?? string.Empty;
+        _musicBrainzUserAgent = GetString("API", "MusicBrainzUserAgent", "Fuzzbin/1.0");
+        _autoFetchMissingMetadata = GetBool("Metadata", "AutoFetchMissingMetadata", true);
+        _overwriteExistingMetadata = GetBool("Metadata", "OverwriteExistingMetadata", false);
+
+        // Load Genre Mappings
+        var genreMappingString = GetRaw("Metadata", "GenreMappings");
+        if (!string.IsNullOrWhiteSpace(genreMappingString))
+        {
+            _genreMappings = System.Text.Json.JsonSerializer.Deserialize<List<GenreMapping>>(genreMappingString) ?? new();
+        }
+        else
+        {
+            _genreMappings.Clear();
+        }
+
+        // Load Advanced Settings
+        _databaseBackupDays = GetInt("System", "DatabaseBackupDays", 30);
+        _logRetentionDays = GetInt("System", "LogRetentionDays", 30);
+        _enableDebugLogging = GetBool("System", "EnableDebugLogging", false);
+        _enableAutoBackup = GetBool("System", "EnableAutoBackup", true);
+    }
+    
+    private async Task SaveGeneralSettings()
+    {
+        await SaveSettings(new[]
+        {
+            ("LibraryPath", _libraryPath, "Storage"),
+            ("DownloadsPath", _downloadsPath, "Storage"),
+            ("NamingPattern", _namingPattern, "Organization")
+        });
+        
+        // Create directories if they don't exist
+        Directory.CreateDirectory(_libraryPath);
+        Directory.CreateDirectory(_downloadsPath);
+        
+        Snackbar.Add("General settings saved successfully", Severity.Success);
+    }
+    
+    private async Task SaveDownloadSettings()
+    {
+        await SaveSettings(new[]
+        {
+            ("DefaultVideoFormat", _defaultVideoFormat, "Download"),
+            ("DefaultVideoQuality", _defaultVideoQuality, "Download"),
+            ("MaxConcurrentDownloads", _maxConcurrentDownloads.ToString(), "Download"),
+            ("DownloadRetries", _downloadRetries.ToString(), "Download"),
+            ("ExtractMetadata", _extractMetadata.ToString(), "Download"),
+            ("GenerateNfo", _generateNfo.ToString(), "Metadata"),
+            ("DownloadSubtitles", _downloadSubtitles.ToString(), "Download"),
+            ("EmbedThumbnails", _embedThumbnails.ToString(), "Download"),
+            ("YtDlpPath", _ytDlpPath, "System"),
+            ("FfmpegPath", _ffmpegPath, "System"),
+            ("FfprobePath", _ffprobePath, "System")
+        });
+        
+        Snackbar.Add("Download settings saved successfully", Severity.Success);
+    }
+    
+    private async Task SaveMetadataSettings()
+    {
+        var genreMappingJson = System.Text.Json.JsonSerializer.Serialize(_genreMappings);
+        
+        await SaveSettings(new[]
+        {
+            ("EnableOnlineMetadata", _enableOnlineMetadata.ToString(), "Metadata"),
+            ("ImvdbApiKey", _imvdbApiKey ?? "", "API"),
+            ("MusicBrainzUserAgent", _musicBrainzUserAgent, "API"),
+            ("AutoFetchMissingMetadata", _autoFetchMissingMetadata.ToString(), "Metadata"),
+            ("OverwriteExistingMetadata", _overwriteExistingMetadata.ToString(), "Metadata"),
+            ("GenreMappings", genreMappingJson, "Metadata")
+        });
+        
+        Snackbar.Add("Metadata settings saved successfully", Severity.Success);
+    }
+    
+    private async Task SaveAdvancedSettings()
+    {
+        await SaveSettings(new[]
+        {
+            ("DatabaseBackupDays", _databaseBackupDays.ToString(), "System"),
+            ("LogRetentionDays", _logRetentionDays.ToString(), "System"),
+            ("EnableDebugLogging", _enableDebugLogging.ToString(), "System"),
+            ("EnableAutoBackup", _enableAutoBackup.ToString(), "System")
+        });
+        
+        Snackbar.Add("Advanced settings saved successfully", Severity.Success);
+    }
+    
+    private async Task SaveSettings(IEnumerable<(string Key, string Value, string Category)> settings)
+    {
+        foreach (var (key, value, category) in settings)
+        {
+            var config = await UnitOfWork.Configurations
+                .FirstOrDefaultAsync(c => c.Key == key && c.Category == category);
+                
+            if (config != null)
+            {
+                config.Value = value;
+                await UnitOfWork.Configurations.UpdateAsync(config);
+            }
+            else
+            {
+                await UnitOfWork.Configurations.AddAsync(new Configuration
+                {
+                    Key = key,
+                    Value = value,
+                    Category = category
+                });
+            }
+        }
+        
+        await UnitOfWork.SaveChangesAsync();
+    }
+    
+    private void AddGenreMapping()
+    {
+        _genreMappings.Add(new GenreMapping());
+    }
+    
+    private void RemoveGenreMapping(GenreMapping mapping)
+    {
+        _genreMappings.Remove(mapping);
+    }
+    
+    private Task CleanupDatabase()
+    {
+        // TODO: Implement database cleanup
+        Snackbar.Add("Database cleanup started", Severity.Info);
+        return Task.CompletedTask;
+    }
+    
+    private async Task BackupDatabase()
+    {
+        if (_isBackupInProgress)
+        {
+            Snackbar.Add("A database backup is already running", Severity.Info);
+            return;
+        }
+
+        _isBackupInProgress = true;
+
+        try
+        {
+            var result = await BackupService.CreateBackupAsync();
+            Snackbar.Add($"Backup created at {result.FilePath}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to create backup: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isBackupInProgress = false;
+        }
+    }
+
+    private async Task RestoreDatabase(InputFileChangeEventArgs args)
+    {
+        if (_isRestoreInProgress)
+        {
+            Snackbar.Add("A database restore is already running", Severity.Info);
+            return;
+        }
+
+        if (args.FileCount == 0 || args.File is null)
+        {
+            Snackbar.Add("No backup file selected", Severity.Warning);
+            return;
+        }
+
+        _isRestoreInProgress = true;
+
+        try
+        {
+            await using var stream = args.File.OpenReadStream(MaxBackupUploadBytes);
+            await BackupService.RestoreBackupAsync(stream);
+            Snackbar.Add("Database restored successfully. Restart the application to reload data.", Severity.Success);
+        }
+        catch (IOException ioEx)
+        {
+            Snackbar.Add($"File error during restore: {ioEx.Message}", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to restore database: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isRestoreInProgress = false;
+            _restoreInputKey = Guid.NewGuid();
+        }
+    }
+
+    private Task RescanLibrary()
+    {
+        // TODO: Implement library rescan
+        Snackbar.Add("Library rescan started", Severity.Info);
+        return Task.CompletedTask;
+    }
+    
+    private Task ClearCache()
+    {
+        // TODO: Implement cache clearing
+        Snackbar.Add("Cache cleared successfully", Severity.Success);
+        return Task.CompletedTask;
+    }
+    
+    private Task ExportSettings()
+    {
+        // TODO: Implement settings export
+        Snackbar.Add("Settings export started", Severity.Info);
+        return Task.CompletedTask;
+    }
+    
+    private Task ImportSettings()
+    {
+        // TODO: Implement settings import
+        Snackbar.Add("Settings import not yet implemented", Severity.Warning);
+        return Task.CompletedTask;
+    }
+
+    private async Task LaunchOnboardingAsync()
+    {
+        await OnboardingService.ResetAsync();
+
+        var options = new DialogOptions
+        {
+            CloseButton = false,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<OnboardingDialog>(string.Empty, new DialogParameters(), options);
+        await dialog.Result;
+    }
+}

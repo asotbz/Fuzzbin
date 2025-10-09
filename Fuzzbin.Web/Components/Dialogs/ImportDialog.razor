@@ -1,0 +1,304 @@
+@using System.Threading
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Forms
+@inject ICollectionService CollectionService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.body1" Class="mb-3">
+                    Import a playlist file to create a new collection
+                </MudText>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudTextField @bind-Value="collectionName" 
+                            Label="Collection Name" 
+                            Variant="Variant.Outlined"
+                            Required="true"
+                            RequiredError="Collection name is required"
+                            HelperText="Name for the imported collection" />
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudFileUpload T="IBrowserFile" FilesChanged="UploadFile" Accept=".m3u,.m3u8,.json,.csv">
+                    <ActivatorContent>
+                        <MudPaper Height="200px" Outlined="true" Class="pa-4 d-flex flex-column align-center justify-center">
+                            @if (selectedFile == null)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Style="font-size: 48px;" Color="Color.Default" />
+                                <MudText Typo="Typo.h6" Class="mt-2">Click here to browse or drag and drop</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    Supported formats: M3U, JSON, CSV
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.InsertDriveFile" Style="font-size: 48px;" Color="Color.Success" />
+                                <MudText Typo="Typo.h6" Class="mt-2">@selectedFile.Name</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @FormatFileSize(selectedFile.Size)
+                                </MudText>
+                                <MudButton StartIcon="@Icons.Material.Filled.Clear" 
+                                         Size="Size.Small" 
+                                         Color="Color.Error"
+                                         OnClick="ClearFile"
+                                         Class="mt-2">
+                                    Clear
+                                </MudButton>
+                            }
+                        </MudPaper>
+                    </ActivatorContent>
+                </MudFileUpload>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudRadioGroup @bind-Value="importMode">
+                    <MudRadio Value="@("match-path")" Color="Color.Primary">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body1">Match by File Path</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Match videos using exact file paths
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                    <MudRadio Value="@("match-name")" Color="Color.Primary">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body1">Match by Filename</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Match videos by filename only (more flexible)
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                    <MudRadio Value="@("match-metadata")" Color="Color.Primary" Disabled="@(!isJsonFormat)">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body1">Match by Metadata</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Match by title and artist (JSON only)
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="createMissingVideos" 
+                          Label="Create entries for missing videos" 
+                          Color="Color.Info"
+                          HelperText="Create placeholder entries for videos not found in the library" />
+            </MudItem>
+            
+            @if (importProgress > 0)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption">Import Progress</MudText>
+                    <MudProgressLinear Value="@importProgress" Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        @importStatus
+                    </MudText>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Disabled="@(isImporting || selectedFile == null || string.IsNullOrWhiteSpace(collectionName))"
+                  OnClick="Import">
+            @if (isImporting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Importing...</MudText>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Upload" Class="mr-2" />
+                @("Import")
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    private const long MaxImportUploadBytes = 250L * 1024L * 1024L; // 250 MB
+    private const int UploadChunkSize = 1 * 1024 * 1024; // 1 MB
+
+    private string collectionName = "";
+    private IBrowserFile? selectedFile = null;
+    private string importMode = "match-path";
+    private bool createMissingVideos = false;
+    private bool isImporting = false;
+    private int importProgress = 0;
+    private string importStatus = "";
+    
+    private bool isJsonFormat => selectedFile?.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ?? false;
+    
+    private Task UploadFile(IBrowserFile file)
+    {
+        selectedFile = file;
+        
+        // Auto-generate collection name from filename if empty
+        if (string.IsNullOrWhiteSpace(collectionName))
+        {
+            collectionName = Path.GetFileNameWithoutExtension(file.Name);
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    private void ClearFile()
+    {
+        selectedFile = null;
+        importProgress = 0;
+        importStatus = "";
+    }
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private async Task Import()
+    {
+        if (selectedFile == null || string.IsNullOrWhiteSpace(collectionName)) return;
+        
+        isImporting = true;
+        importProgress = 0;
+        
+        try
+        {
+            // Save uploaded file temporarily
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "Fuzzbin", "imports");
+            if (!Directory.Exists(tempDirectory))
+            {
+                Directory.CreateDirectory(tempDirectory);
+            }
+            
+            var tempFilePath = Path.Combine(tempDirectory, selectedFile.Name);
+            
+            importStatus = "Uploading file...";
+            importProgress = 10;
+            StateHasChanged();
+            
+            await using var fileStream = selectedFile.OpenReadStream(maxAllowedSize: MaxImportUploadBytes);
+            await using var destinationStream = File.Create(tempFilePath);
+
+            importStatus = "Uploading file...";
+            await CopyStreamInChunksAsync(
+                fileStream,
+                destinationStream,
+                selectedFile.Size,
+                UploadChunkSize,
+                progress => InvokeAsync(() =>
+                {
+                    importProgress = 10 + (int)Math.Min(40, progress * 40);
+                    importStatus = $"Uploading file ({progress * 100:F1}%)";
+                    StateHasChanged();
+                }),
+                cancellationToken: CancellationToken.None);
+
+            importStatus = "Processing file...";
+            importProgress = Math.Max(importProgress, 50);
+            StateHasChanged();
+            
+            // Import the collection
+            var collection = await CollectionService.ImportCollectionAsync(tempFilePath, collectionName);
+            
+            importProgress = 90;
+            StateHasChanged();
+            
+            // Clean up temp file
+            try
+            {
+                File.Delete(tempFilePath);
+            }
+            catch { /* Ignore cleanup errors */ }
+            
+            if (collection != null)
+            {
+                importProgress = 100;
+                importStatus = "Import completed successfully!";
+                StateHasChanged();
+                await Task.Delay(500); // Show completion status briefly
+                
+                Snackbar.Add($"Successfully imported collection '{collectionName}'", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(collection));
+            }
+            else
+            {
+                Snackbar.Add("Failed to import collection", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error importing collection: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal size = bytes;
+        
+        while (size >= 1024 && counter < suffixes.Length - 1)
+        {
+            counter++;
+            size /= 1024;
+        }
+
+        return $"{size:n2} {suffixes[counter]}";
+    }
+
+    private static async Task CopyStreamInChunksAsync(
+        Stream source,
+        Stream destination,
+        long totalBytes,
+        int chunkSize,
+        Func<double, Task>? reportProgress,
+        CancellationToken cancellationToken = default)
+    {
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(chunkSize);
+        try
+        {
+            long bytesCopied = 0;
+            int bytesRead;
+
+            while ((bytesRead = await source.ReadAsync(buffer.AsMemory(0, chunkSize), cancellationToken)) > 0)
+            {
+                await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                bytesCopied += bytesRead;
+
+                if (totalBytes > 0 && reportProgress != null)
+                {
+                    await reportProgress(Math.Min(1d, bytesCopied / (double)totalBytes)).ConfigureAwait(false);
+                }
+            }
+
+            await destination.FlushAsync(cancellationToken);
+            if (reportProgress != null)
+            {
+                await reportProgress(1.0).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+}
+
+<style>
+    .mud-file-upload {
+        width: 100%;
+    }
+</style>

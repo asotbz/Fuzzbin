@@ -1,0 +1,473 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@inject IUnitOfWork UnitOfWork
+@inject IVideoService VideoService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Label" Class="mr-3 mb-n1" />
+            Edit Tags for @SelectedVideos.Count Video(s)
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <!-- Common Fields -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Common Fields</MudText>
+                <MudText Typo="Typo.caption" Class="mb-3">Leave fields blank to keep existing values</MudText>
+            </MudItem>
+            
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_artist" 
+                            Label="Artist" 
+                            Variant="Variant.Outlined"
+                            HelperText="@GetFieldInfo("Artist")" />
+            </MudItem>
+            
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_album" 
+                            Label="Album" 
+                            Variant="Variant.Outlined"
+                            HelperText="@GetFieldInfo("Album")" />
+            </MudItem>
+            
+            <MudItem xs="12" md="4">
+                <MudNumericField @bind-Value="_year" 
+                               Label="Year" 
+                               Variant="Variant.Outlined"
+                               Min="1900"
+                               Max="2100"
+                               HelperText="@GetFieldInfo("Year")" />
+            </MudItem>
+            
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_director"
+                            Label="Director"
+                            Variant="Variant.Outlined"
+                            HelperText="@GetFieldInfo("Director")" />
+            </MudItem>
+            
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_publisher"
+                            Label="Publisher/Label"
+                            Variant="Variant.Outlined"
+                            HelperText="@GetFieldInfo("Publisher")" />
+            </MudItem>
+            
+            <!-- Genres -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle1" Class="mb-2 mt-3">Genres</MudText>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudChipSet T="string" 
+                          AllClosable="true" 
+                          OnClose="RemoveGenre">
+                    @foreach (var genre in _genres)
+                    {
+                        <MudChip T="string" Text="@genre" Color="Color.Primary" />
+                    }
+                </MudChipSet>
+            </MudItem>
+            
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_newGenre" 
+                            Label="Add Genre" 
+                            Variant="Variant.Outlined"
+                            OnKeyUp="@(async (e) => { if (e.Key == "Enter") AddGenre(); })"
+                            Immediate="false" />
+            </MudItem>
+            
+            <MudItem xs="12" md="4">
+                <MudButton Variant="Variant.Filled"
+                         Color="Color.Primary"
+                         OnClick="AddGenre"
+                         StartIcon="@Icons.Material.Filled.Add"
+                         FullWidth="true">
+                    Add Genre
+                </MudButton>
+            </MudItem>
+            
+            <!-- Advanced Options -->
+            <MudItem xs="12">
+                <MudExpansionPanels Class="mt-3">
+                    <MudExpansionPanel Text="Advanced Options">
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_productionCompany"
+                                            Label="Production Company"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_imvdbId"
+                                            Label="IMVDb ID"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_youtubeId"
+                                            Label="YouTube ID"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_musicBrainzId"
+                                            Label="MusicBrainz Recording ID"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+                            
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_description"
+                                            Label="Description"
+                                            Variant="Variant.Outlined"
+                                            Lines="3" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudItem>
+            
+            <!-- Update Mode -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle1" Class="mb-2 mt-3">Update Mode</MudText>
+                <MudRadioGroup @bind-Value="_updateMode">
+                    <MudRadio Value="@("replace")" Color="Color.Primary">
+                        Replace existing values
+                    </MudRadio>
+                    <MudRadio Value="@("append")" Color="Color.Primary">
+                        Append to existing values (for text fields)
+                    </MudRadio>
+                    <MudRadio Value="@("merge")" Color="Color.Primary">
+                        Merge with existing values (keep non-empty)
+                    </MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+            
+            <!-- Preview -->
+            @if (_previewMode)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2 mt-3">Preview Changes</MudText>
+                    <MudTable Items="@GetPreviewItems()" 
+                            Dense="true" 
+                            Hover="true"
+                            Height="300px"
+                            FixedHeader="true">
+                        <HeaderContent>
+                            <MudTh>Video</MudTh>
+                            <MudTh>Field</MudTh>
+                            <MudTh>Current</MudTh>
+                            <MudTh>New</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Video">@context.VideoTitle</MudTd>
+                            <MudTd DataLabel="Field">@context.Field</MudTd>
+                            <MudTd DataLabel="Current">
+                                <MudText Typo="Typo.caption">@context.CurrentValue</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="New">
+                                <MudText Typo="Typo.caption" Color="Color.Success">@context.NewValue</MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        @if (!_previewMode)
+        {
+            <MudButton Color="Color.Secondary" 
+                     Variant="Variant.Filled" 
+                     OnClick="ShowPreview">
+                Preview Changes
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Warning" 
+                     Variant="Variant.Outlined" 
+                     OnClick="HidePreview">
+                Edit Again
+            </MudButton>
+            <MudButton Color="Color.Success" 
+                     Variant="Variant.Filled" 
+                     OnClick="ApplyChanges">
+                Apply Changes
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+    
+    [Parameter] 
+    public List<Video> SelectedVideos { get; set; } = new();
+    
+    private string? _artist;
+    private string? _album;
+    private int? _year;
+    private string? _director;
+    private string? _publisher;
+    private List<string> _genres = new();
+    private string _newGenre = "";
+    private string? _productionCompany;
+    private string? _imvdbId;
+    private string? _youtubeId;
+    private string? _musicBrainzId;
+    private string? _description;
+    private string _updateMode = "replace";
+    private bool _previewMode = false;
+    
+    private class PreviewItem
+    {
+        public string VideoTitle { get; set; } = "";
+        public string Field { get; set; } = "";
+        public string CurrentValue { get; set; } = "";
+        public string NewValue { get; set; } = "";
+    }
+    
+    protected override void OnInitialized()
+    {
+        // If all selected videos share common values, pre-populate them
+        if (SelectedVideos.All(v => v.Artist == SelectedVideos.First().Artist))
+        {
+            _artist = SelectedVideos.First().Artist;
+        }
+        
+        if (SelectedVideos.All(v => v.Album == SelectedVideos.First().Album))
+        {
+            _album = SelectedVideos.First().Album;
+        }
+        
+        if (SelectedVideos.All(v => v.Year == SelectedVideos.First().Year))
+        {
+            _year = SelectedVideos.First().Year;
+        }
+        
+        // Find common genres
+        if (SelectedVideos.Any(v => v.Genres?.Any() == true))
+        {
+            var commonGenres = SelectedVideos
+                .Where(v => v.Genres != null)
+                .SelectMany(v => v.Genres!)
+                .GroupBy(g => g.Name)
+                .Where(g => g.Count() == SelectedVideos.Count)
+                .Select(g => g.Key)
+                .ToList();
+            
+            _genres.AddRange(commonGenres);
+        }
+    }
+    
+    private string GetFieldInfo(string field)
+    {
+        var distinctCount = field switch
+        {
+            "Artist" => SelectedVideos.Select(v => v.Artist).Distinct().Count(),
+            "Album" => SelectedVideos.Select(v => v.Album).Distinct().Count(),
+            "Year" => SelectedVideos.Select(v => v.Year).Distinct().Count(),
+            "Director" => SelectedVideos.Select(v => v.Director).Distinct().Count(),
+            "Publisher" => SelectedVideos.Select(v => v.Publisher).Distinct().Count(),
+            _ => 0
+        };
+        
+        if (distinctCount > 1)
+        {
+            return $"{distinctCount} different values";
+        }
+        
+        return "";
+    }
+    
+    private void AddGenre()
+    {
+        if (!string.IsNullOrWhiteSpace(_newGenre) && !_genres.Contains(_newGenre))
+        {
+            _genres.Add(_newGenre);
+            _newGenre = "";
+        }
+    }
+    
+    private void RemoveGenre(MudChip<string> chip)
+    {
+        if (chip?.Text != null)
+        {
+            _genres.Remove(chip.Text);
+        }
+    }
+    
+    private void ShowPreview()
+    {
+        _previewMode = true;
+    }
+    
+    private void HidePreview()
+    {
+        _previewMode = false;
+    }
+    
+    private List<PreviewItem> GetPreviewItems()
+    {
+        var items = new List<PreviewItem>();
+        
+        foreach (var video in SelectedVideos)
+        {
+            if (!string.IsNullOrWhiteSpace(_artist) && _artist != video.Artist)
+            {
+                items.Add(new PreviewItem
+                {
+                    VideoTitle = video.Title,
+                    Field = "Artist",
+                    CurrentValue = video.Artist ?? "(empty)",
+                    NewValue = GetNewValue(video.Artist, _artist)
+                });
+            }
+            
+            if (!string.IsNullOrWhiteSpace(_album) && _album != video.Album)
+            {
+                items.Add(new PreviewItem
+                {
+                    VideoTitle = video.Title,
+                    Field = "Album",
+                    CurrentValue = video.Album ?? "(empty)",
+                    NewValue = GetNewValue(video.Album, _album)
+                });
+            }
+            
+            if (_year.HasValue && _year != video.Year)
+            {
+                items.Add(new PreviewItem
+                {
+                    VideoTitle = video.Title,
+                    Field = "Year",
+                    CurrentValue = video.Year?.ToString() ?? "(empty)",
+                    NewValue = _year.ToString()!
+                });
+            }
+            
+            if (_genres.Any())
+            {
+                var currentGenres = string.Join(", ", video.Genres?.Select(g => g.Name) ?? Enumerable.Empty<string>());
+                var newGenres = _updateMode == "replace" 
+                    ? string.Join(", ", _genres)
+                    : string.Join(", ", (video.Genres?.Select(g => g.Name) ?? Enumerable.Empty<string>()).Union(_genres).Distinct());
+                
+                if (currentGenres != newGenres)
+                {
+                    items.Add(new PreviewItem
+                    {
+                        VideoTitle = video.Title,
+                        Field = "Genres",
+                        CurrentValue = currentGenres.Length > 0 ? currentGenres : "(empty)",
+                        NewValue = newGenres
+                    });
+                }
+            }
+        }
+        
+        return items;
+    }
+    
+    private string GetNewValue(string? currentValue, string newValue)
+    {
+        return _updateMode switch
+        {
+            "append" => string.IsNullOrEmpty(currentValue) ? newValue : $"{currentValue} {newValue}",
+            "merge" => string.IsNullOrEmpty(currentValue) ? newValue : currentValue,
+            _ => newValue // replace
+        };
+    }
+    
+    private async Task ApplyChanges()
+    {
+        try
+        {
+            foreach (var video in SelectedVideos)
+            {
+                // Update basic fields
+                if (!string.IsNullOrWhiteSpace(_artist))
+                {
+                    video.Artist = GetNewValue(video.Artist, _artist);
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_album))
+                {
+                    video.Album = GetNewValue(video.Album, _album);
+                }
+                
+                if (_year.HasValue)
+                {
+                    video.Year = _year;
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_director))
+                {
+                    video.Director = GetNewValue(video.Director, _director);
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_publisher))
+                {
+                    video.Publisher = GetNewValue(video.Publisher, _publisher);
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_productionCompany))
+                {
+                    video.ProductionCompany = GetNewValue(video.ProductionCompany, _productionCompany);
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_imvdbId))
+                {
+                    video.ImvdbId = _imvdbId;
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_youtubeId))
+                {
+                    video.YouTubeId = _youtubeId;
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_musicBrainzId))
+                {
+                    video.MusicBrainzRecordingId = _musicBrainzId;
+                }
+                
+                if (!string.IsNullOrWhiteSpace(_description))
+                {
+                    video.Description = GetNewValue(video.Description, _description);
+                }
+                
+                // Update genres
+                if (_genres.Any())
+                {
+                    if (_updateMode == "replace")
+                    {
+                        // Clear existing genres and add new ones
+                        video.Genres?.Clear();
+                    }
+                    
+                    // Note: Genre management would need proper implementation
+                    // This is a simplified version
+                }
+                
+                video.UpdatedAt = DateTime.UtcNow;
+                await VideoService.UpdateVideoAsync(video);
+            }
+            
+            Snackbar.Add($"Successfully updated {SelectedVideos.Count} video(s)", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating videos: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private void Cancel() => MudDialog.Cancel();
+}

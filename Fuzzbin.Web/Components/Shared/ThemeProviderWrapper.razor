@@ -1,0 +1,51 @@
+@using MudBlazor
+@inject Fuzzbin.Web.Services.ThemeService ThemeService
+@implements IAsyncDisposable
+
+<MudThemeProvider Theme="@_currentTheme" IsDarkMode="@_isDarkMode" />
+
+@code {
+    private MudTheme _currentTheme = new();
+    private bool _isDarkMode;
+    private bool _initialized;
+    private bool _disposed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            ThemeService.ThemeChanged += HandleThemeChanged;
+            await ThemeService.EnsureInitializedAsync();
+            ApplyTheme();
+            _initialized = true;
+            StateHasChanged();
+        }
+    }
+
+    private void HandleThemeChanged()
+    {
+        ApplyTheme();
+        if (_initialized && !_disposed)
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ApplyTheme()
+    {
+        _currentTheme = ThemeService.Theme;
+        _isDarkMode = ThemeService.IsDarkMode;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        ThemeService.ThemeChanged -= HandleThemeChanged;
+        _disposed = true;
+        await ValueTask.CompletedTask;
+    }
+}

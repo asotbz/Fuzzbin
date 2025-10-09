@@ -1,0 +1,159 @@
+@using MudBlazor
+@using System.Linq
+
+<MudPaper Class="pa-4 fz-filter-sidebar" Elevation="1">
+    <div class="d-flex justify-space-between align-center mb-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudText Typo="Typo.h6">Filters</MudText>
+            <MudTooltip Text="Select multiple facets to intersect results. Hold Shift to select ranges.">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Secondary" Size="Size.Small" />
+            </MudTooltip>
+        </MudStack>
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClearFilters" Disabled="!HasActiveFilters">
+            Clear
+        </MudButton>
+    </div>
+    <MudDivider Class="mb-2" />
+
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+        Tip: Hold <strong>Shift</strong> while clicking to select a range of years or <strong>Ctrl</strong> to toggle individual facets without closing the panel.
+    </MudText>
+
+    <MudExpansionPanels Elevation="0">
+        <MudExpansionPanel Text="Genres" Expanded="true">
+            @if (Genres?.Count > 0)
+            {
+                @foreach (var genre in Genres.OrderByDescending(g => g.Value).ThenBy(g => g.Key))
+                {
+                    <MudCheckBox T="bool" Label="@($"{genre.Key} ({genre.Value})")"
+                                 Checked="SelectedGenres.Contains(genre.Key)"
+                                 Dense="true"
+                                 CheckedChanged="_ => ToggleGenre(genre.Key)" />
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">No genre data</MudText>
+            }
+        </MudExpansionPanel>
+
+        <MudExpansionPanel Text="Artists">
+            @if (Artists?.Count > 0)
+            {
+                @foreach (var artist in Artists.OrderByDescending(a => a.Value).ThenBy(a => a.Key).Take(MaxFacetItems))
+                {
+                    <MudCheckBox T="bool" Label="@($"{artist.Key} ({artist.Value})")"
+                                 Checked="SelectedArtists.Contains(artist.Key)"
+                                 Dense="true"
+                                 CheckedChanged="_ => ToggleArtist(artist.Key)" />
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">No artist data</MudText>
+            }
+        </MudExpansionPanel>
+
+        <MudExpansionPanel Text="Years">
+            @if (Years?.Count > 0)
+            {
+                @foreach (var year in Years.OrderByDescending(y => y.Key))
+                {
+                    <MudCheckBox T="bool" Label="@($"{year.Key} ({year.Value})")"
+                                 Checked="SelectedYears.Contains(year.Key)"
+                                 Dense="true"
+                                 CheckedChanged="_ => ToggleYear(year.Key)" />
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">No year data</MudText>
+            }
+        </MudExpansionPanel>
+
+        <MudExpansionPanel Text="Formats">
+            @if (Formats?.Count > 0)
+            {
+                @foreach (var format in Formats.OrderByDescending(f => f.Value).ThenBy(f => f.Key))
+                {
+                    <MudCheckBox T="bool" Label="@($"{format.Key} ({format.Value})")"
+                                 Checked="SelectedFormats.Contains(format.Key)"
+                                 Dense="true"
+                                 CheckedChanged="_ => ToggleFormat(format.Key)" />
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">No format data</MudText>
+            }
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+</MudPaper>
+
+@code {
+    private const int MaxFacetItems = 20;
+
+    [Parameter]
+    public Dictionary<string, int> Genres { get; set; } = new();
+
+    [Parameter]
+    public HashSet<string> SelectedGenres { get; set; } = new();
+
+    [Parameter]
+    public Dictionary<string, int> Artists { get; set; } = new();
+
+    [Parameter]
+    public HashSet<string> SelectedArtists { get; set; } = new();
+
+    [Parameter]
+    public Dictionary<string, int> Years { get; set; } = new();
+
+    [Parameter]
+    public HashSet<string> SelectedYears { get; set; } = new();
+
+    [Parameter]
+    public Dictionary<string, int> Formats { get; set; } = new();
+
+    [Parameter]
+    public HashSet<string> SelectedFormats { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<string> OnGenreToggled { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnArtistToggled { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnYearToggled { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnFormatToggled { get; set; }
+
+    [Parameter]
+    public EventCallback OnClearFilters { get; set; }
+
+    private bool HasActiveFilters => SelectedGenres.Count + SelectedArtists.Count + SelectedYears.Count + SelectedFormats.Count > 0;
+
+    private Task ToggleGenre(string value) => OnGenreToggled.InvokeAsync(value);
+    private Task ToggleArtist(string value) => OnArtistToggled.InvokeAsync(value);
+    private Task ToggleYear(string value) => OnYearToggled.InvokeAsync(value);
+    private Task ToggleFormat(string value) => OnFormatToggled.InvokeAsync(value);
+
+    private Task ClearFilters()
+    {
+        if (OnClearFilters.HasDelegate)
+        {
+            return OnClearFilters.InvokeAsync();
+        }
+        return Task.CompletedTask;
+    }
+}
+
+<style>
+    .fz-filter-sidebar {
+        position: sticky;
+        top: 88px;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+    }
+</style>

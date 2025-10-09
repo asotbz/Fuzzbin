@@ -1,0 +1,272 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services
+@using MudBlazor
+@inject BulkOrganizeService OrganizeService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-4">
+                    Organize @SelectedVideos.Count Videos
+                </MudText>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudTextField @bind-Value="organizeOptions.Pattern" 
+                             Label="File Organization Pattern" 
+                             HelperText="Use variables like {artist}, {year}, {title}"
+                             Variant="Variant.Outlined"
+                             Adornment="Adornment.End"
+                             AdornmentIcon="@Icons.Material.Filled.Help"
+                             OnAdornmentClick="ShowPatternHelp" />
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSelect T="string" Label="Sample Patterns" 
+                          ValueChanged="@((string val) => OnSamplePatternSelected(val))"
+                          Variant="Variant.Outlined">
+                    @foreach (var pattern in samplePatterns)
+                    {
+                        <MudSelectItem Value="@pattern">@pattern</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="organizeOptions.CreateDirectories" 
+                          Label="Create directories if they don't exist" 
+                          Color="Color.Primary" />
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudRadioGroup @bind-Value="operationType">
+                    <MudRadio Value="@("copy")" Color="Color.Primary">
+                        Copy files (keep originals)
+                    </MudRadio>
+                    <MudRadio Value="@("move")" Color="Color.Primary">
+                        Move files
+                    </MudRadio>
+                    <MudRadio Value="@("rename")" Color="Color.Primary">
+                        Rename only (don't change directory)
+                    </MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="organizeOptions.SkipExisting" 
+                          Label="Skip files that already exist at destination" 
+                          Color="Color.Primary" />
+            </MudItem>
+            
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="organizeOptions.UpdateDatabase" 
+                          Label="Update database with new file paths" 
+                          Color="Color.Primary"
+                          Disabled="@(operationType == "copy")" />
+            </MudItem>
+            
+            @if (showPreview && previewResults != null)
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="pa-3">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">Preview Results:</MudText>
+                        <MudSimpleTable Dense="true">
+                            <thead>
+                                <tr>
+                                    <th>Directory</th>
+                                    <th>Files</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in previewResults.OrderBy(x => x.Key))
+                                {
+                                    <tr>
+                                        <td>@item.Key</td>
+                                        <td>@item.Value</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                </MudItem>
+            }
+            
+            @if (isProcessing)
+            {
+                <MudItem xs="12">
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+                    <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-2">
+                        Processing... (@processedCount / @SelectedVideos.Count)
+                    </MudText>
+                </MudItem>
+            }
+            
+            @if (organizeResult != null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="@(organizeResult.ErrorCount > 0 ? Severity.Warning : Severity.Success)">
+                        <MudText>
+                            Completed: @organizeResult.SuccessCount successful, 
+                            @organizeResult.SkippedCount skipped, 
+                            @organizeResult.ErrorCount errors
+                        </MudText>
+                        <MudText Typo="Typo.caption">
+                            Duration: @organizeResult.Duration.TotalSeconds.ToString("F1") seconds
+                        </MudText>
+                    </MudAlert>
+                    
+                    @if (organizeResult.ErrorCount > 0)
+                    {
+                        <MudExpansionPanels Class="mt-2">
+                            <MudExpansionPanel Text="Show Errors">
+                                <MudSimpleTable Dense="true">
+                                    <tbody>
+                                        @foreach (var item in organizeResult.Items.Where(x => !x.Success && x.Action == BulkOrganizeService.OrganizeAction.Error))
+                                        {
+                                            <tr>
+                                                <td>@Path.GetFileName(item.OriginalPath)</td>
+                                                <td>@item.ErrorMessage</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
+                    }
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Info" 
+                   OnClick="PreviewOrganize" 
+                   Disabled="@(isProcessing || string.IsNullOrWhiteSpace(organizeOptions.Pattern))">
+            Preview
+        </MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled" 
+                   OnClick="StartOrganize"
+                   Disabled="@(isProcessing || string.IsNullOrWhiteSpace(organizeOptions.Pattern))">
+            @(isProcessing ? "Processing..." : "Organize")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudBlazor.IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public List<Video> SelectedVideos { get; set; } = new();
+    
+    private BulkOrganizeService.OrganizeOptions organizeOptions = new();
+    private BulkOrganizeService.OrganizeResult? organizeResult;
+    private Dictionary<string, int>? previewResults;
+    private List<string> samplePatterns = new();
+    private List<string> availableVariables = new();
+    private string operationType = "copy";
+    private bool isProcessing = false;
+    private bool showPreview = false;
+    private int processedCount = 0;
+    
+    protected override void OnInitialized()
+    {
+        samplePatterns = OrganizeService.GetSamplePatterns();
+        availableVariables = OrganizeService.GetAvailableVariables();
+        
+        // Set default pattern
+        if (samplePatterns.Any())
+        {
+            organizeOptions.Pattern = samplePatterns.First();
+        }
+    }
+    
+    private void OnSamplePatternSelected(string pattern)
+    {
+        organizeOptions.Pattern = pattern;
+        showPreview = false;
+        previewResults = null;
+    }
+    
+    private async Task PreviewOrganize()
+    {
+        try
+        {
+            UpdateOptionsFromUI();
+            
+            var videoIds = SelectedVideos.Select(v => v.Id);
+            previewResults = await OrganizeService.PreviewOrganizeAsync(videoIds, organizeOptions);
+            showPreview = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating preview: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private async Task StartOrganize()
+    {
+        try
+        {
+            isProcessing = true;
+            processedCount = 0;
+            organizeResult = null;
+            
+            UpdateOptionsFromUI();
+            
+            var videoIds = SelectedVideos.Select(v => v.Id);
+            
+            // Create a progress callback
+            var progress = new Progress<int>(count =>
+            {
+                processedCount = count;
+                InvokeAsync(StateHasChanged);
+            });
+            
+            organizeResult = await OrganizeService.OrganizeVideosAsync(videoIds, organizeOptions);
+            
+            isProcessing = false;
+            
+            if (organizeResult.ErrorCount == 0)
+            {
+                Snackbar.Add($"Successfully organized {organizeResult.SuccessCount} videos", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(organizeResult));
+            }
+            else
+            {
+                Snackbar.Add($"Organized with {organizeResult.ErrorCount} errors", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            isProcessing = false;
+            Snackbar.Add($"Error organizing videos: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private void UpdateOptionsFromUI()
+    {
+        organizeOptions.MoveFiles = operationType == "move";
+        organizeOptions.RenameOnly = operationType == "rename";
+        
+        // Disable database update for copy operations
+        if (operationType == "copy")
+        {
+            organizeOptions.UpdateDatabase = false;
+        }
+    }
+    
+    private void ShowPatternHelp()
+    {
+        var helpText = "Available variables:\n" + string.Join("\n", availableVariables);
+        Snackbar.Add(helpText, Severity.Info);
+    }
+    
+    private void Cancel() => MudDialog.Cancel();
+}
+
+<style>
+    .mud-expansion-panel {
+        margin-top: 8px;
+    }
+</style>

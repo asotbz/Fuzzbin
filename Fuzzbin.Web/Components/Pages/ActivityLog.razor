@@ -1,0 +1,691 @@
+@page "/activity-log"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using MudBlazor
+@using ActivityLogEntity = Fuzzbin.Core.Entities.ActivityLog
+@inject IActivityLogService ActivityLogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Activity Log</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText Typo="Typo.h4" Class="mb-4">
+                    <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-2" />
+                    Activity Log
+                </MudText>
+            </MudItem>
+
+            <!-- Filters -->
+            <MudItem xs="12">
+                <MudExpansionPanels Elevation="0">
+                    <MudExpansionPanel Text="Filters" Icon="@Icons.Material.Filled.FilterList">
+                        <MudGrid>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="searchTerm" 
+                                            Label="Search" 
+                                            Variant="Variant.Outlined"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Search"
+                                            DebounceInterval="300"
+                                            OnDebounceIntervalElapsed="@(async () => await ApplyFilters())" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
+                                <MudSelect T="string" Label="Category" Variant="Variant.Outlined" 
+                                         @bind-Value="selectedCategory" 
+                                         AnchorOrigin="Origin.BottomCenter">
+                                    <MudSelectItem Value="@("")">All Categories</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Authentication">Authentication</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Video">Video</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Collection">Collection</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Download">Download</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.System">System</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Import">Import</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Export">Export</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Playlist">Playlist</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Search">Search</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Settings">Settings</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityCategories.Backup">Backup</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
+                                <MudSelect T="string" Label="Action" Variant="Variant.Outlined" 
+                                         @bind-Value="selectedAction" 
+                                         AnchorOrigin="Origin.BottomCenter">
+                                    <MudSelectItem Value="@("")">All Actions</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Create">Create</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Read">Read</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Update">Update</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Delete">Delete</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Login">Login</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Logout">Logout</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Play">Play</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Import">Import</MudSelectItem>
+                                    <MudSelectItem Value="@ActivityActions.Export">Export</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
+                                <MudSelect T="bool?" Label="Status" Variant="Variant.Outlined" 
+                                         @bind-Value="selectedSuccess" 
+                                         AnchorOrigin="Origin.BottomCenter">
+                                    <MudSelectItem Value="@((bool?)null)">All Status</MudSelectItem>
+                                    <MudSelectItem Value="@((bool?)true)">Success</MudSelectItem>
+                                    <MudSelectItem Value="@((bool?)false)">Failed</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
+                                <MudButton Color="Color.Primary" 
+                                         Variant="Variant.Filled" 
+                                         StartIcon="@Icons.Material.Filled.Search"
+                                         OnClick="ApplyFilters"
+                                         FullWidth="true">
+                                    Apply Filters
+                                </MudButton>
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudDatePicker Label="Start Date" 
+                                             @bind-Date="startDate"
+                                             Variant="Variant.Outlined"
+                                             DateFormat="yyyy-MM-dd" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudDatePicker Label="End Date" 
+                                             @bind-Date="endDate"
+                                             Variant="Variant.Outlined"
+                                             DateFormat="yyyy-MM-dd" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudSelect T="int" Label="Days Range" Variant="Variant.Outlined" 
+                                         @bind-Value="daysRange" 
+                                         AnchorOrigin="Origin.BottomCenter">
+                                    <MudSelectItem Value="0">Custom Range</MudSelectItem>
+                                    <MudSelectItem Value="1">Today</MudSelectItem>
+                                    <MudSelectItem Value="7">Last 7 Days</MudSelectItem>
+                                    <MudSelectItem Value="30">Last 30 Days</MudSelectItem>
+                                    <MudSelectItem Value="90">Last 90 Days</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudButton Color="Color.Secondary" 
+                                         Variant="Variant.Outlined" 
+                                         StartIcon="@Icons.Material.Filled.Clear"
+                                         OnClick="ClearFilters"
+                                         FullWidth="true">
+                                    Clear Filters
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudItem>
+
+            <!-- Summary Cards -->
+            <MudItem xs="12" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Total Logs</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Primary">@totalCount.ToString("N0")</MudText>
+                        <MudText Typo="Typo.caption">In selected range</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Success Rate</MudText>
+                        <MudText Typo="Typo.h4" Color="@(successRate >= 90 ? Color.Success : successRate >= 70 ? Color.Warning : Color.Error)">
+                            @successRate.ToString("F1")%
+                        </MudText>
+                        <MudText Typo="Typo.caption">@successCount success / @failedCount failed</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Most Active Category</MudText>
+                        <MudText Typo="Typo.h5">@(topCategory ?? "N/A")</MudText>
+                        <MudText Typo="Typo.caption">@(topCategoryCount > 0 ? $"{topCategoryCount} activities" : "")</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Most Common Action</MudText>
+                        <MudText Typo="Typo.h5">@(topAction ?? "N/A")</MudText>
+                        <MudText Typo="Typo.caption">@(topActionCount > 0 ? $"{topActionCount} occurrences" : "")</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Activity Log Table -->
+            <MudItem xs="12">
+                <MudTable Items="@logs" 
+                        Dense="true" 
+                        Hover="true" 
+                        Bordered="false" 
+                        Striped="true"
+                        Loading="@isLoading"
+                        LoadingProgressColor="Color.Primary"
+                        ServerData="@(new Func<TableState, CancellationToken, Task<TableData<ActivityLogEntity>>>(ServerReload))"
+                        @ref="table">
+                    <HeaderContent>
+                        <MudTh>Time</MudTh>
+                        <MudTh>User</MudTh>
+                        <MudTh>Category</MudTh>
+                        <MudTh>Action</MudTh>
+                        <MudTh>Entity</MudTh>
+                        <MudTh>Details</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Timestamp">
+                            <MudText Typo="Typo.caption">
+                                @context.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="User">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.Username</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Category">
+                            <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(context.Category)">
+                                @context.Category
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Action">
+                            <MudChip T="string" Size="Size.Small" Color="@GetActionColor(context.Action)">
+                                @context.Action
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Entity">
+                            @if (!string.IsNullOrWhiteSpace(context.EntityType))
+                            {
+                                <div>
+                                    <MudText Typo="Typo.caption">@context.EntityType</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(context.EntityName))
+                                    {
+                                        <MudText Typo="Typo.body2">@context.EntityName</MudText>
+                                    }
+                                </div>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Details">
+                            @if (!string.IsNullOrWhiteSpace(context.Details))
+                            {
+                                <MudTooltip Text="@context.Details">
+                                    <MudText Typo="Typo.caption" Style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        @context.Details
+                                    </MudText>
+                                </MudTooltip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            @if (context.IsSuccess)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@context.ErrorMessage">
+                                    <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Small" />
+                                </MudTooltip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Actions">
+                            <MudIconButton Icon="@Icons.Material.Filled.Info" 
+                                         Size="Size.Small" 
+                                         Color="Color.Primary"
+                                         OnClick="@(() => ShowDetails(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager />
+                    </PagerContent>
+                    <NoRecordsContent>
+                        <MudText>No activity logs found</MudText>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudItem>
+
+            <!-- Activity Chart -->
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-4">Daily Activity (Last 30 Days)</MudText>
+                        @if (dailyActivity != null && dailyActivity.Any())
+                        {
+                            <MudChart ChartType="ChartType.Line" 
+                                    ChartSeries="@chartSeries" 
+                                    XAxisLabels="@chartLabels" 
+                                    Width="100%" 
+                                    Height="300px"
+                                    ChartOptions="chartOptions" />
+                        }
+                        else
+                        {
+                            <MudText>No activity data available</MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+</MudContainer>
+
+<!-- Details Dialog -->
+<MudDialog @bind-IsVisible="showDetailsDialog" Options="dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+            Activity Details
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (selectedLog != null)
+        {
+            <MudSimpleTable Dense="true">
+                <tbody>
+                    <tr>
+                        <td><strong>Timestamp:</strong></td>
+                        <td>@selectedLog.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    </tr>
+                    <tr>
+                        <td><strong>User:</strong></td>
+                        <td>@selectedLog.Username (ID: @selectedLog.UserId)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Category:</strong></td>
+                        <td>@selectedLog.Category</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Action:</strong></td>
+                        <td>@selectedLog.Action</td>
+                    </tr>
+                    @if (!string.IsNullOrWhiteSpace(selectedLog.EntityType))
+                    {
+                        <tr>
+                            <td><strong>Entity Type:</strong></td>
+                            <td>@selectedLog.EntityType</td>
+                        </tr>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selectedLog.EntityId))
+                    {
+                        <tr>
+                            <td><strong>Entity ID:</strong></td>
+                            <td>@selectedLog.EntityId</td>
+                        </tr>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selectedLog.EntityName))
+                    {
+                        <tr>
+                            <td><strong>Entity Name:</strong></td>
+                            <td>@selectedLog.EntityName</td>
+                        </tr>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selectedLog.Details))
+                    {
+                        <tr>
+                            <td><strong>Details:</strong></td>
+                            <td>@selectedLog.Details</td>
+                        </tr>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selectedLog.OldValue))
+                    {
+                        <tr>
+                            <td><strong>Old Value:</strong></td>
+                            <td><code>@selectedLog.OldValue</code></td>
+                        </tr>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selectedLog.NewValue))
+                    {
+                        <tr>
+                            <td><strong>New Value:</strong></td>
+                            <td><code>@selectedLog.NewValue</code></td>
+                        </tr>
+                    }
+                    <tr>
+                        <td><strong>IP Address:</strong></td>
+                        <td>@selectedLog.IpAddress</td>
+                    </tr>
+                    <tr>
+                        <td><strong>User Agent:</strong></td>
+                        <td style="word-break: break-all;">@selectedLog.UserAgent</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status:</strong></td>
+                        <td>
+                            @if (selectedLog.IsSuccess)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">Success</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small">Failed</MudChip>
+                            }
+                        </td>
+                    </tr>
+                    @if (!selectedLog.IsSuccess && !string.IsNullOrWhiteSpace(selectedLog.ErrorMessage))
+                    {
+                        <tr>
+                            <td><strong>Error:</strong></td>
+                            <td><code style="color: red;">@selectedLog.ErrorMessage</code></td>
+                        </tr>
+                    }
+                    @if (selectedLog.Duration.HasValue)
+                    {
+                        <tr>
+                            <td><strong>Duration:</strong></td>
+                            <td>@selectedLog.Duration.Value.TotalMilliseconds ms</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => showDetailsDialog = false)">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<ActivityLogEntity> logs = new();
+    private MudTable<ActivityLogEntity>? table;
+    private bool isLoading = false;
+
+    // Filters
+    private string searchTerm = "";
+    private string selectedCategory = "";
+    private string selectedAction = "";
+    private bool? selectedSuccess = null;
+    private DateTime? startDate = null;
+    private DateTime? endDate = null;
+    private int daysRange = 7;
+
+    // Statistics
+    private int totalCount = 0;
+    private int successCount = 0;
+    private int failedCount = 0;
+    private double successRate = 0;
+    private string? topCategory = null;
+    private int topCategoryCount = 0;
+    private string? topAction = null;
+    private int topActionCount = 0;
+
+    // Chart data
+    private Dictionary<DateTime, int>? dailyActivity;
+    private List<ChartSeries> chartSeries = new();
+    private string[] chartLabels = Array.Empty<string>();
+    private ChartOptions chartOptions = new()
+    {
+        YAxisTicks = 5,
+        InterpolationOption = InterpolationOption.Straight
+    };
+
+    // Dialog
+    private bool showDetailsDialog = false;
+    private ActivityLogEntity? selectedLog = null;
+    private DialogOptions dialogOptions = new() 
+    { 
+        MaxWidth = MaxWidth.Medium, 
+        FullWidth = true 
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetDateRange();
+        await LoadStatistics();
+        await LoadDailyActivity();
+    }
+
+    private void SetDateRange()
+    {
+        switch (daysRange)
+        {
+            case 1:
+                startDate = DateTime.Today;
+                endDate = DateTime.Today.AddDays(1).AddSeconds(-1);
+                break;
+            case 7:
+                startDate = DateTime.Today.AddDays(-6);
+                endDate = DateTime.Now;
+                break;
+            case 30:
+                startDate = DateTime.Today.AddDays(-29);
+                endDate = DateTime.Now;
+                break;
+            case 90:
+                startDate = DateTime.Today.AddDays(-89);
+                endDate = DateTime.Now;
+                break;
+            default:
+                // Custom range - use selected dates
+                break;
+        }
+    }
+
+    private async Task<TableData<ActivityLogEntity>> ServerReload(TableState state, CancellationToken token)
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        TableData<ActivityLogEntity> tableData;
+
+        try
+        {
+            var result = await ActivityLogService.SearchLogsAsync(
+                searchTerm,
+                string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
+                string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
+                null,
+                startDate,
+                endDate,
+                selectedSuccess,
+                state.Page * state.PageSize,
+                state.PageSize
+            );
+
+            logs = result.ToList();
+
+            var count = await ActivityLogService.GetLogCountAsync(
+                string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
+                string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
+                null,
+                startDate,
+                endDate,
+                selectedSuccess
+            );
+
+            tableData = new TableData<ActivityLogEntity>
+            {
+                Items = logs,
+                TotalItems = count
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load activity logs: {ex.Message}", Severity.Error);
+            tableData = new TableData<ActivityLogEntity>
+            {
+                Items = new List<ActivityLogEntity>(),
+                TotalItems = 0
+            };
+        }
+
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+
+        return tableData;
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            // Get counts
+            totalCount = await ActivityLogService.GetLogCountAsync(
+                string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
+                string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
+                null,
+                startDate,
+                endDate,
+                null
+            );
+
+            successCount = await ActivityLogService.GetLogCountAsync(
+                string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
+                string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
+                null,
+                startDate,
+                endDate,
+                true
+            );
+
+            failedCount = await ActivityLogService.GetLogCountAsync(
+                string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
+                string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
+                null,
+                startDate,
+                endDate,
+                false
+            );
+
+            successRate = totalCount > 0
+                ? (double)successCount / totalCount * 100
+                : 0;
+
+            // Get top category
+            var categorySummary = await ActivityLogService.GetCategorySummaryAsync(startDate, endDate);
+            if (categorySummary.Any())
+            {
+                var top = categorySummary.OrderByDescending(x => x.Value).First();
+                topCategory = top.Key;
+                topCategoryCount = top.Value;
+            }
+            else
+            {
+                topCategory = null;
+                topCategoryCount = 0;
+            }
+
+            // Get top action
+            var actionSummary = await ActivityLogService.GetActionSummaryAsync(startDate, endDate);
+            if (actionSummary.Any())
+            {
+                var top = actionSummary.OrderByDescending(x => x.Value).First();
+                topAction = top.Key;
+                topActionCount = top.Value;
+            }
+            else
+            {
+                topAction = null;
+                topActionCount = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load statistics: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadDailyActivity()
+    {
+        try
+        {
+            dailyActivity = await ActivityLogService.GetDailyActivityAsync(30);
+            
+            if (dailyActivity != null && dailyActivity.Any())
+            {
+                chartLabels = dailyActivity.Keys.Select(d => d.ToString("MM/dd")).ToArray();
+                
+                chartSeries = new List<ChartSeries>
+                {
+                    new ChartSeries
+                    {
+                        Name = "Activities",
+                        Data = dailyActivity.Values.Select(v => (double)v).ToArray()
+                    }
+                };
+            }
+            else
+            {
+                chartLabels = Array.Empty<string>();
+                chartSeries = new List<ChartSeries>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load daily activity: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        SetDateRange();
+        await LoadStatistics();
+        await table?.ReloadServerData()!;
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = "";
+        selectedCategory = "";
+        selectedAction = "";
+        selectedSuccess = null;
+        startDate = null;
+        endDate = null;
+        daysRange = 7;
+        
+        await ApplyFilters();
+    }
+
+    private void ShowDetails(ActivityLogEntity log)
+    {
+        selectedLog = log;
+        showDetailsDialog = true;
+    }
+
+    private Color GetCategoryColor(string category)
+    {
+        return category switch
+        {
+            ActivityCategories.Authentication => Color.Info,
+            ActivityCategories.Video => Color.Primary,
+            ActivityCategories.Collection => Color.Secondary,
+            ActivityCategories.Download => Color.Tertiary,
+            ActivityCategories.System => Color.Dark,
+            ActivityCategories.Import => Color.Success,
+            ActivityCategories.Export => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private Color GetActionColor(string action)
+    {
+        return action switch
+        {
+            ActivityActions.Create => Color.Success,
+            ActivityActions.Update => Color.Info,
+            ActivityActions.Delete => Color.Error,
+            ActivityActions.Login => Color.Primary,
+            ActivityActions.Logout => Color.Secondary,
+            ActivityActions.Play => Color.Tertiary,
+            _ => Color.Default
+        };
+    }
+}

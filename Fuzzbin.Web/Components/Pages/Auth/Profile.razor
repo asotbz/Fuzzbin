@@ -1,0 +1,366 @@
+@page "/profile"
+@using System.ComponentModel.DataAnnotations
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject ILogger<Profile> Logger
+@inject IUnitOfWork UnitOfWork
+
+<PageTitle>My Account - Fuzzbin</PageTitle>
+
+@if (_user is null)
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6" Style="text-align:center;">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.subtitle1" Class="mt-4">Loading profile...</MudText>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+        <MudText Typo="Typo.h4" Class="mb-4">My account</MudText>
+
+        <MudTabs Elevation="2" Rounded="true" PanelClass="pa-6" ApplyEffectsToContainer="true">
+            <MudTabPanel Text="Profile" Icon="@Icons.Material.Filled.AccountCircle">
+                <EditForm Model="_profile" OnValidSubmit="UpdateProfileAsync">
+                    <DataAnnotationsValidator />
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_profile.DisplayName"
+                                          Label="Display name"
+                                          Variant="Variant.Outlined"
+                                          Required="true"
+                                          Disabled="_isSavingProfile" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudButton Type="ButtonType.Submit"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="_isSavingProfile">
+                                @if (_isSavingProfile)
+                                {
+                                    <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>Save changes</span>
+                                }
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </EditForm>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Password" Icon="@Icons.Material.Filled.Security">
+                <EditForm Model="_password" OnValidSubmit="ChangePasswordAsync">
+                    <DataAnnotationsValidator />
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_password.CurrentPassword"
+                                          Label="Current password"
+                                          Variant="Variant.Outlined"
+                                          InputType="InputType.Password"
+                                          Required="true"
+                                          Disabled="_isChangingPassword" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_password.NewPassword"
+                                          Label="New password"
+                                          Variant="Variant.Outlined"
+                                          InputType="InputType.Password"
+                                          Required="true"
+                                          Disabled="_isChangingPassword" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_password.ConfirmPassword"
+                                          Label="Confirm new password"
+                                          Variant="Variant.Outlined"
+                                          InputType="InputType.Password"
+                                          Required="true"
+                                          Disabled="_isChangingPassword" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudButton Type="ButtonType.Submit"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="_isChangingPassword">
+                                @if (_isChangingPassword)
+                                {
+                                    <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                                    <span>Updating...</span>
+                                }
+                                else
+                                {
+                                    <span>Update password</span>
+                                }
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </EditForm>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Preferences" Icon="@Icons.Material.Filled.Tune">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="string" @bind-Value="_preferences.Theme"
+                                   Label="Theme"
+                                   Variant="Variant.Outlined"
+                                   Disabled="_isSavingPreferences">
+                            <MudSelectItem T="string" Value="@("system")">Match system</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("dark")">Dark</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("light")">Light</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="string" @bind-Value="_preferences.LibraryView"
+                                   Label="Default library view"
+                                   Variant="Variant.Outlined"
+                                   Disabled="_isSavingPreferences">
+                            <MudSelectItem T="string" Value="@("grid")">Grid</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("list")">List</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool" @bind-Checked="_preferences.EnableNotifications"
+                                     Label="Enable desktop notifications"
+                                     Disabled="_isSavingPreferences" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="_isSavingPreferences"
+                                   OnClick="SavePreferencesAsync">
+                            @if (_isSavingPreferences)
+                            {
+                                <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>Save preferences</span>
+                            }
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+        </MudTabs>
+    </MudContainer>
+}
+
+@code {
+    private ApplicationUser? _user;
+    private readonly ProfileModel _profile = new();
+    private readonly PasswordModel _password = new();
+    private readonly PreferencesModel _preferences = new();
+    private bool _isSavingProfile;
+    private bool _isChangingPassword;
+    private bool _isSavingPreferences;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        var state = await AuthenticationStateTask;
+        var userName = state.User.Identity?.Name;
+        if (string.IsNullOrEmpty(userName))
+        {
+            Navigation.NavigateTo("/auth/signin", true);
+            return;
+        }
+
+        _user = await UserManager.FindByNameAsync(userName);
+        if (_user is null)
+        {
+            Navigation.NavigateTo("/auth/signin", true);
+            return;
+        }
+
+        _profile.DisplayName = _user.DisplayName ?? _user.UserName ?? string.Empty;
+
+        _preferences.Theme = await GetPreferenceAsync("ui.theme") ?? "system";
+        _preferences.LibraryView = await GetPreferenceAsync("library.view") ?? "grid";
+        _preferences.EnableNotifications = string.Equals(await GetPreferenceAsync("notifications.enabled"), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task UpdateProfileAsync()
+    {
+        if (_user is null)
+        {
+            return;
+        }
+
+        _isSavingProfile = true;
+
+        try
+        {
+            _user.DisplayName = _profile.DisplayName.Trim();
+
+            var result = await UserManager.UpdateAsync(_user);
+            if (result.Succeeded)
+            {
+                Snackbar.Add("Profile updated successfully.", Severity.Success);
+                await SignInManager.RefreshSignInAsync(_user);
+            }
+            else
+            {
+                foreach (var error in result.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to update profile for user {UserId}", _user.Id);
+            Snackbar.Add("Unable to update profile. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _isSavingProfile = false;
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        if (_user is null)
+        {
+            return;
+        }
+
+        _isChangingPassword = true;
+
+        try
+        {
+            var result = await UserManager.ChangePasswordAsync(_user, _password.CurrentPassword, _password.NewPassword);
+            if (result.Succeeded)
+            {
+                Snackbar.Add("Password updated successfully.", Severity.Success);
+                _password.Clear();
+                await SignInManager.RefreshSignInAsync(_user);
+            }
+            else
+            {
+                foreach (var error in result.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to change password for user {UserId}", _user.Id);
+            Snackbar.Add("Unable to change password. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _isChangingPassword = false;
+        }
+    }
+
+    private async Task SavePreferencesAsync()
+    {
+        if (_user is null)
+        {
+            return;
+        }
+
+        _isSavingPreferences = true;
+
+        try
+        {
+            await UpsertPreferenceAsync("ui.theme", _preferences.Theme);
+            await UpsertPreferenceAsync("library.view", _preferences.LibraryView);
+            await UpsertPreferenceAsync("notifications.enabled", _preferences.EnableNotifications.ToString());
+            await UnitOfWork.SaveChangesAsync();
+
+            Snackbar.Add("Preferences saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save preferences for user {UserId}", _user.Id);
+            Snackbar.Add("Unable to save preferences. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _isSavingPreferences = false;
+        }
+    }
+
+    private async Task<string?> GetPreferenceAsync(string key)
+    {
+        if (_user is null)
+        {
+            return null;
+        }
+
+        var preference = await UnitOfWork.UserPreferences.FirstOrDefaultAsync(p => p.UserId == _user.Id && p.Key == key);
+        return preference?.Value;
+    }
+
+    private async Task UpsertPreferenceAsync(string key, string value)
+    {
+        if (_user is null)
+        {
+            return;
+        }
+
+        var existing = await UnitOfWork.UserPreferences.FirstOrDefaultAsync(p => p.UserId == _user.Id && p.Key == key);
+        if (existing is null)
+        {
+            var preference = new UserPreference
+            {
+                UserId = _user.Id,
+                Key = key,
+                Value = value
+            };
+
+            await UnitOfWork.UserPreferences.AddAsync(preference);
+        }
+        else
+        {
+            existing.Value = value;
+            await UnitOfWork.UserPreferences.UpdateAsync(existing);
+        }
+    }
+
+    private sealed class ProfileModel
+    {
+        [Required]
+        [MaxLength(100)]
+        public string DisplayName { get; set; } = string.Empty;
+    }
+
+    private sealed class PasswordModel
+    {
+        [Required]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required]
+        [MinLength(8)]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Compare(nameof(NewPassword), ErrorMessage = "Passwords do not match")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+
+        public void Clear()
+        {
+            CurrentPassword = string.Empty;
+            NewPassword = string.Empty;
+            ConfirmPassword = string.Empty;
+        }
+    }
+
+    private sealed class PreferencesModel
+    {
+        public string Theme { get; set; } = "system";
+        public string LibraryView { get; set; } = "grid";
+        public bool EnableNotifications { get; set; }
+    }
+}

@@ -1,0 +1,216 @@
+@using Microsoft.AspNetCore.Components.Web
+@using System.Linq
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using MudBlazor
+@using Fuzzbin.Core.Entities
+
+@if (_rows.Count == 0)
+{
+    <MudPaper Class="pa-6 text-center fz-video-grid__empty" Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Size="Size.Large" Class="mb-2" />
+        <MudText Typo="Typo.h5">No videos to display</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Adjust your filters or add new videos to the library.</MudText>
+    </MudPaper>
+}
+else
+{
+    <div class="fz-video-grid">
+        <Virtualize TItem="IReadOnlyList<Video>" Items="_rows" Context="row" ItemSize="320" OverscanCount="2">
+            <ItemContent>
+                <div class="fz-video-grid__row">
+                    @foreach (var video in row)
+                    {
+                        <div @key="video.Id" class="fz-video-grid__cell" @oncontextmenu="@(e => HandleContextMenu(e, video))" @oncontextmenu:preventDefault="true">
+                            <MudCard Class="@(BuildCardClass(video))" @onclick="() => OnVideoClicked.InvokeAsync(video)">
+                                <MudCardHeader Class="pa-2">
+                                    <div class="d-flex justify-space-between align-center">
+                                        <MudCheckBox T="bool" Checked="SelectedVideoIds.Contains(video.Id)"
+                                                     Color="Color.Primary"
+                                                     CheckedChanged="_ => ToggleSelection(video)"
+                                                     DisableRipple="true" />
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @FormatMeta(video)
+                                        </MudText>
+                                    </div>
+                                </MudCardHeader>
+                                <MudCardMedia Height="180" Image="@ThumbnailUrlSelector?.Invoke(video)" Alt="@video.Title" />
+                                <MudCardContent Class="pa-3">
+                                    <MudText Typo="Typo.h6" Class="text-truncate" Title="@video.Title">@video.Title</MudText>
+                                    <MudText Typo="Typo.body2" Class="text-truncate" Color="Color.Secondary" Title="@video.Artist">
+                                        @video.Artist
+                                    </MudText>
+                                </MudCardContent>
+                                <MudCardActions Class="pa-2 pt-0">
+                                    <MudTooltip Text="Play now">
+                                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OnPlay.InvokeAsync(video)" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Play next">
+                                        <MudIconButton Icon="@Icons.Material.Filled.SkipNext"
+                                                       Color="Color.Secondary"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OnPlayNext.InvokeAsync(video)" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Add to queue">
+                                        <MudIconButton Icon="@Icons.Material.Filled.PlaylistAdd"
+                                                       Color="Color.Info"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OnAddToQueue.InvokeAsync(video)" />
+                                    </MudTooltip>
+                                    <MudSpacer />
+                                    <MudTooltip Text="Edit metadata">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OnEdit.InvokeAsync(video)" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Delete video">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OnDelete.InvokeAsync(video)" />
+                                    </MudTooltip>
+                                </MudCardActions>
+                            </MudCard>
+                        </div>
+                    }
+                </div>
+            </ItemContent>
+            <Placeholder>
+                <div class="fz-video-grid__row">
+                    @for (var i = 0; i < ColumnsPerRow; i++)
+                    {
+                        <div class="fz-video-grid__cell">
+                            <MudSkeleton Width="100%" Height="260px" />
+                        </div>
+                    }
+                </div>
+            </Placeholder>
+        </Virtualize>
+    </div>
+}
+
+@code {
+    private const int ColumnsPerRow = 4;
+    private List<IReadOnlyList<Video>> _rows = new();
+
+    [Parameter]
+    public IReadOnlyList<Video> Videos { get; set; } = Array.Empty<Video>();
+
+    [Parameter]
+    public HashSet<Guid> SelectedVideoIds { get; set; } = new();
+
+    [Parameter]
+    public Func<Video, string?>? ThumbnailUrlSelector { get; set; }
+
+    [Parameter]
+    public Func<Video, string>? DurationFormatter { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnVideoClicked { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnPlay { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnPlayNext { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnAddToQueue { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnDelete { get; set; }
+
+    [Parameter]
+    public EventCallback<(Video Video, MouseEventArgs MouseEvent)> OnContextMenuRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<Video> OnSelectionToggled { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _rows = Videos
+            .Where(v => v != null)
+            .Select((video, index) => new { video, index })
+            .GroupBy(x => x.index / ColumnsPerRow)
+            .Select(g => (IReadOnlyList<Video>)g.Select(x => x.video).ToList())
+            .ToList();
+    }
+
+    private Task ToggleSelection(Video video)
+    {
+        return OnSelectionToggled.InvokeAsync(video);
+    }
+
+    private Task HandleContextMenu(MouseEventArgs args, Video video)
+    {
+        return OnContextMenuRequested.InvokeAsync((video, args));
+    }
+
+    private string BuildCardClass(Video video)
+    {
+        return SelectedVideoIds.Contains(video.Id)
+            ? "fz-video-grid__card-inner fz-video-grid__card-inner--selected"
+            : "fz-video-grid__card-inner";
+    }
+
+    private string FormatMeta(Video video)
+    {
+        var duration = DurationFormatter?.Invoke(video);
+        if (!string.IsNullOrEmpty(duration) && video.Year.HasValue)
+        {
+            return $"{video.Year} • {duration}";
+        }
+
+        if (video.Year.HasValue)
+        {
+            return video.Year.Value.ToString();
+        }
+
+        return duration ?? string.Empty;
+    }
+}
+
+<style>
+    .fz-video-grid {
+        width: 100%;
+    }
+
+    .fz-video-grid__row {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .fz-video-grid__cell {
+        display: flex;
+    }
+
+    .fz-video-grid__cell > .mud-card {
+        width: 100%;
+    }
+
+    .fz-video-grid__card-inner {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+        width: 100%;
+    }
+
+    .fz-video-grid__card-inner:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .fz-video-grid__card-inner--selected {
+        border: 2px solid var(--mud-palette-primary);
+    }
+
+    .fz-video-grid__empty {
+        min-height: 280px;
+    }
+</style>

@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuzzbin.Web", "Fuzzbin.Web\Fuzzbin.Web.csproj", "{DEF79ECC-57C3-4C09-8950-8D200269D913}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuzzbin.Core", "Fuzzbin.Core\Fuzzbin.Core.csproj", "{65F5FECD-388E-43D9-837D-25A83D0BBBAE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuzzbin.Data", "Fuzzbin.Data\Fuzzbin.Data.csproj", "{DFA5FDAB-524B-4A82-9759-4DFD507208D9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuzzbin.Tests", "Fuzzbin.Tests\Fuzzbin.Tests.csproj", "{96991C7F-C1F6-4BD9-86DB-A8F7CDCA8658}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuzzbin.Services", "Fuzzbin.Services\Fuzzbin.Services.csproj", "{ED29C4B4-4357-420A-89B1-46AB3469858E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuzzbin.PasswordReset", "Fuzzbin.PasswordReset\Fuzzbin.PasswordReset.csproj", "{131BDED5-899A-4AB8-BC01-F04CEA8C23AD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DEF79ECC-57C3-4C09-8950-8D200269D913}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DEF79ECC-57C3-4C09-8950-8D200269D913}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DEF79ECC-57C3-4C09-8950-8D200269D913}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DEF79ECC-57C3-4C09-8950-8D200269D913}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65F5FECD-388E-43D9-837D-25A83D0BBBAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65F5FECD-388E-43D9-837D-25A83D0BBBAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65F5FECD-388E-43D9-837D-25A83D0BBBAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65F5FECD-388E-43D9-837D-25A83D0BBBAE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFA5FDAB-524B-4A82-9759-4DFD507208D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFA5FDAB-524B-4A82-9759-4DFD507208D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFA5FDAB-524B-4A82-9759-4DFD507208D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFA5FDAB-524B-4A82-9759-4DFD507208D9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96991C7F-C1F6-4BD9-86DB-A8F7CDCA8658}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96991C7F-C1F6-4BD9-86DB-A8F7CDCA8658}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96991C7F-C1F6-4BD9-86DB-A8F7CDCA8658}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96991C7F-C1F6-4BD9-86DB-A8F7CDCA8658}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED29C4B4-4357-420A-89B1-46AB3469858E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED29C4B4-4357-420A-89B1-46AB3469858E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED29C4B4-4357-420A-89B1-46AB3469858E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED29C4B4-4357-420A-89B1-46AB3469858E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{131BDED5-899A-4AB8-BC01-F04CEA8C23AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{131BDED5-899A-4AB8-BC01-F04CEA8C23AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{131BDED5-899A-4AB8-BC01-F04CEA8C23AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{131BDED5-899A-4AB8-BC01-F04CEA8C23AD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

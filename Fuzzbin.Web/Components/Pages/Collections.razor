@@ -1,0 +1,432 @@
+@page "/collections"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services
+@using Fuzzbin.Web.Components.Dialogs
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@inject CollectionService CollectionService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Collections</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardContent>
+                    <MudGrid AlignItems="Center">
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.h4">
+                                <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Class="mr-2" />
+                                Collections
+                            </MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" Class="d-flex justify-end">
+                            <MudButton Variant="Variant.Filled" 
+                                     Color="Color.Primary" 
+                                     StartIcon="@Icons.Material.Filled.Add"
+                                     OnClick="OpenCreateDialog">
+                                Create Collection
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" 
+                                     Color="Color.Secondary" 
+                                     StartIcon="@Icons.Material.Filled.Upload"
+                                     OnClick="OpenImportDialog"
+                                     Class="ml-2">
+                                Import Playlist
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Search and Filters -->
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="searchTerm" 
+                                        Label="Search Collections" 
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Search"
+                                        Immediate="true"
+                                        DebounceInterval="300"
+                                        OnDebounceIntervalElapsed="SearchCollections" />
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudSelect @bind-Value="filterType" Label="Filter by Type" Variant="Variant.Outlined">
+                                <MudSelectItem Value="@("")">All Types</MudSelectItem>
+                                <MudSelectItem Value="@("Manual")">Manual</MudSelectItem>
+                                <MudSelectItem Value="@("Smart")">Smart</MudSelectItem>
+                                <MudSelectItem Value="@("Playlist")">Playlist</MudSelectItem>
+                                <MudSelectItem Value="@("Series")">Series</MudSelectItem>
+                                <MudSelectItem Value="@("Album")">Album</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudSwitch @bind-Value="showFavoritesOnly" Label="Favorites Only" Color="Color.Warning" />
+                            <MudSwitch @bind-Value="showPublicOnly" Label="Public Only" Color="Color.Info" />
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Collections Grid -->
+        <MudItem xs="12">
+            @if (isLoading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+            else if (collections?.Any() == true)
+            {
+                <MudGrid>
+                    @foreach (var collection in filteredCollections)
+                    {
+                        <MudItem xs="12" sm="6" md="4" lg="3">
+                            <MudCard>
+                                <MudCardContent>
+                                    <div class="d-flex justify-space-between align-center mb-2">
+                                        <MudText Typo="Typo.h6" Class="text-truncate">
+                                            @collection.Name
+                                        </MudText>
+                                        <div>
+                                            @if (collection.IsFavorite)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Star" 
+                                                       Color="Color.Warning" 
+                                                       Size="Size.Small" />
+                                            }
+                                            @if (!collection.IsPublic)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Lock" 
+                                                       Color="Color.Secondary" 
+                                                       Size="Size.Small" />
+                                            }
+                                        </div>
+                                    </div>
+                                    
+                                    <MudText Typo="Typo.caption" Class="mb-2">
+                                        <MudChip T="string" Size="Size.Small" Color="GetCollectionTypeColor(collection.Type)">
+                                            @collection.Type
+                                        </MudChip>
+                                    </MudText>
+
+                                    @if (!string.IsNullOrEmpty(collection.Description))
+                                    {
+                                        <MudText Typo="Typo.body2" Class="text-truncate-2 mb-2">
+                                            @collection.Description
+                                        </MudText>
+                                    }
+
+                                    <MudGrid>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.caption">Videos</MudText>
+                                            <MudText Typo="Typo.body1">@collection.VideoCount</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.caption">Duration</MudText>
+                                            <MudText Typo="Typo.body1">@FormatDuration(collection.TotalDuration)</MudText>
+                                        </MudItem>
+                                    </MudGrid>
+
+                                    <MudDivider Class="my-2" />
+                                    
+                                    <MudGrid>
+                                        <MudItem xs="12" Class="d-flex justify-space-between">
+                                            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
+                                                         Color="Color.Primary" 
+                                                         Size="Size.Small"
+                                                         Title="Play Collection"
+                                                         OnClick="@(() => PlayCollection(collection.Id))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                                         Color="Color.Info" 
+                                                         Size="Size.Small"
+                                                         Title="Edit Collection"
+                                                         OnClick="@(() => EditCollection(collection.Id))" />
+                                            <MudIconButton Icon="@(collection.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)" 
+                                                         Color="Color.Warning" 
+                                                         Size="Size.Small"
+                                                         Title="Toggle Favorite"
+                                                         OnClick="@(() => ToggleFavorite(collection.Id))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Download" 
+                                                         Color="Color.Success" 
+                                                         Size="Size.Small"
+                                                         Title="Export Collection"
+                                                         OnClick="@(() => ExportCollection(collection.Id))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                         Color="Color.Error" 
+                                                         Size="Size.Small"
+                                                         Title="Delete Collection"
+                                                         OnClick="@(() => DeleteCollection(collection.Id))" />
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+            else
+            {
+                <MudCard>
+                    <MudCardContent Class="text-center py-8">
+                        <MudIcon Icon="@Icons.Material.Outlined.VideoLibrary" 
+                               Style="font-size: 4rem;" 
+                               Color="Color.Default" />
+                        <MudText Typo="Typo.h6" Class="mt-4">No collections found</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Create your first collection to organize your videos
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private bool isLoading = true;
+    private List<Collection> collections = new();
+    private IEnumerable<Collection> filteredCollections => FilterCollections();
+    private string searchTerm = "";
+    private string filterType = "";
+    private bool showFavoritesOnly = false;
+    private bool showPublicOnly = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCollections();
+    }
+
+    private async Task LoadCollections()
+    {
+        isLoading = true;
+        try
+        {
+            var result = await CollectionService.GetAllCollectionsAsync();
+            collections = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load collections: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<Collection> FilterCollections()
+    {
+        var filtered = collections.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filtered = filtered.Where(c => 
+                c.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (c.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filterType))
+        {
+            if (Enum.TryParse<CollectionType>(filterType, out var type))
+            {
+                filtered = filtered.Where(c => c.Type == type);
+            }
+        }
+
+        if (showFavoritesOnly)
+        {
+            filtered = filtered.Where(c => c.IsFavorite);
+        }
+
+        if (showPublicOnly)
+        {
+            filtered = filtered.Where(c => c.IsPublic);
+        }
+
+        return filtered.OrderBy(c => c.SortOrder).ThenBy(c => c.Name);
+    }
+
+    private Task SearchCollections()
+    {
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<CollectionDialog>();
+        var options = new DialogOptions 
+        { 
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<CollectionDialog>("Create Collection", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadCollections();
+        }
+    }
+
+    private async Task OpenImportDialog()
+    {
+        var parameters = new DialogParameters<ImportDialog>();
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ImportDialog>("Import Playlist", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadCollections();
+        }
+    }
+
+    private Task PlayCollection(Guid collectionId)
+    {
+        NavigationManager.NavigateTo($"/player?collection={collectionId}");
+        return Task.CompletedTask;
+    }
+
+    private Task EditCollection(Guid collectionId)
+    {
+        NavigationManager.NavigateTo($"/collections/{collectionId}");
+        return Task.CompletedTask;
+    }
+
+    private async Task ToggleFavorite(Guid collectionId)
+    {
+        try
+        {
+            var success = await CollectionService.ToggleFavoriteAsync(collectionId);
+            if (success)
+            {
+                await LoadCollections();
+                Snackbar.Add("Favorite status updated", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to update favorite status", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ExportCollection(Guid collectionId)
+    {
+        var collection = collections.FirstOrDefault(c => c.Id == collectionId);
+        if (collection == null) return;
+
+        var parameters = new DialogParameters<ExportDialog>
+        {
+            { x => x.CollectionId, collectionId },
+            { x => x.CollectionName, collection.Name }
+        };
+
+        var options = new DialogOptions 
+        { 
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ExportDialog>("Export Collection", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Collection exported successfully", Severity.Success);
+        }
+    }
+
+    private async Task DeleteCollection(Guid collectionId)
+    {
+        var collection = collections.FirstOrDefault(c => c.Id == collectionId);
+        if (collection == null) return;
+
+        var result = await DialogService.ShowMessageBox(
+            "Delete Collection",
+            $"Are you sure you want to delete '{collection.Name}'? This action cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            try
+            {
+                var success = await CollectionService.DeleteCollectionAsync(collectionId);
+                if (success)
+                {
+                    await LoadCollections();
+                    Snackbar.Add("Collection deleted successfully", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete collection", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetCollectionTypeColor(CollectionType type)
+    {
+        return type switch
+        {
+            CollectionType.Manual => Color.Primary,
+            CollectionType.Smart => Color.Secondary,
+            CollectionType.Playlist => Color.Tertiary,
+            CollectionType.Series => Color.Info,
+            CollectionType.Album => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalDays >= 1)
+        {
+            return $"{(int)duration.TotalDays}d {duration.Hours}h";
+        }
+        else if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        }
+        else
+        {
+            return $"{(int)duration.TotalMinutes}m";
+        }
+    }
+}
+
+<style>
+    .text-truncate-2 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+</style>

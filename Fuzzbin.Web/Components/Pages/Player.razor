@@ -1,0 +1,344 @@
+@page "/player"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services
+@using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Web.Components.Player
+@using Fuzzbin.Web.Components.Shared
+@using Fuzzbin.Web.Services
+@using MudBlazor
+@using Microsoft.AspNetCore.WebUtilities
+@using static Fuzzbin.Services.Interfaces.IPlaylistService
+@inject ICollectionService CollectionService
+@inject IPlaylistService PlaylistService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject KeyboardShortcutService KeyboardService
+@implements IDisposable
+
+<PageTitle>Video Player - @(currentVideo?.Title ?? "Fuzzbin")</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+    <MudGrid Class="ma-0" Style="height: 100vh;">
+        <!-- Player Section -->
+        <MudItem xs="12" md="8" Class="pa-0" Style="height: 100%;">
+            <VideoPlayer @ref="videoPlayer"
+                       CurrentVideo="currentVideo"
+                       AutoPlay="true"
+                       ShowNativeControls="false"
+                       ShowOverlay="true"
+                       OnVideoEnded="OnVideoEnded"
+                       OnError="OnPlayerError" />
+        </MudItem>
+        
+        <!-- Playlist Queue Section -->
+        <MudItem xs="12" md="4" Class="pa-0" Style="height: 100%; background-color: var(--mud-palette-surface);">
+            <PlaylistQueue SessionId="@playlistSession?.SessionId"
+                          OnVideoSelected="OnVideoSelected"
+                          OnSessionUpdated="OnSessionUpdated" />
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private VideoPlayer? videoPlayer;
+    private Video? currentVideo;
+    private PlaylistSession? playlistSession;
+    private Collection? collection;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // Register keyboard shortcuts
+        RegisterKeyboardShortcuts();
+        
+        // Parse query parameters
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        
+        if (query.TryGetValue("collection", out var collectionIdStr) &&
+            Guid.TryParse(collectionIdStr, out var cId))
+        {
+            await LoadCollection(cId);
+        }
+        else if (query.TryGetValue("video", out var videoIdStr) &&
+                 Guid.TryParse(videoIdStr, out var vId))
+        {
+            await LoadSingleVideo(vId);
+        }
+        else if (query.TryGetValue("session", out var sessionStr) &&
+                 Guid.TryParse(sessionStr, out var sessionId))
+        {
+            await LoadSession(sessionId);
+        }
+        else
+        {
+            // No valid parameters, redirect to videos page
+            NavigationManager.NavigateTo("/videos");
+        }
+    }
+    
+    private void RegisterKeyboardShortcuts()
+    {
+        KeyboardService.RegisterShortcut("Space", "Player", TogglePlayPause, "Toggle play or pause");
+        KeyboardService.RegisterShortcut("ArrowLeft", "Player", () => SeekRelative(-10), "Seek backward 10s");
+        KeyboardService.RegisterShortcut("ArrowRight", "Player", () => SeekRelative(10), "Seek forward 10s");
+        KeyboardService.RegisterShortcut("ArrowUp", "Player", () => AdjustVolume(0.1), "Increase volume");
+        KeyboardService.RegisterShortcut("ArrowDown", "Player", () => AdjustVolume(-0.1), "Decrease volume");
+        KeyboardService.RegisterShortcut("M", "Player", ToggleMute, "Toggle mute");
+        KeyboardService.RegisterShortcut("F", "Player", ToggleFullscreen, "Toggle fullscreen");
+        KeyboardService.RegisterShortcut("N", "Player", PlayNext, "Play next video");
+        KeyboardService.RegisterShortcut("P", "Player", PlayPrevious, "Play previous video");
+    }
+    
+    private async Task LoadCollection(Guid collectionId)
+    {
+        try
+        {
+            collection = await CollectionService.GetCollectionAsync(collectionId);
+            if (collection == null)
+            {
+                Snackbar.Add("Collection not found", Severity.Error);
+                NavigationManager.NavigateTo("/collections");
+                return;
+            }
+            
+            // Create playlist session from collection
+            playlistSession = await PlaylistService.CreateFromCollectionAsync(collectionId);
+            currentVideo = PlaylistService.GetCurrentVideo(playlistSession);
+            
+            if (currentVideo == null)
+            {
+                Snackbar.Add("Collection has no videos", Severity.Warning);
+                NavigationManager.NavigateTo("/collections");
+            }
+            else
+            {
+                playlistSession.IsPlaying = true;
+                await PlaylistService.UpdateSessionAsync(playlistSession);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading collection: {ex.Message}", Severity.Error);
+            NavigationManager.NavigateTo("/collections");
+        }
+    }
+    
+    private async Task LoadSingleVideo(Guid videoId)
+    {
+        try
+        {
+            // Create a playlist with just this video
+            playlistSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { videoId });
+            currentVideo = PlaylistService.GetCurrentVideo(playlistSession);
+            
+            if (currentVideo != null)
+            {
+                playlistSession.IsPlaying = true;
+                await PlaylistService.UpdateSessionAsync(playlistSession);
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Video not found", Severity.Error);
+                NavigationManager.NavigateTo("/videos");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading video: {ex.Message}", Severity.Error);
+            NavigationManager.NavigateTo("/videos");
+        }
+    }
+    
+    private async Task LoadSession(Guid sessionId)
+    {
+        try
+        {
+            playlistSession = await PlaylistService.GetSessionAsync(sessionId);
+            if (playlistSession != null)
+            {
+                currentVideo = PlaylistService.GetCurrentVideo(playlistSession);
+                if (currentVideo != null)
+                {
+                    playlistSession.IsPlaying = true;
+                    await PlaylistService.UpdateSessionAsync(playlistSession);
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                Snackbar.Add("Playlist session not found", Severity.Error);
+                NavigationManager.NavigateTo("/videos");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading session: {ex.Message}", Severity.Error);
+            NavigationManager.NavigateTo("/videos");
+        }
+    }
+    
+    private async Task OnVideoSelected(Video video)
+    {
+        currentVideo = video;
+        StateHasChanged();
+        
+        if (videoPlayer != null)
+        {
+            await videoPlayer.Load();
+            await videoPlayer.Play();
+        }
+    }
+    
+    private Task OnSessionUpdated(PlaylistSession session)
+    {
+        playlistSession = session;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+    
+    private async Task OnVideoEnded()
+    {
+        if (playlistSession != null)
+        {
+            var nextVideo = await PlaylistService.NextAsync(playlistSession);
+            if (nextVideo != null)
+            {
+                currentVideo = nextVideo;
+                StateHasChanged();
+                
+                if (videoPlayer != null)
+                {
+                    await videoPlayer.Load();
+                    await videoPlayer.Play();
+                }
+            }
+            else
+            {
+                // Playlist ended
+                Snackbar.Add("Playlist ended", Severity.Info);
+                playlistSession.IsPlaying = false;
+                await PlaylistService.UpdateSessionAsync(playlistSession);
+                
+                // Stay on player page, don't navigate away
+                StateHasChanged();
+            }
+        }
+    }
+    
+    private void OnPlayerError(string error)
+    {
+        Snackbar.Add($"Player error: {error}", Severity.Error);
+    }
+    
+    // Keyboard shortcut handlers
+    private async void TogglePlayPause()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (videoPlayer != null)
+            {
+                await videoPlayer.TogglePlayPause();
+            }
+        });
+    }
+
+    private async void SeekRelative(double seconds)
+    {
+        await InvokeAsync(async () =>
+        {
+            if (videoPlayer != null)
+            {
+                await videoPlayer.SeekRelative(seconds);
+            }
+        });
+    }
+
+    private async void AdjustVolume(double delta)
+    {
+        await InvokeAsync(async () =>
+        {
+            if (videoPlayer != null)
+            {
+                await videoPlayer.AdjustVolume(delta);
+            }
+        });
+    }
+
+    private async void ToggleMute()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (videoPlayer != null)
+            {
+                await videoPlayer.ToggleMute();
+            }
+        });
+    }
+
+    private async void ToggleFullscreen()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (videoPlayer != null)
+            {
+                await videoPlayer.ToggleFullscreen();
+            }
+        });
+    }
+
+    private async void PlayNext()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (playlistSession != null)
+            {
+                var nextVideo = await PlaylistService.NextAsync(playlistSession);
+                if (nextVideo != null)
+                {
+                    await OnVideoSelected(nextVideo);
+                }
+            }
+        });
+    }
+
+    private async void PlayPrevious()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (playlistSession != null)
+            {
+                var previousVideo = await PlaylistService.PreviousAsync(playlistSession);
+                if (previousVideo != null)
+                {
+                    await OnVideoSelected(previousVideo);
+                }
+            }
+        });
+    }
+    
+    public void Dispose()
+    {
+        // Clean up keyboard shortcuts
+        KeyboardService.UnregisterShortcut("Space");
+        KeyboardService.UnregisterShortcut("ArrowLeft");
+        KeyboardService.UnregisterShortcut("ArrowRight");
+        KeyboardService.UnregisterShortcut("ArrowUp");
+        KeyboardService.UnregisterShortcut("ArrowDown");
+        KeyboardService.UnregisterShortcut("M");
+        KeyboardService.UnregisterShortcut("F");
+        KeyboardService.UnregisterShortcut("N");
+        KeyboardService.UnregisterShortcut("P");
+    }
+}
+
+<style>
+    .mud-grid {
+        height: 100vh;
+    }
+    
+    .mud-grid-item {
+        overflow: hidden;
+    }
+</style>

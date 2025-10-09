@@ -1,0 +1,85 @@
+@using MudBlazor
+@inject ILogger<ErrorDisplay> Logger
+@inject NavigationManager Navigation
+
+<MudPaper Elevation="3" Class="pa-6 fz-error-boundary">
+    <MudStack Spacing="2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudIcon Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Large" Class="mr-2" />
+            <div>
+                <MudText Typo="Typo.h5">Something went wrong</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    The interface hit an unexpected error. You can retry the last action or report the issue so we can investigate.
+                </MudText>
+            </div>
+        </MudStack>
+
+        <MudStack Row="true" Spacing="1">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TriggerRetry" StartIcon="@Icons.Material.Filled.Refresh">
+                Retry
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="ReportIssue" StartIcon="@Icons.Material.Filled.BugReport">
+                Report issue
+            </MudButton>
+        </MudStack>
+
+        @if (Exception != null)
+        {
+            <MudExpansionPanels Elevation="0">
+                <MudExpansionPanel Text="Technical details">
+                    <pre class="fz-error-boundary__stack">@Exception</pre>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public Exception? Exception { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    private bool _logged;
+
+    protected override void OnParametersSet()
+    {
+        if (!_logged && Exception != null)
+        {
+            _logged = true;
+            Logger.LogError(Exception, "Unhandled UI exception captured by error boundary.");
+        }
+    }
+
+    private async Task TriggerRetry()
+    {
+        _logged = false;
+        if (OnRetry.HasDelegate)
+        {
+            await OnRetry.InvokeAsync();
+        }
+    }
+
+    private void ReportIssue()
+    {
+        var subject = Uri.EscapeDataString("Fuzzbin UI error report");
+        var body = Exception != null
+            ? Uri.EscapeDataString($"Stack trace:%0D%0A{Exception}")
+            : Uri.EscapeDataString("Please describe what you were doing when the error occurred.");
+        Navigation.NavigateTo($"mailto:support@fuzzbin.local?subject={subject}&body={body}", forceLoad: true);
+    }
+}
+
+<style>
+    .fz-error-boundary {
+        border-left: 4px solid var(--mud-palette-error);
+        animation: fz-fade-in 220ms ease-out;
+    }
+
+    .fz-error-boundary__stack {
+        padding: 16px;
+        background-color: rgba(0, 0, 0, 0.04);
+        border-radius: 8px;
+        overflow-x: auto;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+</style>

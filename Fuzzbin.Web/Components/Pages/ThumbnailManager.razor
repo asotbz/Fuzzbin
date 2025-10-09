@@ -1,0 +1,255 @@
+@page "/thumbnails"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@inject IThumbnailService ThumbnailService
+@inject IVideoService VideoService
+@inject ISnackbar Snackbar
+@inject ILogger<ThumbnailManager> Logger
+
+<PageTitle>Thumbnail Manager - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudText Typo="Typo.h4" Class="mb-4">Thumbnail Manager</MudText>
+        </MudItem>
+        
+        <!-- Statistics Card -->
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" md="4">
+                            <MudText Typo="Typo.h6">Total Videos</MudText>
+                            <MudText Typo="Typo.h3" Color="Color.Primary">@_totalVideos</MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudText Typo="Typo.h6">With Thumbnails</MudText>
+                            <MudText Typo="Typo.h3" Color="Color.Success">@_videosWithThumbnails</MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudText Typo="Typo.h6">Missing Thumbnails</MudText>
+                            <MudText Typo="Typo.h3" Color="Color.Warning">@_videosWithoutThumbnails</MudText>
+                        </MudItem>
+                    </MudGrid>
+                    
+                    @if (_videosWithoutThumbnails > 0)
+                    {
+                        <MudDivider Class="my-4" />
+                        <MudButton Variant="Variant.Filled"
+                                 Color="Color.Primary"
+                                 StartIcon="@Icons.Material.Filled.Image"
+                                 OnClick="GenerateMissingThumbnails"
+                                 Disabled="@_isGenerating">
+                            Generate Missing Thumbnails
+                        </MudButton>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Progress Card (shown during generation) -->
+        @if (_isGenerating)
+        {
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Generating Thumbnails...</MudText>
+                        <MudProgressLinear Color="Color.Primary" 
+                                         Value="@_progressPercent" 
+                                         Class="mb-2" />
+                        <MudText Typo="Typo.body2">
+                            Processing: @_currentVideo (@_currentProgress of @_totalProgress)
+                        </MudText>
+                        <MudButton Color="Color.Error"
+                                 StartIcon="@Icons.Material.Filled.Cancel"
+                                 OnClick="CancelGeneration"
+                                 Class="mt-3">
+                            Cancel
+                        </MudButton>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+        
+        <!-- Videos without thumbnails list -->
+        @if (_videosWithoutThumbnailsList.Any())
+        {
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Videos Missing Thumbnails</MudText>
+                        <MudTable Items="@_videosWithoutThumbnailsList" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh>Title</MudTh>
+                                <MudTh>Artist</MudTh>
+                                <MudTh>File Path</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Title">@context.Title</MudTd>
+                                <MudTd DataLabel="Artist">@context.Artist</MudTd>
+                                <MudTd DataLabel="File Path">
+                                    <MudTooltip Text="@context.FilePath">
+                                        <MudText Class="text-truncate" Style="max-width: 300px;">
+                                            @(string.IsNullOrEmpty(context.FilePath) ? "No file path" : Path.GetFileName(context.FilePath))
+                                        </MudText>
+                                    </MudTooltip>
+                                </MudTd>
+                                <MudTd DataLabel="Actions">
+                                    @if (!string.IsNullOrEmpty(context.FilePath))
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Image"
+                                                     Color="Color.Primary"
+                                                     Size="Size.Small"
+                                                     OnClick="@(() => GenerateSingleThumbnail(context))"
+                                                     Disabled="@_isGenerating" />
+                                    }
+                                    else
+                                    {
+                                        <MudTooltip Text="No file path available">
+                                            <MudIconButton Icon="@Icons.Material.Filled.ImageNotSupported"
+                                                         Color="Color.Default"
+                                                         Size="Size.Small"
+                                                         Disabled="true" />
+                                        </MudTooltip>
+                                    }
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private int _totalVideos = 0;
+    private int _videosWithThumbnails = 0;
+    private int _videosWithoutThumbnails = 0;
+    private List<Video> _videosWithoutThumbnailsList = new();
+    
+    private bool _isGenerating = false;
+    private CancellationTokenSource? _cancellationTokenSource;
+    private int _currentProgress = 0;
+    private int _totalProgress = 0;
+    private double _progressPercent = 0;
+    private string _currentVideo = "";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatistics();
+    }
+    
+    private async Task LoadStatistics()
+    {
+        var allVideos = await VideoService.GetAllVideosAsync();
+        _totalVideos = allVideos.Count();
+        
+        _videosWithoutThumbnailsList = allVideos
+            .Where(v => !ThumbnailService.HasThumbnail(v))
+            .ToList();
+        
+        _videosWithoutThumbnails = _videosWithoutThumbnailsList.Count;
+        _videosWithThumbnails = _totalVideos - _videosWithoutThumbnails;
+    }
+    
+    private async Task GenerateMissingThumbnails()
+    {
+        _isGenerating = true;
+        _cancellationTokenSource = new CancellationTokenSource();
+        
+        try
+        {
+            var progress = new Progress<(int current, int total, string currentVideo)>((value) =>
+            {
+                InvokeAsync(() =>
+                {
+                    _currentProgress = value.current;
+                    _totalProgress = value.total;
+                    _currentVideo = value.currentVideo;
+                    _progressPercent = value.total > 0 ? (double)value.current / value.total * 100 : 0;
+                    StateHasChanged();
+                });
+            });
+            
+            var generated = await ThumbnailService.GenerateMissingThumbnailsAsync(progress, _cancellationTokenSource.Token);
+            
+            if (!_cancellationTokenSource.Token.IsCancellationRequested)
+            {
+                Snackbar.Add($"Successfully generated {generated} thumbnails", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Thumbnail generation cancelled", Severity.Info);
+            }
+            
+            await LoadStatistics();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating thumbnails");
+            Snackbar.Add($"Error generating thumbnails: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isGenerating = false;
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+            _currentProgress = 0;
+            _totalProgress = 0;
+            _progressPercent = 0;
+            _currentVideo = "";
+        }
+    }
+    
+    private async Task GenerateSingleThumbnail(Video video)
+    {
+        if (string.IsNullOrEmpty(video.FilePath))
+        {
+            Snackbar.Add("Video has no file path", Severity.Warning);
+            return;
+        }
+        
+        _isGenerating = true;
+        
+        try
+        {
+            var thumbnailPath = ThumbnailService.GetThumbnailPath(video);
+            var success = await ThumbnailService.GenerateThumbnailAsync(video.FilePath, thumbnailPath);
+            
+            if (success)
+            {
+                // Update video entity with thumbnail path
+                video.ThumbnailPath = Path.GetRelativePath(
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
+                    thumbnailPath
+                );
+                await VideoService.UpdateVideoAsync(video);
+                
+                Snackbar.Add($"Thumbnail generated for '{video.Title}'", Severity.Success);
+                await LoadStatistics();
+            }
+            else
+            {
+                Snackbar.Add($"Failed to generate thumbnail for '{video.Title}'", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating thumbnail for video {VideoId}", video.Id);
+            Snackbar.Add($"Error generating thumbnail: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isGenerating = false;
+        }
+    }
+    
+    private void CancelGeneration()
+    {
+        _cancellationTokenSource?.Cancel();
+    }
+}

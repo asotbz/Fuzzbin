@@ -1,0 +1,81 @@
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
+@using System.Threading
+
+<MudAutocomplete T="string"
+                 Value="SearchTerm"
+                 ValueChanged="OnValueChanged"
+                 Placeholder="Search by title, artist, or album"
+                 Label="Search"
+                 Adornment="Adornment.Start"
+                 AdornmentIcon="@Icons.Material.Filled.Search"
+                 Dense="true"
+                 Immediate="true"
+                 ResetValueOnEmptyText="false"
+                 HelperText="Press '/' to focus search instantly"
+                 SearchFunc="SearchAsync"
+                 OnBlur="HandleBlur"
+                 OnKeyDown="HandleKeyDown">
+</MudAutocomplete>
+
+@code {
+    [Parameter]
+    public string SearchTerm { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchTermChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearch { get; set; }
+
+    [Parameter]
+    public EventCallback OnClear { get; set; }
+
+    [Parameter]
+    public Func<string, CancellationToken, Task<IEnumerable<string>>>? SuggestionProvider { get; set; }
+
+    private Task<IEnumerable<string>> SearchAsync(string value, CancellationToken cancellationToken)
+    {
+        if (SuggestionProvider is null)
+        {
+            return Task.FromResult<IEnumerable<string>>(Array.Empty<string>());
+        }
+
+        return SuggestionProvider.Invoke(value, cancellationToken);
+    }
+
+    private async Task OnValueChanged(string value)
+    {
+        SearchTerm = value ?? string.Empty;
+        await SearchTermChanged.InvokeAsync(SearchTerm);
+
+        if (string.IsNullOrWhiteSpace(SearchTerm) && OnClear.HasDelegate)
+        {
+            await OnClear.InvokeAsync();
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            _ = TriggerSearchAsync();
+        }
+        else if (args.Key == "Escape")
+        {
+            _ = OnClear.HasDelegate ? OnClear.InvokeAsync() : Task.CompletedTask;
+        }
+    }
+
+    private Task TriggerSearchAsync()
+    {
+        if (OnSearch.HasDelegate)
+        {
+            return OnSearch.InvokeAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleBlur(FocusEventArgs _) => TriggerSearchAsync();
+}

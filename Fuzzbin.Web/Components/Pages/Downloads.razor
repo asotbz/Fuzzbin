@@ -1,0 +1,597 @@
+@page "/downloads"
+@using System.Threading
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Services.Interfaces
+@using DownloadStatus = Fuzzbin.Core.Entities.DownloadStatus
+@using MudBlazor
+@inject IUnitOfWork UnitOfWork
+@inject Fuzzbin.Services.Interfaces.IDownloadQueueService DownloadQueueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
+
+<PageTitle>Downloads - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudText Typo="Typo.h4" Class="mb-4">Download Queue</MudText>
+        </MudItem>
+        
+        <!-- Add Download Form -->
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="12" md="8">
+                            <MudTextField @bind-Value="_newDownloadUrl" 
+                                        Label="Video URL or Search Query" 
+                                        Placeholder="Enter YouTube URL or search terms..."
+                                        Variant="Variant.Outlined"
+                                        Adornment="Adornment.Start"
+                                        AdornmentIcon="@Icons.Material.Filled.Link"
+                                        OnKeyUp="@(async (e) => { if (e.Key == "Enter") await AddToQueue(); })"
+                                        Immediate="false" />
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect @bind-Value="_priority" 
+                                     Label="Priority" 
+                                     Variant="Variant.Outlined">
+                                <MudSelectItem Value="1">Low</MudSelectItem>
+                                <MudSelectItem Value="5">Normal</MudSelectItem>
+                                <MudSelectItem Value="10">High</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2" Class="d-flex align-center">
+                            <MudButton Variant="Variant.Filled" 
+                                     Color="Color.Primary" 
+                                     OnClick="AddToQueue"
+                                     StartIcon="@Icons.Material.Filled.Add"
+                                     Disabled="@_isAdding"
+                                     FullWidth="true">
+                                @if (_isAdding)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Adding...</span>
+                                }
+                                else
+                                {
+                                    <span>Add to Queue</span>
+                                }
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                    <MudItem xs="12" Class="mt-2">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Tip: You can paste a YouTube URL directly or enter search terms like "artist song name"
+                        </MudText>
+                    </MudItem>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <!-- Queue Statistics -->
+        <MudItem xs="12">
+            <MudGrid>
+                <MudItem xs="6" sm="3">
+                    <MudCard>
+                        <MudCardContent Class="text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CloudQueue" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.h6">@_queuedCount</MudText>
+                            <MudText Typo="Typo.caption">Queued</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudCard>
+                        <MudCardContent Class="text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CloudDownload" Color="Color.Info" Size="Size.Large" />
+                            <MudText Typo="Typo.h6">@_downloadingCount</MudText>
+                            <MudText Typo="Typo.caption">Downloading</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudCard>
+                        <MudCardContent Class="text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                            <MudText Typo="Typo.h6">@_completedCount</MudText>
+                            <MudText Typo="Typo.caption">Completed</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudCard>
+                        <MudCardContent Class="text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Large" />
+                            <MudText Typo="Typo.h6">@_failedCount</MudText>
+                            <MudText Typo="Typo.caption">Failed</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+        
+        <!-- Active Downloads -->
+        @if (_activeDownloads.Any())
+        {
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2">Active Downloads</MudText>
+                @foreach (var item in _activeDownloads)
+                {
+                    <MudCard Class="mb-2">
+                        <MudCardContent>
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudText Typo="Typo.subtitle1">@(item.Title ?? item.Url)</MudText>
+                                    <MudText Typo="Typo.caption">@item.Status</MudText>
+                                </MudItem>
+                                <MudItem xs="12" md="4">
+                                    <MudProgressLinear Value="@item.Progress" 
+                                                     Color="Color.Primary" 
+                                                     Striped="true" 
+                                                     Size="Size.Medium" 
+                                                     Class="my-2">
+                                        <MudText Typo="Typo.caption">@($"{item.Progress:F1}%")</MudText>
+                                    </MudProgressLinear>
+                                </MudItem>
+                                <MudItem xs="12" md="2" Class="d-flex justify-end align-center">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" 
+                                                 Color="Color.Error" 
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => CancelDownload(item))" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+                }
+            </MudItem>
+        }
+        
+        <!-- Queue Tabs -->
+        <MudItem xs="12">
+            <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                <MudTabPanel Text="@($"Queued ({_queuedCount})")" Icon="@Icons.Material.Filled.CloudQueue">
+                    @if (_queuedItems.Any())
+                    {
+                        <MudSimpleTable Hover="true" Dense="true">
+                            <thead>
+                                <tr>
+                                    <th>URL / Title</th>
+                                    <th>Priority</th>
+                                    <th>Added</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _queuedItems)
+                                {
+                                    <tr>
+                                        <td>@(item.Title ?? item.Url)</td>
+                                        <td>
+                                            <MudChip T="string"
+                                                   Size="Size.Small"
+                                                   Color="@GetPriorityColor(item.Priority)">
+                                                @GetPriorityText(item.Priority)
+                                            </MudChip>
+                                        </td>
+                                        <td>@item.CreatedAt.ToLocalTime().ToString("g")</td>
+                                        <td>
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" 
+                                                         Color="Color.Primary" 
+                                                         Size="Size.Small"
+                                                         Title="Increase Priority"
+                                                         OnClick="@(() => ChangePriority(item, 1))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" 
+                                                         Color="Color.Default" 
+                                                         Size="Size.Small"
+                                                         Title="Decrease Priority"
+                                                         OnClick="@(() => ChangePriority(item, -1))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                         Color="Color.Error" 
+                                                         Size="Size.Small"
+                                                         OnClick="@(() => RemoveFromQueue(item))" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body1" Class="text-center py-4">No items in queue</MudText>
+                    }
+                </MudTabPanel>
+                
+                <MudTabPanel Text="@($"Completed ({_completedCount})")" Icon="@Icons.Material.Filled.CheckCircle">
+                    @if (_completedItems.Any())
+                    {
+                        <MudSimpleTable Hover="true" Dense="true">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Completed</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _completedItems)
+                                {
+                                    <tr>
+                                        <td>@(item.Title ?? "Unknown")</td>
+                                        <td>@item.UpdatedAt.ToLocalTime().ToString("g")</td>
+                                        <td>
+                                            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
+                                                         Color="Color.Primary" 
+                                                         Size="Size.Small"
+                                                         Title="Play Video"
+                                                         OnClick="@(() => PlayVideo(item))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" 
+                                                         Color="Color.Default" 
+                                                         Size="Size.Small"
+                                                         Title="View in Library"
+                                                         OnClick="@(() => ViewInLibrary(item))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Clear" 
+                                                         Color="Color.Error" 
+                                                         Size="Size.Small"
+                                                         Title="Clear from History"
+                                                         OnClick="@(() => ClearFromHistory(item))" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body1" Class="text-center py-4">No completed downloads</MudText>
+                    }
+                </MudTabPanel>
+                
+                <MudTabPanel Text="@($"Failed ({_failedCount})")" Icon="@Icons.Material.Filled.Error">
+                    @if (_failedItems.Any())
+                    {
+                        <MudSimpleTable Hover="true" Dense="true">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Error</th>
+                                    <th>Failed</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _failedItems)
+                                {
+                                    <tr>
+                                        <td>@(item.Title ?? item.Url)</td>
+                                        <td>
+                                            <MudTooltip Text="@item.ErrorMessage">
+                                                <MudText Typo="Typo.caption" Color="Color.Error">
+                                                    @(item.ErrorMessage?.Length > 50 
+                                                        ? item.ErrorMessage.Substring(0, 50) + "..." 
+                                                        : item.ErrorMessage)
+                                                </MudText>
+                                            </MudTooltip>
+                                        </td>
+                                        <td>@item.UpdatedAt.ToLocalTime().ToString("g")</td>
+                                        <td>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                                                         Color="Color.Primary" 
+                                                         Size="Size.Small"
+                                                         Title="Retry Download"
+                                                         OnClick="@(() => RetryDownload(item))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                         Color="Color.Error" 
+                                                         Size="Size.Small"
+                                                         Title="Remove from Queue"
+                                                         OnClick="@(() => RemoveFromQueue(item))" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body1" Class="text-center py-4">No failed downloads</MudText>
+                    }
+                </MudTabPanel>
+            </MudTabs>
+        </MudItem>
+        
+        <!-- Bulk Actions -->
+        @if (_queuedItems.Any() || _failedItems.Any())
+        {
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">Bulk Actions</MudText>
+                        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                            @if (_failedItems.Any())
+                            {
+                                <MudButton StartIcon="@Icons.Material.Filled.Refresh" 
+                                         Color="Color.Primary"
+                                         OnClick="RetryAllFailed">
+                                    Retry All Failed
+                                </MudButton>
+                            }
+                            @if (_queuedItems.Any() || _failedItems.Any())
+                            {
+                                <MudButton StartIcon="@Icons.Material.Filled.ClearAll" 
+                                         Color="Color.Error"
+                                         OnClick="ClearQueue">
+                                    Clear Queue
+                                </MudButton>
+                            }
+                        </MudButtonGroup>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private CancellationTokenSource? _refreshCts;
+    private Task? _refreshTask;
+    private string _newDownloadUrl = "";
+    private int _priority = 5;
+    private bool _isAdding = false;
+    
+    private List<DownloadQueueItem> _activeDownloads = new();
+    private List<DownloadQueueItem> _queuedItems = new();
+    private List<DownloadQueueItem> _completedItems = new();
+    private List<DownloadQueueItem> _failedItems = new();
+    
+    private int _queuedCount = 0;
+    private int _downloadingCount = 0;
+    private int _completedCount = 0;
+    private int _failedCount = 0;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshQueue();
+
+        _refreshCts = new CancellationTokenSource();
+        _refreshTask = RunRefreshLoopAsync(_refreshCts.Token);
+    }
+
+    private async Task RunRefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    await RefreshQueue();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the component is disposed
+        }
+    }
+    
+    private async Task RefreshQueue()
+    {
+        var allItems = await UnitOfWork.DownloadQueueItems
+            .GetAllAsync(includeDeleted: false);
+        
+        _activeDownloads = allItems
+            .Where(i => i.Status == DownloadStatus.Downloading)
+            .OrderBy(i => i.CreatedAt)
+            .ToList();
+        
+        _queuedItems = allItems
+            .Where(i => i.Status == DownloadStatus.Queued)
+            .OrderByDescending(i => i.Priority)
+            .ThenBy(i => i.CreatedAt)
+            .ToList();
+        
+        _completedItems = allItems
+            .Where(i => i.Status == DownloadStatus.Completed)
+            .OrderByDescending(i => i.UpdatedAt)
+            .Take(20)
+            .ToList();
+        
+        _failedItems = allItems
+            .Where(i => i.Status == DownloadStatus.Failed)
+            .OrderByDescending(i => i.UpdatedAt)
+            .ToList();
+        
+        _queuedCount = _queuedItems.Count;
+        _downloadingCount = _activeDownloads.Count;
+        _completedCount = _completedItems.Count;
+        _failedCount = _failedItems.Count;
+    }
+    
+    private async Task AddToQueue()
+    {
+        if (string.IsNullOrWhiteSpace(_newDownloadUrl))
+        {
+            Snackbar.Add("Please enter a URL or search query", Severity.Warning);
+            return;
+        }
+        
+        _isAdding = true;
+        
+        try
+        {
+            // Determine if it's a URL or search query
+            bool isUrl = _newDownloadUrl.StartsWith("http://") || 
+                        _newDownloadUrl.StartsWith("https://") ||
+                        _newDownloadUrl.Contains("youtube.com") ||
+                        _newDownloadUrl.Contains("youtu.be");
+            
+            string url = isUrl ? _newDownloadUrl : $"ytsearch:{_newDownloadUrl}";
+            
+            await DownloadQueueService.AddToQueueAsync(url, _priority);
+            
+            Snackbar.Add("Added to download queue", Severity.Success);
+            _newDownloadUrl = "";
+            await RefreshQueue();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding to queue: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isAdding = false;
+        }
+    }
+    
+    private async Task ChangePriority(DownloadQueueItem item, int change)
+    {
+        item.Priority = Math.Max(1, Math.Min(10, item.Priority + change));
+        await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+    }
+    
+    private async Task RemoveFromQueue(DownloadQueueItem item)
+    {
+        item.IsDeleted = true;
+        await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+        Snackbar.Add("Removed from queue", Severity.Success);
+    }
+    
+    private async Task CancelDownload(DownloadQueueItem item)
+    {
+        // TODO: Implement download cancellation
+        item.Status = DownloadStatus.Failed;
+        item.ErrorMessage = "Cancelled by user";
+        await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+        Snackbar.Add("Download cancelled", Severity.Warning);
+    }
+    
+    private async Task RetryDownload(DownloadQueueItem item)
+    {
+        item.Status = DownloadStatus.Queued;
+        item.ErrorMessage = null;
+        item.RetryCount++;
+        await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+        Snackbar.Add("Download queued for retry", Severity.Info);
+    }
+    
+    private async Task RetryAllFailed()
+    {
+        foreach (var item in _failedItems)
+        {
+            item.Status = DownloadStatus.Queued;
+            item.ErrorMessage = null;
+            item.RetryCount++;
+            await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        }
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+        Snackbar.Add($"Queued {_failedItems.Count} items for retry", Severity.Info);
+    }
+    
+    private async Task ClearQueue()
+    {
+        foreach (var item in _queuedItems.Concat(_failedItems))
+        {
+            item.IsDeleted = true;
+            await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        }
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+        Snackbar.Add("Queue cleared", Severity.Success);
+    }
+    
+    private async Task ClearFromHistory(DownloadQueueItem item)
+    {
+        item.IsDeleted = true;
+        await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+        await UnitOfWork.SaveChangesAsync();
+        await RefreshQueue();
+    }
+    
+    private void PlayVideo(DownloadQueueItem item)
+    {
+        if (item.VideoId.HasValue)
+        {
+            Navigation.NavigateTo($"/player/{item.VideoId}");
+        }
+    }
+    
+    private void ViewInLibrary(DownloadQueueItem item)
+    {
+        if (item.VideoId.HasValue)
+        {
+            Navigation.NavigateTo($"/videos/{item.VideoId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/videos");
+        }
+    }
+    
+    private Color GetPriorityColor(int priority)
+    {
+        return priority switch
+        {
+            >= 8 => Color.Error,
+            >= 5 => Color.Warning,
+            _ => Color.Default
+        };
+    }
+    
+    private string GetPriorityText(int priority)
+    {
+        return priority switch
+        {
+            >= 8 => "High",
+            >= 5 => "Normal",
+            _ => "Low"
+        };
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_refreshCts != null)
+        {
+            try
+            {
+                _refreshCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already disposed
+            }
+        }
+
+        if (_refreshTask != null)
+        {
+            try
+            {
+                await _refreshTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected
+            }
+        }
+
+        _refreshCts?.Dispose();
+    }
+}

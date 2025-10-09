@@ -1,0 +1,565 @@
+@page "/collections/{CollectionId:guid}"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services
+@using Fuzzbin.Web.Components.Dialogs
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
+@inject CollectionService CollectionService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(collection?.Name ?? "Collection")</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+    @if (isLoading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (collection != null)
+    {
+        <MudGrid>
+            <!-- Collection Header -->
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudGrid AlignContent="Center">
+                            <MudItem xs="12" sm="8">
+                                <div class="d-flex align-center mb-2">
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" 
+                                                 OnClick="@(() => NavigationManager.NavigateTo("/collections"))" />
+                                    <MudText Typo="Typo.h4" Class="ml-2">
+                                        @collection.Name
+                                        @if (collection.IsFavorite)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Star" 
+                                                   Color="Color.Warning" 
+                                                   Class="ml-2" />
+                                        }
+                                        @if (!collection.IsPublic)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Lock" 
+                                                   Color="Color.Secondary" 
+                                                   Class="ml-2" />
+                                        }
+                                    </MudText>
+                                </div>
+                                @if (!string.IsNullOrEmpty(collection.Description))
+                                {
+                                    <MudText Typo="Typo.body1" Color="Color.Secondary">
+                                        @collection.Description
+                                    </MudText>
+                                }
+                                <div class="mt-2">
+                                    <MudChip T="string" Size="Size.Small" Color="GetCollectionTypeColor(collection.Type)">
+                                        @collection.Type
+                                    </MudChip>
+                                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.VideoLibrary">
+                                        @collection.VideoCount videos
+                                    </MudChip>
+                                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Schedule">
+                                        @FormatDuration(collection.TotalDuration)
+                                    </MudChip>
+                                </div>
+                            </MudItem>
+                            <MudItem xs="12" sm="4" Class="d-flex justify-end">
+                                <MudButton Variant="Variant.Filled" 
+                                         Color="Color.Primary" 
+                                         StartIcon="@Icons.Material.Filled.PlayArrow"
+                                         OnClick="PlayAll"
+                                         Class="mr-2">
+                                    Play All
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" 
+                                         Color="Color.Info" 
+                                         StartIcon="@Icons.Material.Filled.Edit"
+                                         OnClick="EditCollection">
+                                    Edit
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Action Bar -->
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudGrid AlignContent="Center">
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="searchTerm" 
+                                            Label="Search in collection" 
+                                            Variant="Variant.Outlined"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Search"
+                                            Immediate="true"
+                                            DebounceInterval="300"
+                                            OnDebounceIntervalElapsed="FilterVideos" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6" Class="d-flex justify-end">
+                                @if (collection.Type != CollectionType.Smart)
+                                {
+                                    <MudButton Variant="Variant.Outlined" 
+                                             Color="Color.Success" 
+                                             StartIcon="@Icons.Material.Filled.Add"
+                                             OnClick="AddVideos"
+                                             Class="mr-2">
+                                        Add Videos
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Outlined" 
+                                             Color="Color.Warning" 
+                                             StartIcon="@Icons.Material.Filled.Refresh"
+                                             OnClick="RefreshSmartCollection"
+                                             Class="mr-2">
+                                        Refresh
+                                    </MudButton>
+                                }
+                                <MudButton Variant="Variant.Outlined" 
+                                         Color="Color.Secondary" 
+                                         StartIcon="@Icons.Material.Filled.Download"
+                                         OnClick="ExportCollection">
+                                    Export
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Videos Grid -->
+            <MudItem xs="12">
+                @if (videos?.Any() == true)
+                {
+                    <MudCard>
+                        <MudCardContent>
+                            <MudTable Items="@filteredVideos" 
+                                    Hover="true" 
+                                    Striped="true" 
+                                    Dense="true"
+                                    MultiSelection="true"
+                                    @bind-SelectedItems="selectedVideos">
+                                <ToolBarContent>
+                                    @if (selectedVideos?.Any() == true)
+                                    {
+                                        <MudText Class="mr-4">
+                                            @selectedVideos.Count() video(s) selected
+                                        </MudText>
+                                        <MudButton Color="Color.Error" 
+                                                 StartIcon="@Icons.Material.Filled.Delete"
+                                                 OnClick="RemoveSelectedVideos">
+                                            Remove Selected
+                                        </MudButton>
+                                    }
+                                </ToolBarContent>
+                                <HeaderContent>
+                                    <MudTh>Position</MudTh>
+                                    <MudTh>Title</MudTh>
+                                    <MudTh>Artist</MudTh>
+                                    <MudTh>Duration</MudTh>
+                                    <MudTh>Year</MudTh>
+                                    <MudTh>Actions</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Position">
+                                        @if (collection.Type != CollectionType.Smart)
+                                        {
+                                            <div class="d-flex align-center">
+                                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" 
+                                                             Size="Size.Small"
+                                                             Disabled="@(context == videos.First())"
+                                                             OnClick="@(() => MoveUp(context))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" 
+                                                             Size="Size.Small"
+                                                             Disabled="@(context == videos.Last())"
+                                                             OnClick="@(() => MoveDown(context))" />
+                                                <MudText>@(videos.IndexOf(context) + 1)</MudText>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <MudText>@(videos.IndexOf(context) + 1)</MudText>
+                                        }
+                                    </MudTd>
+                                    <MudTd DataLabel="Title">@context.Title</MudTd>
+                                    <MudTd DataLabel="Artist">@context.Artist</MudTd>
+                                    <MudTd DataLabel="Duration">@FormatDuration(TimeSpan.FromSeconds(context.Duration ?? 0))</MudTd>
+                                    <MudTd DataLabel="Year">@context.Year</MudTd>
+                                    <MudTd DataLabel="Actions">
+                                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
+                                                     Size="Size.Small"
+                                                     Color="Color.Primary"
+                                                     Title="Play"
+                                                     OnClick="@(() => PlayVideo(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Info" 
+                                                     Size="Size.Small"
+                                                     Color="Color.Info"
+                                                     Title="Details"
+                                                     OnClick="@(() => ShowVideoDetails(context))" />
+                                        @if (collection.Type != CollectionType.Smart)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                         Size="Size.Small"
+                                                         Color="Color.Error"
+                                                         Title="Remove from collection"
+                                                         OnClick="@(() => RemoveVideo(context))" />
+                                        }
+                                    </MudTd>
+                                </RowTemplate>
+                                <PagerContent>
+                                    <MudTablePager />
+                                </PagerContent>
+                            </MudTable>
+                        </MudCardContent>
+                    </MudCard>
+                }
+                else
+                {
+                    <MudCard>
+                        <MudCardContent Class="text-center py-8">
+                            <MudIcon Icon="@Icons.Material.Outlined.VideoCall" 
+                                   Style="font-size: 4rem;" 
+                                   Color="Color.Default" />
+                            <MudText Typo="Typo.h6" Class="mt-4">No videos in this collection</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @if (collection.Type == CollectionType.Smart)
+                                {
+                                    @("No videos match the smart criteria. Try adjusting the criteria or refresh the collection.")
+                                }
+                                else
+                                {
+                                    @("Add videos to start building your collection")
+                                }
+                            </MudText>
+                            @if (collection.Type != CollectionType.Smart)
+                            {
+                                <MudButton Variant="Variant.Filled" 
+                                         Color="Color.Primary" 
+                                         StartIcon="@Icons.Material.Filled.Add"
+                                         OnClick="AddVideos"
+                                         Class="mt-4">
+                                    Add Videos
+                                </MudButton>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                }
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudCard>
+            <MudCardContent Class="text-center py-8">
+                <MudText Typo="Typo.h6">Collection not found</MudText>
+                <MudButton Variant="Variant.Filled" 
+                         Color="Color.Primary" 
+                         OnClick="@(() => NavigationManager.NavigateTo("/collections"))"
+                         Class="mt-4">
+                    Back to Collections
+                </MudButton>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid CollectionId { get; set; }
+    
+    private Collection? collection;
+    private List<Video> videos = new();
+    private IEnumerable<Video> filteredVideos => FilterVideosList();
+    private HashSet<Video> selectedVideos = new();
+    private string searchTerm = "";
+    private bool isLoading = true;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCollection();
+    }
+    
+    private async Task LoadCollection()
+    {
+        isLoading = true;
+        try
+        {
+            collection = await CollectionService.GetCollectionAsync(CollectionId);
+            if (collection != null)
+            {
+                var collectionVideos = await CollectionService.GetCollectionVideosAsync(CollectionId);
+                videos = collectionVideos.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load collection: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private IEnumerable<Video> FilterVideosList()
+    {
+        var filtered = videos.AsEnumerable();
+        
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filtered = filtered.Where(v => 
+                v.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                v.Artist.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (v.Album?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+        
+        return filtered;
+    }
+    
+    private void FilterVideos()
+    {
+        StateHasChanged();
+    }
+    
+    private Task PlayAll()
+    {
+        NavigationManager.NavigateTo($"/player?collection={CollectionId}");
+        return Task.CompletedTask;
+    }
+    
+    private async Task EditCollection()
+    {
+        if (collection == null)
+        {
+            Snackbar.Add("Collection not loaded", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<CollectionDialog>
+        {
+            { x => x.Collection, collection }
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<CollectionDialog>("Edit Collection", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result is { Canceled: false })
+        {
+            await LoadCollection();
+        }
+    }
+    
+    private Task AddVideos()
+    {
+        // TODO: Implement video selection dialog
+        Snackbar.Add("Video selection dialog coming soon", Severity.Info);
+        return Task.CompletedTask;
+    }
+    
+    private async Task RefreshSmartCollection()
+    {
+        if (collection?.Type != CollectionType.Smart) return;
+        
+        try
+        {
+            var success = await CollectionService.RefreshSmartCollectionAsync(CollectionId);
+            if (success)
+            {
+                await LoadCollection();
+                Snackbar.Add("Smart collection refreshed", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to refresh smart collection", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private async Task ExportCollection()
+    {
+        if (collection == null) return;
+        
+        var parameters = new DialogParameters<ExportDialog>
+        {
+            { x => x.CollectionId, CollectionId },
+            { x => x.CollectionName, collection.Name }
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<ExportDialog>("Export Collection", parameters, options);
+        var result = await dialog.Result;
+        
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Collection exported successfully", Severity.Success);
+        }
+    }
+    
+    private async Task RemoveVideo(Video video)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Remove Video",
+            $"Remove '{video.Title}' from this collection?",
+            yesText: "Remove", cancelText: "Cancel");
+        
+        if (result == true)
+        {
+            try
+            {
+                var success = await CollectionService.RemoveVideoFromCollectionAsync(CollectionId, video.Id);
+                if (success)
+                {
+                    videos.Remove(video);
+                    collection!.VideoCount = videos.Count;
+                    StateHasChanged();
+                    Snackbar.Add("Video removed from collection", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to remove video", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+    
+    private async Task RemoveSelectedVideos()
+    {
+        if (!selectedVideos.Any()) return;
+        
+        var result = await DialogService.ShowMessageBox(
+            "Remove Videos",
+            $"Remove {selectedVideos.Count} video(s) from this collection?",
+            yesText: "Remove", cancelText: "Cancel");
+        
+        if (result == true)
+        {
+            var removedCount = 0;
+            foreach (var video in selectedVideos.ToList())
+            {
+                try
+                {
+                    var success = await CollectionService.RemoveVideoFromCollectionAsync(CollectionId, video.Id);
+                    if (success)
+                    {
+                        videos.Remove(video);
+                        removedCount++;
+                    }
+                }
+                catch { }
+            }
+            
+            if (removedCount > 0)
+            {
+                collection!.VideoCount = videos.Count;
+                selectedVideos.Clear();
+                StateHasChanged();
+                Snackbar.Add($"Removed {removedCount} video(s) from collection", Severity.Success);
+            }
+        }
+    }
+    
+    private async Task MoveUp(Video video)
+    {
+        var index = videos.IndexOf(video);
+        if (index <= 0) return;
+        
+        videos.RemoveAt(index);
+        videos.Insert(index - 1, video);
+        
+        await ReorderVideos();
+    }
+    
+    private async Task MoveDown(Video video)
+    {
+        var index = videos.IndexOf(video);
+        if (index < 0 || index >= videos.Count - 1) return;
+        
+        videos.RemoveAt(index);
+        videos.Insert(index + 1, video);
+        
+        await ReorderVideos();
+    }
+    
+    private async Task ReorderVideos()
+    {
+        try
+        {
+            var videoIds = videos.Select(v => v.Id).ToList();
+            var success = await CollectionService.ReorderCollectionVideosAsync(CollectionId, videoIds);
+            
+            if (success)
+            {
+                StateHasChanged();
+                Snackbar.Add("Video order updated", Severity.Success);
+            }
+            else
+            {
+                await LoadCollection(); // Reload to restore original order
+                Snackbar.Add("Failed to reorder videos", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await LoadCollection(); // Reload to restore original order
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private void PlayVideo(Video video)
+    {
+        NavigationManager.NavigateTo($"/player?video={video.Id}");
+    }
+    
+    private void ShowVideoDetails(Video video)
+    {
+        NavigationManager.NavigateTo($"/videos/{video.Id}");
+    }
+    
+    private Color GetCollectionTypeColor(CollectionType type)
+    {
+        return type switch
+        {
+            CollectionType.Manual => Color.Primary,
+            CollectionType.Smart => Color.Secondary,
+            CollectionType.Playlist => Color.Tertiary,
+            CollectionType.Series => Color.Info,
+            CollectionType.Album => Color.Success,
+            _ => Color.Default
+        };
+    }
+    
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}";
+        }
+        else
+        {
+            return $"{(int)duration.TotalMinutes}:{duration.Seconds:D2}";
+        }
+    }
+}

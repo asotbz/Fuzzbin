@@ -1,0 +1,620 @@
+@page "/"
+@page "/dashboard"
+@using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Core.Entities
+@using Microsoft.EntityFrameworkCore
+@using System.Linq
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Dashboard" Class="mr-2" />
+        Dashboard
+    </MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <!-- Summary Cards -->
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" 
+                                    Color="Color.Primary" 
+                                    Size="Size.Large" 
+                                    Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h3">@totalVideos</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Videos</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" 
+                                    Color="Color.Secondary" 
+                                    Size="Size.Large" 
+                                    Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h3">@totalArtists</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Artists</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Collections" 
+                                    Color="Color.Tertiary" 
+                                    Size="Size.Large" 
+                                    Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h3">@totalCollections</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Collections</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Storage" 
+                                    Color="Color.Warning" 
+                                    Size="Size.Large" 
+                                    Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h3">@FormatFileSize(totalStorageSize)</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Storage Used</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="mt-4">
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Quick Actions</MudText>
+                        <MudGrid>
+                            <MudItem xs="12" sm="6" md="3">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" FullWidth="true" Href="/videos/add">
+                                    Add Video
+                                </MudButton>
+                            </MudItem>
+                            <MudItem xs="12" sm="6" md="3">
+                                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Download" FullWidth="true" Href="/downloads/new">
+                                    New Download
+                                </MudButton>
+                            </MudItem>
+                            <MudItem xs="12" sm="6" md="3">
+                                <MudButton Variant="Variant.Filled" Color="Color.Tertiary" StartIcon="@Icons.Material.Filled.Upload" FullWidth="true" Href="/import">
+                                    Import Collection
+                                </MudButton>
+                            </MudItem>
+                            <MudItem xs="12" sm="6" md="3">
+                                <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Settings" FullWidth="true" Href="/settings">
+                                    Settings
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="mt-4">
+            <!-- Videos by Year Chart -->
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Videos by Year</MudText>
+                        <MudChart ChartType="ChartType.Bar" 
+                                 ChartSeries="@yearChartSeries" 
+                                 XAxisLabels="@yearLabels"
+                                 Width="100%" 
+                                 Height="300px"
+                                 ChartOptions="@chartOptions" />
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Top Genres Chart -->
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Top Genres</MudText>
+                        <MudChart ChartType="ChartType.Donut" 
+                                 ChartSeries="@genreChartSeries" 
+                                 InputLabels="@genreLabels"
+                                 Width="100%" 
+                                 Height="300px"
+                                 ChartOptions="@pieChartOptions" />
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="mt-4">
+            <!-- Recent Activity -->
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Recent Additions</MudText>
+                        <MudList T="string" Dense="true">
+                            @foreach (var video in recentVideos.Take(5))
+                            {
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between align-center">
+                                        <div class="d-flex align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle" 
+                                                    Color="Color.Primary" 
+                                                    Size="Size.Small" 
+                                                    Class="mr-2" />
+                                            <div>
+                                                <MudText Typo="Typo.body2">@video.Title</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@video.Artist</MudText>
+                                            </div>
+                                        </div>
+                                        <MudText Typo="Typo.caption">
+                                            @video.CreatedAt.ToString("MMM dd")
+                                        </MudText>
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                        @if (recentVideos.Count > 5)
+                        {
+                            <MudButton Variant="Variant.Text" 
+                                      Color="Color.Primary" 
+                                      Size="Size.Small"
+                                      OnClick="@(() => Navigation.NavigateTo("/videos"))"
+                                      Class="mt-2">
+                                View All Videos
+                            </MudButton>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Top Artists -->
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Top Artists</MudText>
+                        <MudList T="string" Dense="true">
+                            @foreach (var artist in topArtists.Take(5))
+                            {
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between align-center">
+                                        <div class="d-flex align-center">
+                                            <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                                @artist.Name.FirstOrDefault()
+                                            </MudAvatar>
+                                            <MudText Typo="Typo.body2">@artist.Name</MudText>
+                                        </div>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                                            @artist.Count videos
+                                        </MudChip>
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="mt-4">
+            <!-- Storage Breakdown -->
+            <MudItem xs="12" md="4">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Storage by Format</MudText>
+                        <MudChart ChartType="ChartType.Pie" 
+                                 ChartSeries="@formatChartSeries" 
+                                 InputLabels="@formatLabels"
+                                 Width="100%" 
+                                 Height="250px"
+                                 ChartOptions="@pieChartOptions" />
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Quality Distribution -->
+            <MudItem xs="12" md="4">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Quality Distribution</MudText>
+                        <MudList T="string" Dense="true">
+                            @foreach (var quality in qualityDistribution)
+                            {
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between align-center mb-1">
+                                        <MudText Typo="Typo.body2">@quality.Resolution</MudText>
+                                        <MudText Typo="Typo.caption">@quality.Count videos</MudText>
+                                    </div>
+                                    <MudProgressLinear Value="@((double)quality.Count / totalVideos * 100)" 
+                                                      Color="@GetQualityColor(quality.Resolution)" 
+                                                      Size="Size.Small" />
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Quick Stats -->
+            <MudItem xs="12" md="4">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-3">Library Stats</MudText>
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                <tr>
+                                    <td>Average Duration</td>
+                                    <td class="text-right">@FormatDuration(averageDuration)</td>
+                                </tr>
+                                <tr>
+                                    <td>Total Duration</td>
+                                    <td class="text-right">@FormatTotalDuration(totalDuration)</td>
+                                </tr>
+                                <tr>
+                                    <td>Average File Size</td>
+                                    <td class="text-right">@FormatFileSize(averageFileSize)</td>
+                                </tr>
+                                <tr>
+                                    <td>Videos Added Today</td>
+                                    <td class="text-right">@videosAddedToday</td>
+                                </tr>
+                                <tr>
+                                    <td>Videos Added This Week</td>
+                                    <td class="text-right">@videosAddedThisWeek</td>
+                                </tr>
+                                <tr>
+                                    <td>Videos Added This Month</td>
+                                    <td class="text-right">@videosAddedThisMonth</td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Collection Overview -->
+        <MudGrid Class="mt-4">
+            <MudItem xs="12">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center mb-3">
+                            <MudText Typo="Typo.h6">Collections Overview</MudText>
+                            <MudButton Variant="Variant.Text" 
+                                      Color="Color.Primary" 
+                                      Size="Size.Small"
+                                      OnClick="@(() => Navigation.NavigateTo("/collections"))">
+                                View All Collections
+                            </MudButton>
+                        </div>
+                        <MudGrid>
+                            @foreach (var collection in topCollections.Take(4))
+                            {
+                                <MudItem xs="12" sm="6" md="3">
+                                    <MudCard Outlined="true">
+                                        <MudCardContent Class="pa-3">
+                                            <div class="d-flex align-center mb-2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Folder" 
+                                                        Color="Color.Primary" 
+                                                        Size="Size.Small" 
+                                                        Class="mr-2" />
+                                                <MudText Typo="Typo.subtitle2">@collection.Name</MudText>
+                                            </div>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                @collection.VideoCount videos
+                                            </MudText>
+                                            @if (!string.IsNullOrEmpty(collection.Description))
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mt-1">
+                                                    @TruncateText(collection.Description, 50)
+                                                </MudText>
+                                            }
+                                        </MudCardContent>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private bool isLoading = true;
+    
+    // Summary stats
+    private int totalVideos = 0;
+    private int totalArtists = 0;
+    private int totalCollections = 0;
+    private long totalStorageSize = 0;
+    
+    // Time-based stats
+    private int videosAddedToday = 0;
+    private int videosAddedThisWeek = 0;
+    private int videosAddedThisMonth = 0;
+    
+    // Average stats
+    private double averageDuration = 0;
+    private long totalDuration = 0;
+    private long averageFileSize = 0;
+    
+    // Lists
+    private List<Video> recentVideos = new();
+    private List<(string Name, int Count)> topArtists = new();
+    private List<(string Resolution, int Count)> qualityDistribution = new();
+    private List<CollectionSummary> topCollections = new();
+    
+    // Chart data
+    private List<ChartSeries> yearChartSeries = new();
+    private string[] yearLabels = Array.Empty<string>();
+    
+    private List<ChartSeries> genreChartSeries = new();
+    private string[] genreLabels = Array.Empty<string>();
+    
+    private List<ChartSeries> formatChartSeries = new();
+    private string[] formatLabels = Array.Empty<string>();
+    
+    private ChartOptions chartOptions = new() 
+    { 
+        YAxisTicks = 1,
+        MaxNumYAxisTicks = 10
+    };
+    
+    private ChartOptions pieChartOptions = new()
+    {
+        // ChartOptions configuration
+    };
+    
+    private class CollectionSummary
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int VideoCount { get; set; }
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+    
+    private async Task LoadDashboardData()
+    {
+        isLoading = true;
+        
+        try
+        {
+            // Get all videos
+            var videos = await UnitOfWork.Videos.GetAllAsync();
+            var videosList = videos.ToList();
+            totalVideos = videosList.Count();
+            
+            // Calculate storage
+            totalStorageSize = videosList.Where(v => v.FileSize.HasValue).Sum(v => v.FileSize!.Value);
+            averageFileSize = totalVideos > 0 ? totalStorageSize / totalVideos : 0;
+            
+            // Calculate duration stats
+            var videosWithDuration = videosList.Where(v => v.Duration.HasValue).ToList();
+            if (videosWithDuration.Any())
+            {
+                totalDuration = videosWithDuration.Sum(v => v.Duration!.Value);
+                averageDuration = videosWithDuration.Average(v => v.Duration!.Value);
+            }
+            
+            // Get unique artists
+            totalArtists = videosList.Select(v => v.Artist).Distinct().Count();
+            
+            // Get top artists
+            topArtists = videosList
+                .GroupBy(v => v.Artist)
+                .Select(g => (Name: g.Key, Count: g.Count()))
+                .OrderByDescending(a => a.Count)
+                .Take(10)
+                .ToList();
+            
+            // Get collections
+            var collections = await UnitOfWork.Collections.GetAllAsync();
+            var collectionsList = collections.ToList();
+            totalCollections = collectionsList.Count();
+            
+            // Get top collections
+            topCollections = collectionsList
+                .Select(c => new CollectionSummary
+                {
+                    Name = c.Name,
+                    Description = c.Description,
+                    VideoCount = c.CollectionVideos?.Count ?? 0
+                })
+                .OrderByDescending(c => c.VideoCount)
+                .ToList();
+            
+            // Get recent videos
+            recentVideos = videosList
+                .OrderByDescending(v => v.CreatedAt)
+                .Take(10)
+                .ToList();
+            
+            // Calculate time-based stats
+            var now = DateTime.UtcNow;
+            var today = now.Date;
+            var weekStart = today.AddDays(-(int)today.DayOfWeek);
+            var monthStart = new DateTime(now.Year, now.Month, 1);
+            
+            videosAddedToday = videosList.Count(v => v.CreatedAt.Date == today);
+            videosAddedThisWeek = videosList.Count(v => v.CreatedAt >= weekStart);
+            videosAddedThisMonth = videosList.Count(v => v.CreatedAt >= monthStart);
+            
+            // Prepare year chart data
+            var videosByYear = videosList
+                .Where(v => v.Year.HasValue)
+                .GroupBy(v => v.Year!.Value)
+                .Select(g => new { Year = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Year)
+                .ToList();
+            
+            if (videosByYear.Any())
+            {
+                yearLabels = videosByYear.Select(x => x.Year.ToString()).ToArray();
+                yearChartSeries = new List<ChartSeries>
+                {
+                    new ChartSeries
+                    {
+                        Name = "Videos",
+                        Data = videosByYear.Select(x => (double)x.Count).ToArray()
+                    }
+                };
+            }
+            
+            // Prepare genre chart data
+            var videosByGenre = videosList
+                .SelectMany(v => v.Genres)
+                .GroupBy(g => g.Name)
+                .Select(g => new { Genre = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .Take(5)
+                .ToList();
+            
+            if (videosByGenre.Any())
+            {
+                genreLabels = videosByGenre.Select(x => x.Genre).ToArray();
+                genreChartSeries = new List<ChartSeries>
+                {
+                    new ChartSeries
+                    {
+                        Name = "Genres",
+                        Data = videosByGenre.Select(x => (double)x.Count).ToArray()
+                    }
+                };
+            }
+            
+            // Prepare format chart data
+            var videosByFormat = videosList
+                .Where(v => !string.IsNullOrEmpty(v.Format))
+                .GroupBy(v => v.Format!)
+                .Select(g => new { Format = g.Key.ToUpper(), Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .ToList();
+            
+            if (videosByFormat.Any())
+            {
+                formatLabels = videosByFormat.Select(x => x.Format).ToArray();
+                formatChartSeries = new List<ChartSeries>
+                {
+                    new ChartSeries
+                    {
+                        Name = "Formats",
+                        Data = videosByFormat.Select(x => (double)x.Count).ToArray()
+                    }
+                };
+            }
+            
+            // Calculate quality distribution
+            qualityDistribution = videosList
+                .Where(v => !string.IsNullOrEmpty(v.Resolution))
+                .GroupBy(v => v.Resolution!)
+                .Select(g => (Resolution: g.Key, Count: g.Count()))
+                .OrderByDescending(q => GetResolutionOrder(q.Resolution))
+                .ToList();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+    
+    private string FormatDuration(double seconds)
+    {
+        var timeSpan = TimeSpan.FromSeconds(seconds);
+        return $"{(int)timeSpan.TotalMinutes}:{timeSpan.Seconds:D2}";
+    }
+    
+    private string FormatTotalDuration(long seconds)
+    {
+        var timeSpan = TimeSpan.FromSeconds(seconds);
+        if (timeSpan.TotalDays >= 1)
+        {
+            return $"{(int)timeSpan.TotalDays}d {timeSpan.Hours}h {timeSpan.Minutes}m";
+        }
+        else if (timeSpan.TotalHours >= 1)
+        {
+            return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
+        }
+        else
+        {
+            return $"{(int)timeSpan.TotalMinutes}m";
+        }
+    }
+    
+    private Color GetQualityColor(string resolution)
+    {
+        if (resolution.Contains("2160") || resolution.Contains("4K"))
+            return Color.Success;
+        if (resolution.Contains("1080"))
+            return Color.Primary;
+        if (resolution.Contains("720"))
+            return Color.Info;
+        if (resolution.Contains("480"))
+            return Color.Warning;
+        return Color.Default;
+    }
+    
+    private int GetResolutionOrder(string resolution)
+    {
+        if (resolution.Contains("2160") || resolution.Contains("4K")) return 4;
+        if (resolution.Contains("1080")) return 3;
+        if (resolution.Contains("720")) return 2;
+        if (resolution.Contains("480")) return 1;
+        return 0;
+    }
+    
+    private string TruncateText(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+            return text;
+        return text.Substring(0, maxLength) + "...";
+    }
+}

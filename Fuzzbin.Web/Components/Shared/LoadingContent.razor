@@ -1,0 +1,90 @@
+@using MudBlazor
+@using Fuzzbin.Web.Services
+@inject LoadingStateService LoadingStateService
+
+<div class="fz-loading-content">
+    @if (IsLoading)
+    {
+        <div class="fz-loading-content__skeletons" role="status" aria-live="polite">
+            @if (!string.IsNullOrWhiteSpace(LoadingMessage))
+            {
+                <MudText Typo="Typo.caption" Class="fz-loading-content__message">@LoadingMessage</MudText>
+            }
+            @foreach (var descriptor in _descriptors)
+            {
+                <div class="fz-loading-content__group">
+                    @for (var i = 0; i < descriptor.Count; i++)
+                    {
+                        <MudSkeleton Class="@($"fz-skeleton {descriptor.CssClass}")"
+                                     Width="@descriptor.Width"
+                                     Height="@descriptor.Height"
+                                     Animation="descriptor.Animation" />
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        @ChildContent
+    }
+</div>
+
+@code {
+    private IReadOnlyList<SkeletonDescriptor> _descriptors = Array.Empty<SkeletonDescriptor>();
+
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public LoadingProfile Profile { get; set; }
+    [Parameter] public string? LoadingMessage { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (IsLoading)
+        {
+            _descriptors = LoadingStateService.GetDescriptors(Profile);
+        }
+    }
+}
+
+<style>
+    .fz-loading-content {
+        position: relative;
+        width: 100%;
+    }
+
+    .fz-loading-content__skeletons {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        width: 100%;
+        animation: fz-fade-in 180ms ease-out;
+    }
+
+    .fz-loading-content__group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .fz-loading-content__message {
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .fz-skeleton {
+        border-radius: 12px;
+    }
+
+    .fz-skeleton-card {
+        flex: 1 1 240px;
+        max-width: 360px;
+    }
+
+    .fz-skeleton-row {
+        flex: 1 1 100%;
+    }
+
+    .fz-skeleton-form {
+        flex: 1 1 280px;
+    }
+</style>

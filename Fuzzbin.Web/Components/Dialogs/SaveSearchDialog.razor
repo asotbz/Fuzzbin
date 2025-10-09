@@ -1,0 +1,82 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_savedSearch.Name" Label="Search Name" 
+                     Variant="Variant.Outlined" FullWidth="true" Class="mb-3" 
+                     Required="true" RequiredError="Name is required" />
+
+        <MudTextField @bind-Value="_savedSearch.Description" Label="Description"
+                     Variant="Variant.Outlined" FullWidth="true" Lines="3" Class="mb-3" />
+
+        <MudAutocomplete T="string" @bind-Value="_savedSearch.Icon" Label="Icon"
+                        SearchFunc="SearchIcons" Variant="Variant.Outlined" 
+                        Dense="true" Class="mb-3"
+                        AdornmentIcon="@(_savedSearch.Icon ?? Icons.Material.Filled.Search)"
+                        Adornment="Adornment.Start" />
+
+        <MudColorPicker @bind-Text="_savedSearch.Color" Label="Color" 
+                       Variant="Variant.Outlined" ColorPickerMode="ColorPickerMode.HEX" 
+                       Class="mb-3" />
+
+        <MudCheckBox T="bool" @bind-Checked="_savedSearch.IsPublic" Label="Make this search public" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save" Disabled="@(string.IsNullOrWhiteSpace(_savedSearch.Name))">
+            Save Search
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Fuzzbin.Services.Interfaces.SearchQuery Query { get; set; } = new();
+
+    private Fuzzbin.Core.Entities.SavedSearch _savedSearch = new Fuzzbin.Core.Entities.SavedSearch
+    {
+        Icon = Icons.Material.Filled.Search,
+        Color = "#1976d2"
+    };
+
+    private readonly List<string> _availableIcons = new()
+    {
+        Icons.Material.Filled.Search,
+        Icons.Material.Filled.Star,
+        Icons.Material.Filled.Favorite,
+        Icons.Material.Filled.Bookmark,
+        Icons.Material.Filled.MusicNote,
+        Icons.Material.Filled.Movie,
+        Icons.Material.Filled.VideoLibrary,
+        Icons.Material.Filled.PlayCircle,
+        Icons.Material.Filled.Album,
+        Icons.Material.Filled.LibraryMusic,
+        Icons.Material.Filled.QueueMusic,
+        Icons.Material.Filled.Audiotrack
+    };
+
+    private async Task<IEnumerable<string>> SearchIcons(string value, CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask;
+        if (string.IsNullOrEmpty(value))
+            return _availableIcons.AsEnumerable();
+
+        return _availableIcons
+            .Where(i => i.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .AsEnumerable();
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Save()
+    {
+        if (!string.IsNullOrWhiteSpace(_savedSearch.Name))
+        {
+            MudDialog.Close(DialogResult.Ok(_savedSearch));
+        }
+    }
+}

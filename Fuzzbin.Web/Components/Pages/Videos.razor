@@ -1,0 +1,939 @@
+@page "/videos"
+@using System
+@using System.Linq
+@using System.Threading
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.SignalR.Client
+@using MudBlazor
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Specifications
+@using Fuzzbin.Core.Specifications.Queries
+@using SortDir = Fuzzbin.Core.Specifications.SortDirection;
+@using Fuzzbin.Services
+@using Fuzzbin.Services.Interfaces
+@using static Fuzzbin.Services.Interfaces.IPlaylistService
+@using Fuzzbin.Web.Components.Dialogs
+@using Fuzzbin.Web.Components.Shared
+@using Fuzzbin.Web.Components.Videos
+@using Fuzzbin.Web.Services
+@inject IVideoService VideoService
+@inject ISearchService SearchService
+@inject IPlaylistService PlaylistService
+@inject IThumbnailService ThumbnailService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject KeyboardShortcutService KeyboardService
+@implements IAsyncDisposable
+
+<PageTitle>Video Library - Fuzzbin</PageTitle>
+
+<VideoContextMenu @ref="_contextMenu"
+                  Video="@_contextMenuVideo"
+                  SessionId="@_currentPlaylistSession?.SessionId"
+                  OnVideoDeleted="OnVideoDeleted"
+                  OnVideoUpdated="OnVideoUpdated" />
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-4">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudPaper Class="pa-4 mb-4" Elevation="1">
+                <MudGrid AlignItems="AlignItems.Center" GutterSize="GutterSize.Small">
+                    <MudItem xs="12" md="8">
+                        <VideoSearchBar SearchTerm="@_searchTerm"
+                                        SearchTermChanged="OnSearchTermChanged"
+                                        OnSearch="PerformSearch"
+                                        OnClear="ClearSearch"
+                                        SuggestionProvider="ProvideSearchSuggestions" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.FlexEnd" Spacing="1" Class="videos-header-controls">
+                            <MudSelect T="string" Value="@_sortSelection" ValueChanged="OnSortChanged" Label="Sort By" Dense="true" Class="mud-width-full">
+                                <MudSelectItem Value="@("DateAdded")">Date Added</MudSelectItem>
+                                <MudSelectItem Value="@("Title")">Title</MudSelectItem>
+                                <MudSelectItem Value="@("Artist")">Artist</MudSelectItem>
+                                <MudSelectItem Value="@("Year")">Year</MudSelectItem>
+                                <MudSelectItem Value="@("Duration")">Duration</MudSelectItem>
+                            </MudSelect>
+                            <MudButtonGroup Variant="Variant.Outlined" Dense="true">
+                                <MudIconButton Icon="@Icons.Material.Filled.GridView"
+                                               Color="@(_viewMode == ViewMode.Grid ? Color.Primary : Color.Default)"
+                                               OnClick="() => SwitchView(ViewMode.Grid)"
+                                               Title="Grid view" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ViewList"
+                                               Color="@(_viewMode == ViewMode.List ? Color.Primary : Color.Default)"
+                                               OnClick="() => SwitchView(ViewMode.List)"
+                                               Title="List view" />
+                            </MudButtonGroup>
+                        <MudTooltip Text="Add a new video (Ctrl+A)">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Success"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       OnClick="OpenAddVideoDialog">
+                                Add Video
+                            </MudButton>
+                        </MudTooltip>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudGrid GutterSize="GutterSize.Medium">
+                <MudItem xs="12" md="3">
+                    <VideoFilterSidebar Genres="@(_facets?.Genres ?? new())"
+                                        SelectedGenres="@_selectedGenres"
+                                        Artists="@(_facets?.Artists ?? new())"
+                                        SelectedArtists="@_selectedArtists"
+                                        Years="@(_facets?.Years ?? new())"
+                                        SelectedYears="@_selectedYears"
+                                        Formats="@(_facets?.Formats ?? new())"
+                                        SelectedFormats="@_selectedFormats"
+                                        OnGenreToggled="ToggleGenre"
+                                        OnArtistToggled="ToggleArtist"
+                                        OnYearToggled="ToggleYear"
+                                        OnFormatToggled="ToggleFormat"
+                                        OnClearFilters="ClearFilters" />
+                </MudItem>
+                <MudItem xs="12" md="9">
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3 videos-toolbar">
+                            <MudText Typo="Typo.subtitle1">
+                                @_totalCount video@(_totalCount == 1 ? string.Empty : "s") found
+                            </MudText>
+                            <div>
+                                @if (HasSelection)
+                                {
+                                    <MudChip T="string" Color="Color.Info" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CheckCircle">
+                                        @_selectedVideoIds.Count selected
+                                    </MudChip>
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="SelectAll">
+                                        Select All
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClearSelection">
+                                        Clear Selection
+                                    </MudButton>
+                                }
+                            </div>
+                        </MudStack>
+
+                        @if (HasSelection)
+                        {
+                            <MudStack Row="true" Spacing="2" Class="mb-3 videos-selection-actions">
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="PlaySelected">
+                                    Play Selected
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="OpenOrganizeDialog">
+                                    Organize
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Label" OnClick="OpenTagEditDialog">
+                                    Edit Tags
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.Description" OnClick="OpenNfoExportDialog">
+                                    Export NFO
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelected">
+                                    Delete
+                                </MudButton>
+                            </MudStack>
+                        }
+
+                        <LoadingContent Profile="LoadingProfile.VideoGrid"
+                                        IsLoading="@_isLoading"
+                                        LoadingMessage="Loading library...">
+                            @if (_videos.Count == 0)
+                            {
+                                <MudPaper Class="pa-6 text-center fz-animate-fade-in" Elevation="0">
+                                    <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Size="Size.Large" Color="Color.Default" />
+                                    <MudText Typo="Typo.h5" Class="mt-2">No videos found</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        Adjust your search or filters to find what you're looking for.
+                                    </MudText>
+                                </MudPaper>
+                            }
+                            else
+                            {
+                                @if (_viewMode == ViewMode.Grid)
+                                {
+                                    <div class="fz-animate-fade-in">
+                                        <VideoLibraryGrid Videos="@_videos"
+                                                          SelectedVideoIds="@_selectedVideoIds"
+                                                          ThumbnailUrlSelector="GetThumbnailUrl"
+                                                          DurationFormatter="FormatDuration"
+                                                          OnVideoClicked="OpenVideoDetails"
+                                                          OnSelectionToggled="ToggleSelection"
+                                                          OnPlay="PlayVideo"
+                                                          OnPlayNext="PlayNext"
+                                                          OnAddToQueue="AddToQueue"
+                                                          OnEdit="OpenEditorDialog"
+                                                          OnDelete="DeleteVideo"
+                                                          OnContextMenuRequested="HandleContextMenu" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="fz-animate-fade-in">
+                                        <VideoLibraryList Videos="@_videos"
+                                                          SelectedVideoIds="@_selectedVideoIds"
+                                                          ThumbnailUrlSelector="GetThumbnailUrl"
+                                                          DurationFormatter="FormatDuration"
+                                                          OnVideoClicked="OpenVideoDetails"
+                                                          OnSelectionToggled="ToggleSelection"
+                                                          OnPlay="PlayVideo"
+                                                          OnPlayNext="PlayNext"
+                                                          OnAddToQueue="AddToQueue"
+                                                          OnEdit="OpenEditorDialog"
+                                                          OnDelete="DeleteVideo"
+                                                          OnContextMenuRequested="HandleContextMenu" />
+                                    </div>
+                                }
+
+                                @if (_hasMoreVideos)
+                                {
+                                    <div class="d-flex justify-center mt-4">
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   Disabled="@_isLoadingMore"
+                                                   OnClick="LoadMoreVideosAsync">
+                                            @if (_isLoadingMore)
+                                            {
+                                                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                                            }
+                                            Load More
+                                        </MudButton>
+                                    </div>
+                                }
+                            }
+                        </LoadingContent>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+<style>
+    .videos-header-controls {
+        gap: 12px;
+    }
+
+    .videos-selection-actions {
+        gap: 12px;
+    }
+
+    @@media (max-width: 960px) {
+        .videos-header-controls {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .videos-header-controls .mud-select,
+        .videos-header-controls .mud-button-group,
+        .videos-header-controls .mud-button {
+            width: 100%;
+        }
+
+        .videos-toolbar {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .videos-toolbar > div {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .videos-selection-actions {
+            flex-wrap: wrap;
+        }
+
+        .videos-selection-actions .mud-button {
+            flex: 1 1 48%;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .videos-selection-actions {
+            flex-direction: column;
+        }
+
+        .videos-selection-actions .mud-button {
+            width: 100%;
+            flex: none;
+        }
+
+        .videos-toolbar > div {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+
+@code {
+    private enum ViewMode
+    {
+        Grid,
+        List
+    }
+
+    private const int PageSize = 100;
+
+    private readonly HashSet<Guid> _selectedVideoIds = new();
+    private readonly Dictionary<Guid, Video> _videoCache = new();
+    private readonly HashSet<string> _selectedGenres = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _selectedArtists = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _selectedYears = new();
+    private readonly HashSet<string> _selectedFormats = new(StringComparer.OrdinalIgnoreCase);
+
+    private List<Video> _videos = new();
+    private SearchFacets? _facets;
+    private PlaylistSession? _currentPlaylistSession;
+    private HubConnection? _hubConnection;
+    private VideoContextMenu? _contextMenu;
+    private Video? _contextMenuVideo;
+
+    private string _searchTerm = string.Empty;
+    private string _sortSelection = "DateAdded";
+    private ViewMode _viewMode = ViewMode.Grid;
+
+    private int _totalCount;
+    private int _currentPage = 1;
+    private bool _hasMoreVideos;
+
+    private bool _isLoading;
+    private bool _isLoadingMore;
+
+    private bool HasSelection => _selectedVideoIds.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFacetsAsync();
+        await LoadVideosAsync(clearSelection: true);
+        RegisterKeyboardShortcuts();
+        await InitializeSignalRAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await KeyboardService.InitializeAsync();
+        }
+    }
+
+    private async Task InitializeSignalRAsync()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/updates"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<VideoUpdateNotification>("VideoCreated", async _ => await LoadVideosAsync(clearSelection: true));
+        _hubConnection.On<VideoUpdateNotification>("VideoUpdated", async update => await HandleRemoteUpdate(update.Id));
+        _hubConnection.On<Guid>("VideoDeleted", async id => await HandleRemoteDelete(id));
+
+        try
+        {
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unable to connect to updates hub: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task HandleRemoteUpdate(Guid videoId)
+    {
+        if (_videos.Any(v => v.Id == videoId))
+        {
+            await LoadVideosAsync();
+        }
+    }
+
+    private async Task HandleRemoteDelete(Guid videoId)
+    {
+        if (_videos.Any(v => v.Id == videoId) || _selectedVideoIds.Contains(videoId))
+        {
+            _selectedVideoIds.Remove(videoId);
+            _videoCache.Remove(videoId);
+            await LoadVideosAsync();
+        }
+    }
+
+    private async Task LoadFacetsAsync()
+    {
+        try
+        {
+            _facets = await SearchService.GetSearchFacetsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load filter facets: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task LoadVideosAsync(bool clearSelection = false)
+    {
+        if (_isLoading || _isLoadingMore)
+        {
+            return;
+        }
+
+        if (clearSelection)
+        {
+            ClearSelection();
+        }
+
+        await FetchVideosPageAsync(pageNumber: 1, reset: true);
+    }
+
+    private async Task LoadMoreVideosAsync()
+    {
+        if (!_hasMoreVideos || _isLoading || _isLoadingMore)
+        {
+            return;
+        }
+
+        await FetchVideosPageAsync(_currentPage + 1, reset: false);
+    }
+
+    private async Task FetchVideosPageAsync(int pageNumber, bool reset)
+    {
+        if (reset)
+        {
+            _isLoading = true;
+        }
+        else
+        {
+            _isLoadingMore = true;
+        }
+
+        StateHasChanged();
+
+        try
+        {
+            var query = BuildQuery(pageNumber);
+            var page = await VideoService.GetVideosAsync(query);
+
+            if (reset)
+            {
+                _videos = page.Items.ToList();
+                _videoCache.Clear();
+            }
+            else
+            {
+                foreach (var video in page.Items)
+                {
+                    if (_videoCache.TryGetValue(video.Id, out _))
+                    {
+                        var index = _videos.FindIndex(v => v.Id == video.Id);
+                        if (index >= 0)
+                        {
+                            _videos[index] = video;
+                        }
+                    }
+                    else
+                    {
+                        _videos.Add(video);
+                    }
+                }
+            }
+
+            foreach (var video in page.Items)
+            {
+                _videoCache[video.Id] = video;
+            }
+
+            _totalCount = page.TotalCount;
+            _currentPage = page.Page;
+            _hasMoreVideos = _videos.Count < _totalCount;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load videos: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            _isLoadingMore = false;
+            StateHasChanged();
+        }
+    }
+
+    private VideoQuery BuildQuery(int pageNumber)
+    {
+        var (sort, direction) = GetSortSettings();
+
+        var query = new VideoQuery
+        {
+            Search = string.IsNullOrWhiteSpace(_searchTerm) ? null : _searchTerm,
+            Page = pageNumber,
+            PageSize = PageSize,
+            SortBy = sort,
+            SortDirection = direction
+        };
+
+        if (_selectedGenres.Count > 0)
+        {
+            query.GenreNames.AddRange(_selectedGenres);
+        }
+
+        if (_selectedArtists.Count > 0)
+        {
+            query.ArtistNames.AddRange(_selectedArtists);
+        }
+
+        if (_selectedFormats.Count > 0)
+        {
+            query.Formats.AddRange(_selectedFormats);
+        }
+
+        if (_selectedYears.Count > 0)
+        {
+            foreach (var yearValue in _selectedYears)
+            {
+                if (int.TryParse(yearValue, out var year))
+                {
+                    query.Years.Add(year);
+                }
+            }
+        }
+
+        return query;
+    }
+
+    private (VideoSortOption Sort, SortDir Direction) GetSortSettings()
+    {
+        return _sortSelection switch
+        {
+            "Title" => (VideoSortOption.Title, SortDir.Ascending),
+            "Artist" => (VideoSortOption.Artist, SortDir.Ascending),
+            "Year" => (VideoSortOption.Year, SortDir.Descending),
+            "Duration" => (VideoSortOption.Duration, SortDir.Descending),
+            _ => (VideoSortOption.CreatedAt, SortDir.Descending)
+        };
+    }
+
+    private async Task<IEnumerable<string>> ProvideSearchSuggestions(string input, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(input) || input.Length < 2)
+        {
+            return Enumerable.Empty<string>();
+        }
+
+        try
+        {
+            var result = await SearchService.SearchAsync(new SearchQuery
+            {
+                SearchText = input,
+                PageNumber = 1,
+                PageSize = 5
+            });
+
+            return result.Videos
+                .Select(v => $"{v.Title} — {v.Artist}")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToList();
+        }
+        catch
+        {
+            return Enumerable.Empty<string>();
+        }
+    }
+
+    private Task OnSearchTermChanged(string value)
+    {
+        _searchTerm = value;
+        return Task.CompletedTask;
+    }
+
+    private Task PerformSearch()
+    {
+        return LoadVideosAsync(clearSelection: true);
+    }
+
+    private Task ClearSearch()
+    {
+        _searchTerm = string.Empty;
+        return LoadVideosAsync(clearSelection: true);
+    }
+
+    private Task ToggleGenre(string genre) => ToggleFilter(_selectedGenres, genre);
+    private Task ToggleArtist(string artist) => ToggleFilter(_selectedArtists, artist);
+    private Task ToggleYear(string year) => ToggleFilter(_selectedYears, year);
+    private Task ToggleFormat(string format) => ToggleFilter(_selectedFormats, format);
+
+    private async Task ToggleFilter(HashSet<string> set, string value)
+    {
+        if (set.Contains(value))
+        {
+            set.Remove(value);
+        }
+        else
+        {
+            set.Add(value);
+        }
+
+        await LoadVideosAsync(clearSelection: true);
+    }
+
+    private Task OnSortChanged(string value)
+    {
+        _sortSelection = value;
+        return LoadVideosAsync(clearSelection: true);
+    }
+
+    private Task ClearFilters()
+    {
+        _selectedGenres.Clear();
+        _selectedArtists.Clear();
+        _selectedYears.Clear();
+        _selectedFormats.Clear();
+        return LoadVideosAsync(clearSelection: true);
+    }
+
+    private string GetThumbnailUrl(Video video) => ThumbnailService.GetThumbnailUrl(video);
+
+    private string FormatDuration(Video video)
+    {
+        return FormatDuration(video.Duration);
+    }
+
+    private string FormatDuration(int? seconds)
+    {
+        if (!seconds.HasValue)
+        {
+            return "0:00";
+        }
+
+        var duration = TimeSpan.FromSeconds(seconds.Value);
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
+            : $"{duration.Minutes}:{duration.Seconds:D2}";
+    }
+
+    private void SwitchView(ViewMode mode)
+    {
+        if (_viewMode != mode)
+        {
+            _viewMode = mode;
+        }
+    }
+
+    private void ToggleSelection(Video video)
+    {
+        if (_selectedVideoIds.Contains(video.Id))
+        {
+            _selectedVideoIds.Remove(video.Id);
+        }
+        else
+        {
+            _selectedVideoIds.Add(video.Id);
+        }
+
+        StateHasChanged();
+    }
+
+    private void SelectAll()
+    {
+        foreach (var video in _videos)
+        {
+            _selectedVideoIds.Add(video.Id);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearSelection()
+    {
+        _selectedVideoIds.Clear();
+        StateHasChanged();
+    }
+
+    private async Task<List<Video>> ResolveSelectedVideosAsync()
+    {
+        var videos = new List<Video>();
+
+        foreach (var id in _selectedVideoIds)
+        {
+            if (_videoCache.TryGetValue(id, out var cached))
+            {
+                videos.Add(cached);
+                continue;
+            }
+
+            var fetched = await VideoService.GetVideoByIdAsync(id);
+            if (fetched != null)
+            {
+                _videoCache[id] = fetched;
+                videos.Add(fetched);
+            }
+        }
+
+        return videos;
+    }
+
+    private async Task PlayVideo(Video video)
+    {
+        var session = await PlaylistService.CreateFromVideosAsync(new List<Guid> { video.Id });
+        _currentPlaylistSession = session;
+        Navigation.NavigateTo($"/player?session={session.SessionId}");
+    }
+
+    private async Task PlayNext(Video video)
+    {
+        if (_currentPlaylistSession == null)
+        {
+            _currentPlaylistSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { video.Id });
+            Snackbar.Add($"Started new playlist with '{video.Title}'", Severity.Success);
+            Navigation.NavigateTo($"/player?session={_currentPlaylistSession.SessionId}");
+        }
+        else
+        {
+            var currentIndex = _currentPlaylistSession.CurrentIndex;
+            _currentPlaylistSession.Videos.Insert(currentIndex + 1, video);
+            await PlaylistService.UpdateSessionAsync(_currentPlaylistSession);
+            Snackbar.Add($"'{video.Title}' will play next", Severity.Success);
+        }
+    }
+
+    private async Task AddToQueue(Video video)
+    {
+        if (_currentPlaylistSession == null)
+        {
+            _currentPlaylistSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { video.Id });
+            Snackbar.Add($"Started new playlist with '{video.Title}'", Severity.Success);
+        }
+        else
+        {
+            await PlaylistService.AddVideosAsync(_currentPlaylistSession, new List<Guid> { video.Id });
+            Snackbar.Add($"'{video.Title}' added to queue", Severity.Success);
+        }
+    }
+
+    private void OpenVideoDetails(Video video)
+    {
+        Navigation.NavigateTo($"/videos/{video.Id}");
+    }
+
+    private async Task OpenEditorDialog(Video video)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(VideoEditorDialog.Video), video }
+        };
+
+        var dialog = await DialogService.ShowAsync<VideoEditorDialog>("Edit Video", parameters, new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small
+        });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Video updated })
+        {
+            await OnVideoUpdated(updated);
+        }
+    }
+
+    private async Task DeleteVideo(Video video)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete '{video.Title}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Video", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            try
+            {
+                await VideoService.DeleteVideoAsync(video.Id);
+                _selectedVideoIds.Remove(video.Id);
+                _videoCache.Remove(video.Id);
+                Snackbar.Add($"'{video.Title}' deleted", Severity.Success);
+                await LoadVideosAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to delete video: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task PlaySelected()
+    {
+        if (!HasSelection)
+        {
+            Snackbar.Add("Select at least one video", Severity.Info);
+            return;
+        }
+
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Unable to resolve selected videos", Severity.Error);
+            return;
+        }
+
+        var session = await PlaylistService.CreateFromVideosAsync(videos.Select(v => v.Id).ToList());
+        _currentPlaylistSession = session;
+        Navigation.NavigateTo($"/player?session={session.SessionId}");
+    }
+
+    private async Task OpenOrganizeDialog()
+    {
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Select videos to organize", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "SelectedVideos", videos }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<BulkOrganizeDialog>("Organize Videos", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadVideosAsync();
+        }
+    }
+
+    private async Task OpenTagEditDialog()
+    {
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Select videos to edit", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "SelectedVideos", videos }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<BulkTagEditDialog>("Edit Tags", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadVideosAsync();
+        }
+    }
+
+    private async Task OpenNfoExportDialog()
+    {
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Select videos to export", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "SelectedVideos", videos }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<BulkNfoExportDialog>("Export NFO", parameters, options);
+        await dialog.Result;
+    }
+
+    private async Task DeleteSelected()
+    {
+        if (!HasSelection)
+        {
+            Snackbar.Add("No videos selected", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Delete {_selectedVideoIds.Count} selected video(s)?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Videos", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            foreach (var id in _selectedVideoIds.ToList())
+            {
+                try
+                {
+                    await VideoService.DeleteVideoAsync(id);
+                    _videoCache.Remove(id);
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Failed to delete video {id}: {ex.Message}", Severity.Error);
+                }
+            }
+
+            _selectedVideoIds.Clear();
+            await LoadVideosAsync(clearSelection: true);
+        }
+    }
+
+    private void HandleContextMenu((Video Video, MouseEventArgs MouseEvent) context)
+    {
+        _contextMenuVideo = context.Video;
+        _contextMenu?.Open((int)context.MouseEvent.ClientX, (int)context.MouseEvent.ClientY);
+    }
+
+    private async Task OnVideoDeleted(Video video)
+    {
+        _selectedVideoIds.Remove(video.Id);
+        _videoCache.Remove(video.Id);
+        await LoadVideosAsync();
+    }
+
+    private async Task OnVideoUpdated(Video video)
+    {
+        _videoCache[video.Id] = video;
+        await LoadVideosAsync();
+    }
+
+    private void OpenAddVideoDialog()
+    {
+        Navigation.NavigateTo("/downloads");
+    }
+
+    private void RegisterKeyboardShortcuts()
+    {
+        KeyboardService.RegisterShortcut("Ctrl+A", "Library", () => SelectAll(), "Select all videos");
+        KeyboardService.RegisterShortcut("Escape", "Library", ClearSelection, "Clear selection");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        KeyboardService.UnregisterShortcut("Ctrl+A");
+        KeyboardService.UnregisterShortcut("Escape");
+
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}

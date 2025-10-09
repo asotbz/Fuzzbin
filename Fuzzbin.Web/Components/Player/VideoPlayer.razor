@@ -1,0 +1,467 @@
+@using Fuzzbin.Core.Entities
+@using MudBlazor
+@implements IDisposable
+
+<div class="video-player-container">
+    <div class="video-wrapper">
+        <video @ref="videoElement"
+               class="video-element"
+               @onended="HandleVideoEnded"
+               @ontimeupdate="OnTimeUpdate"
+               @onloadedmetadata="OnMetadataLoaded"
+               @onplay="OnPlay"
+               @onpause="OnPause"
+               controls="@showNativeControls">
+            @if (!string.IsNullOrEmpty(CurrentVideo?.FilePath))
+            {
+                <source src="@GetVideoUrl(CurrentVideo.FilePath)" type="video/mp4" />
+            }
+        </video>
+        
+        @if (showOverlay)
+        {
+            <div class="video-overlay @(isPlaying ? "fade-out" : "")">
+                <MudIconButton Icon="@(isPlaying ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)"
+                             Size="Size.Large"
+                             Color="Color.Inherit"
+                             Class="play-overlay-button"
+                             OnClick="TogglePlayPause" />
+            </div>
+        }
+    </div>
+    
+    @if (!showNativeControls)
+    {
+        <div class="custom-controls">
+            <!-- Progress Bar -->
+            <MudGrid AlignItems="Center" Class="progress-section">
+                <MudItem xs="1">
+                    <MudText Typo="Typo.caption">@FormatTime(currentTime)</MudText>
+                </MudItem>
+                <MudItem xs="10">
+                    <MudSlider Value="progressValue"
+                             Min="0"
+                             Max="100"
+                             Step="0.1"
+                             Immediate="false"
+                             ValueChanged="@((double val) => OnProgressChanged(val))" />
+                </MudItem>
+                <MudItem xs="1">
+                    <MudText Typo="Typo.caption">@FormatTime(duration)</MudText>
+                </MudItem>
+            </MudGrid>
+            
+            <!-- Control Buttons -->
+            <MudGrid AlignItems="Center" Class="control-buttons">
+                <MudItem xs="4" Class="d-flex align-center">
+                    <!-- Play/Pause -->
+                    <MudIconButton Icon="@(isPlaying ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)"
+                                 Color="Color.Primary"
+                                 OnClick="TogglePlayPause" />
+                    
+                    <!-- Volume -->
+                    <MudIconButton Icon="@GetVolumeIcon()"
+                                 Color="Color.Default"
+                                 OnClick="ToggleMute" />
+                    <div style="width: 100px;">
+                        <MudSlider Value="volume"
+                                 Min="0"
+                                 Max="100"
+                                 Step="1"
+                                 Immediate="true"
+                                 ValueChanged="@((double val) => OnVolumeChanged(val))" />
+                    </div>
+                </MudItem>
+                
+                <MudItem xs="4" Class="text-center">
+                    @if (CurrentVideo != null)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="text-truncate">
+                            @CurrentVideo.Title
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">
+                            @CurrentVideo.Artist
+                        </MudText>
+                    }
+                </MudItem>
+                
+                <MudItem xs="4" Class="d-flex justify-end align-center">
+                    <!-- Speed -->
+                    <MudMenu Icon="@Icons.Material.Filled.Speed" IconColor="Color.Default">
+                        <MudMenuItem OnClick="@(() => SetPlaybackRate(0.5))">0.5x</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => SetPlaybackRate(0.75))">0.75x</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => SetPlaybackRate(1.0))">1.0x</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => SetPlaybackRate(1.25))">1.25x</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => SetPlaybackRate(1.5))">1.5x</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => SetPlaybackRate(2.0))">2.0x</MudMenuItem>
+                    </MudMenu>
+                    
+                    <!-- Picture in Picture -->
+                    @if (supportsPiP)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.PictureInPicture"
+                                     Color="Color.Default"
+                                     OnClick="TogglePictureInPicture" />
+                    }
+                    
+                    <!-- Fullscreen -->
+                    <MudIconButton Icon="@(isFullscreen ? Icons.Material.Filled.FullscreenExit : Icons.Material.Filled.Fullscreen)"
+                                 Color="Color.Default"
+                                 OnClick="ToggleFullscreen" />
+                </MudItem>
+            </MudGrid>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Video? CurrentVideo { get; set; }
+    [Parameter] public EventCallback OnVideoEnded { get; set; }
+    [Parameter] public EventCallback<string> OnError { get; set; }
+    [Parameter] public bool AutoPlay { get; set; } = true;
+    [Parameter] public bool ShowNativeControls { get; set; } = false;
+    [Parameter] public bool ShowOverlay { get; set; } = true;
+    
+    private ElementReference videoElement;
+    private bool isPlaying = false;
+    private bool isMuted = false;
+    private bool isFullscreen = false;
+    private bool supportsPiP = false;
+    
+    private double currentTime = 0;
+    private double duration = 0;
+    private double progressValue = 0;
+    private double volume = 100;
+    private double playbackRate = 1.0;
+    
+    private bool showNativeControls => ShowNativeControls;
+    private bool showOverlay => ShowOverlay && !showNativeControls;
+    
+    private System.Timers.Timer? updateTimer;
+    private IJSRuntime? jsRuntime;
+    
+    [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        jsRuntime = JSRuntime;
+        supportsPiP = await CheckPictureInPictureSupport();
+        
+        updateTimer = new System.Timers.Timer(250);
+        updateTimer.Elapsed += async (sender, e) => await UpdateProgress();
+        updateTimer.Start();
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AutoPlay && CurrentVideo != null)
+        {
+            await Load();
+            await Play();
+        }
+    }
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        // When CurrentVideo changes, reload the video
+        if (CurrentVideo != null)
+        {
+            await Load();
+        }
+    }
+    
+    public async Task Load()
+    {
+        try
+        {
+            // Force video element to reload source
+            await jsRuntime!.InvokeVoidAsync("eval", "const v = document.querySelector('video'); if(v) { v.load(); }");
+        }
+        catch (Exception ex)
+        {
+            await OnError.InvokeAsync($"Failed to load video: {ex.Message}");
+        }
+    }
+    
+    public async Task Play()
+    {
+        try
+        {
+            await jsRuntime!.InvokeVoidAsync("eval", "const v = document.querySelector('video'); if(v) { v.play(); }");
+            isPlaying = true;
+        }
+        catch (Exception ex)
+        {
+            await OnError.InvokeAsync($"Failed to play video: {ex.Message}");
+        }
+    }
+    
+    public async Task Pause()
+    {
+        try
+        {
+            await jsRuntime!.InvokeVoidAsync("eval", "const v = document.querySelector('video'); if(v) { v.pause(); }");
+            isPlaying = false;
+        }
+        catch (Exception ex)
+        {
+            await OnError.InvokeAsync($"Failed to pause video: {ex.Message}");
+        }
+    }
+    
+    public async Task TogglePlayPause()
+    {
+        if (isPlaying)
+            await Pause();
+        else
+            await Play();
+    }
+    
+    public async Task SeekRelative(double seconds)
+    {
+        try
+        {
+            var newTime = currentTime + seconds;
+            newTime = Math.Max(0, Math.Min(newTime, duration));
+            await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').currentTime = {newTime}");
+        }
+        catch (Exception ex)
+        {
+            await OnError.InvokeAsync($"Failed to seek: {ex.Message}");
+        }
+    }
+    
+    public async Task AdjustVolume(double delta)
+    {
+        var newVolume = volume + (delta * 100);
+        newVolume = Math.Max(0, Math.Min(100, newVolume));
+        await OnVolumeChanged(newVolume);
+    }
+    
+    private async Task HandleVideoEnded()
+    {
+        await OnVideoEnded.InvokeAsync();
+    }
+    
+    private void OnTimeUpdate()
+    {
+        // Time update is handled by the timer
+    }
+    
+    private void OnMetadataLoaded()
+    {
+        // Metadata loaded
+    }
+    
+    private void OnPlay()
+    {
+        isPlaying = true;
+        StateHasChanged();
+    }
+    
+    private void OnPause()
+    {
+        isPlaying = false;
+        StateHasChanged();
+    }
+    
+    private async Task UpdateProgress()
+    {
+        try
+        {
+            currentTime = await jsRuntime!.InvokeAsync<double>("eval", "document.querySelector('video')?.currentTime || 0");
+            duration = await jsRuntime!.InvokeAsync<double>("eval", "document.querySelector('video')?.duration || 0");
+            
+            if (duration > 0)
+            {
+                progressValue = (currentTime / duration) * 100;
+            }
+            
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+    
+    private async Task OnProgressChanged(double value)
+    {
+        progressValue = value;
+        if (duration > 0)
+        {
+            var newTime = (value / 100) * duration;
+            await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').currentTime = {newTime}");
+        }
+    }
+    
+    private async Task OnVolumeChanged(double value)
+    {
+        volume = value;
+        await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').volume = {value / 100}");
+        if (value > 0) isMuted = false;
+    }
+    
+    public async Task ToggleMute()
+    {
+        isMuted = !isMuted;
+        await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').muted = {isMuted.ToString().ToLower()}");
+    }
+    
+    private async Task SetPlaybackRate(double rate)
+    {
+        playbackRate = rate;
+        await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').playbackRate = {rate}");
+    }
+    
+    public async Task ToggleFullscreen()
+    {
+        try
+        {
+            if (!isFullscreen)
+            {
+                await jsRuntime!.InvokeVoidAsync("eval", "document.querySelector('.video-player-container').requestFullscreen()");
+                isFullscreen = true;
+            }
+            else
+            {
+                await jsRuntime!.InvokeVoidAsync("eval", "document.exitFullscreen()");
+                isFullscreen = false;
+            }
+        }
+        catch { }
+    }
+    
+    private async Task TogglePictureInPicture()
+    {
+        try
+        {
+            await jsRuntime!.InvokeVoidAsync("eval", @"
+                const video = document.querySelector('video');
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture();
+                } else {
+                    video.requestPictureInPicture();
+                }
+            ");
+        }
+        catch { }
+    }
+    
+    private async Task<bool> CheckPictureInPictureSupport()
+    {
+        try
+        {
+            return await jsRuntime!.InvokeAsync<bool>("eval", "document.pictureInPictureEnabled || false");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    private string GetVolumeIcon()
+    {
+        if (isMuted || volume == 0)
+            return Icons.Material.Filled.VolumeOff;
+        else if (volume < 50)
+            return Icons.Material.Filled.VolumeDown;
+        else
+            return Icons.Material.Filled.VolumeUp;
+    }
+    
+    private string FormatTime(double seconds)
+    {
+        var timeSpan = TimeSpan.FromSeconds(seconds);
+        return timeSpan.Hours > 0 
+            ? $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}"
+            : $"{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}";
+    }
+    
+    private string GetVideoUrl(string filePath)
+    {
+        // This should be replaced with actual video serving endpoint
+        return $"/api/videos/stream?path={Uri.EscapeDataString(filePath)}";
+    }
+    
+    public void Dispose()
+    {
+        updateTimer?.Dispose();
+    }
+}
+
+<style>
+    .video-player-container {
+        position: relative;
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        background: #000;
+    }
+    
+    .video-wrapper {
+        position: relative;
+        width: 100%;
+        padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    }
+    
+    .video-element {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+    }
+    
+    .video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        transition: opacity 0.3s;
+    }
+    
+    .video-overlay.fade-out {
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    .play-overlay-button {
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        width: 80px;
+        height: 80px;
+        font-size: 48px;
+    }
+    
+    .custom-controls {
+        background: #1e1e1e;
+        padding: 16px;
+        border-top: 1px solid #333;
+    }
+    
+    .progress-section {
+        margin-bottom: 8px;
+    }
+    
+    .control-buttons {
+        margin-top: 8px;
+    }
+    
+    .video-player-container:fullscreen .video-wrapper {
+        padding-bottom: 0;
+        height: 100vh;
+    }
+    
+    .video-player-container:fullscreen .custom-controls {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(30, 30, 30, 0.95);
+    }
+</style>

@@ -1,0 +1,52 @@
+﻿@using Microsoft.AspNetCore.Components
+@using Fuzzbin.Web.Components.Shared
+
+<ThemeProviderWrapper />
+
+<ErrorBoundary @ref="_errorBoundary">
+    <ChildContent>
+        <Router AppAssembly="typeof(Program).Assembly">
+            <Found Context="routeData">
+                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                    <NotAuthorized>
+                        <NotAuthorizedRedirect />
+                    </NotAuthorized>
+                    <Authorizing>
+                        <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+                                <MudText Typo="Typo.subtitle1">Checking permissions...</MudText>
+                            </MudStack>
+                        </MudContainer>
+                    </Authorizing>
+                </AuthorizeRouteView>
+                <FocusOnNavigate RouteData="routeData" Selector="h1" />
+            </Found>
+            <NotFound>
+                <LayoutView Layout="typeof(Layout.MainLayout)">
+                    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+                        <MudAlert Severity="Severity.Warning" Elevation="0">
+                            The requested page could not be found.
+                        </MudAlert>
+                    </MudContainer>
+                </LayoutView>
+            </NotFound>
+        </Router>
+    </ChildContent>
+    <ErrorContent>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+                <ErrorDisplay Exception="@context" OnRetry="Recover" />
+            </MudContainer>
+        </LayoutView>
+    </ErrorContent>
+</ErrorBoundary>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+
+    private void Recover()
+    {
+        _errorBoundary?.Recover();
+    }
+}

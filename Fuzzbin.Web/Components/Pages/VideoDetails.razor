@@ -1,0 +1,519 @@
+@page "/videos/{VideoId:guid}"
+@using MudBlazor
+@using System.Text.Json
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Services.Models
+@using Fuzzbin.Web.Components.Dialogs
+@using static Fuzzbin.Services.Interfaces.IPlaylistService
+@inject IVideoService VideoService
+@inject IThumbnailService ThumbnailService
+@inject ISnackbar Snackbar
+@inject IPlaylistService PlaylistService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISourceVerificationService SourceVerificationService
+
+<PageTitle>Video Details - Fuzzbin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="my-4">
+    @if (_isLoading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_video == null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mt-4">
+            Unable to load the requested video. It may have been removed.
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudCard>
+                        <MudCardMedia Height="220" Image="@ThumbnailService.GetThumbnailUrl(_video)" />
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5">@_video.Title</MudText>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@_video.Artist</MudText>
+                            <div class="mt-2">
+                                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Today">
+                                    @(_video.Year?.ToString() ?? "Unknown year")
+                                </MudChip>
+                                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Schedule">
+                                    @FormatDuration(_video.Duration)
+                                </MudChip>
+                            </div>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="PlayVideo">
+                                Play
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.SkipNext" OnClick="PlayNext">
+                                Play Next
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="AddToQueue">
+                                Queue
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" md="8">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.h5">Metadata</MudText>
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="OpenEditor">
+                            Edit
+                        </MudButton>
+                    </div>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Album</MudText>
+                            <MudText>@(_video.Album ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Format</MudText>
+                            <MudText>@(_video.Format ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Resolution</MudText>
+                            <MudText>@(_video.Resolution ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Bitrate</MudText>
+                            <MudText>@(_video.Bitrate?.ToString("N0") ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Imported</MudText>
+                            <MudText>@(_video.ImportedAt?.ToLocalTime().ToString("g") ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Last Played</MudText>
+                            <MudText>@(_video.LastPlayedAt?.ToLocalTime().ToString("g") ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Description</MudText>
+                            <MudText>@(_video.Description ?? "No description available.")</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Genres</MudText>
+                            @if (_video.Genres?.Any() == true)
+                            {
+                                foreach (var genre in _video.Genres)
+                                {
+                                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-1 mb-1">@genre.Name</MudChip>
+                                }
+                            }
+                            else
+                            {
+                                <MudText>—</MudText>
+                            }
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Tags</MudText>
+                            @if (_video.Tags?.Any() == true)
+                            {
+                                foreach (var tag in _video.Tags)
+                                {
+                                    <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Class="mr-1 mb-1">@tag.Name</MudChip>
+                                }
+                            }
+                            else
+                            {
+                                <MudText>—</MudText>
+                            }
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Alignment="Center" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.h6">Source Verification</MudText>
+                            @if (_verification != null)
+                            {
+                                <MudChip T="string" Color="@GetVerificationColor(_verification.Status)" Variant="Variant.Filled" Size="Size.Small">
+                                    @GetVerificationLabel(_verification)
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">Not yet verified</MudChip>
+                            }
+                        </MudStack>
+
+                        <MudStack Row="true" Spacing="1" Alignment="Center">
+                            <MudTextField @bind-Value="_customSourceUrl" Label="Source URL (optional)" Variant="Variant.Outlined" Style="min-width:260px" Dense="true" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="VerifySourceAsync" Disabled="_isVerifying || _video == null" StartIcon="@Icons.Material.Filled.Verified">
+                                @(_isVerifying ? "Verifying..." : "Verify Source")
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Disabled="_verification == null" OnClick="LoadLatestVerification" StartIcon="@Icons.Material.Filled.History">
+                                Reload
+                            </MudButton>
+                        </MudStack>
+
+                        @if (_verification != null)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Last checked @(_verification.VerifiedAt?.ToLocalTime().ToString("g") ?? _verification.CreatedAt.ToLocalTime().ToString("g")) · Confidence @(_verification.Confidence.ToString("0.00"))
+                            </MudText>
+
+                            @if (_comparison != null)
+                            {
+                                <table class="mud-table mud-elevation-0 mud-table-dense mt-2">
+                                    <thead>
+                                        <tr>
+                                            <th>Metric</th>
+                                            <th>Local</th>
+                                            <th>Source</th>
+                                            <th>Δ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Duration</td>
+                                            <td>@FormatDuration(_video?.Duration)</td>
+                                            <td>@FormatSeconds(_comparison.SourceDurationSeconds)</td>
+                                            <td>@(_comparison.DurationDeltaSeconds?.ToString("0.0") ?? "—") s</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Frame Rate</td>
+                                            <td>@(_comparison.LocalFrameRate?.ToString("0.00") ?? "—")</td>
+                                            <td>@(_comparison.SourceFrameRate?.ToString("0.00") ?? "—")</td>
+                                            <td>@(_comparison.FrameRateDelta?.ToString("0.00") ?? "—")</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Resolution</td>
+                                            <td>@(_comparison.Resolution ?? "—")</td>
+                                            <td>@(_comparison.SourceResolution ?? "—")</td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            }
+
+                            <MudStack Row="true" Alignment="Center" Spacing="1">
+                                <MudTextField @bind-Value="_overrideNotes" Label="Notes" Variant="Variant.Outlined" Dense="true" Style="min-width:220px" />
+                                <MudButton Variant="Variant.Outlined" Color="Color.Success" Disabled="_verification == null" OnClick="MarkVerified" StartIcon="@Icons.Material.Filled.Check">
+                                    Mark Verified
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_verification == null" OnClick="FlagMismatch" StartIcon="@Icons.Material.Filled.Flag">
+                                    Flag Mismatch
+                                </MudButton>
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public Guid VideoId { get; set; }
+
+    private Video? _video;
+    private bool _isLoading = true;
+    private PlaylistSession? _playlistSession;
+    private VideoSourceVerification? _verification;
+    private SourceVerificationComparison? _comparison;
+    private bool _isVerifying;
+    private string _customSourceUrl = string.Empty;
+    private string _overrideNotes = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVideoAsync();
+    }
+
+    private async Task LoadVideoAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _video = await VideoService.GetVideoByIdAsync(VideoId);
+            if (_video == null)
+            {
+                Snackbar.Add("Video not found", Severity.Warning);
+            }
+            else
+            {
+                await LoadVerificationAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load video: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string FormatDuration(int? seconds)
+    {
+        if (!seconds.HasValue)
+        {
+            return "—";
+        }
+
+        var duration = TimeSpan.FromSeconds(seconds.Value);
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
+            : $"{duration.Minutes}:{duration.Seconds:D2}";
+    }
+
+    private string FormatSeconds(double? seconds)
+    {
+        if (!seconds.HasValue)
+        {
+            return "—";
+        }
+
+        var duration = TimeSpan.FromSeconds(seconds.Value);
+        return duration.TotalHours >= 1
+            ? duration.ToString("hh\\:mm\\:ss")
+            : duration.ToString("mm\\:ss");
+    }
+
+    private async Task LoadVerificationAsync()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var latest = await SourceVerificationService.GetLatestAsync(_video.Id);
+            if (latest != null)
+            {
+                CaptureVerification(latest);
+            }
+            else
+            {
+                _verification = null;
+                _comparison = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load verification: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private void CaptureVerification(VideoSourceVerification verification)
+    {
+        _verification = verification;
+        _comparison = DeserializeComparison(verification);
+    }
+
+    private async Task VerifySourceAsync()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _isVerifying = true;
+            var request = new SourceVerificationRequest
+            {
+                SourceUrl = string.IsNullOrWhiteSpace(_customSourceUrl) ? null : _customSourceUrl,
+                ConfidenceThreshold = 0.75
+            };
+
+            var result = await SourceVerificationService.VerifyVideoAsync(_video, request);
+            CaptureVerification(result);
+            Snackbar.Add($"Verification status: {result.Status}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Verification failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isVerifying = false;
+        }
+    }
+
+    private async Task LoadLatestVerification()
+    {
+        await LoadVerificationAsync();
+        Snackbar.Add("Verification reloaded.", Severity.Normal);
+    }
+
+    private async Task MarkVerified()
+    {
+        if (_verification == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await SourceVerificationService.OverrideAsync(_verification.Id, new SourceVerificationOverride
+            {
+                MarkAsVerified = true,
+                Confidence = 1.0,
+                Notes = _overrideNotes
+            });
+            CaptureVerification(updated);
+            Snackbar.Add("Marked as verified.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Override failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task FlagMismatch()
+    {
+        if (_verification == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await SourceVerificationService.OverrideAsync(_verification.Id, new SourceVerificationOverride
+            {
+                MarkAsVerified = false,
+                Confidence = 0.0,
+                Notes = _overrideNotes
+            });
+            CaptureVerification(updated);
+            Snackbar.Add("Marked as mismatch.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Override failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private SourceVerificationComparison? DeserializeComparison(VideoSourceVerification verification)
+    {
+        if (string.IsNullOrWhiteSpace(verification.ComparisonSnapshotJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<SourceVerificationComparison>(verification.ComparisonSnapshotJson);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private Color GetVerificationColor(VideoSourceVerificationStatus status) => status switch
+    {
+        VideoSourceVerificationStatus.Verified => Color.Success,
+        VideoSourceVerificationStatus.Mismatch => Color.Error,
+        VideoSourceVerificationStatus.SourceMissing => Color.Warning,
+        VideoSourceVerificationStatus.Failed => Color.Error,
+        _ => Color.Info
+    };
+
+    private string GetVerificationLabel(VideoSourceVerification verification)
+    {
+        var label = verification.Status switch
+        {
+            VideoSourceVerificationStatus.Verified => "Verified",
+            VideoSourceVerificationStatus.Mismatch => "Mismatch",
+            VideoSourceVerificationStatus.SourceMissing => "Source missing",
+            VideoSourceVerificationStatus.Failed => "Failed",
+            _ => "Pending"
+        };
+
+        if (verification.IsManualOverride)
+        {
+            label += " (manual)";
+        }
+
+        return label;
+    }
+
+    private async Task PlayVideo()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        var session = await PlaylistService.CreateFromVideosAsync(new List<Guid> { _video.Id });
+        Navigation.NavigateTo($"/player?session={session.SessionId}");
+    }
+
+    private async Task PlayNext()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        if (_playlistSession == null)
+        {
+            _playlistSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { _video.Id });
+            Snackbar.Add("Started new playlist", Severity.Success);
+            Navigation.NavigateTo($"/player?session={_playlistSession.SessionId}");
+        }
+        else
+        {
+            var currentIndex = _playlistSession.CurrentIndex;
+            _playlistSession.Videos.Insert(currentIndex + 1, _video);
+            await PlaylistService.UpdateSessionAsync(_playlistSession);
+            Snackbar.Add($"'{_video.Title}' will play next", Severity.Success);
+        }
+    }
+
+    private async Task AddToQueue()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        if (_playlistSession == null)
+        {
+            _playlistSession = await PlaylistService.CreateFromVideosAsync(new List<Guid> { _video.Id });
+            Snackbar.Add("Started new playlist", Severity.Success);
+        }
+        else
+        {
+            await PlaylistService.AddVideosAsync(_playlistSession, new List<Guid> { _video.Id });
+            Snackbar.Add($"'{_video.Title}' added to queue", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditor()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(VideoEditorDialog.Video), _video }
+        };
+
+        var dialog = await DialogService.ShowAsync<VideoEditorDialog>("Edit Video", parameters, new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small
+        });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Video updated })
+        {
+            _video = updated;
+            Snackbar.Add("Video updated", Severity.Success);
+        }
+    }
+}

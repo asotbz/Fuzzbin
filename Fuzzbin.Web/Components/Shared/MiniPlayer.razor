@@ -1,0 +1,376 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using static Fuzzbin.Services.Interfaces.IPlaylistService
+@inject IPlaylistService PlaylistService
+@inject IThumbnailService ThumbnailService
+@inject NavigationManager Navigation
+
+@if (_session != null && _currentVideo != null)
+{
+    <div class="mini-player @(_isExpanded ? "expanded" : "")" @onclick="ToggleExpanded">
+        <div class="mini-player-content">
+            <div class="thumbnail-wrapper">
+                <img src="@ThumbnailService.GetThumbnailUrl(_currentVideo)"
+                     alt="@_currentVideo.Title"
+                     class="thumbnail" />
+                @if (_session.IsPlaying)
+                {
+                    <div class="playing-indicator">
+                        <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" />
+                    </div>
+                }
+            </div>
+            
+            <div class="video-info">
+                <div class="title">@_currentVideo.Title</div>
+                <div class="artist">@_currentVideo.Artist</div>
+            </div>
+            
+            <div class="controls" @onclick:stopPropagation="true">
+                <MudIconButton Icon="@Icons.Material.Filled.SkipPrevious"
+                             Size="Size.Small"
+                             OnClick="PlayPrevious"
+                             Disabled="@(!HasPrevious())" />
+                
+                <MudIconButton Icon="@(_session.IsPlaying ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)"
+                             Size="Size.Small"
+                             Color="Color.Primary"
+                             OnClick="TogglePlayPause" />
+                
+                <MudIconButton Icon="@Icons.Material.Filled.SkipNext"
+                             Size="Size.Small"
+                             OnClick="PlayNext"
+                             Disabled="@(!HasNext())" />
+                
+                <MudIconButton Icon="@Icons.Material.Filled.OpenInFull"
+                             Size="Size.Small"
+                             OnClick="OpenPlayer" />
+                
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                             Size="Size.Small"
+                             OnClick="CloseMiniPlayer" />
+            </div>
+        </div>
+        
+        @if (_isExpanded)
+        {
+            <div class="queue-preview" @onclick:stopPropagation="true">
+                <div class="queue-header">
+                    <MudText Typo="Typo.subtitle2">Up Next</MudText>
+                    <MudText Typo="Typo.caption">@(_session.Videos.Count - _session.CurrentIndex - 1) videos</MudText>
+                </div>
+                <div class="queue-list">
+                    @{
+                        var upcomingVideos = GetUpcomingVideos(3);
+                        foreach (var video in upcomingVideos)
+                        {
+                            <div class="queue-item">
+                                <img src="@ThumbnailService.GetThumbnailUrl(video)" alt="@video.Title" class="queue-thumbnail" />
+                                <div class="queue-info">
+                                    <div class="queue-title">@video.Title</div>
+                                    <div class="queue-artist">@video.Artist</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .mini-player {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--mud-palette-surface);
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+        z-index: 1100;
+        cursor: pointer;
+        min-width: 350px;
+    }
+    
+    .mini-player:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 30px rgba(0,0,0,0.4);
+    }
+    
+    .mini-player.expanded {
+        min-width: 400px;
+    }
+    
+    .mini-player-content {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        gap: 12px;
+    }
+    
+    .thumbnail-wrapper {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        flex-shrink: 0;
+    }
+    
+    .thumbnail {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    
+    .playing-indicator {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        background: var(--mud-palette-primary);
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: pulse 2s infinite;
+    }
+    
+    /* pulse animation */
+    
+    .video-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .title {
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .artist {
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .controls {
+        display: flex;
+        gap: 4px;
+    }
+    
+    .queue-preview {
+        border-top: 1px solid var(--mud-palette-divider);
+        padding: 12px;
+        animation: slideIn 0.3s ease;
+    }
+    
+    /* slideIn animation */
+    
+    .queue-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 12px;
+    }
+    
+    .queue-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .queue-item {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    
+    .queue-thumbnail {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    
+    .queue-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .queue-title {
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .queue-artist {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+
+@code {
+    [Parameter] public Guid? SessionId { get; set; }
+    [Parameter] public EventCallback<PlaylistSession> OnSessionUpdated { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    
+    private PlaylistSession? _session;
+    private Video? _currentVideo;
+    private bool _isExpanded = false;
+    private System.Threading.Timer? _refreshTimer;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        if (SessionId.HasValue)
+        {
+            await LoadSession();
+        }
+        
+        // Set up timer to refresh session
+        _refreshTimer = new System.Threading.Timer(async _ => 
+        {
+            await InvokeAsync(async () => 
+            {
+                await RefreshSession();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+    }
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        if (SessionId != _session?.SessionId)
+        {
+            await LoadSession();
+        }
+    }
+    
+    private async Task LoadSession()
+    {
+        if (SessionId.HasValue)
+        {
+            _session = await PlaylistService.GetSessionAsync(SessionId.Value);
+            if (_session != null)
+            {
+                _currentVideo = PlaylistService.GetCurrentVideo(_session);
+            }
+        }
+        else
+        {
+            _session = null;
+            _currentVideo = null;
+        }
+    }
+    
+    private async Task RefreshSession()
+    {
+        if (_session != null)
+        {
+            var refreshed = await PlaylistService.GetSessionAsync(_session.SessionId);
+            if (refreshed != null)
+            {
+                _session = refreshed;
+                _currentVideo = PlaylistService.GetCurrentVideo(_session);
+            }
+        }
+    }
+    
+    private void ToggleExpanded()
+    {
+        _isExpanded = !_isExpanded;
+    }
+    
+    private async Task TogglePlayPause()
+    {
+        if (_session == null) return;
+        
+        _session.IsPlaying = !_session.IsPlaying;
+        await PlaylistService.UpdateSessionAsync(_session);
+        await OnSessionUpdated.InvokeAsync(_session);
+    }
+    
+    private async Task PlayPrevious()
+    {
+        if (_session == null) return;
+        
+        var video = await PlaylistService.PreviousAsync(_session);
+        if (video != null)
+        {
+            _currentVideo = video;
+            await OnSessionUpdated.InvokeAsync(_session);
+        }
+    }
+    
+    private async Task PlayNext()
+    {
+        if (_session == null) return;
+        
+        var video = await PlaylistService.NextAsync(_session);
+        if (video != null)
+        {
+            _currentVideo = video;
+            await OnSessionUpdated.InvokeAsync(_session);
+        }
+    }
+    
+    private void OpenPlayer()
+    {
+        if (_session != null)
+        {
+            Navigation.NavigateTo($"/player?session={_session.SessionId}");
+        }
+    }
+    
+    private async Task CloseMiniPlayer()
+    {
+        await OnClose.InvokeAsync();
+    }
+    
+    private bool HasPrevious()
+    {
+        return _session != null && _session.CurrentIndex > 0;
+    }
+    
+    private bool HasNext()
+    {
+        return _session != null && _session.CurrentIndex < _session.Videos.Count - 1;
+    }
+    
+    private List<Video> GetUpcomingVideos(int count)
+    {
+        if (_session == null) return new List<Video>();
+        
+        var startIndex = _session.CurrentIndex + 1;
+        if (startIndex >= _session.Videos.Count) return new List<Video>();
+        
+        if (_session.IsShuffled && _session.ShuffleOrder.Any())
+        {
+            return _session.ShuffleOrder
+                .Skip(startIndex)
+                .Take(count)
+                .Select(i => _session.Videos[i])
+                .ToList();
+        }
+        
+        return _session.Videos
+            .Skip(startIndex)
+            .Take(count)
+            .ToList();
+    }
+    
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

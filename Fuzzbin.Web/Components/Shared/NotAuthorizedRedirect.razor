@@ -1,0 +1,49 @@
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+@if (_isAuthenticated)
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+        <MudAlert Severity="Severity.Error" Elevation="0">
+            You are signed in but do not have permission to access this page.
+        </MudAlert>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-6" Style="text-align:center;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.subtitle1" Class="mt-4">Redirecting to login...</MudText>
+    </MudContainer>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private bool _isAuthenticated;
+    private bool _redirected;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthenticationStateTask is null || _redirected)
+        {
+            return;
+        }
+
+        var state = await AuthenticationStateTask;
+        _isAuthenticated = state.User.Identity?.IsAuthenticated ?? false;
+
+        if (!_isAuthenticated)
+        {
+            _redirected = true;
+            var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
+            if (!string.IsNullOrWhiteSpace(relativePath) && !relativePath.StartsWith('/'))
+            {
+                relativePath = $"/{relativePath}";
+            }
+
+            var target = string.IsNullOrWhiteSpace(relativePath) ? "/" : relativePath;
+            var encoded = Uri.EscapeDataString(target);
+            Navigation.NavigateTo($"/auth/signin?returnUrl={encoded}", true);
+        }
+    }
+}
