@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Specifications.Queries;
+using Fuzzbin.Services.Models;
 
 namespace Fuzzbin.Services.Interfaces;
 
@@ -10,7 +11,9 @@ public interface IVideoService
     Task<Video?> GetVideoByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Video> CreateVideoAsync(Video video, CancellationToken cancellationToken = default);
     Task<Video> UpdateVideoAsync(Video video, CancellationToken cancellationToken = default);
-    Task DeleteVideoAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<VideoBatchUpdateResult> UpdateVideosAsync(IEnumerable<Video> videos, CancellationToken cancellationToken = default);
+    Task DeleteVideoAsync(Guid id, bool deleteFiles = true, CancellationToken cancellationToken = default);
+    Task<VideoDeletionResult> DeleteVideosAsync(IEnumerable<Guid> ids, bool deleteFiles = true, CancellationToken cancellationToken = default);
     Task<List<Video>> GetVideosByArtistAsync(string artist, CancellationToken cancellationToken = default);
     Task<List<Video>> GetVideosByGenreAsync(Guid genreId, CancellationToken cancellationToken = default);
     Task<List<Video>> GetRecentVideosAsync(int count = 10, CancellationToken cancellationToken = default);

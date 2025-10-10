@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Fuzzbin.Web.Hubs;
@@ -434,6 +436,72 @@ app.MapHub<VideoUpdatesHub>("/hubs/updates");
         .CacheOutput("SystemMetrics")
         .WithName("GetSystemMetrics")
         .AllowAnonymous();
+
+    app.MapGet("/api/videos/stream", async (
+        string path,
+        ILibraryPathManager libraryPathManager,
+        ILogger<Program> logger,
+        CancellationToken cancellationToken) =>
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return Results.BadRequest(new { message = "File path is required." });
+        }
+
+        try
+        {
+            var normalized = libraryPathManager.NormalizePath(path);
+            var candidates = new List<string>();
+
+            if (Path.IsPathRooted(normalized))
+            {
+                candidates.Add(normalized);
+            }
+
+            var videoRoot = await libraryPathManager.GetVideoRootAsync(cancellationToken).ConfigureAwait(false);
+            candidates.Add(Path.Combine(videoRoot, normalized));
+
+            string? fullPath = null;
+            foreach (var candidate in candidates)
+            {
+                try
+                {
+                    var resolved = Path.GetFullPath(candidate);
+                    if (File.Exists(resolved))
+                    {
+                        fullPath = resolved;
+                        break;
+                    }
+                }
+                catch
+                {
+                    // Ignore invalid path combinations and continue.
+                }
+            }
+
+            if (fullPath is null)
+            {
+                logger.LogWarning("Stream requested for missing file {FilePath}", path);
+                return Results.NotFound();
+            }
+
+            var provider = new FileExtensionContentTypeProvider();
+            if (!provider.TryGetContentType(fullPath, out var contentType))
+            {
+                contentType = "application/octet-stream";
+            }
+
+            var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true);
+            return Results.File(stream, contentType, enableRangeProcessing: true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to stream video {FilePath}", path);
+            return Results.Problem("Unable to stream requested video.");
+        }
+    })
+    .WithName("StreamVideo")
+    .AllowAnonymous();
 
     app.MapGet("/auth/setup-complete", async (
         HttpContext httpContext,

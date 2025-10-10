@@ -1,3 +1,5 @@
+@using System.Collections.Generic
+@using System.Linq
 @using Microsoft.AspNetCore.Components.Web
 @using MudBlazor
 @using Fuzzbin.Core.Entities
@@ -13,6 +15,11 @@
         <MudTh></MudTh>
         <MudTh>Title</MudTh>
         <MudTh>Artist</MudTh>
+        <MudTh>Album</MudTh>
+        <MudTh>Genres</MudTh>
+        <MudTh>Label</MudTh>
+        <MudTh>Tags</MudTh>
+        <MudTh>Collections</MudTh>
         <MudTh>Year</MudTh>
         <MudTh>Duration</MudTh>
         <MudTh>Format</MudTh>
@@ -24,7 +31,7 @@
                          DisableRipple="true"
                          CheckedChanged="_ => OnSelectionToggled.InvokeAsync(video)" />
         </MudTd>
-        <MudTd Class="cursor-pointer" @onclick="() => OnVideoClicked.InvokeAsync(video)">
+        <MudTd Class="cursor-pointer" @onclick="async () => await HandleRowClickAsync(video)">
             <div class="d-flex align-center"
                  @oncontextmenu="@(e => HandleContextMenu(e, video))"
                  @oncontextmenu:preventDefault="true">
@@ -33,6 +40,11 @@
             </div>
         </MudTd>
         <MudTd>@video.Artist</MudTd>
+        <MudTd>@FormatAlbum(video)</MudTd>
+        <MudTd>@FormatGenres(video)</MudTd>
+        <MudTd>@FormatLabel(video)</MudTd>
+        <MudTd>@FormatTags(video)</MudTd>
+        <MudTd>@FormatCollections(video)</MudTd>
         <MudTd>@(video.Year?.ToString() ?? "—")</MudTd>
         <MudTd>@DurationFormatter?.Invoke(video)</MudTd>
         <MudTd>@(video.Format ?? "—")</MudTd>
@@ -40,22 +52,22 @@
             <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
                            Color="Color.Primary"
                            Size="Size.Small"
-                           OnClick="() => OnPlay.InvokeAsync(video)" />
+                           OnClick="async () => await OnPlayClickedAsync(video)" />
             <MudIconButton Icon="@Icons.Material.Filled.SkipNext"
                            Color="Color.Secondary"
                            Size="Size.Small"
-                           OnClick="() => OnPlayNext.InvokeAsync(video)" />
+                           OnClick="async () => await OnPlayNextClickedAsync(video)" />
             <MudIconButton Icon="@Icons.Material.Filled.PlaylistAdd"
                            Color="Color.Info"
                            Size="Size.Small"
-                           OnClick="() => OnAddToQueue.InvokeAsync(video)" />
+                           OnClick="async () => await OnAddToQueueClickedAsync(video)" />
             <MudIconButton Icon="@Icons.Material.Filled.Edit"
                            Size="Size.Small"
-                           OnClick="() => OnEdit.InvokeAsync(video)" />
+                           OnClick="async () => await OnEditClickedAsync(video)" />
             <MudIconButton Icon="@Icons.Material.Filled.Delete"
                            Color="Color.Error"
                            Size="Size.Small"
-                           OnClick="() => OnDelete.InvokeAsync(video)" />
+                           OnClick="async () => await OnDeleteClickedAsync(video)" />
         </MudTd>
     </RowTemplate>
 </MudTable>
@@ -97,8 +109,89 @@
     [Parameter]
     public EventCallback<(Video Video, MouseEventArgs MouseEvent)> OnContextMenuRequested { get; set; }
 
+    private bool _suppressRowClick;
+
     private Task HandleContextMenu(MouseEventArgs args, Video video)
     {
         return OnContextMenuRequested.InvokeAsync((video, args));
+    }
+
+    private async Task HandleRowClickAsync(Video video)
+    {
+        if (_suppressRowClick)
+        {
+            _suppressRowClick = false;
+            return;
+        }
+
+        await OnVideoClicked.InvokeAsync(video);
+    }
+
+    private async Task OnPlayClickedAsync(Video video)
+    {
+        _suppressRowClick = true;
+        await OnPlay.InvokeAsync(video);
+        _suppressRowClick = false;
+    }
+
+    private async Task OnPlayNextClickedAsync(Video video)
+    {
+        _suppressRowClick = true;
+        await OnPlayNext.InvokeAsync(video);
+        _suppressRowClick = false;
+    }
+
+    private async Task OnAddToQueueClickedAsync(Video video)
+    {
+        _suppressRowClick = true;
+        await OnAddToQueue.InvokeAsync(video);
+        _suppressRowClick = false;
+    }
+
+    private async Task OnEditClickedAsync(Video video)
+    {
+        _suppressRowClick = true;
+        await OnEdit.InvokeAsync(video);
+        _suppressRowClick = false;
+    }
+
+    private async Task OnDeleteClickedAsync(Video video)
+    {
+        _suppressRowClick = true;
+        await OnDelete.InvokeAsync(video);
+        _suppressRowClick = false;
+    }
+
+    private static string FormatAlbum(Video video) =>
+        string.IsNullOrWhiteSpace(video.Album) ? "—" : video.Album;
+
+    private static string FormatLabel(Video video) =>
+        string.IsNullOrWhiteSpace(video.Publisher) ? "—" : video.Publisher;
+
+    private static string FormatGenres(Video video) =>
+        FormatNameList(video.Genres?.Select(g => g.Name));
+
+    private static string FormatTags(Video video) =>
+        FormatNameList(video.Tags?.Select(t => t.Name));
+
+    private static string FormatCollections(Video video) =>
+        FormatNameList(video.CollectionVideos?
+            .Select(cv => cv.Collection?.Name));
+
+    private static string FormatNameList(IEnumerable<string?>? values)
+    {
+        if (values == null)
+        {
+            return "—";
+        }
+
+        var names = values
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return names.Count == 0 ? "—" : string.Join(", ", names);
     }
 }

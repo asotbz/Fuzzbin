@@ -165,6 +165,9 @@ public class ExternalSearchService : IExternalSearchService
             {
                 var summary = summaries[index];
                 ImvdbMetadata? metadata = null;
+                var expectedArtist = query.Artist ?? string.Empty;
+                var expectedTitle = query.Title ?? string.Empty;
+                var matchConfidence = ImvdbMapper.ComputeMatchConfidence(expectedArtist, expectedTitle, summary);
 
                 if (index < detailLimit)
                 {
@@ -173,7 +176,7 @@ public class ExternalSearchService : IExternalSearchService
                         var detail = await _imvdbApi.GetVideoAsync(
                             summary.Id.ToString(),
                             cancellationToken).ConfigureAwait(false);
-                        metadata = ImvdbMapper.MapToMetadata(detail, summary);
+                        metadata = ImvdbMapper.MapToMetadata(detail, summary, matchConfidence);
                     }
                     catch (ApiException apiException)
                     {
@@ -188,8 +191,12 @@ public class ExternalSearchService : IExternalSearchService
                     Title = ImvdbMapper.FirstNonEmpty(summary.SongTitle, summary.Title) ?? string.Empty,
                     Artist = summary.Artist ?? string.Empty,
                     ImageUrl = summary.ImageUrl,
-                    VideoUrl = summary.Url
+                    VideoUrl = summary.Url,
+                    Confidence = matchConfidence
                 };
+
+                var itemConfidence = CalculateConfidence(metadata.Artist, metadata.Title, query);
+                metadata.Confidence = Math.Max(metadata.Confidence, Math.Max(matchConfidence, itemConfidence));
 
                 var item = new ExternalSearchItem
                 {
@@ -199,7 +206,7 @@ public class ExternalSearchService : IExternalSearchService
                     Imvdb = metadata,
                     ArtworkUrl = metadata.ImageUrl,
                     Description = metadata.Description,
-                    Confidence = CalculateConfidence(metadata.Artist, metadata.Title, query)
+                    Confidence = itemConfidence
                 };
 
                 items.Add(item);

@@ -1,5 +1,6 @@
-@using Microsoft.AspNetCore.Components.Web
+@using System.Collections.Generic
 @using System.Linq
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.Components.Web.Virtualization
 @using MudBlazor
 @using Fuzzbin.Core.Entities
@@ -21,7 +22,7 @@ else
                     @foreach (var video in row)
                     {
                         <div @key="video.Id" class="fz-video-grid__cell" @oncontextmenu="@(e => HandleContextMenu(e, video))" @oncontextmenu:preventDefault="true">
-                            <MudCard Class="@(BuildCardClass(video))" @onclick="() => OnVideoClicked.InvokeAsync(video)">
+                            <MudCard Class="@(BuildCardClass(video))" @onclick="async () => await HandleCardClickAsync(video)">
                                 <MudCardHeader Class="pa-2">
                                     <div class="d-flex justify-space-between align-center">
                                         <MudCheckBox T="bool" Checked="SelectedVideoIds.Contains(video.Id)"
@@ -36,8 +37,14 @@ else
                                 <MudCardMedia Height="180" Image="@ThumbnailUrlSelector?.Invoke(video)" Alt="@video.Title" />
                                 <MudCardContent Class="pa-3">
                                     <MudText Typo="Typo.h6" Class="text-truncate" Title="@video.Title">@video.Title</MudText>
-                                    <MudText Typo="Typo.body2" Class="text-truncate" Color="Color.Secondary" Title="@video.Artist">
+                                    <MudText Typo="Typo.body2" Class="text-truncate" Color="Color.Primary" Title="@video.Artist">
                                         @video.Artist
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="text-truncate" Color="Color.Secondary" Title="@FormatAlbumYear(video)">
+                                        @FormatAlbumYear(video)
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="text-truncate" Color="Color.Secondary" Title="@FormatLabelGenre(video)">
+                                        @FormatLabelGenre(video)
                                     </MudText>
                                 </MudCardContent>
                                 <MudCardActions Class="pa-2 pt-0">
@@ -45,31 +52,31 @@ else
                                         <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
                                                        Color="Color.Primary"
                                                        Size="Size.Small"
-                                                       OnClick="() => OnPlay.InvokeAsync(video)" />
+                                                       OnClick="async () => await OnPlayClickedAsync(video)" />
                                     </MudTooltip>
                                     <MudTooltip Text="Play next">
                                         <MudIconButton Icon="@Icons.Material.Filled.SkipNext"
                                                        Color="Color.Secondary"
                                                        Size="Size.Small"
-                                                       OnClick="() => OnPlayNext.InvokeAsync(video)" />
+                                                       OnClick="async () => await OnPlayNextClickedAsync(video)" />
                                     </MudTooltip>
                                     <MudTooltip Text="Add to queue">
                                         <MudIconButton Icon="@Icons.Material.Filled.PlaylistAdd"
                                                        Color="Color.Info"
                                                        Size="Size.Small"
-                                                       OnClick="() => OnAddToQueue.InvokeAsync(video)" />
+                                                       OnClick="async () => await OnAddToQueueClickedAsync(video)" />
                                     </MudTooltip>
                                     <MudSpacer />
                                     <MudTooltip Text="Edit metadata">
                                         <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                                        Size="Size.Small"
-                                                       OnClick="() => OnEdit.InvokeAsync(video)" />
+                                                       OnClick="async () => await OnEditClickedAsync(video)" />
                                     </MudTooltip>
                                     <MudTooltip Text="Delete video">
                                         <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                        Color="Color.Error"
                                                        Size="Size.Small"
-                                                       OnClick="() => OnDelete.InvokeAsync(video)" />
+                                                       OnClick="async () => await OnDeleteClickedAsync(video)" />
                                     </MudTooltip>
                                 </MudCardActions>
                             </MudCard>
@@ -94,6 +101,7 @@ else
 @code {
     private const int ColumnsPerRow = 4;
     private List<IReadOnlyList<Video>> _rows = new();
+    private bool _suppressCardClick;
 
     [Parameter]
     public IReadOnlyList<Video> Videos { get; set; } = Array.Empty<Video>();
@@ -151,11 +159,101 @@ else
         return OnContextMenuRequested.InvokeAsync((video, args));
     }
 
+    private async Task HandleCardClickAsync(Video video)
+    {
+        if (_suppressCardClick)
+        {
+            _suppressCardClick = false;
+            return;
+        }
+
+        await OnVideoClicked.InvokeAsync(video);
+    }
+
+    private async Task OnPlayClickedAsync(Video video)
+    {
+        _suppressCardClick = true;
+        await OnPlay.InvokeAsync(video);
+        _suppressCardClick = false;
+    }
+
+    private async Task OnPlayNextClickedAsync(Video video)
+    {
+        _suppressCardClick = true;
+        await OnPlayNext.InvokeAsync(video);
+        _suppressCardClick = false;
+    }
+
+    private async Task OnAddToQueueClickedAsync(Video video)
+    {
+        _suppressCardClick = true;
+        await OnAddToQueue.InvokeAsync(video);
+        _suppressCardClick = false;
+    }
+
+    private async Task OnEditClickedAsync(Video video)
+    {
+        _suppressCardClick = true;
+        await OnEdit.InvokeAsync(video);
+        _suppressCardClick = false;
+    }
+
+    private async Task OnDeleteClickedAsync(Video video)
+    {
+        _suppressCardClick = true;
+        await OnDelete.InvokeAsync(video);
+        _suppressCardClick = false;
+    }
+
     private string BuildCardClass(Video video)
     {
         return SelectedVideoIds.Contains(video.Id)
             ? "fz-video-grid__card-inner fz-video-grid__card-inner--selected"
             : "fz-video-grid__card-inner";
+    }
+
+    private static string FormatAlbumYear(Video video)
+    {
+        var hasAlbum = !string.IsNullOrWhiteSpace(video.Album);
+        var hasYear = video.Year.HasValue;
+
+        return (hasAlbum, hasYear) switch
+        {
+            (true, true) => $"{video.Album} ({video.Year})",
+            (true, false) => video.Album!,
+            (false, true) => video.Year!.Value.ToString(),
+            _ => "—"
+        };
+    }
+
+    private static string FormatLabelGenre(Video video)
+    {
+        var label = string.IsNullOrWhiteSpace(video.Publisher) ? null : video.Publisher.Trim();
+        var genres = FormatNameList(video.Genres?.Select(g => g.Name));
+
+        if (!string.IsNullOrWhiteSpace(label) && genres != "—")
+        {
+            return $"{label} · {genres}";
+        }
+
+        return label ?? genres;
+    }
+
+    private static string FormatNameList(IEnumerable<string?>? values)
+    {
+        if (values == null)
+        {
+            return "—";
+        }
+
+        var names = values
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return names.Count == 0 ? "—" : string.Join(", ", names);
     }
 
     private string FormatMeta(Video video)

@@ -1,32 +1,45 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
 using Fuzzbin.Core.Specifications;
 using Fuzzbin.Core.Specifications.Queries;
 using Fuzzbin.Core.Specifications.Videos;
 using Fuzzbin.Services.Interfaces;
+using Fuzzbin.Services.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Fuzzbin.Services;
 
 public class VideoService : IVideoService
 {
+    private const string RecycleBinFolderName = ".trash";
+
     private readonly IRepository<Video> _videoRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEnumerable<IVideoUpdateNotifier> _updateNotifiers;
     private readonly ISearchService _searchService;
+    private readonly ILibraryPathManager _libraryPathManager;
+    private readonly ILogger<VideoService> _logger;
 
     public VideoService(
         IRepository<Video> videoRepository,
         IUnitOfWork unitOfWork,
         IEnumerable<IVideoUpdateNotifier> updateNotifiers,
-        ISearchService searchService)
+        ISearchService searchService,
+        ILibraryPathManager libraryPathManager,
+        ILogger<VideoService> logger)
     {
         _videoRepository = videoRepository;
         _unitOfWork = unitOfWork;
         _updateNotifiers = updateNotifiers ?? Enumerable.Empty<IVideoUpdateNotifier>();
         _searchService = searchService;
+        _libraryPathManager = libraryPathManager;
+        _logger = logger;
     }
 
     public async Task<List<Video>> GetAllVideosAsync(CancellationToken cancellationToken = default)
@@ -95,15 +108,247 @@ public class VideoService : IVideoService
         return video;
     }
 
-    public async Task DeleteVideoAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<VideoBatchUpdateResult> UpdateVideosAsync(IEnumerable<Video> videos, CancellationToken cancellationToken = default)
     {
-        var video = await _videoRepository.GetByIdAsync(id);
-        if (video != null)
+        if (videos == null)
         {
-            await _videoRepository.DeleteAsync(video);
+            return new VideoBatchUpdateResult();
+        }
+
+        var materialized = videos.Where(v => v != null).Distinct().ToList();
+        var result = new VideoBatchUpdateResult
+        {
+            RequestedCount = materialized.Count
+        };
+
+        if (materialized.Count == 0)
+        {
+            return result;
+        }
+
+        var successful = new List<Video>();
+
+        foreach (var video in materialized)
+        {
+            try
+            {
+                await _videoRepository.UpdateAsync(video);
+                successful.Add(video);
+                result.UpdatedCount++;
+            }
+            catch (Exception ex)
+            {
+                result.Failures.Add(new VideoBatchUpdateResult.VideoUpdateFailure
+                {
+                    VideoId = video.Id,
+                    Title = video.Title,
+                    Error = ex.Message
+                });
+                _logger.LogError(ex, "Failed to update video {VideoId}", video.Id);
+            }
+        }
+
+        if (successful.Count > 0)
+        {
             await _unitOfWork.SaveChangesAsync();
             _searchService.InvalidateFacetsCache();
-            await NotifyAsync(notifier => notifier.VideoDeletedAsync(id));
+
+            foreach (var video in successful)
+            {
+                // Skip notifying for videos that failed
+                if (result.Failures.Any(f => f.VideoId == video.Id))
+                {
+                    continue;
+                }
+
+                var notification = await BuildNotificationAsync(video.Id);
+                if (notification != null)
+                {
+                    await NotifyAsync(notifier => notifier.VideoUpdatedAsync(notification));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public async Task DeleteVideoAsync(Guid id, bool deleteFiles = true, CancellationToken cancellationToken = default)
+    {
+        var video = await _videoRepository.GetByIdAsync(id);
+        if (video == null)
+        {
+            return;
+        }
+
+        await DeleteVideoInternalAsync(video, deleteFiles, cancellationToken);
+        await _unitOfWork.SaveChangesAsync();
+        _searchService.InvalidateFacetsCache();
+        await NotifyAsync(notifier => notifier.VideoDeletedAsync(id));
+    }
+
+    public async Task<VideoDeletionResult> DeleteVideosAsync(IEnumerable<Guid> ids, bool deleteFiles = true, CancellationToken cancellationToken = default)
+    {
+        if (ids == null)
+        {
+            return new VideoDeletionResult();
+        }
+
+        var uniqueIds = ids.Where(id => id != Guid.Empty).Distinct().ToList();
+        var result = new VideoDeletionResult
+        {
+            RequestedCount = uniqueIds.Count
+        };
+
+        if (uniqueIds.Count == 0)
+        {
+            return result;
+        }
+
+        var deletedIds = new List<Guid>();
+
+        foreach (var videoId in uniqueIds)
+        {
+            Video? currentVideo = null;
+            try
+            {
+                currentVideo = await _videoRepository.GetByIdAsync(videoId);
+                if (currentVideo == null)
+                {
+                    result.Failures.Add(new VideoDeletionResult.VideoDeletionFailure
+                    {
+                        VideoId = videoId,
+                        Title = "Unknown video",
+                        Error = "Video not found"
+                    });
+                    continue;
+                }
+
+                await DeleteVideoInternalAsync(currentVideo, deleteFiles, cancellationToken);
+                deletedIds.Add(videoId);
+                result.DeletedCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete video {VideoId}", videoId);
+                result.Failures.Add(new VideoDeletionResult.VideoDeletionFailure
+                {
+                    VideoId = videoId,
+                    Title = currentVideo?.Title ?? "Unknown",
+                    Error = ex.Message
+                });
+            }
+        }
+
+        if (deletedIds.Count > 0)
+        {
+            await _unitOfWork.SaveChangesAsync();
+            _searchService.InvalidateFacetsCache();
+
+            foreach (var videoId in deletedIds)
+            {
+                await NotifyAsync(notifier => notifier.VideoDeletedAsync(videoId));
+            }
+        }
+
+        return result;
+    }
+
+    private async Task DeleteVideoInternalAsync(Video video, bool deleteFiles, CancellationToken cancellationToken)
+    {
+        if (deleteFiles)
+        {
+            await MoveMediaToRecycleBinAsync(video, cancellationToken).ConfigureAwait(false);
+        }
+
+        await _videoRepository.DeleteAsync(video);
+    }
+
+    private async Task MoveMediaToRecycleBinAsync(Video video, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var videoRoot = await _libraryPathManager.GetVideoRootAsync(cancellationToken).ConfigureAwait(false);
+            var metadataRoot = await _libraryPathManager.GetMetadataRootAsync(cancellationToken).ConfigureAwait(false);
+            var recycleRoot = Path.Combine(videoRoot, RecycleBinFolderName);
+            _libraryPathManager.EnsureDirectoryExists(recycleRoot);
+
+            MoveFileToRecycleBin(ResolveFullPath(video.FilePath, videoRoot), recycleRoot);
+            MoveFileToRecycleBin(ResolveFullPath(video.NfoPath, metadataRoot), recycleRoot);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to move media for video {VideoId} to recycle bin", video.Id);
+        }
+    }
+
+    private static string? ResolveFullPath(string? storedPath, string baseRoot)
+    {
+        if (string.IsNullOrWhiteSpace(storedPath))
+        {
+            return null;
+        }
+
+        var candidates = new List<string>();
+
+        if (Path.IsPathRooted(storedPath))
+        {
+            candidates.Add(storedPath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(baseRoot))
+        {
+            candidates.Add(Path.Combine(baseRoot, storedPath));
+        }
+
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                var fullPath = Path.GetFullPath(candidate);
+                if (File.Exists(fullPath))
+                {
+                    return fullPath;
+                }
+            }
+            catch
+            {
+                // Ignore malformed paths.
+            }
+        }
+
+        return null;
+    }
+
+    private void MoveFileToRecycleBin(string? fullPath, string recycleRoot)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || !File.Exists(fullPath))
+        {
+            return;
+        }
+
+        try
+        {
+            _libraryPathManager.EnsureDirectoryExists(recycleRoot);
+
+            var fileName = Path.GetFileName(fullPath);
+            var destination = Path.Combine(recycleRoot, fileName);
+
+            if (File.Exists(destination))
+            {
+                var name = Path.GetFileNameWithoutExtension(fileName);
+                var extension = Path.GetExtension(fileName);
+                destination = Path.Combine(recycleRoot, $"{name}_{DateTime.UtcNow:yyyyMMddHHmmssfff}{extension}");
+            }
+
+#if NET6_0_OR_GREATER
+            File.Move(fullPath, destination, false);
+#else
+            File.Move(fullPath, destination);
+#endif
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to move file {FilePath} to recycle bin", fullPath);
         }
     }
 
@@ -140,7 +385,7 @@ public class VideoService : IVideoService
             includeGenres: true,
             includeTags: true,
             includeFeaturedArtists: true,
-            includeCollections: false,
+            includeCollections: true,
             applyPaging: true);
 
         var countSpecification = new VideoQuerySpecification(

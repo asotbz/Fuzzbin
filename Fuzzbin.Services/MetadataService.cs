@@ -253,6 +253,8 @@ public class MetadataService : IMetadataService
                 return null;
             }
 
+            var confidence = ImvdbMapper.ComputeMatchConfidence(trimmedArtist, trimmedTitle, bestMatch);
+
             var videoResponse = await _imvdbApi.GetVideoAsync(
                 bestMatch.Id.ToString(CultureInfo.InvariantCulture),
                 cancellationToken).ConfigureAwait(false);
@@ -263,7 +265,16 @@ public class MetadataService : IMetadataService
                 return null;
             }
 
-            var metadata = ImvdbMapper.MapToMetadata(videoResponse, bestMatch);
+            var metadata = ImvdbMapper.MapToMetadata(videoResponse, bestMatch, confidence);
+
+            if (confidence < 0.9)
+            {
+                _logger.LogInformation(
+                    "IMVDb match confidence {Confidence:P0} below automatic update threshold for {Artist} - {Title}",
+                    confidence,
+                    trimmedArtist,
+                    trimmedTitle);
+            }
 
             var options = _imvdbOptions.CurrentValue;
             var expiration = options.CacheDuration <= TimeSpan.Zero
@@ -637,20 +648,30 @@ public class MetadataService : IMetadataService
                 var imvdbMetadata = await GetImvdbMetadataAsync(video.Artist, video.Title, cancellationToken);
                 if (imvdbMetadata != null)
                 {
-                    video.ImvdbId = imvdbMetadata.ImvdbId?.ToString();
-                    video.Director ??= imvdbMetadata.Director;
-                    video.ProductionCompany ??= imvdbMetadata.ProductionCompany;
-                    video.Publisher ??= imvdbMetadata.RecordLabel;
-                    video.Description ??= imvdbMetadata.Description;
-                    video.Year ??= imvdbMetadata.Year;
-                    
-                    // Convert featured artists string to entities
-                    if (!string.IsNullOrEmpty(imvdbMetadata.FeaturedArtists) && !video.FeaturedArtists.Any())
+                    if (imvdbMetadata.Confidence >= 0.9)
                     {
-                        foreach (var artistName in imvdbMetadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        video.ImvdbId = imvdbMetadata.ImvdbId?.ToString();
+                        video.Director ??= imvdbMetadata.Director;
+                        video.ProductionCompany ??= imvdbMetadata.ProductionCompany;
+                        video.Publisher ??= imvdbMetadata.RecordLabel;
+                        video.Description ??= imvdbMetadata.Description;
+                        video.Year ??= imvdbMetadata.Year;
+                        
+                        // Convert featured artists string to entities
+                        if (!string.IsNullOrEmpty(imvdbMetadata.FeaturedArtists) && !video.FeaturedArtists.Any())
                         {
-                            video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
+                            foreach (var artistName in imvdbMetadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
+                            }
                         }
+                    }
+                    else
+                    {
+                        _logger.LogInformation(
+                            "Skipping automatic IMVDb metadata apply for video {VideoId} due to low confidence {Confidence:P0}",
+                            video.Id,
+                            imvdbMetadata.Confidence);
                     }
                 }
                 

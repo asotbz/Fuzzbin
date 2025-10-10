@@ -1,0 +1,284 @@
+@using System.Collections.Generic
+@using System.Linq
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using MudBlazor
+@inject ICollectionService CollectionService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @if (Action == BulkCollectionAction.Add)
+            {
+                <text>Add @SelectedVideos.Count video(s) to a collection</text>
+            }
+            else
+            {
+                <text>Remove @SelectedVideos.Count video(s) from collections</text>
+            }
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+            @if (Action == BulkCollectionAction.Add)
+            {
+                <MudRadioGroup @bind-Value="_addMode" Row="true">
+                    <MudRadio Value="@AddMode.UseExisting" Color="Color.Primary">Existing collection</MudRadio>
+                    <MudRadio Value="@AddMode.CreateNew" Color="Color.Primary">Create new</MudRadio>
+                </MudRadioGroup>
+
+                @if (_addMode == AddMode.UseExisting)
+                {
+                    <MudSelect Label="Select collection"
+                               HelperText="Only manual and playlist collections can accept videos."
+                               @bind-Value="_selectedCollectionId"
+                               Dense="true"
+                               Variant="Variant.Outlined">
+                        @foreach (var collection in _availableCollections.Where(c => IsEligibleForAdd(c)))
+                        {
+                            <MudSelectItem Value="@collection.Id">@collection.Name (@collection.VideoCount)</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_newCollectionName"
+                                  Label="Collection name"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  RequiredError="Please enter a name for the new collection." />
+                    <MudSelect T="CollectionType"
+                               @bind-Value="_newCollectionType"
+                               Label="Collection type"
+                               Variant="Variant.Outlined"
+                               Dense="true">
+                        <MudSelectItem Value="CollectionType.Manual">Manual</MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Playlist">Playlist</MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Album">Album</MudSelectItem>
+                        <MudSelectItem Value="CollectionType.Series">Series</MudSelectItem>
+                    </MudSelect>
+                }
+            }
+            else
+            {
+                if (_removeCandidates.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info">
+                        None of the selected videos are part of a collection.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudSelect T="Guid"
+                               Label="Collections to update"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               MultiSelection="true"
+                               SelectedValues="_selectedCollectionIds"
+                               SelectedValuesChanged="@OnSelectedCollectionsChanged">
+                        @foreach (var option in _removeCandidates)
+                        {
+                            <MudSelectItem Value="@option.CollectionId">@option.Name (@option.VideoCount)</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_isProcessing">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="ApplyAsync"
+                   Disabled="_isProcessing || !CanSubmit">
+            @(_isProcessing ? "Working..." : "Apply")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public List<Video> SelectedVideos { get; set; } = new();
+    [Parameter] public BulkCollectionAction Action { get; set; }
+
+    private List<Collection> _availableCollections = new();
+    private List<CollectionSummary> _removeCandidates = new();
+    private Guid? _selectedCollectionId;
+    private HashSet<Guid> _selectedCollectionIds = new();
+    private string _newCollectionName = string.Empty;
+    private CollectionType _newCollectionType = CollectionType.Manual;
+    private AddMode _addMode = AddMode.UseExisting;
+    private bool _isProcessing;
+    private string? _errorMessage;
+
+    private bool CanSubmit =>
+        Action switch
+        {
+            BulkCollectionAction.Add => _addMode == AddMode.CreateNew
+                ? !string.IsNullOrWhiteSpace(_newCollectionName)
+                : _selectedCollectionId.HasValue,
+            BulkCollectionAction.Remove => _selectedCollectionIds.Count > 0,
+            _ => false
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var collections = await CollectionService.GetAllCollectionsAsync();
+        _availableCollections = collections
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (Action == BulkCollectionAction.Add)
+        {
+            _selectedCollectionId = _availableCollections.FirstOrDefault(IsEligibleForAdd)?.Id;
+        }
+        else
+        {
+            var selectedCollectionIds = SelectedVideos
+                .SelectMany(v => v.CollectionVideos.Select(cv => cv.CollectionId))
+                .Distinct()
+                .ToHashSet();
+
+            _removeCandidates = _availableCollections
+                .Where(c => selectedCollectionIds.Contains(c.Id))
+                .Select(c => new CollectionSummary(c.Id, c.Name, c.VideoCount))
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _selectedCollectionIds = _removeCandidates.Select(c => c.CollectionId).ToHashSet();
+        }
+    }
+
+    private bool IsEligibleForAdd(Collection collection)
+    {
+        return collection.Type is CollectionType.Manual
+            or CollectionType.Playlist
+            or CollectionType.Series
+            or CollectionType.Album;
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (!CanSubmit || _isProcessing)
+        {
+            return;
+        }
+
+        _isProcessing = true;
+        _errorMessage = null;
+
+        try
+        {
+            switch (Action)
+            {
+                case BulkCollectionAction.Add:
+                    await ApplyAddAsync();
+                    break;
+                case BulkCollectionAction.Remove:
+                    await ApplyRemoveAsync();
+                    break;
+            }
+
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            Snackbar.Add($"Collection update failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ApplyAddAsync()
+    {
+        Guid targetCollectionId;
+
+        if (_addMode == AddMode.CreateNew)
+        {
+            if (string.IsNullOrWhiteSpace(_newCollectionName))
+            {
+                throw new InvalidOperationException("Collection name is required.");
+            }
+
+            var created = await CollectionService.CreateCollectionAsync(_newCollectionName.Trim(), type: _newCollectionType);
+            targetCollectionId = created.Id;
+            Snackbar.Add($"Created collection '{created.Name}'", Severity.Success);
+        }
+        else
+        {
+            if (!_selectedCollectionId.HasValue)
+            {
+                throw new InvalidOperationException("Select a collection to continue.");
+            }
+
+            targetCollectionId = _selectedCollectionId.Value;
+        }
+
+        var added = 0;
+        foreach (var video in SelectedVideos)
+        {
+            if (await CollectionService.AddVideoToCollectionAsync(targetCollectionId, video.Id))
+            {
+                added++;
+            }
+        }
+
+        Snackbar.Add($"Added {added} video(s) to the collection.", Severity.Success);
+    }
+
+    private async Task ApplyRemoveAsync()
+    {
+        if (_selectedCollectionIds.Count == 0)
+        {
+            throw new InvalidOperationException("Select at least one collection to update.");
+        }
+
+        var updates = 0;
+        foreach (var collectionId in _selectedCollectionIds)
+        {
+            foreach (var video in SelectedVideos)
+            {
+                if (await CollectionService.RemoveVideoFromCollectionAsync(collectionId, video.Id))
+                {
+                    updates++;
+                }
+            }
+        }
+
+        Snackbar.Add($"Updated collections for {updates} video entries.", Severity.Success);
+    }
+
+    private void Cancel() => Dialog.Cancel();
+
+    private Task OnSelectedCollectionsChanged(IEnumerable<Guid> values)
+    {
+        _selectedCollectionIds = values is HashSet<Guid> set
+            ? set
+            : values.ToHashSet();
+        return Task.CompletedTask;
+    }
+
+    private enum AddMode
+    {
+        UseExisting,
+        CreateNew
+    }
+
+    public enum BulkCollectionAction
+    {
+        Add,
+        Remove
+    }
+
+    private sealed record CollectionSummary(Guid CollectionId, string Name, int VideoCount);
+}

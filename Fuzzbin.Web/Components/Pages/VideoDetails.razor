@@ -4,14 +4,12 @@
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Services.Interfaces
 @using Fuzzbin.Services.Models
-@using Fuzzbin.Web.Components.Dialogs
 @using static Fuzzbin.Services.Interfaces.IPlaylistService
 @inject IVideoService VideoService
 @inject IThumbnailService ThumbnailService
 @inject ISnackbar Snackbar
 @inject IPlaylistService PlaylistService
 @inject NavigationManager Navigation
-@inject IDialogService DialogService
 @inject ISourceVerificationService SourceVerificationService
 
 <PageTitle>Video Details - Fuzzbin</PageTitle>
@@ -62,68 +60,165 @@
                 <MudItem xs="12" md="8">
                     <div class="d-flex justify-space-between align-center mb-2">
                         <MudText Typo="Typo.h5">Metadata</MudText>
-                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="OpenEditor">
-                            Edit
-                        </MudButton>
+                        @if (_isEditing)
+                        {
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Save"
+                                           Disabled="_isSaving"
+                                           OnClick="SaveEditAsync">
+                                    @(_isSaving ? "Saving..." : "Save")
+                                </MudButton>
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Default"
+                                           Disabled="_isSaving"
+                                           OnClick="CancelEdit">
+                                    Cancel
+                                </MudButton>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="BeginEdit">
+                                Edit
+                            </MudButton>
+                        }
                     </div>
-                    <MudGrid>
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Album</MudText>
-                            <MudText>@(_video.Album ?? "—")</MudText>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Format</MudText>
-                            <MudText>@(_video.Format ?? "—")</MudText>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Resolution</MudText>
-                            <MudText>@(_video.Resolution ?? "—")</MudText>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Bitrate</MudText>
-                            <MudText>@(_video.Bitrate?.ToString("N0") ?? "—")</MudText>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Imported</MudText>
-                            <MudText>@(_video.ImportedAt?.ToLocalTime().ToString("g") ?? "—")</MudText>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Last Played</MudText>
-                            <MudText>@(_video.LastPlayedAt?.ToLocalTime().ToString("g") ?? "—")</MudText>
-                        </MudItem>
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Description</MudText>
-                            <MudText>@(_video.Description ?? "No description available.")</MudText>
-                        </MudItem>
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Genres</MudText>
-                            @if (_video.Genres?.Any() == true)
-                            {
-                                foreach (var genre in _video.Genres)
+
+                    @if (_isEditing)
+                    {
+                        <MudForm @ref="_editForm" Model="_editModel">
+                            <MudGrid>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.Title" Label="Title" Required="true" RequiredError="Title is required" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.Artist" Label="Artist" Required="true" RequiredError="Artist is required" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.Album" Label="Album" />
+                                </MudItem>
+                                <MudItem xs="12" sm="3">
+                                    <MudNumericField T="int?" @bind-Value="_editModel.Year" Label="Year" Min="1900" Max="2100" Immediate="true" />
+                                </MudItem>
+                                <MudItem xs="12" sm="3">
+                                    <MudNumericField T="int?" @bind-Value="_editModel.Bitrate" Label="Bitrate (kbps)" Min="0" Immediate="true" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.Publisher" Label="Label / Publisher" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.ProductionCompany" Label="Production Company" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.Format" Label="Format" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_editModel.Resolution" Label="Resolution" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="_editModel.SourceIdentifier" Label="Primary Source (URL or ID)" HelperText="Provide at least one source identifier." />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="_editModel.Description" Label="Description" Lines="4" TextArea="true" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Genres</MudText>
+                                    @if (_video.Genres?.Any() == true)
+                                    {
+                                        foreach (var genre in _video.Genres)
+                                        {
+                                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-1 mb-1">@genre.Name</MudChip>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <MudText>—</MudText>
+                                    }
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Tags</MudText>
+                                    @if (_video.Tags?.Any() == true)
+                                    {
+                                        foreach (var tag in _video.Tags)
+                                        {
+                                            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Class="mr-1 mb-1">@tag.Name</MudChip>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <MudText>—</MudText>
+                                    }
+                                </MudItem>
+                            </MudGrid>
+                        </MudForm>
+                        @if (!string.IsNullOrWhiteSpace(_editError))
+                        {
+                            <MudAlert Severity="Severity.Warning" Class="mt-2">@_editError</MudAlert>
+                        }
+                    }
+                    else if (_video != null)
+                    {
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Album</MudText>
+                                <MudText>@(_video.Album ?? "—")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Format</MudText>
+                                <MudText>@(_video.Format ?? "—")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Resolution</MudText>
+                                <MudText>@(_video.Resolution ?? "—")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Bitrate</MudText>
+                                <MudText>@(_video.Bitrate?.ToString("N0") ?? "—")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Imported</MudText>
+                                <MudText>@(_video.ImportedAt?.ToLocalTime().ToString("g") ?? "—")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Last Played</MudText>
+                                <MudText>@(_video.LastPlayedAt?.ToLocalTime().ToString("g") ?? "—")</MudText>
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Description</MudText>
+                                <MudText>@(_video.Description ?? "No description available.")</MudText>
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Genres</MudText>
+                                @if (_video.Genres?.Any() == true)
                                 {
-                                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-1 mb-1">@genre.Name</MudChip>
+                                    foreach (var genre in _video.Genres)
+                                    {
+                                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-1 mb-1">@genre.Name</MudChip>
+                                    }
                                 }
-                            }
-                            else
-                            {
-                                <MudText>—</MudText>
-                            }
-                        </MudItem>
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Tags</MudText>
-                            @if (_video.Tags?.Any() == true)
-                            {
-                                foreach (var tag in _video.Tags)
+                                else
                                 {
-                                    <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Class="mr-1 mb-1">@tag.Name</MudChip>
+                                    <MudText>—</MudText>
                                 }
-                            }
-                            else
-                            {
-                                <MudText>—</MudText>
-                            }
-                        </MudItem>
-                    </MudGrid>
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Tags</MudText>
+                                @if (_video.Tags?.Any() == true)
+                                {
+                                    foreach (var tag in _video.Tags)
+                                    {
+                                        <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Class="mr-1 mb-1">@tag.Name</MudChip>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText>—</MudText>
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    }
 
                     <MudDivider Class="my-4" />
 
@@ -221,6 +316,14 @@
     private bool _isVerifying;
     private string _customSourceUrl = string.Empty;
     private string _overrideNotes = string.Empty;
+    private bool _isEditing;
+    private bool _isSaving;
+    private MudForm? _editForm;
+    private readonly VideoEditModel _editModel = new();
+    private string? _editError;
+
+    [SupplyParameterFromQuery(Name = "edit")]
+    public bool StartInEditMode { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -240,6 +343,10 @@
             else
             {
                 await LoadVerificationAsync();
+                if (StartInEditMode && !_isEditing)
+                {
+                    BeginEdit();
+                }
             }
         }
         catch (Exception ex)
@@ -323,7 +430,7 @@
             var request = new SourceVerificationRequest
             {
                 SourceUrl = string.IsNullOrWhiteSpace(_customSourceUrl) ? null : _customSourceUrl,
-                ConfidenceThreshold = 0.75
+                ConfidenceThreshold = 0.9
             };
 
             var result = await SourceVerificationService.VerifyVideoAsync(_video, request);
@@ -491,29 +598,119 @@
         }
     }
 
-    private async Task OpenEditor()
+    private void BeginEdit()
     {
         if (_video == null)
         {
             return;
         }
 
-        var parameters = new DialogParameters
-        {
-            { nameof(VideoEditorDialog.Video), _video }
-        };
+        _editModel.LoadFrom(_video);
+        _editError = null;
+        _isEditing = true;
+        StateHasChanged();
+    }
 
-        var dialog = await DialogService.ShowAsync<VideoEditorDialog>("Edit Video", parameters, new DialogOptions
-        {
-            FullWidth = true,
-            MaxWidth = MaxWidth.Small
-        });
+    private void CancelEdit()
+    {
+        _isEditing = false;
+        _isSaving = false;
+        _editError = null;
+        StartInEditMode = false;
+    }
 
-        var result = await dialog.Result;
-        if (result is { Canceled: false, Data: Video updated })
+    private async Task SaveEditAsync()
+    {
+        if (_video == null || _isSaving)
         {
-            _video = updated;
-            Snackbar.Add("Video updated", Severity.Success);
+            return;
+        }
+
+        if (_editForm != null)
+        {
+            await _editForm.Validate();
+            if (!_editForm.IsValid)
+            {
+                return;
+            }
+        }
+
+        if (!_editModel.HasSource(_video))
+        {
+            _editError = "At least one source identifier (file path or streaming ID) is required.";
+            return;
+        }
+
+        _isSaving = true;
+        _editError = null;
+
+        try
+        {
+            _editModel.ApplyTo(_video);
+            _video = await VideoService.UpdateVideoAsync(_video);
+            Snackbar.Add("Metadata updated", Severity.Success);
+            _isEditing = false;
+            StartInEditMode = false;
+        }
+        catch (Exception ex)
+        {
+            _editError = ex.Message;
+            Snackbar.Add($"Failed to update metadata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private sealed class VideoEditModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string? Album { get; set; }
+        public int? Year { get; set; }
+        public int? Bitrate { get; set; }
+        public string? Publisher { get; set; }
+        public string? ProductionCompany { get; set; }
+        public string? Format { get; set; }
+        public string? Resolution { get; set; }
+        public string? Description { get; set; }
+        public string? SourceIdentifier { get; set; }
+
+        public void LoadFrom(Video video)
+        {
+            Title = video.Title;
+            Artist = video.Artist;
+            Album = video.Album;
+            Year = video.Year;
+            Bitrate = video.Bitrate;
+            Publisher = video.Publisher;
+            ProductionCompany = video.ProductionCompany;
+            Format = video.Format;
+            Resolution = video.Resolution;
+            Description = video.Description;
+            SourceIdentifier = video.YouTubeId;
+        }
+
+        public void ApplyTo(Video video)
+        {
+            video.Title = Title.Trim();
+            video.Artist = Artist.Trim();
+            video.Album = string.IsNullOrWhiteSpace(Album) ? null : Album.Trim();
+            video.Year = Year;
+            video.Bitrate = Bitrate;
+            video.Publisher = string.IsNullOrWhiteSpace(Publisher) ? null : Publisher.Trim();
+            video.ProductionCompany = string.IsNullOrWhiteSpace(ProductionCompany) ? null : ProductionCompany.Trim();
+            video.Format = string.IsNullOrWhiteSpace(Format) ? null : Format.Trim();
+            video.Resolution = string.IsNullOrWhiteSpace(Resolution) ? null : Resolution.Trim();
+            video.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+            video.YouTubeId = string.IsNullOrWhiteSpace(SourceIdentifier) ? null : SourceIdentifier.Trim();
+            video.UpdatedAt = DateTime.UtcNow;
+        }
+
+        public bool HasSource(Video video)
+        {
+            return !string.IsNullOrWhiteSpace(SourceIdentifier) || !string.IsNullOrWhiteSpace(video.FilePath);
         }
     }
 }

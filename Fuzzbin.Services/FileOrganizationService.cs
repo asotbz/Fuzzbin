@@ -315,7 +315,7 @@ public class FileOrganizationService : IFileOrganizationService
             .FirstOrDefaultAsync(c => c.Key == "NamingPattern" && c.Category == "Organization")
             .ConfigureAwait(false);
 
-        return patternConfig?.Value ?? "{artist_safe}/{year} - {title_safe}.{format}";
+        return patternConfig?.Value ?? "{artist}/{title}.{format}";
     }
 
     private string SanitizeRelativePath(string relativePath)

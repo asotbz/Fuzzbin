@@ -390,77 +390,95 @@
     {
         try
         {
+            var videosToUpdate = new List<Video>();
+
             foreach (var video in SelectedVideos)
             {
-                // Update basic fields
                 if (!string.IsNullOrWhiteSpace(_artist))
                 {
                     video.Artist = GetNewValue(video.Artist, _artist);
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_album))
                 {
                     video.Album = GetNewValue(video.Album, _album);
                 }
-                
+
                 if (_year.HasValue)
                 {
                     video.Year = _year;
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_director))
                 {
                     video.Director = GetNewValue(video.Director, _director);
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_publisher))
                 {
                     video.Publisher = GetNewValue(video.Publisher, _publisher);
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_productionCompany))
                 {
                     video.ProductionCompany = GetNewValue(video.ProductionCompany, _productionCompany);
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_imvdbId))
                 {
                     video.ImvdbId = _imvdbId;
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_youtubeId))
                 {
                     video.YouTubeId = _youtubeId;
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_musicBrainzId))
                 {
                     video.MusicBrainzRecordingId = _musicBrainzId;
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(_description))
                 {
                     video.Description = GetNewValue(video.Description, _description);
                 }
-                
-                // Update genres
+
                 if (_genres.Any())
                 {
-                    if (_updateMode == "replace")
+                    video.Genres ??= new List<Genre>();
+                    if (_updateMode != "append")
                     {
-                        // Clear existing genres and add new ones
-                        video.Genres?.Clear();
+                        video.Genres.Clear();
                     }
-                    
-                    // Note: Genre management would need proper implementation
-                    // This is a simplified version
+                    foreach (var genreName in _genres)
+                    {
+                        if (video.Genres.All(g => !string.Equals(g.Name, genreName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            video.Genres.Add(new Genre { Name = genreName });
+                        }
+                    }
                 }
-                
+
                 video.UpdatedAt = DateTime.UtcNow;
-                await VideoService.UpdateVideoAsync(video);
+                videosToUpdate.Add(video);
             }
-            
-            Snackbar.Add($"Successfully updated {SelectedVideos.Count} video(s)", Severity.Success);
+
+            var updateResult = await VideoService.UpdateVideosAsync(videosToUpdate);
+
+            if (updateResult.UpdatedCount > 0)
+            {
+                Snackbar.Add($"Updated {updateResult.UpdatedCount} video(s)", Severity.Success);
+            }
+
+            if (updateResult.HasFailures)
+            {
+                foreach (var failure in updateResult.Failures)
+                {
+                    Snackbar.Add($"Failed to update video {failure.Title}: {failure.Error}", Severity.Warning);
+                }
+            }
+
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)

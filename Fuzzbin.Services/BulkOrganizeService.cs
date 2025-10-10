@@ -26,7 +26,7 @@ namespace Fuzzbin.Services
         
         public class OrganizeOptions
         {
-            public string Pattern { get; set; } = "{artist}/{year}/{title}";
+            public string Pattern { get; set; } = "{artist}/{title}.{format}";
             public bool CreateDirectories { get; set; } = true;
             public bool MoveFiles { get; set; } = false; // false = copy, true = move
             public bool RenameOnly { get; set; } = false; // Just rename without moving to different directory
@@ -283,7 +283,8 @@ namespace Fuzzbin.Services
                 { "{month}", video.CreatedAt.ToString("MM") },
                 { "{day}", video.CreatedAt.ToString("dd") },
                 { "{id}", video.Id.ToString() },
-                { "{original_name}", Path.GetFileNameWithoutExtension(video.FilePath) }
+                { "{original_name}", Path.GetFileNameWithoutExtension(video.FilePath) },
+                { "{format}", ResolveFormat(video) }
             };
             
             // Add custom variables
@@ -307,6 +308,22 @@ namespace Fuzzbin.Services
             }
             
             return result;
+        }
+
+        private static string ResolveFormat(Video video)
+        {
+            if (!string.IsNullOrWhiteSpace(video.Format))
+            {
+                return video.Format.Trim().TrimStart('.').ToLowerInvariant();
+            }
+
+            var extension = Path.GetExtension(video.FilePath ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(extension))
+            {
+                return extension.Trim().TrimStart('.').ToLowerInvariant();
+            }
+
+            return "mp4";
         }
         
         private string SanitizePath(string path)

@@ -1,0 +1,118 @@
+@using System.Linq
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Services.Models
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-2">Confirm Delete</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            You are about to delete @Videos.Count video(s). Media files will be moved to a recycle folder unless you opt out.
+        </MudText>
+
+        <MudTable Items="Videos" Dense="true" Hover="true" Class="mb-3">
+            <HeaderContent>
+                <MudTh>Title</MudTh>
+                <MudTh>Artist</MudTh>
+                <MudTh>File Path</MudTh>
+                <MudTh>NFO Path</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Title">@context.Title</MudTd>
+                <MudTd DataLabel="Artist">@context.Artist</MudTd>
+                <MudTd DataLabel="File Path">@(string.IsNullOrWhiteSpace(context.FilePath) ? "—" : context.FilePath)</MudTd>
+                <MudTd DataLabel="NFO Path">@(string.IsNullOrWhiteSpace(context.NfoPath) ? "—" : context.NfoPath)</MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <MudSwitch @bind-Value="_moveToRecycleBin"
+                   Color="Color.Primary"
+                   Label="Move media files to recycle bin (recommended)" />
+
+        @if (_result != null)
+        {
+            <MudAlert Severity="@(_result.HasFailures ? Severity.Warning : Severity.Success)" Class="mt-3">
+                Deleted @_result.DeletedCount of @_result.RequestedCount video(s).
+                @if (_result.HasFailures)
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var failure in _result.Failures)
+                        {
+                            <MudListItem T="string" Icon="@Icons.Material.Filled.Warning">@failure.Title: @failure.Error</MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_isDeleting">Cancel</MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   Disabled="_isDeleting"
+                   OnClick="DeleteAsync"
+                   StartIcon="@Icons.Material.Filled.Delete">
+            @if (_isDeleting)
+            {
+                <MudProgressCircular Indeterminate="true" Class="mr-2" Diameter="16" />
+            }
+            Delete
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _moveToRecycleBin = true;
+    private bool _isDeleting;
+    private VideoDeletionResult? _result;
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public List<Video> Videos { get; set; } = new();
+
+    [Inject] private IVideoService VideoService { get; set; } = default!;
+    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+
+    private async Task DeleteAsync()
+    {
+        if (_isDeleting)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+        StateHasChanged();
+
+        try
+        {
+            _result = await VideoService.DeleteVideosAsync(Videos.Select(v => v.Id), _moveToRecycleBin);
+
+            if (_result.DeletedCount > 0)
+            {
+                Snackbar.Add($"Deleted {_result.DeletedCount} video(s)", Severity.Success);
+            }
+
+            if (_result.HasFailures)
+            {
+                foreach (var failure in _result.Failures)
+                {
+                    Snackbar.Add($"Failed to delete {failure.Title}: {failure.Error}", Severity.Warning);
+                }
+            }
+
+            Dialog.Close(DialogResult.Ok(_result));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting videos: {ex.Message}", Severity.Error);
+            _result = null;
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

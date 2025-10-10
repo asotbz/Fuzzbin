@@ -3,11 +3,14 @@
 @using System.Linq
 @using System.Threading
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Logging
 @using Microsoft.AspNetCore.SignalR.Client
 @using MudBlazor
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Core.Specifications
 @using Fuzzbin.Core.Specifications.Queries
+@using Fuzzbin.Services.Models
+@using Fuzzbin.Core.Interfaces
 @using SortDir = Fuzzbin.Core.Specifications.SortDirection;
 @using Fuzzbin.Services
 @using Fuzzbin.Services.Interfaces
@@ -20,10 +23,12 @@
 @inject ISearchService SearchService
 @inject IPlaylistService PlaylistService
 @inject IThumbnailService ThumbnailService
+@inject IMetadataService MetadataService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject KeyboardShortcutService KeyboardService
+@inject ILogger<Videos> Logger
 @implements IAsyncDisposable
 
 <PageTitle>Video Library - Fuzzbin</PageTitle>
@@ -120,17 +125,26 @@
 
                         @if (HasSelection)
                         {
-                            <MudStack Row="true" Spacing="2" Class="mb-3 videos-selection-actions">
+                            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-3 videos-selection-actions">
                                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="PlaySelected">
                                     Play Selected
                                 </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Edit" OnClick="OpenMetadataEditDialog">
+                                    Edit Metadata
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.LibraryAdd" OnClick="@(() => OpenCollectionDialog(true))">
+                                    Add to Collection
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.RemoveCircle" OnClick="@(() => OpenCollectionDialog(false))">
+                                    Remove from Collection
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshSelectedMetadata">
+                                    Refresh Metadata
+                                </MudButton>
                                 <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="OpenOrganizeDialog">
-                                    Organize
+                                    Organize Files
                                 </MudButton>
-                                <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Label" OnClick="OpenTagEditDialog">
-                                    Edit Tags
-                                </MudButton>
-                                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.Description" OnClick="OpenNfoExportDialog">
+                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Description" OnClick="OpenNfoExportDialog">
                                     Export NFO
                                 </MudButton>
                                 <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelected">
@@ -722,52 +736,41 @@
         Navigation.NavigateTo($"/videos/{video.Id}");
     }
 
-    private async Task OpenEditorDialog(Video video)
+    private void OpenEditorDialog(Video video)
     {
-        var parameters = new DialogParameters
-        {
-            { nameof(VideoEditorDialog.Video), video }
-        };
-
-        var dialog = await DialogService.ShowAsync<VideoEditorDialog>("Edit Video", parameters, new DialogOptions
-        {
-            FullWidth = true,
-            MaxWidth = MaxWidth.Small
-        });
-
-        var result = await dialog.Result;
-        if (result is { Canceled: false, Data: Video updated })
-        {
-            await OnVideoUpdated(updated);
-        }
+        Navigation.NavigateTo($"/videos/{video.Id}?edit=true");
     }
 
     private async Task DeleteVideo(Video video)
     {
-        var parameters = new DialogParameters
+        var videos = new List<Video> { video };
+        var result = await ShowDeleteDialogAsync(videos);
+        if (result == null)
         {
-            { "ContentText", $"Are you sure you want to delete '{video.Title}'?" },
-            { "ButtonText", "Delete" },
-            { "Color", Color.Error }
-        };
+            return;
+        }
 
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Video", parameters);
-        var result = await dialog.Result;
+        var failedIds = new HashSet<Guid>(result.Failures.Select(f => f.VideoId));
+        var deletedIds = videos
+            .Where(v => !failedIds.Contains(v.Id))
+            .Select(v => v.Id)
+            .ToList();
 
-        if (result is { Canceled: false })
+        foreach (var deletedId in deletedIds)
         {
-            try
-            {
-                await VideoService.DeleteVideoAsync(video.Id);
-                _selectedVideoIds.Remove(video.Id);
-                _videoCache.Remove(video.Id);
-                Snackbar.Add($"'{video.Title}' deleted", Severity.Success);
-                await LoadVideosAsync();
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Failed to delete video: {ex.Message}", Severity.Error);
-            }
+            _selectedVideoIds.Remove(deletedId);
+            _videoCache.Remove(deletedId);
+        }
+
+        if (deletedIds.Count > 0)
+        {
+            _videos.RemoveAll(v => deletedIds.Contains(v.Id));
+            StateHasChanged();
+        }
+
+        if (deletedIds.Count > 0)
+        {
+            await LoadVideosAsync();
         }
     }
 
@@ -815,7 +818,7 @@
         }
     }
 
-    private async Task OpenTagEditDialog()
+    private async Task OpenMetadataEditDialog()
     {
         var videos = await ResolveSelectedVideosAsync();
         if (videos.Count == 0)
@@ -830,13 +833,103 @@
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<BulkTagEditDialog>("Edit Tags", parameters, options);
+        var dialog = await DialogService.ShowAsync<BulkTagEditDialog>("Edit Metadata", parameters, options);
         var result = await dialog.Result;
 
         if (result is { Canceled: false })
         {
             await LoadVideosAsync();
         }
+    }
+
+    private async Task OpenCollectionDialog(bool isAdd)
+    {
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Select videos to update collections", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "SelectedVideos", videos },
+            {
+                "Action",
+                isAdd
+                    ? BulkCollectionDialog.BulkCollectionAction.Add
+                    : BulkCollectionDialog.BulkCollectionAction.Remove
+            }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var title = isAdd ? "Add to Collection" : "Remove from Collection";
+        var dialog = await DialogService.ShowAsync<BulkCollectionDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadVideosAsync();
+        }
+    }
+
+    private async Task RefreshSelectedMetadata()
+    {
+        if (!HasSelection)
+        {
+            Snackbar.Add("No videos selected", Severity.Info);
+            return;
+        }
+
+        var confirmParameters = new DialogParameters
+        {
+            { "ContentText", $"Refresh metadata for {_selectedVideoIds.Count} selected video(s)?" },
+            { "ButtonText", "Refresh" },
+            { "Color", Color.Primary }
+        };
+
+        var confirmDialog = await DialogService.ShowAsync<ConfirmDialog>("Refresh Metadata", confirmParameters);
+        var confirmation = await confirmDialog.Result;
+        if (confirmation is { Canceled: true })
+        {
+            return;
+        }
+
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Unable to resolve selected videos", Severity.Error);
+            return;
+        }
+
+        var refreshed = 0;
+        var failures = new List<string>();
+
+        foreach (var video in videos)
+        {
+            try
+            {
+                var result = await MetadataService.EnrichVideoMetadataAsync(video, fetchOnlineMetadata: true);
+                _videoCache[result.Id] = result;
+                refreshed++;
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{video.Title}: {ex.Message}");
+            }
+        }
+
+        if (refreshed > 0)
+        {
+            Snackbar.Add($"Refreshed metadata for {refreshed} video(s).", Severity.Success);
+        }
+
+        if (failures.Count > 0)
+        {
+            Snackbar.Add($"Failed to refresh {failures.Count} video(s).", Severity.Warning);
+        }
+
+        await LoadVideosAsync(clearSelection: false);
     }
 
     private async Task OpenNfoExportDialog()
@@ -866,34 +959,66 @@
             return;
         }
 
+        var videos = await ResolveSelectedVideosAsync();
+        if (videos.Count == 0)
+        {
+            Snackbar.Add("Unable to resolve selected videos", Severity.Error);
+            return;
+        }
+
+        var result = await ShowDeleteDialogAsync(videos);
+        if (result == null)
+        {
+            return;
+        }
+
+        var failed = new HashSet<Guid>(result.Failures.Select(f => f.VideoId));
+        foreach (var video in videos)
+        {
+            if (!failed.Contains(video.Id))
+            {
+                _videoCache.Remove(video.Id);
+                _selectedVideoIds.Remove(video.Id);
+            }
+        }
+
+        var deletedIds = videos
+            .Where(v => !failed.Contains(v.Id))
+            .Select(v => v.Id)
+            .ToList();
+
+        if (deletedIds.Count > 0)
+        {
+            _videos.RemoveAll(v => deletedIds.Contains(v.Id));
+            StateHasChanged();
+        }
+
+        await LoadVideosAsync(clearSelection: true);
+    }
+
+    private async Task<VideoDeletionResult?> ShowDeleteDialogAsync(List<Video> videos)
+    {
         var parameters = new DialogParameters
         {
-            { "ContentText", $"Delete {_selectedVideoIds.Count} selected video(s)?" },
-            { "ButtonText", "Delete" },
-            { "Color", Color.Error }
+            { nameof(ConfirmDeleteVideosDialog.Videos), videos }
         };
 
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Videos", parameters);
-        var result = await dialog.Result;
-
-        if (result is { Canceled: false })
-        {
-            foreach (var id in _selectedVideoIds.ToList())
+        var dialog = await DialogService.ShowAsync<ConfirmDeleteVideosDialog>(
+            "Delete Videos",
+            parameters,
+            new DialogOptions
             {
-                try
-                {
-                    await VideoService.DeleteVideoAsync(id);
-                    _videoCache.Remove(id);
-                }
-                catch (Exception ex)
-                {
-                    Snackbar.Add($"Failed to delete video {id}: {ex.Message}", Severity.Error);
-                }
-            }
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true
+            });
 
-            _selectedVideoIds.Clear();
-            await LoadVideosAsync(clearSelection: true);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: VideoDeletionResult deletionResult })
+        {
+            return deletionResult;
         }
+
+        return null;
     }
 
     private void HandleContextMenu((Video Video, MouseEventArgs MouseEvent) context)

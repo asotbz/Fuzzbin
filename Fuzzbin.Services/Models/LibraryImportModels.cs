@@ -112,7 +112,7 @@ namespace Fuzzbin.Services.Models
         public bool RefreshMetadata { get; set; } = true;
         public bool AllowDownloadProbe { get; set; } = false;
         public int DurationToleranceSeconds { get; set; } = 3;
-        public double ConfidenceThreshold { get; set; } = 0.75;
+        public double ConfidenceThreshold { get; set; } = 0.9;
         public string? PreferredProvider { get; set; }
         public SourceVerificationRequest Clone() => (SourceVerificationRequest)MemberwiseClone();
     }

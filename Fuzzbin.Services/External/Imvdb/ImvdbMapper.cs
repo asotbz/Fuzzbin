@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using FuzzySharp;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
 using DomainImvdbCredit = Fuzzbin.Core.Interfaces.ImvdbCredit;
@@ -58,7 +59,7 @@ public static class ImvdbMapper
         return exact ?? partial ?? results.FirstOrDefault();
     }
 
-    public static ImvdbMetadata MapToMetadata(ImvdbVideoResponse video, ImvdbVideoSummary summary)
+    public static ImvdbMetadata MapToMetadata(ImvdbVideoResponse video, ImvdbVideoSummary summary, double confidence = 0)
     {
         var metadata = new ImvdbMetadata
         {
@@ -124,7 +125,34 @@ public static class ImvdbMapper
             metadata.FeaturedArtists = string.Join(", ", featured);
         }
 
+        metadata.Confidence = Math.Clamp(confidence, 0, 1);
         return metadata;
+    }
+
+    public static double ComputeMatchConfidence(string expectedArtist, string expectedTitle, ImvdbVideoSummary summary)
+    {
+        if (summary == null)
+        {
+            return 0;
+        }
+
+        var resultArtist = summary.Artist ?? string.Empty;
+        var resultTitle = FirstNonEmpty(summary.SongTitle, summary.Title) ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(expectedArtist) || string.IsNullOrWhiteSpace(expectedTitle) ||
+            (string.IsNullOrWhiteSpace(resultArtist) && string.IsNullOrWhiteSpace(resultTitle)))
+        {
+            return 0;
+        }
+
+        var artistScore = Fuzz.TokenSetRatio(expectedArtist, resultArtist);
+        var titleScore = Fuzz.TokenSetRatio(expectedTitle, resultTitle);
+        var combinedScore = Fuzz.TokenSetRatio(
+            $"{expectedArtist} {expectedTitle}",
+            $"{resultArtist} {resultTitle}");
+
+        var weightedScore = (artistScore * 0.4 + titleScore * 0.4 + combinedScore * 0.2) / 100.0;
+        return Math.Clamp(Math.Round(weightedScore, 4), 0, 1);
     }
 
     public static string NormalizeKey(string value)

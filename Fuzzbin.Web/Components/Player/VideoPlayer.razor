@@ -1,4 +1,5 @@
 @using Fuzzbin.Core.Entities
+@using Microsoft.AspNetCore.Components.Web
 @using MudBlazor
 @implements IDisposable
 
@@ -11,6 +12,7 @@
                @onloadedmetadata="OnMetadataLoaded"
                @onplay="OnPlay"
                @onpause="OnPause"
+               @onerror="@(args => HandleVideoError(args))"
                controls="@showNativeControls">
             @if (!string.IsNullOrEmpty(CurrentVideo?.FilePath))
             {
@@ -112,6 +114,11 @@
             </MudGrid>
         </div>
     }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mt-2">@errorMessage</MudAlert>
+    }
 </div>
 
 @code {
@@ -139,6 +146,7 @@
     
     private System.Timers.Timer? updateTimer;
     private IJSRuntime? jsRuntime;
+    private string? errorMessage;
     
     [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
     
@@ -174,12 +182,13 @@
     {
         try
         {
+            errorMessage = null;
             // Force video element to reload source
             await jsRuntime!.InvokeVoidAsync("eval", "const v = document.querySelector('video'); if(v) { v.load(); }");
         }
         catch (Exception ex)
         {
-            await OnError.InvokeAsync($"Failed to load video: {ex.Message}");
+            await ReportErrorAsync($"Failed to load video: {ex.Message}");
         }
     }
     
@@ -192,7 +201,7 @@
         }
         catch (Exception ex)
         {
-            await OnError.InvokeAsync($"Failed to play video: {ex.Message}");
+            await ReportErrorAsync($"Failed to play video: {ex.Message}");
         }
     }
     
@@ -205,7 +214,7 @@
         }
         catch (Exception ex)
         {
-            await OnError.InvokeAsync($"Failed to pause video: {ex.Message}");
+            await ReportErrorAsync($"Failed to pause video: {ex.Message}");
         }
     }
     
@@ -227,7 +236,7 @@
         }
         catch (Exception ex)
         {
-            await OnError.InvokeAsync($"Failed to seek: {ex.Message}");
+            await ReportErrorAsync($"Failed to seek: {ex.Message}");
         }
     }
     
@@ -294,21 +303,42 @@
     
     private async Task OnVolumeChanged(double value)
     {
-        volume = value;
-        await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').volume = {value / 100}");
-        if (value > 0) isMuted = false;
+        try
+        {
+            volume = value;
+            await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').volume = {value / 100}");
+            if (value > 0) isMuted = false;
+        }
+        catch (Exception ex)
+        {
+            await ReportErrorAsync($"Failed to change volume: {ex.Message}");
+        }
     }
-    
+
     public async Task ToggleMute()
     {
-        isMuted = !isMuted;
-        await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').muted = {isMuted.ToString().ToLower()}");
+        try
+        {
+            isMuted = !isMuted;
+            await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').muted = {isMuted.ToString().ToLower()}");
+        }
+        catch (Exception ex)
+        {
+            await ReportErrorAsync($"Failed to toggle mute: {ex.Message}");
+        }
     }
-    
+
     private async Task SetPlaybackRate(double rate)
     {
-        playbackRate = rate;
-        await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').playbackRate = {rate}");
+        try
+        {
+            playbackRate = rate;
+            await jsRuntime!.InvokeVoidAsync("eval", $"document.querySelector('video').playbackRate = {rate}");
+        }
+        catch (Exception ex)
+        {
+            await ReportErrorAsync($"Failed to change playback speed: {ex.Message}");
+        }
     }
     
     public async Task ToggleFullscreen()
@@ -326,9 +356,12 @@
                 isFullscreen = false;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            await ReportErrorAsync($"Failed to toggle fullscreen: {ex.Message}");
+        }
     }
-    
+
     private async Task TogglePictureInPicture()
     {
         try
@@ -342,7 +375,10 @@
                 }
             ");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            await ReportErrorAsync($"Failed to toggle picture-in-picture: {ex.Message}");
+        }
     }
     
     private async Task<bool> CheckPictureInPictureSupport()
@@ -355,6 +391,18 @@
         {
             return false;
         }
+    }
+
+    private async Task HandleVideoError(ErrorEventArgs _)
+    {
+        await ReportErrorAsync("Unable to stream the video. Please verify that the media file exists and is accessible.");
+    }
+
+    private async Task ReportErrorAsync(string message)
+    {
+        errorMessage = message;
+        await OnError.InvokeAsync(message);
+        await InvokeAsync(StateHasChanged);
     }
     
     private string GetVolumeIcon()

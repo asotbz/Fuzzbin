@@ -65,6 +65,7 @@ public class ImvdbMetadata
     public int? ImvdbId { get; set; }
     public string? Title { get; set; }
     public string? Artist { get; set; }
+    public double Confidence { get; set; }
     public string? FeaturedArtists { get; set; }
     public string? Director { get; set; }
     public string? ProductionCompany { get; set; }

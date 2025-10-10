@@ -1,5 +1,8 @@
+@using System.Linq
+@using System.Collections.Generic
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Services.Interfaces
+@using Fuzzbin.Services.Models
 @using MudBlazor
 @using static Fuzzbin.Services.Interfaces.IPlaylistService
 @inject NavigationManager Navigation
@@ -259,30 +262,11 @@
         Close();
     }
     
-    private async Task EditVideo()
+    private void EditVideo()
     {
         if (Video == null) return;
 
-        var parameters = new DialogParameters
-        {
-            { nameof(Fuzzbin.Web.Components.Dialogs.VideoEditorDialog.Video), Video }
-        };
-
-        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.VideoEditorDialog>(
-            "Edit Video",
-            parameters,
-            new DialogOptions
-            {
-                FullWidth = true,
-                MaxWidth = MaxWidth.Small
-            });
-
-        var result = await dialog.Result;
-        if (result is { Canceled: false, Data: Video updated })
-        {
-            await OnVideoUpdated.InvokeAsync(updated);
-        }
-
+        Navigation.NavigateTo($"/videos/{Video.Id}?edit=true");
         Close();
     }
     
@@ -324,19 +308,6 @@
     {
         if (Video == null) return;
         
-        var parameters = new DialogParameters
-        {
-            { "ContentText", $"Are you sure you want to delete '{Video.Title}'?" },
-            { "ButtonText", "Delete" },
-            { "Color", Color.Error }
-        };
-        
-        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.ConfirmDialog>(
-            "Delete Video", 
-            parameters);
-        
-        var result = await dialog.Result;
-        
         var video = Video;
         if (video == null)
         {
@@ -344,25 +315,37 @@
             return;
         }
 
-        if (result is { Canceled: false })
-        {
-            try
+        var dialog = await DialogService.ShowAsync<Fuzzbin.Web.Components.Dialogs.ConfirmDeleteVideosDialog>(
+            "Delete Video",
+            new DialogParameters
             {
-                await VideoService.DeleteVideoAsync(video.Id);
+                { nameof(Fuzzbin.Web.Components.Dialogs.ConfirmDeleteVideosDialog.Videos), new List<Video> { video } }
+            },
+            new DialogOptions
+            {
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true
+            });
 
-                if (!string.IsNullOrEmpty(video.FilePath) && File.Exists(video.FilePath))
-                {
-                    File.Delete(video.FilePath);
-                }
-                
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: Fuzzbin.Services.Models.VideoDeletionResult deletionResult })
+        {
+            if (deletionResult.DeletedCount > 0)
+            {
                 Snackbar.Add($"'{video.Title}' has been deleted", Severity.Success);
                 await OnVideoDeleted.InvokeAsync(video);
             }
-            catch (Exception ex)
+            else if (deletionResult.HasFailures)
             {
-                Snackbar.Add($"Error deleting video: {ex.Message}", Severity.Error);
+                var failure = deletionResult.Failures.FirstOrDefault();
+                if (failure != null)
+                {
+                    Snackbar.Add($"Error deleting video: {failure.Error}", Severity.Error);
+                }
             }
         }
+
         Close();
     }
 }
