@@ -228,6 +228,15 @@ namespace Fuzzbin.Services
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(downloadResult.FilePath))
+                {
+                    _logger.LogWarning(
+                        "Download result for {Url} did not include a file path; skipping persistence.",
+                        queueItem.Url);
+                    return (queueItem.VideoId, downloadResult.FilePath);
+                }
+
+                var downloadPath = downloadResult.FilePath;
                 var metadata = downloadResult.Metadata ?? await ytDlpService.GetVideoMetadataAsync(queueItem.Url, cancellationToken);
 
                 if (metadata == null)
@@ -238,18 +247,21 @@ namespace Fuzzbin.Services
 
                 var existingVideo = await unitOfWork.Videos.FirstOrDefaultAsync(v => v.YouTubeId == metadata.Id);
 
+                var resolvedFileSize = ResolveFileSize(downloadPath, metadata.FileSize);
+                var resolvedFormat = ResolveFormat(downloadPath);
+
                 if (existingVideo == null)
                 {
                     var video = new Video
                     {
-                        Title = metadata.Title ?? Path.GetFileNameWithoutExtension(downloadResult.FilePath!),
+                        Title = metadata.Title ?? Path.GetFileNameWithoutExtension(downloadPath),
                         Artist = metadata.Artist ?? metadata.Channel ?? "Unknown Artist",
-                        FilePath = downloadResult.FilePath!,
-                        FileSize = metadata.FileSize,
+                        FilePath = downloadPath,
+                        FileSize = resolvedFileSize,
                         VideoCodec = metadata.VideoCodec,
                         AudioCodec = metadata.AudioCodec,
                         FrameRate = metadata.Fps,
-                        Format = Path.GetExtension(downloadResult.FilePath)?.Trim('.'),
+                        Format = resolvedFormat,
                         Duration = metadata.Duration.HasValue ? (int)metadata.Duration.Value.TotalSeconds : null,
                         YouTubeId = metadata.Id,
                         Description = metadata.Description,
@@ -263,17 +275,17 @@ namespace Fuzzbin.Services
 
                     await unitOfWork.Videos.AddAsync(video);
                     await unitOfWork.SaveChangesAsync();
-                    var finalPath = await fileService.OrganizeVideoFileAsync(video, downloadResult.FilePath!, cancellationToken);
+                    var finalPath = await fileService.OrganizeVideoFileAsync(video, downloadPath, cancellationToken);
                     return (video.Id, finalPath);
                 }
 
-                existingVideo.FilePath = downloadResult.FilePath!;
+                existingVideo.FilePath = downloadPath;
                 existingVideo.ImportedAt = DateTime.UtcNow;
-                existingVideo.FileSize = metadata.FileSize ?? existingVideo.FileSize;
+                existingVideo.FileSize = resolvedFileSize ?? existingVideo.FileSize;
                 existingVideo.VideoCodec = metadata.VideoCodec ?? existingVideo.VideoCodec;
                 existingVideo.AudioCodec = metadata.AudioCodec ?? existingVideo.AudioCodec;
                 existingVideo.FrameRate = metadata.Fps ?? existingVideo.FrameRate;
-                existingVideo.Format = Path.GetExtension(downloadResult.FilePath)?.Trim('.') ?? existingVideo.Format;
+                existingVideo.Format = resolvedFormat ?? existingVideo.Format;
 
                 if (metadata.Duration.HasValue)
                 {
@@ -289,7 +301,7 @@ namespace Fuzzbin.Services
 
                 await unitOfWork.Videos.UpdateAsync(existingVideo);
                 await unitOfWork.SaveChangesAsync();
-                var existingFinalPath = await fileService.OrganizeVideoFileAsync(existingVideo, downloadResult.FilePath!, cancellationToken);
+                var existingFinalPath = await fileService.OrganizeVideoFileAsync(existingVideo, downloadPath, cancellationToken);
                 return (existingVideo.Id, existingFinalPath);
             }
             catch (Exception ex)
@@ -297,6 +309,45 @@ namespace Fuzzbin.Services
                 _logger.LogError(ex, "Error persisting video entity for queue item {QueueId}", queueItem.Id);
                 return (queueItem.VideoId, downloadResult.FilePath);
             }
+        }
+
+        private static long? ResolveFileSize(string? filePath, long? metadataFileSize)
+        {
+            if (metadataFileSize.HasValue && metadataFileSize.Value > 0)
+            {
+                return metadataFileSize.Value;
+            }
+
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var info = new FileInfo(filePath);
+                return info.Exists ? info.Length : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? ResolveFormat(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return null;
+            }
+
+            var extension = Path.GetExtension(filePath);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                return null;
+            }
+
+            return extension.Trim('.').ToLowerInvariant();
         }
 
         private string ResolveOutputDirectory(string? requestedPath)

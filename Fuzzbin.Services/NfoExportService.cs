@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -5,12 +6,20 @@ using System.Xml;
 using System.Xml.Linq;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Services.Interfaces;
+using Fuzzbin.Services.Models;
 using Fuzzbin.Services.Templates;
 
 namespace Fuzzbin.Services;
 
 public class NfoExportService : INfoExportService
 {
+    private readonly IMetadataSettingsProvider _metadataSettingsProvider;
+
+    public NfoExportService(IMetadataSettingsProvider metadataSettingsProvider)
+    {
+        _metadataSettingsProvider = metadataSettingsProvider;
+    }
+
     public async Task<bool> ExportNfoAsync(
         Video video,
         string outputPath,
@@ -65,7 +74,15 @@ public class NfoExportService : INfoExportService
 
     public string GenerateNfoContent(Video video)
     {
-        var document = NfoTemplateBuilder.BuildVideoDocument(video);
+        var settings = _metadataSettingsProvider.GetSettings();
+        var overrideGenres = settings.GeneralizeGenres
+            ? GetGeneralizedGenres(video, settings)
+            : null;
+        var additionalTags = settings.GeneralizeGenres && settings.WriteExternalGenreAsTag
+            ? GetSpecificGenresForTags(video, settings)
+            : null;
+
+        var document = NfoTemplateBuilder.BuildVideoDocument(video, overrideGenres, additionalTags);
         return Serialize(document);
     }
 
@@ -96,7 +113,15 @@ public class NfoExportService : INfoExportService
     public string GenerateArtistNfoContent(FeaturedArtist artist, IEnumerable<Video> artistVideos)
     {
         var videoList = artistVideos?.ToList() ?? new List<Video>();
-        var document = NfoTemplateBuilder.BuildArtistDocument(artist, videoList);
+        var settings = _metadataSettingsProvider.GetSettings();
+        Func<Video, IEnumerable<string>?>? genreSelector = null;
+
+        if (settings.GeneralizeGenres)
+        {
+            genreSelector = video => GetGeneralizedGenres(video, settings);
+        }
+
+        var document = NfoTemplateBuilder.BuildArtistDocument(artist, videoList, genreSelector);
         return Serialize(document);
     }
 
@@ -156,5 +181,75 @@ public class NfoExportService : INfoExportService
         }
 
         return builder.ToString();
+    }
+
+    private static IReadOnlyList<string>? GetGeneralizedGenres(Video video, MetadataSettings settings)
+    {
+        if (video.Genres?.Any() != true)
+        {
+            return null;
+        }
+
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var genre in video.Genres)
+        {
+            if (string.IsNullOrWhiteSpace(genre?.Name))
+            {
+                continue;
+            }
+
+            var normalized = genre.Name.Trim();
+            if (settings.GenreMappings.TryGetValue(normalized, out var mapped) && !string.IsNullOrWhiteSpace(mapped))
+            {
+                normalized = mapped.Trim();
+            }
+
+            if (seen.Add(normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result.Count > 0 ? result : null;
+    }
+
+    private static IReadOnlyList<string>? GetSpecificGenresForTags(Video video, MetadataSettings settings)
+    {
+        if (video.Genres?.Any() != true)
+        {
+            return null;
+        }
+
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var genre in video.Genres)
+        {
+            if (string.IsNullOrWhiteSpace(genre?.Name))
+            {
+                continue;
+            }
+
+            var original = genre.Name.Trim();
+            if (!settings.GenreMappings.TryGetValue(original, out var mapped) ||
+                string.IsNullOrWhiteSpace(mapped))
+            {
+                continue;
+            }
+
+            if (string.Equals(original, mapped, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (seen.Add(original))
+            {
+                result.Add(original);
+            }
+        }
+
+        return result.Count > 0 ? result : null;
     }
 }

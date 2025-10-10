@@ -114,7 +114,8 @@ public class MetadataExportServiceTests : IAsyncLifetime
         await unitOfWork.SaveChangesAsync();
 
         var pathManager = new LibraryPathManager(unitOfWork, NullLogger<LibraryPathManager>.Instance);
-        var nfoService = new NfoExportService();
+        var metadataSettingsProvider = new TestMetadataSettingsProvider();
+        var nfoService = new NfoExportService(metadataSettingsProvider);
 
         var webRoot = Path.Combine(_tempRoot, "wwwroot");
         Directory.CreateDirectory(Path.Combine(webRoot, "thumbnails"));
@@ -175,6 +176,18 @@ public class MetadataExportServiceTests : IAsyncLifetime
         catch
         {
             // ignore cleanup failures
+        }
+    }
+
+    private sealed class TestMetadataSettingsProvider : IMetadataSettingsProvider
+    {
+        public MetadataSettings Settings { get; set; } = MetadataSettings.Default;
+
+        public MetadataSettings GetSettings() => Settings;
+
+        public void Invalidate()
+        {
+            // no-op for tests
         }
     }
 }

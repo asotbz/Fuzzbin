@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
@@ -57,8 +58,7 @@ public class FileOrganizationService : IFileOrganizationService
                 sourceFilePath,
                 destinationPath);
 
-            video.FilePath = destinationPath;
-            video.UpdatedAt = DateTime.UtcNow;
+            ApplyFileMetadata(video, destinationPath);
             await _unitOfWork.Videos.UpdateAsync(video).ConfigureAwait(false);
             await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
 
@@ -229,8 +229,7 @@ public class FileOrganizationService : IFileOrganizationService
 
             await Task.Run(() => File.Move(originalPath, destination, true), cancellationToken).ConfigureAwait(false);
 
-            video.FilePath = destination;
-            video.UpdatedAt = DateTime.UtcNow;
+            ApplyFileMetadata(video, destination);
             await _unitOfWork.Videos.UpdateAsync(video).ConfigureAwait(false);
             await _unitOfWork.SaveChangesAsync().ConfigureAwait(false);
 
@@ -249,6 +248,29 @@ public class FileOrganizationService : IFileOrganizationService
                 video.FilePath,
                 newPath);
             return false;
+        }
+    }
+
+    private static void ApplyFileMetadata(Video video, string destinationPath)
+    {
+        video.FilePath = destinationPath;
+        video.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            var fileInfo = new FileInfo(destinationPath);
+            if (fileInfo.Exists)
+            {
+                video.FileSize = fileInfo.Length;
+                if (!string.IsNullOrWhiteSpace(fileInfo.Extension))
+                {
+                    video.Format = fileInfo.Extension.TrimStart('.').ToLowerInvariant();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore file metadata refresh failures; file path update already applied.
         }
     }
 

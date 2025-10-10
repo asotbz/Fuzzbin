@@ -72,6 +72,7 @@ namespace Fuzzbin.Services
                         DownloadedBytes = ParseSizeToBytes(p.Data)
                     });
                 });
+                var outputLogger = CreateYtDlpOutputLogger(url);
 
                 if (File.Exists(_cookiesPath))
                 {
@@ -86,8 +87,9 @@ namespace Fuzzbin.Services
                     VideoRecodeFormat.None,
                     cancellationToken,
                     downloadProgress,
-                    null,
+                    outputLogger,
                     optionSet).ConfigureAwait(false);
+                LogYtDlpErrorOutput(url, runResult.ErrorOutput);
 
                 result.Duration = DateTime.UtcNow - startTime;
                 result.Metadata = metadata;
@@ -150,6 +152,7 @@ namespace Fuzzbin.Services
                     flat: false,
                     fetchComments: false,
                     optionSet).ConfigureAwait(false);
+                LogYtDlpErrorOutput(searchQuery, runResult.ErrorOutput);
 
                 if (!runResult.Success || runResult.Data == null)
                 {
@@ -187,6 +190,7 @@ namespace Fuzzbin.Services
                 flat: false,
                 fetchComments: false,
                 optionSet).ConfigureAwait(false);
+            LogYtDlpErrorOutput(url, runResult.ErrorOutput);
 
             if (!runResult.Success || runResult.Data == null)
             {
@@ -473,6 +477,37 @@ namespace Fuzzbin.Services
             }
 
             return string.Join(Environment.NewLine, errorOutput);
+        }
+
+        private IProgress<string> CreateYtDlpOutputLogger(string url)
+        {
+            return new Progress<string>(line =>
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    return;
+                }
+
+                _logger.LogInformation("yt-dlp[{Url}] {Output}", url, line);
+            });
+        }
+
+        private void LogYtDlpErrorOutput(string url, string[]? errorOutput)
+        {
+            if (errorOutput == null || errorOutput.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var line in errorOutput)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                _logger.LogInformation("yt-dlp[{Url}] [stderr] {Output}", url, line);
+            }
         }
 
         private string ResolvePath(string? path)

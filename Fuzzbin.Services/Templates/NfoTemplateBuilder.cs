@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -8,7 +9,10 @@ namespace Fuzzbin.Services.Templates;
 
 internal static class NfoTemplateBuilder
 {
-    public static XDocument BuildVideoDocument(Video video)
+    public static XDocument BuildVideoDocument(
+        Video video,
+        IEnumerable<string>? overrideGenres = null,
+        IEnumerable<string>? additionalTags = null)
     {
         ArgumentNullException.ThrowIfNull(video);
 
@@ -43,9 +47,17 @@ internal static class NfoTemplateBuilder
             AddElement(elements, "durationinseconds", ((int)Math.Round(duration.Value.TotalSeconds)).ToString(CultureInfo.InvariantCulture));
         }
 
-        AddElement(elements, "genre", video.Genres?.FirstOrDefault()?.Name);
-        AddRepeatedElements(elements, "genre", video.Genres?.Skip(1).Select(g => g.Name) ?? Enumerable.Empty<string?>());
-        AddRepeatedElements(elements, "tag", video.Tags?.Select(t => t.Name) ?? Enumerable.Empty<string?>());
+        var resolvedGenres = ResolveGenresForVideo(video, overrideGenres);
+        if (resolvedGenres.Count > 0)
+        {
+            AddElement(elements, "genre", resolvedGenres[0]);
+            if (resolvedGenres.Count > 1)
+            {
+                AddRepeatedElements(elements, "genre", resolvedGenres.Skip(1));
+            }
+        }
+        var resolvedTags = ResolveTagsForVideo(video, additionalTags);
+        AddRepeatedElements(elements, "tag", resolvedTags);
 
         AddElement(elements, "studio", video.ProductionCompany);
         AddElement(elements, "director", video.Director);
@@ -145,7 +157,7 @@ internal static class NfoTemplateBuilder
             new XElement("musicvideo", elements));
     }
 
-    public static XDocument BuildArtistDocument(FeaturedArtist artist, IEnumerable<Video> videos)
+    public static XDocument BuildArtistDocument(FeaturedArtist artist, IEnumerable<Video> videos, Func<Video, IEnumerable<string>?>? genreSelector = null)
     {
         ArgumentNullException.ThrowIfNull(artist);
 
@@ -166,15 +178,8 @@ internal static class NfoTemplateBuilder
         var uniqueIds = BuildUniqueIdElements(artist);
         elements.AddRange(uniqueIds);
 
-        var genres = associatedVideos
-            .Where(v => v.Genres?.Any() == true)
-            .SelectMany(v => v.Genres!)
-            .Select(g => g.Name)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        AddRepeatedElements(elements, "genre", genres);
+        var artistGenres = ResolveGenresForArtist(associatedVideos, genreSelector);
+        AddRepeatedElements(elements, "genre", artistGenres);
 
         var tags = associatedVideos
             .Where(v => v.Tags?.Any() == true)
@@ -218,6 +223,97 @@ internal static class NfoTemplateBuilder
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement("artist", elements));
+    }
+
+    private static IReadOnlyList<string> ResolveGenresForVideo(Video video, IEnumerable<string>? overrideGenres)
+    {
+        var normalizedOverride = NormalizeGenres(overrideGenres);
+        if (normalizedOverride.Count > 0)
+        {
+            return normalizedOverride;
+        }
+
+        return NormalizeGenres(video.Genres?.Select(g => g.Name));
+    }
+
+    private static IReadOnlyList<string> ResolveTagsForVideo(Video video, IEnumerable<string>? additionalTags)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddRange(IEnumerable<string?>? source)
+        {
+            if (source is null)
+            {
+                return;
+            }
+
+            foreach (var entry in source)
+            {
+                if (string.IsNullOrWhiteSpace(entry))
+                {
+                    continue;
+                }
+
+                var normalized = entry.Trim();
+                if (seen.Add(normalized))
+                {
+                    result.Add(normalized);
+                }
+            }
+        }
+
+        AddRange(video.Tags?.Select(t => t.Name));
+        AddRange(additionalTags);
+
+        return result;
+    }
+
+    private static IReadOnlyList<string> ResolveGenresForArtist(IEnumerable<Video> videos, Func<Video, IEnumerable<string>?>? genreSelector)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var video in videos)
+        {
+            var genres = ResolveGenresForVideo(video, genreSelector?.Invoke(video));
+            foreach (var genre in genres)
+            {
+                if (seen.Add(genre))
+                {
+                    result.Add(genre);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<string> NormalizeGenres(IEnumerable<string?>? source)
+    {
+        if (source is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in source)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+            {
+                continue;
+            }
+
+            var normalized = entry.Trim();
+            if (seen.Add(normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result;
     }
 
     private static XElement? BuildFuzzbinMetadata(Video video)

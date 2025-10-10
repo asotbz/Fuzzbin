@@ -187,6 +187,8 @@ try
     // Shared services
     builder.Services.AddSingleton<IDownloadTaskQueue, DownloadTaskQueue>();
     builder.Services.AddSingleton<IDownloadSettingsProvider, DownloadSettingsProvider>();
+    builder.Services.AddSingleton<IGenreMappingDefaultsProvider, GenreMappingDefaultsProvider>();
+    builder.Services.AddSingleton<IMetadataSettingsProvider, MetadataSettingsProvider>();
 
     // Register Services
     builder.Services.AddScoped<IYtDlpService, YtDlpService>();

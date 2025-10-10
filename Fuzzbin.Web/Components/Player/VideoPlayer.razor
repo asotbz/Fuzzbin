@@ -408,7 +408,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: #000;
+        background: var(--mud-palette-background-grey, #000);
     }
     
     .video-overlay {
@@ -439,9 +439,9 @@
     }
     
     .custom-controls {
-        background: #1e1e1e;
+        background: var(--mud-palette-surface);
         padding: 16px;
-        border-top: 1px solid #333;
+        border-top: 1px solid var(--mud-palette-lines-default, #333);
     }
     
     .progress-section {
@@ -462,6 +462,7 @@
         bottom: 0;
         left: 0;
         right: 0;
-        background: rgba(30, 30, 30, 0.95);
+        background: var(--mud-palette-surface);
+        backdrop-filter: blur(12px);
     }
 </style>

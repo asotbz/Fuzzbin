@@ -16,6 +16,7 @@
 @inject IBackupService BackupService
 @inject IDialogService DialogService
 @inject OnboardingService OnboardingService
+@inject IGenreMappingDefaultsProvider GenreMappingDefaultsProvider
 
 <PageTitle>Settings - Fuzzbin</PageTitle>
 
@@ -243,6 +244,18 @@
                                Color="Color.Primary" />
                 </MudItem>
                 <MudItem xs="12">
+                    <MudCheckBox @bind-Value="GeneralizeGenres"
+                               Label="Generalize genres when writing metadata"
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_writeExternalGenreAsTag"
+                               Disabled="!_generalizeGenres"
+                               Label="Write specific external genres as tags"
+                               HelperText="Adds IMVDb/MusicBrainz genres as tags while keeping broader genres"
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12">
                     <MudText Typo="Typo.h6" Class="mb-2 mt-4">Genre Mappings</MudText>
                     <MudText Typo="Typo.body2" Class="mb-2">Map external genres to your preferred names</MudText>
                 </MudItem>
@@ -270,12 +283,20 @@
                             </MudItem>
                         </MudGrid>
                     }
-                    <MudButton Variant="Variant.Outlined" 
-                             Color="Color.Primary" 
-                             StartIcon="@Icons.Material.Filled.Add"
-                             OnClick="AddGenreMapping">
-                        Add Genre Mapping
-                    </MudButton>
+                    <MudStack Row="true" Spacing="1">
+                        <MudButton Variant="Variant.Outlined" 
+                                 Color="Color.Primary" 
+                                 StartIcon="@Icons.Material.Filled.Add"
+                                 OnClick="AddGenreMapping">
+                            Add Genre Mapping
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                 Color="Color.Secondary"
+                                 StartIcon="@Icons.Material.Filled.Restore"
+                                 OnClick="ResetGenreMappings">
+                            Reset to default mapping
+                        </MudButton>
+                    </MudStack>
                 </MudItem>
                 <MudItem xs="12">
                     <MudButton Variant="Variant.Filled" 
@@ -428,7 +449,27 @@
     private string _musicBrainzUserAgent = "Fuzzbin/1.0";
     private bool _autoFetchMissingMetadata = true;
     private bool _overwriteExistingMetadata = false;
+    private bool _generalizeGenres = false;
+    private bool _writeExternalGenreAsTag = false;
     private List<GenreMapping> _genreMappings = new();
+
+    private bool GeneralizeGenres
+    {
+        get => _generalizeGenres;
+        set
+        {
+            if (_generalizeGenres == value)
+            {
+                return;
+            }
+
+            _generalizeGenres = value;
+            if (!value)
+            {
+                _writeExternalGenreAsTag = false;
+            }
+        }
+    }
     
     // Advanced Settings
     private int _databaseBackupDays = 30;
@@ -533,16 +574,18 @@
         _musicBrainzUserAgent = GetString("API", "MusicBrainzUserAgent", "Fuzzbin/1.0");
         _autoFetchMissingMetadata = GetBool("Metadata", "AutoFetchMissingMetadata", true);
         _overwriteExistingMetadata = GetBool("Metadata", "OverwriteExistingMetadata", false);
+        GeneralizeGenres = GetBool("Metadata", "GeneralizeGenres", false);
+        _writeExternalGenreAsTag = GetBool("Metadata", "WriteExternalGenreAsTag", false) && _generalizeGenres;
 
         // Load Genre Mappings
         var genreMappingString = GetRaw("Metadata", "GenreMappings");
-        if (!string.IsNullOrWhiteSpace(genreMappingString))
+        _genreMappings = !string.IsNullOrWhiteSpace(genreMappingString)
+            ? System.Text.Json.JsonSerializer.Deserialize<List<GenreMapping>>(genreMappingString) ?? new()
+            : LoadDefaultGenreMappings();
+
+        if (_genreMappings.Count == 0)
         {
-            _genreMappings = System.Text.Json.JsonSerializer.Deserialize<List<GenreMapping>>(genreMappingString) ?? new();
-        }
-        else
-        {
-            _genreMappings.Clear();
+            _genreMappings = LoadDefaultGenreMappings();
         }
 
         // Load Advanced Settings
@@ -550,6 +593,25 @@
         _logRetentionDays = GetInt("System", "LogRetentionDays", 30);
         _enableDebugLogging = GetBool("System", "EnableDebugLogging", false);
         _enableAutoBackup = GetBool("System", "EnableAutoBackup", true);
+    }
+
+    private List<GenreMapping> LoadDefaultGenreMappings()
+    {
+        return GenreMappingDefaultsProvider
+            .GetDefaultMappings()
+            .Select(mapping => new GenreMapping
+            {
+                From = mapping.SpecificGenre,
+                To = mapping.GeneralGenre
+            })
+            .ToList();
+    }
+
+    private void ResetGenreMappings()
+    {
+        _genreMappings = LoadDefaultGenreMappings();
+        Snackbar.Add("Genre mappings reset to defaults", Severity.Info);
+        StateHasChanged();
     }
     
     private async Task SaveGeneralSettings()
@@ -599,6 +661,8 @@
             ("MusicBrainzUserAgent", _musicBrainzUserAgent, "API"),
             ("AutoFetchMissingMetadata", _autoFetchMissingMetadata.ToString(), "Metadata"),
             ("OverwriteExistingMetadata", _overwriteExistingMetadata.ToString(), "Metadata"),
+            ("GeneralizeGenres", _generalizeGenres.ToString(), "Metadata"),
+            ("WriteExternalGenreAsTag", _writeExternalGenreAsTag.ToString(), "Metadata"),
             ("GenreMappings", genreMappingJson, "Metadata")
         });
         

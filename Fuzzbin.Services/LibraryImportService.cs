@@ -447,6 +447,9 @@ namespace Fuzzbin.Services
             video.FileHash = item.FileHash ?? video.FileHash;
             video.VideoCodec = item.VideoCodec ?? video.VideoCodec;
             video.AudioCodec = item.AudioCodec ?? video.AudioCodec;
+            video.Format = NormalizeFormat(item.Extension)
+                ?? NormalizeFormat(Path.GetExtension(item.RelativePath ?? item.FilePath))
+                ?? video.Format;
             video.Bitrate = item.BitrateKbps ?? video.Bitrate;
             video.FrameRate = item.FrameRate ?? video.FrameRate;
             video.Resolution = item.Resolution ?? video.Resolution;
@@ -691,6 +694,22 @@ namespace Fuzzbin.Services
             }
 
             return trimmed.ToLowerInvariant();
+        }
+
+        private static string? NormalizeFormat(string? extension)
+        {
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                return null;
+            }
+
+            var normalized = NormalizeExtension(extension);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                return null;
+            }
+
+            return normalized.TrimStart('.');
         }
     }
 }

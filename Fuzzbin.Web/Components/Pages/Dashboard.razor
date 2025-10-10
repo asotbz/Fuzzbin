@@ -4,6 +4,7 @@
 @using Fuzzbin.Core.Entities
 @using Microsoft.EntityFrameworkCore
 @using System.Linq
+@using System.IO
 @inject IUnitOfWork UnitOfWork
 @inject NavigationManager Navigation
 
@@ -98,22 +99,17 @@
                     <MudCardContent>
                         <MudText Typo="Typo.h6" Class="mb-3">Quick Actions</MudText>
                         <MudGrid>
-                            <MudItem xs="12" sm="6" md="3">
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" FullWidth="true" Href="/videos/add">
-                                    Add Video
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Download" FullWidth="true" Href="/downloads">
+                                    Downloads
                                 </MudButton>
                             </MudItem>
-                            <MudItem xs="12" sm="6" md="3">
-                                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Download" FullWidth="true" Href="/downloads/new">
-                                    New Download
-                                </MudButton>
-                            </MudItem>
-                            <MudItem xs="12" sm="6" md="3">
+                            <MudItem xs="12" sm="6" md="4">
                                 <MudButton Variant="Variant.Filled" Color="Color.Tertiary" StartIcon="@Icons.Material.Filled.Upload" FullWidth="true" Href="/import">
                                     Import Collection
                                 </MudButton>
                             </MudItem>
-                            <MudItem xs="12" sm="6" md="3">
+                            <MudItem xs="12" sm="6" md="4">
                                 <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Settings" FullWidth="true" Href="/settings">
                                     Settings
                                 </MudButton>
@@ -419,9 +415,12 @@
             var videos = await UnitOfWork.Videos.GetAllAsync();
             var videosList = videos.ToList();
             totalVideos = videosList.Count();
+
+            var videoSizeMap = videosList.ToDictionary(v => v.Id, ResolveVideoFileSize);
+            var videoFormatMap = videosList.ToDictionary(v => v.Id, ResolveVideoFormat);
             
             // Calculate storage
-            totalStorageSize = videosList.Where(v => v.FileSize.HasValue).Sum(v => v.FileSize!.Value);
+            totalStorageSize = videoSizeMap.Values.Sum();
             averageFileSize = totalVideos > 0 ? totalStorageSize / totalVideos : 0;
             
             // Calculate duration stats
@@ -520,10 +519,15 @@
             
             // Prepare format chart data
             var videosByFormat = videosList
-                .Where(v => !string.IsNullOrEmpty(v.Format))
-                .GroupBy(v => v.Format!)
-                .Select(g => new { Format = g.Key.ToUpper(), Count = g.Count() })
-                .OrderByDescending(x => x.Count)
+                .Select(v => new
+                {
+                    Format = videoFormatMap.TryGetValue(v.Id, out var formatValue) ? formatValue : null,
+                    Size = videoSizeMap.TryGetValue(v.Id, out var sizeValue) ? sizeValue : 0L
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Format) && x.Size > 0)
+                .GroupBy(x => x.Format!)
+                .Select(g => new { Format = g.Key.ToUpperInvariant(), TotalBytes = g.Sum(x => x.Size) })
+                .OrderByDescending(x => x.TotalBytes)
                 .ToList();
             
             if (videosByFormat.Any())
@@ -533,10 +537,33 @@
                 {
                     new ChartSeries
                     {
-                        Name = "Formats",
-                        Data = videosByFormat.Select(x => (double)x.Count).ToArray()
+                        Name = "Storage (MB)",
+                        Data = videosByFormat.Select(x => ConvertBytesToMegabytes(x.TotalBytes)).ToArray()
                     }
                 };
+            }
+            else
+            {
+                var fallbackFormats = videosList
+                    .Select(v => videoFormatMap.TryGetValue(v.Id, out var formatValue) ? formatValue : null)
+                    .Where(format => !string.IsNullOrWhiteSpace(format))
+                    .GroupBy(format => format!)
+                    .Select(g => new { Format = g.Key.ToUpperInvariant(), Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .ToList();
+
+                if (fallbackFormats.Any())
+                {
+                    formatLabels = fallbackFormats.Select(x => x.Format).ToArray();
+                    formatChartSeries = new List<ChartSeries>
+                    {
+                        new ChartSeries
+                        {
+                            Name = "Videos",
+                            Data = fallbackFormats.Select(x => (double)x.Count).ToArray()
+                        }
+                    };
+                }
             }
             
             // Calculate quality distribution
@@ -553,6 +580,54 @@
         }
     }
     
+    private long ResolveVideoFileSize(Video video)
+    {
+        if (video.FileSize.HasValue && video.FileSize.Value > 0)
+        {
+            return video.FileSize.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(video.FilePath) &&
+            Path.IsPathRooted(video.FilePath) &&
+            File.Exists(video.FilePath))
+        {
+            try
+            {
+                return new FileInfo(video.FilePath).Length;
+            }
+            catch
+            {
+                // Ignore filesystem errors; fall back to stored metadata.
+            }
+        }
+
+        return 0;
+    }
+
+    private string? ResolveVideoFormat(Video video)
+    {
+        if (!string.IsNullOrWhiteSpace(video.Format))
+        {
+            return video.Format!.ToLowerInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(video.FilePath))
+        {
+            var extension = Path.GetExtension(video.FilePath);
+            if (!string.IsNullOrWhiteSpace(extension))
+            {
+                return extension.TrimStart('.').ToLowerInvariant();
+            }
+        }
+
+        return null;
+    }
+
+    private double ConvertBytesToMegabytes(long bytes)
+    {
+        return bytes / 1024d / 1024d;
+    }
+
     private string FormatFileSize(long bytes)
     {
         string[] sizes = { "B", "KB", "MB", "GB", "TB" };

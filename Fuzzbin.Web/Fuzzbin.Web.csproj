@@ -26,4 +26,10 @@
     <ProjectReference Include="..\Fuzzbin.Services\Fuzzbin.Services.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\genre_mapping.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
