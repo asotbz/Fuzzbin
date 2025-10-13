@@ -160,6 +160,12 @@
                                 <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="OrganizeLibraryFiles">
                                     Organize Library Files
                                 </MudButton>
+                                @if (HasActiveFilters)
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="CreateSmartCollectionFromFilters">
+                                        Create Smart Collection from Filters
+                                    </MudButton>
+                                }
                             }
                         </MudStack>
 
@@ -333,6 +339,11 @@
     private bool _isLoadingMore;
 
     private bool HasSelection => _selectedVideoIds.Count > 0;
+    private bool HasActiveFilters => !string.IsNullOrWhiteSpace(_searchTerm) ||
+                                      _selectedGenres.Count > 0 ||
+                                      _selectedArtists.Count > 0 ||
+                                      _selectedYears.Count > 0 ||
+                                      _selectedFormats.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1146,6 +1157,121 @@
     private void OpenAddVideoDialog()
     {
         Navigation.NavigateTo("/downloads");
+    }
+
+    private async Task CreateSmartCollectionFromFilters()
+    {
+        if (!HasActiveFilters)
+        {
+            Snackbar.Add("No active filters to create smart collection from", Severity.Info);
+            return;
+        }
+
+        // Build smart criteria string from current filters
+        var criteria = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            criteria.Add($"search:{_searchTerm}");
+        }
+
+        foreach (var genre in _selectedGenres)
+        {
+            criteria.Add($"genre:{genre}");
+        }
+
+        foreach (var artist in _selectedArtists)
+        {
+            criteria.Add($"artist:{artist}");
+        }
+
+        foreach (var year in _selectedYears)
+        {
+            criteria.Add($"year:{year}");
+        }
+
+        foreach (var format in _selectedFormats)
+        {
+            criteria.Add($"format:{format}");
+        }
+
+        var smartCriteria = string.Join(" ", criteria);
+
+        // Suggest a collection name based on filters
+        var suggestedName = GenerateSmartCollectionName();
+
+        var parameters = new DialogParameters<CollectionDialog>
+        {
+            { x => x.Collection, new Collection
+                {
+                    Name = suggestedName,
+                    Type = CollectionType.Smart,
+                    SmartCriteria = smartCriteria,
+                    IsPublic = true,
+                    IsFavorite = false
+                }
+            }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<CollectionDialog>("Create Smart Collection", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Smart collection created successfully", Severity.Success);
+        }
+    }
+
+    private string GenerateSmartCollectionName()
+    {
+        var nameParts = new List<string>();
+
+        if (_selectedArtists.Count == 1)
+        {
+            nameParts.Add(_selectedArtists.First());
+        }
+        else if (_selectedArtists.Count > 1)
+        {
+            nameParts.Add($"{_selectedArtists.Count} Artists");
+        }
+
+        if (_selectedGenres.Count == 1)
+        {
+            nameParts.Add(_selectedGenres.First());
+        }
+        else if (_selectedGenres.Count > 1)
+        {
+            nameParts.Add($"{_selectedGenres.Count} Genres");
+        }
+
+        if (_selectedYears.Count == 1)
+        {
+            nameParts.Add(_selectedYears.First());
+        }
+        else if (_selectedYears.Count > 1)
+        {
+            var years = _selectedYears.Select(y => int.TryParse(y, out var year) ? year : 0).Where(y => y > 0).OrderBy(y => y).ToList();
+            if (years.Count >= 2)
+            {
+                nameParts.Add($"{years.First()}-{years.Last()}");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm) && nameParts.Count == 0)
+        {
+            nameParts.Add($"Search: {_searchTerm}");
+        }
+
+        return nameParts.Count > 0
+            ? string.Join(" - ", nameParts)
+            : "Smart Collection";
     }
 
     private void RegisterKeyboardShortcuts()
