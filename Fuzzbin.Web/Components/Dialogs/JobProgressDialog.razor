@@ -1,0 +1,219 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
+@inject IBackgroundJobService JobService
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
+
+<MudDialog>
+    <DialogContent>
+        @if (_job != null)
+        {
+            <MudStack Spacing="3">
+                <div>
+                    <MudText Typo="Typo.h6">@GetJobTypeDisplay(_job.Type)</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Job ID: @_job.Id</MudText>
+                </div>
+
+                <MudProgressLinear Value="@_job.Progress" 
+                                   Color="@GetStatusColor(_job.Status)" 
+                                   Size="Size.Large"
+                                   Class="my-2">
+                    <MudText Typo="Typo.body2">@_job.Progress%</MudText>
+                </MudProgressLinear>
+
+                @if (!string.IsNullOrEmpty(_job.StatusMessage))
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        @_job.StatusMessage
+                    </MudAlert>
+                }
+
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Status</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_job.Status)">
+                            @_job.Status
+                        </MudChip>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Progress</MudText>
+                        <MudText Typo="Typo.body2">
+                            @_job.ProcessedItems / @_job.TotalItems items
+                        </MudText>
+                    </MudItem>
+                    @if (_job.FailedItems > 0)
+                    {
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Failed Items</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Error">
+                                @_job.FailedItems
+                            </MudText>
+                        </MudItem>
+                    }
+                    @if (_job.StartedAt.HasValue)
+                    {
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Started</MudText>
+                            <MudText Typo="Typo.body2">
+                                @_job.StartedAt.Value.ToLocalTime().ToString("g")
+                            </MudText>
+                        </MudItem>
+                    }
+                    @if (_job.CompletedAt.HasValue)
+                    {
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Completed</MudText>
+                            <MudText Typo="Typo.body2">
+                                @_job.CompletedAt.Value.ToLocalTime().ToString("g")
+                            </MudText>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                @if (!string.IsNullOrEmpty(_job.ErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error">
+                        <MudText Typo="Typo.body2"><strong>Error:</strong></MudText>
+                        <MudText Typo="Typo.body2">@_job.ErrorMessage</MudText>
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+        else
+        {
+            <MudProgressCircular Indeterminate="true" />
+            <MudText>Loading job details...</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_job?.CanCancel == true && _job.Status == BackgroundJobStatus.Running && !_job.CancellationRequested)
+        {
+            <MudButton Color="Color.Warning" OnClick="RequestCancellation">Cancel Job</MudButton>
+        }
+        @if (_job?.Status == BackgroundJobStatus.Completed || _job?.Status == BackgroundJobStatus.Failed || _job?.Status == BackgroundJobStatus.Cancelled)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Close">Close</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="Close">Close</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid JobId { get; set; }
+
+    private BackgroundJob? _job;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobAsync();
+        await InitializeSignalRAsync();
+    }
+
+    private async Task LoadJobAsync()
+    {
+        _job = await JobService.GetJobAsync(JobId);
+        StateHasChanged();
+    }
+
+    private async Task InitializeSignalRAsync()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/jobprogress"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<dynamic>("JobStarted", data =>
+        {
+            InvokeAsync(LoadJobAsync);
+        });
+
+        _hubConnection.On<dynamic>("JobProgress", data =>
+        {
+            InvokeAsync(LoadJobAsync);
+        });
+
+        _hubConnection.On<dynamic>("JobCompleted", data =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadJobAsync();
+                Snackbar.Add("Job completed successfully!", Severity.Success);
+            });
+        });
+
+        _hubConnection.On<dynamic>("JobFailed", data =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadJobAsync();
+                Snackbar.Add("Job failed!", Severity.Error);
+            });
+        });
+
+        _hubConnection.On<dynamic>("JobCancelled", data =>
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadJobAsync();
+                Snackbar.Add("Job was cancelled", Severity.Warning);
+            });
+        });
+
+        await _hubConnection.StartAsync();
+        await _hubConnection.InvokeAsync("SubscribeToJob", JobId);
+    }
+
+    private async Task RequestCancellation()
+    {
+        if (_job == null) return;
+
+        await JobService.CancelJobAsync(_job.Id);
+        Snackbar.Add("Cancellation requested", Severity.Info);
+        await LoadJobAsync();
+    }
+
+    private void Close() => MudDialog.Close();
+
+    private string GetJobTypeDisplay(BackgroundJobType type)
+    {
+        return type switch
+        {
+            BackgroundJobType.RefreshMetadata => "Refresh Metadata",
+            BackgroundJobType.OrganizeFiles => "Organize Files",
+            BackgroundJobType.GenerateThumbnails => "Generate Thumbnails",
+            BackgroundJobType.VerifySourceUrls => "Verify Source URLs",
+            BackgroundJobType.ExportNfo => "Export NFO Files",
+            BackgroundJobType.DeleteVideos => "Delete Videos",
+            _ => type.ToString()
+        };
+    }
+
+    private Color GetStatusColor(BackgroundJobStatus status)
+    {
+        return status switch
+        {
+            BackgroundJobStatus.Pending => Color.Default,
+            BackgroundJobStatus.Running => Color.Info,
+            BackgroundJobStatus.Completed => Color.Success,
+            BackgroundJobStatus.Failed => Color.Error,
+            BackgroundJobStatus.Cancelled => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            await _hubConnection.InvokeAsync("UnsubscribeFromJob", JobId);
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}

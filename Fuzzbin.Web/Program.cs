@@ -214,6 +214,8 @@ try
     builder.Services.AddScoped<ISourceVerificationService, SourceVerificationService>();
     builder.Services.AddSingleton<IVideoUpdateNotifier, Fuzzbin.Web.Services.SignalRVideoUpdateNotifier>();
     builder.Services.AddScoped<IBackupService, BackupService>();
+    builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+    builder.Services.AddSingleton<IJobProgressNotifier, Fuzzbin.Web.Services.SignalRJobProgressNotifier>();
     
     // Add HttpContextAccessor for ActivityLogService
     builder.Services.AddHttpContextAccessor();
@@ -221,6 +223,7 @@ try
     // Register Background Services
     builder.Services.AddHostedService<DownloadBackgroundService>();
     builder.Services.AddHostedService<ThumbnailBackgroundService>();
+    builder.Services.AddHostedService<BackgroundJobProcessorService>();
 
     // Add health checks
     builder.Services.AddHealthChecks()
@@ -406,7 +409,8 @@ try
     app.MapRazorComponents<Fuzzbin.Web.Components.App>()
         .AddInteractiveServerRenderMode();
 
-app.MapHub<VideoUpdatesHub>("/hubs/updates");
+    app.MapHub<VideoUpdatesHub>("/hubs/updates");
+    app.MapHub<JobProgressHub>("/hubs/jobprogress");
 
     app.MapGet("/api/system/build-info", () =>
     {

@@ -27,6 +27,7 @@ namespace Fuzzbin.Data.Context
         public DbSet<LibraryImportSession> LibraryImportSessions { get; set; } = null!;
         public DbSet<LibraryImportItem> LibraryImportItems { get; set; } = null!;
         public DbSet<VideoSourceVerification> VideoSourceVerifications { get; set; } = null!;
+        public DbSet<BackgroundJob> BackgroundJobs { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -300,12 +301,30 @@ namespace Fuzzbin.Data.Context
                 entity.Property(e => e.Notes).HasMaxLength(1000);
 
                 entity.HasOne(e => e.Video)
-                    .WithMany()
+                    .WithMany(v => v.SourceVerifications)
                     .HasForeignKey(e => e.VideoId)
                     .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(e => e.VideoId);
                 entity.HasIndex(e => e.Status);
+            });
+
+            // Configure BackgroundJob entity
+            modelBuilder.Entity<BackgroundJob>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Type).HasConversion<string>().HasMaxLength(100);
+                entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(50);
+                entity.Property(e => e.StatusMessage).HasMaxLength(1000);
+                entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+                entity.Property(e => e.ParametersJson).HasColumnType("TEXT");
+                entity.Property(e => e.ResultJson).HasColumnType("TEXT");
+
+                entity.HasIndex(e => e.Type);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.StartedAt);
+                entity.HasIndex(e => e.CompletedAt);
             });
 
             // Seed initial configuration data with static dates

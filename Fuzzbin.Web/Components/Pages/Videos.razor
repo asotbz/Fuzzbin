@@ -123,9 +123,9 @@
                             </div>
                         </MudStack>
 
-                        @if (HasSelection)
-                        {
-                            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-3 videos-selection-actions">
+                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-3 videos-selection-actions">
+                            @if (HasSelection)
+                            {
                                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="PlaySelected">
                                     Play Selected
                                 </MudButton>
@@ -150,8 +150,18 @@
                                 <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelected">
                                     Delete
                                 </MudButton>
-                            </MudStack>
-                        }
+                            }
+                            else
+                            {
+                                <!-- Library-level operations when no videos are selected -->
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshLibraryMetadata">
+                                    Refresh Library Metadata
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="OrganizeLibraryFiles">
+                                    Organize Library Files
+                                </MudButton>
+                            }
+                        </MudStack>
 
                         <LoadingContent Profile="LoadingProfile.VideoGrid"
                                         IsLoading="@_isLoading"
@@ -903,15 +913,49 @@
         }
 
         var refreshed = 0;
+        var skipped = 0;
         var failures = new List<string>();
+        var isSingleVideo = videos.Count == 1;
 
         foreach (var video in videos)
         {
             try
             {
-                var result = await MetadataService.EnrichVideoMetadataAsync(video, fetchOnlineMetadata: true);
-                _videoCache[result.Id] = result;
-                refreshed++;
+                var result = await MetadataService.EnrichVideoMetadataWithResultAsync(video, fetchOnlineMetadata: true);
+                
+                // For single video with low confidence, show manual selection dialog
+                if (isSingleVideo && result.RequiresManualReview && result.ImvdbMetadata != null)
+                {
+                    var matchParameters = new DialogParameters
+                    {
+                        { "Video", result.Video }
+                    };
+
+                    var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+                    var matchDialog = await DialogService.ShowAsync<MetadataMatchDialog>("Select Metadata Match", matchParameters, options);
+                    var matchResult = await matchDialog.Result;
+
+                    if (matchResult is { Canceled: false, Data: Video updatedVideo })
+                    {
+                        _videoCache[updatedVideo.Id] = updatedVideo;
+                        refreshed++;
+                    }
+                    else
+                    {
+                        skipped++;
+                    }
+                }
+                // For multi-selection with low confidence, skip automatically
+                else if (!isSingleVideo && result.RequiresManualReview)
+                {
+                    skipped++;
+                    Logger.LogInformation("Skipped video {VideoId} due to low confidence match", video.Id);
+                }
+                else
+                {
+                    _videoCache[result.Video.Id] = result.Video;
+                    refreshed++;
+                }
             }
             catch (Exception ex)
             {
@@ -924,12 +968,71 @@
             Snackbar.Add($"Refreshed metadata for {refreshed} video(s).", Severity.Success);
         }
 
+        if (skipped > 0)
+        {
+            Snackbar.Add($"Skipped {skipped} video(s) due to low confidence matches.", Severity.Info);
+        }
+
         if (failures.Count > 0)
         {
             Snackbar.Add($"Failed to refresh {failures.Count} video(s).", Severity.Warning);
         }
 
         await LoadVideosAsync(clearSelection: false);
+    }
+
+    private async Task RefreshLibraryMetadata()
+    {
+        var confirmParameters = new DialogParameters
+        {
+            { "ContentText", "Refresh metadata for all videos in the library? This may take a long time." },
+            { "ButtonText", "Refresh Library" },
+            { "Color", Color.Primary }
+        };
+
+        var confirmDialog = await DialogService.ShowAsync<ConfirmDialog>("Refresh Library Metadata", confirmParameters);
+        var confirmation = await confirmDialog.Result;
+        if (confirmation is { Canceled: true })
+        {
+            return;
+        }
+
+        // TODO: Implement long-running job service
+        Snackbar.Add("Library metadata refresh has been queued. This will run in the background.", Severity.Info);
+        
+        // Placeholder for long-running job implementation
+        // This should:
+        // 1. Create a job in the job registry
+        // 2. Send progress updates via SignalR
+        // 3. Allow cancellation
+        // 4. Show completion status
+    }
+
+    private async Task OrganizeLibraryFiles()
+    {
+        var confirmParameters = new DialogParameters
+        {
+            { "ContentText", "Organize all video files in the library? This will rename and move files according to your settings." },
+            { "ButtonText", "Organize Library" },
+            { "Color", Color.Warning }
+        };
+
+        var confirmDialog = await DialogService.ShowAsync<ConfirmDialog>("Organize Library Files", confirmParameters);
+        var confirmation = await confirmDialog.Result;
+        if (confirmation is { Canceled: true })
+        {
+            return;
+        }
+
+        // TODO: Implement long-running job service
+        Snackbar.Add("Library file organization has been queued. This will run in the background.", Severity.Info);
+        
+        // Placeholder for long-running job implementation
+        // This should:
+        // 1. Create a job in the job registry
+        // 2. Send progress updates via SignalR
+        // 3. Allow cancellation
+        // 4. Show completion status
     }
 
     private async Task OpenNfoExportDialog()

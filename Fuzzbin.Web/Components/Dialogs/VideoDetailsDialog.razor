@@ -1,0 +1,293 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@inject IMetadataService MetadataService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_video != null && _metadata != null)
+        {
+            <MudStack Spacing="3">
+                <!-- Basic Information -->
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-2">Basic Information</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Title</MudText>
+                            <MudText Typo="Typo.body1">@_video.Title</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Artist</MudText>
+                            <MudText Typo="Typo.body1">@_video.Artist</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Year</MudText>
+                            <MudText Typo="Typo.body1">@(_video.Year?.ToString() ?? "N/A")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Duration</MudText>
+                            <MudText Typo="Typo.body1">@FormatDuration(_video.Duration)</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+
+                <!-- Source URLs Panel -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+                            <MudText Typo="Typo.subtitle1">Source URLs</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                @_metadata.SourceUrls.Count
+                            </MudChip>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (_metadata.SourceUrls.Any())
+                        {
+                            <MudList T="string" Dense="true">
+                                @foreach (var source in _metadata.SourceUrls)
+                                {
+                                    <MudListItem T="string">
+                                        <div class="d-flex align-center justify-space-between">
+                                            <div class="flex-grow-1">
+                                                <MudText Typo="Typo.body2">@source.Url</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @source.Provider
+                                                    @if (source.VerifiedAt.HasValue)
+                                                    {
+                                                        <span> • Verified @source.VerifiedAt.Value.ToString("MMM d, yyyy")</span>
+                                                    }
+                                                </MudText>
+                                            </div>
+                                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(source.Status)">
+                                                @source.Status
+                                            </MudChip>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">
+                                No source URLs available
+                            </MudText>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                <!-- Collections Panel -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Collections" Size="Size.Small" />
+                            <MudText Typo="Typo.subtitle1">Collections</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                @_metadata.Collections.Count
+                            </MudChip>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (_metadata.Collections.Any())
+                        {
+                            <MudList T="string" Dense="true">
+                                @foreach (var collection in _metadata.Collections)
+                                {
+                                    <MudListItem T="string">
+                                        <div class="d-flex align-center justify-space-between">
+                                            <div>
+                                                <MudText Typo="Typo.body2">@collection.Name</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @collection.Type • Added @collection.AddedAt.ToString("MMM d, yyyy")
+                                                </MudText>
+                                            </div>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">
+                                Not in any collections
+                            </MudText>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                <!-- Record Label/Publisher Panel -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" />
+                            <MudText Typo="Typo.subtitle1">Record Label & Publisher</MudText>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudGrid Spacing="2" Class="pa-4">
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Record Label</MudText>
+                                <MudText Typo="Typo.body2">@(_metadata.RecordLabel ?? _video.Publisher ?? "N/A")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Publisher</MudText>
+                                <MudText Typo="Typo.body2">@(_metadata.Publisher ?? _video.Publisher ?? "N/A")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Production Company</MudText>
+                                <MudText Typo="Typo.body2">@(_video.ProductionCompany ?? "N/A")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Verification Status</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="@GetVerificationColor(_metadata.VerificationStatus)">
+                                    @_metadata.VerificationStatus
+                                </MudChip>
+                            </MudItem>
+                        </MudGrid>
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                <!-- Technical Details Panel -->
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
+                            <MudText Typo="Typo.subtitle1">Technical Details</MudText>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudGrid Spacing="2" Class="pa-4">
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Resolution</MudText>
+                                <MudText Typo="Typo.body2">@(_video.Resolution ?? "N/A")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Video Codec</MudText>
+                                <MudText Typo="Typo.body2">@(_video.VideoCodec ?? "N/A")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Audio Codec</MudText>
+                                <MudText Typo="Typo.body2">@(_video.AudioCodec ?? "N/A")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Frame Rate</MudText>
+                                <MudText Typo="Typo.body2">@(_video.FrameRate?.ToString("F2") ?? "N/A") fps</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </ChildContent>
+                </MudExpansionPanel>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="RefreshMetadata">
+            Refresh Metadata
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid VideoId { get; set; }
+    [Parameter] public Video? Video { get; set; }
+
+    private Video? _video;
+    private VideoMetadata? _metadata;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVideoDetails();
+    }
+
+    private async Task LoadVideoDetails()
+    {
+        _loading = true;
+        try
+        {
+            // TODO: Load video from repository if not provided
+            _video = Video;
+            
+            if (_video != null)
+            {
+                // TODO: Build metadata from video entity and related data
+                _metadata = new VideoMetadata
+                {
+                    Title = _video.Title,
+                    Artist = _video.Artist,
+                    RecordLabel = _video.Publisher,
+                    Publisher = _video.Publisher,
+                    VerificationStatus = MetadataVerificationStatus.Unverified,
+                    // TODO: Load source URLs from VideoSourceVerification table
+                    // TODO: Load collections from CollectionVideo table
+                };
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshMetadata()
+    {
+        if (_video == null) return;
+
+        try
+        {
+            _loading = true;
+            await MetadataService.EnrichVideoMetadataAsync(_video, fetchOnlineMetadata: true);
+            await LoadVideoDetails();
+            Snackbar.Add("Metadata refreshed successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to refresh metadata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+
+    private string FormatDuration(int? seconds)
+    {
+        if (!seconds.HasValue) return "N/A";
+        var ts = TimeSpan.FromSeconds(seconds.Value);
+        return ts.Hours > 0 
+            ? $"{ts.Hours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}"
+            : $"{ts.Minutes:D2}:{ts.Seconds:D2}";
+    }
+
+    private Color GetStatusColor(VideoSourceVerificationStatus status)
+    {
+        return status switch
+        {
+            VideoSourceVerificationStatus.Verified => Color.Success,
+            VideoSourceVerificationStatus.Pending => Color.Warning,
+            VideoSourceVerificationStatus.Mismatch => Color.Error,
+            VideoSourceVerificationStatus.SourceMissing => Color.Error,
+            VideoSourceVerificationStatus.Failed => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private Color GetVerificationColor(MetadataVerificationStatus status)
+    {
+        return status switch
+        {
+            MetadataVerificationStatus.Verified => Color.Success,
+            MetadataVerificationStatus.ManuallyVerified => Color.Success,
+            MetadataVerificationStatus.NeedsReview => Color.Warning,
+            _ => Color.Default
+        };
+    }
+}

@@ -146,6 +146,28 @@ internal static class NfoTemplateBuilder
             }
         }
 
+        // Add source URLs if available
+        if (video.SourceVerifications?.Any() == true)
+        {
+            foreach (var source in video.SourceVerifications
+                .OrderByDescending(sv => sv.Status == VideoSourceVerificationStatus.Verified)
+                .ThenBy(sv => sv.SourceUrl))
+            {
+                if (!string.IsNullOrWhiteSpace(source.SourceUrl))
+                {
+                    var sourceElement = new XElement("source");
+                    sourceElement.SetAttributeValue("verified", (source.Status == VideoSourceVerificationStatus.Verified).ToString().ToLowerInvariant());
+                    sourceElement.SetAttributeValue("status", source.Status.ToString());
+                    if (source.VerifiedAt.HasValue)
+                    {
+                        sourceElement.SetAttributeValue("lastverified", source.VerifiedAt.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    }
+                    sourceElement.Value = source.SourceUrl;
+                    elements.Add(sourceElement);
+                }
+            }
+        }
+
         var metadataElement = BuildFuzzbinMetadata(video);
         if (metadataElement is not null)
         {
@@ -326,6 +348,39 @@ internal static class NfoTemplateBuilder
         AddElement(metadata, "filepath", NormalizePath(video.FilePath));
         AddElement(metadata, "thumbnailpath", NormalizePath(video.ThumbnailPath));
         AddElement(metadata, "nfopath", NormalizePath(video.NfoPath));
+
+        // Add source URLs (note: VideoSourceVerification needs to be loaded separately)
+        // This is a placeholder for when the Video entity includes navigation properties
+        // In practice, you would load these via repository with includes
+        
+        // Add collections the video belongs to
+        if (video.CollectionVideos?.Any() == true)
+        {
+            var collectionsElement = new XElement("collections");
+            foreach (var collectionVideo in video.CollectionVideos.OrderBy(cv => cv.AddedToCollectionDate))
+            {
+                if (collectionVideo.Collection != null)
+                {
+                    var collElement = new XElement("collection");
+                    AddElement(collElement, "name", collectionVideo.Collection.Name);
+                    AddElement(collElement, "type", collectionVideo.Collection.Type.ToString());
+                    AddElement(collElement, "dateadded", collectionVideo.AddedToCollectionDate.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                    if (collectionVideo.Position > 0)
+                    {
+                        AddElement(collElement, "position", collectionVideo.Position.ToString(CultureInfo.InvariantCulture));
+                    }
+                    if (!string.IsNullOrWhiteSpace(collectionVideo.Notes))
+                    {
+                        AddElement(collElement, "notes", collectionVideo.Notes);
+                    }
+                    collectionsElement.Add(collElement);
+                }
+            }
+            if (collectionsElement.HasElements)
+            {
+                metadata.Add(collectionsElement);
+            }
+        }
 
         return metadata.HasElements ? metadata : null;
     }

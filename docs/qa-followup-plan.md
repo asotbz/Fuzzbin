@@ -97,7 +97,7 @@ This document captures the remaining QA findings and proposes an implementation 
 - Replace the static page with a sortable, filterable MudTable bound to `Genre` records.  
 - Add selection support (checkbox column) and show counts of videos per genre to aid decisions.  
 - Provide bulk action toolbar:
-  - **Generalize Genres**: trigger dialog to choose target genre and persist mappings via `IGenreMappingDefaultsProvider`.  
+  - **Generalize Genres**: trigger dialog to choose target genre and persist mappings in database.
   - **Delete** (optional, if desired) with confirmation.
 - Update backend API:
   - Endpoint to fetch paged genre data with search/sort descriptors.  
@@ -160,7 +160,7 @@ This document captures the remaining QA findings and proposes an implementation 
 ## 9. Search Experience Improvements
 
 ### 9.1 Defaults & Filters
-- Default both “Include yt-dlp” and “Include IMVDb” toggles to `true`. Persist user preference if needed.  
+- Default both “Include yt-dlp” and “Include IMVDb” toggles to `true`. Persist user preference.  
 - Rename “Search Filters” section header to “Local Library”.
 
 ### 9.2 External Results Actions
@@ -189,7 +189,6 @@ This document captures the remaining QA findings and proposes an implementation 
 ## 11. Settings Overhaul
 
 ### 11.1 Remove Unused Features
-- Strip onboarding tour references (UI components, settings toggles).  
 - Remove Export/Import settings UI and backend endpoints.
 
 ### 11.2 Backup Restore
@@ -217,6 +216,7 @@ This document captures the remaining QA findings and proposes an implementation 
   - Option to choose whether NFO artist field uses primary artist only or includes featuring list (default includes featuring list).
   - When the above setting is enabled, also expose a setting allowing for featuring artists to be appended to track title (default off).
   - Option to write collection names as NFO tags (default off).
+  - Ensure only default genre mappings are sourced from genre_mapping.csv. The active genre mapping should be stored in the database.
 - Ensure default values defined in configuration provider and surfaced in UI.
 
 ### 11.6 Testing

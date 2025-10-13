@@ -26,6 +26,7 @@ public class MetadataService : IMetadataService
     private readonly IImvdbApi _imvdbApi;
     private readonly IOptionsMonitor<ImvdbOptions> _imvdbOptions;
     private readonly IImvdbApiKeyProvider _apiKeyProvider;
+    private readonly IThumbnailService _thumbnailService;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public MetadataService(
@@ -35,7 +36,8 @@ public class MetadataService : IMetadataService
         IMemoryCache cache,
         IImvdbApi imvdbApi,
         IOptionsMonitor<ImvdbOptions> imvdbOptions,
-        IImvdbApiKeyProvider apiKeyProvider)
+        IImvdbApiKeyProvider apiKeyProvider,
+        IThumbnailService thumbnailService)
     {
         _logger = logger;
         _unitOfWork = unitOfWork;
@@ -43,9 +45,10 @@ public class MetadataService : IMetadataService
         _imvdbApi = imvdbApi;
         _imvdbOptions = imvdbOptions;
         _apiKeyProvider = apiKeyProvider;
+        _thumbnailService = thumbnailService;
         _httpClient = httpClientFactory.CreateClient();
-        _jsonOptions = new JsonSerializerOptions 
-        { 
+        _jsonOptions = new JsonSerializerOptions
+        {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
@@ -301,6 +304,126 @@ public class MetadataService : IMetadataService
         }
 
         return null;
+    }
+
+    public async Task<List<ImvdbMetadata>> GetTopMatchesAsync(string artist, string title, int maxResults = 5, CancellationToken cancellationToken = default)
+    {
+        var results = new List<ImvdbMetadata>();
+
+        if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
+        {
+            _logger.LogWarning("Cannot query IMVDb with missing artist or title");
+            return results;
+        }
+
+        var trimmedArtist = artist.Trim();
+        var trimmedTitle = title.Trim();
+
+        var apiKey = await _apiKeyProvider.GetApiKeyAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogWarning("IMVDb API key not configured");
+            return results;
+        }
+
+        try
+        {
+            var query = $"{trimmedArtist} {trimmedTitle}";
+            var searchResponse = await _imvdbApi.SearchVideosAsync(
+                query,
+                perPage: Math.Max(maxResults, 10),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (searchResponse?.Results == null || searchResponse.Results.Count == 0)
+            {
+                return results;
+            }
+
+            // Get top N results
+            var topResults = searchResponse.Results
+                .Take(maxResults)
+                .ToList();
+
+            foreach (var summary in topResults)
+            {
+                try
+                {
+                    var confidence = ImvdbMapper.ComputeMatchConfidence(trimmedArtist, trimmedTitle, summary);
+                    var videoResponse = await _imvdbApi.GetVideoAsync(
+                        summary.Id.ToString(CultureInfo.InvariantCulture),
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (videoResponse != null)
+                    {
+                        var metadata = ImvdbMapper.MapToMetadata(videoResponse, summary, confidence);
+                        results.Add(metadata);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to fetch details for IMVDb video {Id}", summary.Id);
+                }
+            }
+
+            return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching top matches from IMVDb for {Artist} - {Title}", trimmedArtist, trimmedTitle);
+            return results;
+        }
+    }
+
+    public async Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            video.ImvdbId = metadata.ImvdbId?.ToString();
+            video.Director = metadata.Director;
+            video.ProductionCompany = metadata.ProductionCompany;
+            video.Publisher = metadata.RecordLabel;
+            video.Description = metadata.Description;
+            video.Year = metadata.Year;
+
+            // Clear and add genres
+            video.Genres.Clear();
+            foreach (var genreName in metadata.Genres)
+            {
+                var existingGenre = await _unitOfWork.Genres
+                    .FirstOrDefaultAsync(g => g.Name == genreName);
+
+                if (existingGenre != null)
+                {
+                    video.Genres.Add(existingGenre);
+                }
+                else
+                {
+                    video.Genres.Add(new Genre { Name = genreName });
+                }
+            }
+
+            // Clear and add featured artists
+            video.FeaturedArtists.Clear();
+            if (!string.IsNullOrEmpty(metadata.FeaturedArtists))
+            {
+                foreach (var artistName in metadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
+                }
+            }
+
+            video.UpdatedAt = DateTime.UtcNow;
+            await _unitOfWork.Videos.UpdateAsync(video);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Applied IMVDb metadata to video {VideoId} from IMVDb ID {ImvdbId}", video.Id, metadata.ImvdbId);
+            return video;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error applying IMVDb metadata to video {VideoId}", video.Id);
+            throw;
+        }
     }
 
     public async Task<MusicBrainzMetadata?> GetMusicBrainzMetadataAsync(string artist, string title, CancellationToken cancellationToken = default)
@@ -595,6 +718,14 @@ public class MetadataService : IMetadataService
 
     public async Task<Video> EnrichVideoMetadataAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default)
     {
+        var result = await EnrichVideoMetadataWithResultAsync(video, fetchOnlineMetadata, cancellationToken);
+        return result.Video;
+    }
+
+    public async Task<MetadataEnrichmentResult> EnrichVideoMetadataWithResultAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default)
+    {
+        var result = new MetadataEnrichmentResult { Video = video };
+
         try
         {
             // Extract metadata from file if available
@@ -648,6 +779,9 @@ public class MetadataService : IMetadataService
                 var imvdbMetadata = await GetImvdbMetadataAsync(video.Artist, video.Title, cancellationToken);
                 if (imvdbMetadata != null)
                 {
+                    result.ImvdbMetadata = imvdbMetadata;
+                    result.MatchConfidence = imvdbMetadata.Confidence;
+
                     if (imvdbMetadata.Confidence >= 0.9)
                     {
                         video.ImvdbId = imvdbMetadata.ImvdbId?.ToString();
@@ -665,9 +799,11 @@ public class MetadataService : IMetadataService
                                 video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
                             }
                         }
+                        result.MetadataApplied = true;
                     }
                     else
                     {
+                        result.RequiresManualReview = true;
                         _logger.LogInformation(
                             "Skipping automatic IMVDb metadata apply for video {VideoId} due to low confidence {Confidence:P0}",
                             video.Id,
@@ -691,7 +827,7 @@ public class MetadataService : IMetadataService
             await _unitOfWork.SaveChangesAsync();
             
             _logger.LogInformation("Enriched metadata for video {VideoId}", video.Id);
-            return video;
+            return result;
         }
         catch (Exception ex)
         {
@@ -722,6 +858,58 @@ public class MetadataService : IMetadataService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error downloading thumbnail from {Url}", thumbnailUrl);
+            return null;
+        }
+    }
+
+    public async Task<string?> EnsureThumbnailAsync(Video video, string? remoteImageUrl = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Check if video already has a thumbnail
+            if (_thumbnailService.HasThumbnail(video))
+            {
+                return _thumbnailService.GetThumbnailPath(video);
+            }
+
+            // Try to download from remote URL if provided
+            if (!string.IsNullOrEmpty(remoteImageUrl))
+            {
+                var thumbnailPath = _thumbnailService.GetThumbnailPath(video);
+                var downloaded = await DownloadThumbnailAsync(remoteImageUrl, thumbnailPath, cancellationToken);
+                
+                if (downloaded != null)
+                {
+                    video.ThumbnailPath = Path.GetFileName(thumbnailPath);
+                    await _unitOfWork.Videos.UpdateAsync(video);
+                    await _unitOfWork.SaveChangesAsync();
+                    _logger.LogInformation("Downloaded remote thumbnail for video {VideoId}", video.Id);
+                    return thumbnailPath;
+                }
+            }
+
+            // Fallback: Generate thumbnail from local video file
+            if (!string.IsNullOrEmpty(video.FilePath) && File.Exists(video.FilePath))
+            {
+                var thumbnailPath = _thumbnailService.GetThumbnailPath(video);
+                var generated = await _thumbnailService.GenerateThumbnailAsync(video.FilePath, thumbnailPath, cancellationToken: cancellationToken);
+                
+                if (generated)
+                {
+                    video.ThumbnailPath = Path.GetFileName(thumbnailPath);
+                    await _unitOfWork.Videos.UpdateAsync(video);
+                    await _unitOfWork.SaveChangesAsync();
+                    _logger.LogInformation("Generated local thumbnail for video {VideoId}", video.Id);
+                    return thumbnailPath;
+                }
+            }
+
+            _logger.LogWarning("Unable to ensure thumbnail for video {VideoId}", video.Id);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error ensuring thumbnail for video {VideoId}", video.Id);
             return null;
         }
     }

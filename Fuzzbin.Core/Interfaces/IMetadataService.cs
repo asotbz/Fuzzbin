@@ -15,6 +15,11 @@ public interface IMetadataService
     Task<ImvdbMetadata?> GetImvdbMetadataAsync(string artist, string title, CancellationToken cancellationToken = default);
     
     /// <summary>
+    /// Fetches top N metadata matches from IMVDb for manual selection
+    /// </summary>
+    Task<List<ImvdbMetadata>> GetTopMatchesAsync(string artist, string title, int maxResults = 5, CancellationToken cancellationToken = default);
+    
+    /// <summary>
     /// Fetches metadata from MusicBrainz for audio information
     /// </summary>
     Task<MusicBrainzMetadata?> GetMusicBrainzMetadataAsync(string artist, string title, CancellationToken cancellationToken = default);
@@ -35,9 +40,33 @@ public interface IMetadataService
     Task<Video> EnrichVideoMetadataAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default);
     
     /// <summary>
+    /// Updates video entity with metadata from various sources and returns enrichment result
+    /// </summary>
+    Task<MetadataEnrichmentResult> EnrichVideoMetadataWithResultAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Applies selected IMVDb metadata to a video
+    /// </summary>
+    Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default);
+    
+    /// <summary>
     /// Downloads thumbnail for a video
     /// </summary>
     Task<string?> DownloadThumbnailAsync(string thumbnailUrl, string outputPath, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Ensures video has a thumbnail, downloading from remote or generating from local file
+    /// </summary>
+    Task<string?> EnsureThumbnailAsync(Video video, string? remoteImageUrl = null, CancellationToken cancellationToken = default);
+}
+
+public class MetadataEnrichmentResult
+{
+    public Video Video { get; set; } = null!;
+    public ImvdbMetadata? ImvdbMetadata { get; set; }
+    public double MatchConfidence { get; set; }
+    public bool MetadataApplied { get; set; }
+    public bool RequiresManualReview { get; set; }
 }
 
 public class VideoMetadata
@@ -58,6 +87,57 @@ public class VideoMetadata
     public string? Container { get; set; }
     public long FileSize { get; set; }
     public Dictionary<string, string> Tags { get; set; } = new();
+    
+    /// <summary>
+    /// List of source URLs with verification status
+    /// </summary>
+    public List<VideoSourceInfo> SourceUrls { get; set; } = new();
+    
+    /// <summary>
+    /// List of collections this video belongs to
+    /// </summary>
+    public List<CollectionMembershipInfo> Collections { get; set; } = new();
+    
+    /// <summary>
+    /// Record label/publisher information
+    /// </summary>
+    public string? RecordLabel { get; set; }
+    
+    /// <summary>
+    /// Publisher information
+    /// </summary>
+    public string? Publisher { get; set; }
+    
+    /// <summary>
+    /// Verification status for metadata
+    /// </summary>
+    public MetadataVerificationStatus VerificationStatus { get; set; }
+}
+
+public class VideoSourceInfo
+{
+    public string? Url { get; set; }
+    public string? Provider { get; set; }
+    public VideoSourceVerificationStatus Status { get; set; }
+    public double Confidence { get; set; }
+    public DateTime? VerifiedAt { get; set; }
+}
+
+public class CollectionMembershipInfo
+{
+    public Guid CollectionId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public CollectionType Type { get; set; }
+    public DateTime AddedAt { get; set; }
+    public int Position { get; set; }
+}
+
+public enum MetadataVerificationStatus
+{
+    Unverified = 0,
+    Verified = 1,
+    ManuallyVerified = 2,
+    NeedsReview = 3
 }
 
 public class ImvdbMetadata  

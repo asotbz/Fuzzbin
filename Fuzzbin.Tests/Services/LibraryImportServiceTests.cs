@@ -167,5 +167,9 @@ public class LibraryImportServiceTests : IAsyncLifetime
         public Task<NfoData?> ReadNfoAsync(string nfoPath, CancellationToken cancellationToken = default) => Task.FromResult<NfoData?>(null);
         public Task<Video> EnrichVideoMetadataAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default) => Task.FromResult(video);
         public Task<string?> DownloadThumbnailAsync(string thumbnailUrl, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task<List<ImvdbMetadata>> GetTopMatchesAsync(string artist, string title, int maxResults = 5, CancellationToken cancellationToken = default) => Task.FromResult(new List<ImvdbMetadata>());
+        public Task<MetadataEnrichmentResult> EnrichVideoMetadataWithResultAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default) => Task.FromResult(new MetadataEnrichmentResult { Video = video, MatchConfidence = 1.0 });
+        public Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default) => Task.FromResult(video);
+        public Task<string?> EnsureThumbnailAsync(Video video, string? videoFilePath = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
     }
 }

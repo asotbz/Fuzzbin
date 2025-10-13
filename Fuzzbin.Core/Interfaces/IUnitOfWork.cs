@@ -55,6 +55,11 @@ namespace Fuzzbin.Core.Interfaces
         IRepository<UserPreference> UserPreferences { get; }
 
         /// <summary>
+        /// Repository for BackgroundJob entities
+        /// </summary>
+        IRepository<BackgroundJob> BackgroundJobs { get; }
+
+        /// <summary>
         /// Save all changes to the database
         /// </summary>
         Task<int> SaveChangesAsync();

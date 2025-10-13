@@ -1,0 +1,184 @@
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
+@inject IMetadataService MetadataService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+            <MudText Class="mt-2">Searching for matches...</MudText>
+        }
+        else if (_matches.Count > 0)
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">
+                Select Best Match for "@Video.Title" by @Video.Artist
+            </MudText>
+            
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Automatic match confidence was below 90%. Please select the best match or skip to keep existing metadata.
+            </MudAlert>
+
+            <MudStack Spacing="2">
+                @foreach (var (match, index) in _matches.Select((m, i) => (m, i)))
+                {
+                    var isSelected = _selectedMatch == match;
+                    <MudPaper Elevation="@(isSelected ? 4 : 1)" 
+                              Class="@($"pa-3 {(isSelected ? "mud-theme-primary" : "")}")"
+                              Style="@(isSelected ? "border: 2px solid var(--mud-palette-primary);" : "cursor: pointer;")"
+                              @onclick="@(() => SelectMatch(match))">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.subtitle1">
+                                            <strong>@match.Title</strong>
+                                        </MudText>
+                                        <MudText Typo="Typo.body2">
+                                            by @match.Artist
+                                        </MudText>
+                                    </div>
+                                    <MudChip T="string" Size="Size.Small" Color="@GetConfidenceColor(match.Confidence)">
+                                        @((match.Confidence * 100).ToString("F0"))% Match
+                                    </MudChip>
+                                </div>
+                            </MudItem>
+                            
+                            @if (!string.IsNullOrEmpty(match.Description))
+                            {
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @match.Description
+                                    </MudText>
+                                </MudItem>
+                            }
+                            
+                            <MudItem xs="12">
+                                <MudStack Row="true" Spacing="1">
+                                    @if (match.Year.HasValue)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                            @match.Year
+                                        </MudChip>
+                                    }
+                                    @if (!string.IsNullOrEmpty(match.Director))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                            Dir: @match.Director
+                                        </MudChip>
+                                    }
+                                    @if (match.Genres.Any())
+                                    {
+                                        foreach (var genre in match.Genres.Take(3))
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                                @genre
+                                            </MudChip>
+                                        }
+                                    }
+                                </MudStack>
+                            </MudItem>
+                            
+                            @if (!string.IsNullOrEmpty(match.ImageUrl))
+                            {
+                                <MudItem xs="12" sm="4">
+                                    <MudImage Src="@match.ImageUrl" Alt="@match.Title" 
+                                             ObjectFit="ObjectFit.Cover" 
+                                             Height="120" 
+                                             Class="rounded" />
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning">
+                No matches found for "@Video.Title" by @Video.Artist
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Skip">Skip</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled" 
+                   Disabled="@(_selectedMatch == null)"
+                   OnClick="ApplySelected">
+            Apply Selected
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Video Video { get; set; } = null!;
+    [Parameter] public int MaxResults { get; set; } = 5;
+
+    private List<ImvdbMetadata> _matches = new();
+    private ImvdbMetadata? _selectedMatch;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMatches();
+    }
+
+    private async Task LoadMatches()
+    {
+        _loading = true;
+        try
+        {
+            _matches = await MetadataService.GetTopMatchesAsync(Video.Artist, Video.Title, MaxResults);
+            
+            // Auto-select the first match if available
+            if (_matches.Count > 0)
+            {
+                _selectedMatch = _matches[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load matches: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectMatch(ImvdbMetadata match)
+    {
+        _selectedMatch = match;
+    }
+
+    private async Task ApplySelected()
+    {
+        if (_selectedMatch == null) return;
+
+        try
+        {
+            var updatedVideo = await MetadataService.UpdateVideoFromImvdbMetadataAsync(Video, _selectedMatch);
+            MudDialog.Close(DialogResult.Ok(updatedVideo));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to apply metadata: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Skip()
+    {
+        MudDialog.Cancel();
+    }
+
+    private Color GetConfidenceColor(double confidence)
+    {
+        if (confidence >= 0.9) return Color.Success;
+        if (confidence >= 0.7) return Color.Info;
+        if (confidence >= 0.5) return Color.Warning;
+        return Color.Error;
+    }
+}

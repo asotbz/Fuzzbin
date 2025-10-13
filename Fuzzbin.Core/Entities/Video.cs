@@ -162,5 +162,10 @@ namespace Fuzzbin.Core.Entities
         /// Collections this video belongs to
         /// </summary>
         public virtual ICollection<CollectionVideo> CollectionVideos { get; set; } = new List<CollectionVideo>();
+
+        /// <summary>
+        /// Source URL verifications for this video
+        /// </summary>
+        public virtual ICollection<VideoSourceVerification> SourceVerifications { get; set; } = new List<VideoSourceVerification>();
     }
 }

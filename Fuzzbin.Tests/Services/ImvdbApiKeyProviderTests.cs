@@ -94,6 +94,7 @@ public class ImvdbApiKeyProviderTests
         public ICollectionRepository Collections => throw new NotSupportedException();
         public IRepository<CollectionVideo> CollectionVideos => throw new NotSupportedException();
         public IRepository<UserPreference> UserPreferences => throw new NotSupportedException();
+        public IRepository<BackgroundJob> BackgroundJobs => throw new NotSupportedException();
 
         public Task<int> SaveChangesAsync() => Task.FromResult(0);
         public Task BeginTransactionAsync() => Task.CompletedTask;
