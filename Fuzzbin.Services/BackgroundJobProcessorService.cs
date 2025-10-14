@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -58,10 +59,38 @@ public class BackgroundJobProcessorService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var backgroundJobService = scope.ServiceProvider.GetRequiredService<IBackgroundJobService>();
+        var progressNotifier = scope.ServiceProvider.GetRequiredService<IJobProgressNotifier>();
 
-        // Get pending jobs
-        var allJobs = await unitOfWork.BackgroundJobs.GetAllAsync();
-        var pendingJobs = allJobs.Where(j => j.Status == BackgroundJobStatus.Pending && j.IsActive).ToList();
+        // Get pending jobs (query directly to avoid loading all jobs)
+        var pendingJobs = unitOfWork.BackgroundJobs
+            .GetQueryable()
+            .Where(j => j.Status == BackgroundJobStatus.Pending && j.IsActive)
+            .OrderBy(j => j.CreatedAt)
+            .ToList();
+
+        // Enforce singleton per job type: keep earliest Pending per Type, cancel subsequent duplicates
+        var seenTypes = new HashSet<BackgroundJobType>();
+        var duplicateCancelled = false;
+        foreach (var dup in pendingJobs.Where(j => !seenTypes.Add(j.Type)))
+        {
+            dup.Status = BackgroundJobStatus.Cancelled;
+            dup.CompletedAt = DateTime.UtcNow;
+            dup.ErrorMessage = "Cancelled (duplicate pending singleton job of same type)";
+            duplicateCancelled = true;
+        }
+        if (duplicateCancelled)
+        {
+            await unitOfWork.SaveChangesAsync();
+            // Notify cancellations for duplicates
+            foreach (var cancelled in pendingJobs.Where(j => j.Status == BackgroundJobStatus.Cancelled))
+            {
+                await progressNotifier.NotifyJobCancelledAsync(cancelled.Id, cancellationToken);
+            }
+            // Only process the first instance per type
+            pendingJobs = pendingJobs
+                .Where(j => j.Status == BackgroundJobStatus.Pending)
+                .ToList();
+        }
 
         foreach (var job in pendingJobs)
         {
@@ -72,21 +101,58 @@ public class BackgroundJobProcessorService : BackgroundService
             {
                 _logger.LogInformation("Starting background job {JobId} of type {JobType}", job.Id, job.Type);
 
+                // If cancellation was requested before starting, mark cancelled and skip
+                if (job.CancellationRequested)
+                {
+                    job.Status = BackgroundJobStatus.Cancelled;
+                    job.CompletedAt = DateTime.UtcNow;
+
+                    // Serialize structured result
+                    job.ResultJson = JsonSerializer.Serialize(
+                        BackgroundJobResult.Create(job, "Cancelled before start"));
+
+                    await unitOfWork.SaveChangesAsync();
+                    _logger.LogInformation("Background job {JobId} cancelled prior to execution", job.Id);
+                    await progressNotifier.NotifyJobCancelledAsync(job.Id, cancellationToken);
+                    continue;
+                }
+
                 // Update job status to running
                 job.Status = BackgroundJobStatus.Running;
                 job.StartedAt = DateTime.UtcNow;
                 await unitOfWork.SaveChangesAsync();
+                await progressNotifier.NotifyJobStartedAsync(job.Id, job.Type, cancellationToken);
 
                 // Execute the job based on type
                 await ExecuteJobAsync(scope.ServiceProvider, job, cancellationToken);
 
-                // Mark as completed
-                job.Status = BackgroundJobStatus.Completed;
-                job.CompletedAt = DateTime.UtcNow;
-                job.Progress = 100;
-                await unitOfWork.SaveChangesAsync();
+                // After execution decide final status (cancelled vs completed)
+                if (job.CancellationRequested)
+                {
+                    job.Status = BackgroundJobStatus.Cancelled;
+                    job.CompletedAt = DateTime.UtcNow;
+                    if (job.Progress >= 100) job.Progress = 99; // ensure not reported as fully completed
 
-                _logger.LogInformation("Background job {JobId} completed successfully", job.Id);
+                    job.ResultJson = JsonSerializer.Serialize(
+                        BackgroundJobResult.Create(job, "Cancelled during execution"));
+
+                    await unitOfWork.SaveChangesAsync();
+                    _logger.LogInformation("Background job {JobId} cancelled during execution", job.Id);
+                    await progressNotifier.NotifyJobCancelledAsync(job.Id, cancellationToken);
+                }
+                else
+                {
+                    job.Status = BackgroundJobStatus.Completed;
+                    job.CompletedAt = DateTime.UtcNow;
+                    job.Progress = 100;
+
+                    job.ResultJson = JsonSerializer.Serialize(
+                        BackgroundJobResult.Create(job, "Completed successfully"));
+
+                    await unitOfWork.SaveChangesAsync();
+                    _logger.LogInformation("Background job {JobId} completed successfully", job.Id);
+                    await progressNotifier.NotifyJobCompletedAsync(job.Id, null, cancellationToken);
+                }
             }
             catch (Exception ex)
             {
@@ -95,7 +161,12 @@ public class BackgroundJobProcessorService : BackgroundService
                 job.Status = BackgroundJobStatus.Failed;
                 job.ErrorMessage = ex.Message;
                 job.CompletedAt = DateTime.UtcNow;
+
+                job.ResultJson = JsonSerializer.Serialize(
+                    BackgroundJobResult.Create(job, $"Failed: {ex.Message}"));
+
                 await unitOfWork.SaveChangesAsync();
+                await progressNotifier.NotifyJobFailedAsync(job.Id, ex.Message, cancellationToken);
             }
         }
     }
@@ -165,4 +236,11 @@ public class BackgroundJobProcessorService : BackgroundService
             _logger.LogError(ex, "Error performing background job cleanup");
         }
     }
+
+    /// <summary>
+    /// Single processing iteration (no delay loop) exposed for unit tests.
+    /// Allows tests to enqueue jobs and invoke processing deterministically.
+    /// </summary>
+    public Task ProcessOnceForTestsAsync(CancellationToken cancellationToken = default) =>
+        ProcessPendingJobsAsync(cancellationToken);
 }

@@ -441,6 +441,66 @@ try
         .WithName("GetSystemMetrics")
         .AllowAnonymous();
 
+    // Background Job API Endpoints
+    // GET /api/jobs?status=Running&limit=50
+    app.MapGet("/api/jobs", async (IBackgroundJobService jobService, string? status, int? limit, CancellationToken ct) =>
+    {
+        BackgroundJobStatus? parsedStatus = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (Enum.TryParse<BackgroundJobStatus>(status, true, out var st))
+            {
+                parsedStatus = st;
+            }
+            else
+            {
+                return Results.BadRequest(new { message = $"Invalid status value '{status}'." });
+            }
+        }
+        var jobs = await jobService.GetJobsAsync(parsedStatus, limit, ct);
+        return Results.Ok(jobs);
+    })
+    .WithName("ListJobs");
+
+    // GET /api/jobs/{jobId}
+    app.MapGet("/api/jobs/{jobId:guid}", async (IBackgroundJobService jobService, Guid jobId, CancellationToken ct) =>
+    {
+        var job = await jobService.GetJobAsync(jobId, ct);
+        return job is null ? Results.NotFound() : Results.Ok(job);
+    })
+    .WithName("GetJob");
+
+    // POST /api/jobs/{type}  (singleton enqueue)
+    app.MapPost("/api/jobs/{type}", async (IBackgroundJobService jobService, string type, CancellationToken ct) =>
+    {
+        if (!Enum.TryParse<BackgroundJobType>(type, true, out var jobType))
+        {
+            return Results.BadRequest(new { message = $"Unknown job type '{type}'." });
+        }
+
+        var (created, job) = await jobService.TryEnqueueSingletonJobAsync(jobType, null, ct);
+        if (created)
+        {
+            return Results.Accepted($"/api/jobs/{job.Id}", job);
+        }
+        return Results.Ok(new
+        {
+            message = "Job of this type is already active (singleton).",
+            existingJobId = job.Id,
+            job.Status,
+            job.Progress
+        });
+    })
+    .WithName("EnqueueSingletonJob");
+
+    // POST /api/jobs/{jobId}/cancel
+    app.MapPost("/api/jobs/{jobId:guid}/cancel", async (IBackgroundJobService jobService, Guid jobId, CancellationToken ct) =>
+    {
+        await jobService.CancelJobAsync(jobId, ct);
+        return Results.Accepted();
+    })
+    .WithName("CancelJob");
+
     app.MapGet("/api/videos/stream", async (
         string path,
         ILibraryPathManager libraryPathManager,

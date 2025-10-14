@@ -65,5 +65,17 @@ namespace Fuzzbin.Core.Interfaces
         /// Delete old completed jobs
         /// </summary>
         Task CleanupOldJobsAsync(TimeSpan olderThan, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Get the currently active (Pending or Running) job for a specific type, if any.
+        /// </summary>
+        Task<BackgroundJob?> GetActiveJobByTypeAsync(BackgroundJobType type, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Attempt to enqueue a singleton job of the given type.
+        /// If a Pending or Running job of that type already exists, returns (created: false, existingJob).
+        /// Otherwise creates a new Pending job and returns (created: true, newJob).
+        /// </summary>
+        Task<(bool created, BackgroundJob job)> TryEnqueueSingletonJobAsync(BackgroundJobType type, string? parametersJson = null, CancellationToken cancellationToken = default);
     }
 }

@@ -472,3 +472,5 @@ Pending Decision Flags
 - (A) Include backup job stub now vs later
 - (B) Job retention eviction policy in M1?
 - (C) Merge large taxonomy operations via background job threshold (defer?)
+
+[2025-10-13 21:26:50 UTC] - Integrated library-wide operation triggers in [`Videos.razor`](Fuzzbin.Web/Components/Pages/Videos.razor:995) replacing TODOs: now enqueue singleton jobs via POST /api/jobs/RefreshMetadata and /api/jobs/OrganizeFiles with user feedback (Snackbar). Pending: dedicated job monitoring UI, cancellation surface in UI, tests, documentation update.

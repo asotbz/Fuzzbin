@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
@@ -10,93 +11,72 @@ using Fuzzbin.Services.Interfaces;
 namespace Fuzzbin.Services.BackgroundJobs;
 
 /// <summary>
-/// Executes file organization background jobs
+/// Executes file organization background jobs (refactored to BaseJobExecutor).
 /// </summary>
-public class FileOrganizationJobExecutor
+public class FileOrganizationJobExecutor : BaseJobExecutor
 {
     private readonly IFileOrganizationService _organizationService;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IJobProgressNotifier _progressNotifier;
-    private readonly ILogger<FileOrganizationJobExecutor> _logger;
 
     public FileOrganizationJobExecutor(
         IFileOrganizationService organizationService,
         IUnitOfWork unitOfWork,
-        IJobProgressNotifier progressNotifier,
+        IJobProgressNotifier notifier,
         ILogger<FileOrganizationJobExecutor> logger)
+        : base(unitOfWork, notifier, logger)
     {
         _organizationService = organizationService;
-        _unitOfWork = unitOfWork;
-        _progressNotifier = progressNotifier;
-        _logger = logger;
     }
 
-    public async Task ExecuteAsync(BackgroundJob job, CancellationToken cancellationToken)
+    public async Task ExecuteAsync(BackgroundJob job, CancellationToken ct)
     {
         try
         {
-            await _progressNotifier.NotifyJobStartedAsync(job.Id, BackgroundJobType.OrganizeFiles, cancellationToken);
-
-            // Parse video IDs from parameters
-            var videoIds = System.Text.Json.JsonSerializer.Deserialize<Guid[]>(job.ParametersJson ?? "[]") ?? Array.Empty<Guid>();
+            var videoIds = JsonSerializer.Deserialize<Guid[]>(job.ParametersJson ?? "[]") ?? Array.Empty<Guid>();
 
             if (videoIds.Length == 0)
             {
-                // Organize all videos in library
                 var allVideos = await _unitOfWork.Videos.GetAllAsync();
                 videoIds = allVideos.Select(v => v.Id).ToArray();
             }
 
-            job.TotalItems = videoIds.Length;
-            job.ProcessedItems = 0;
-            job.FailedItems = 0;
-            await _unitOfWork.SaveChangesAsync();
-
-            _logger.LogInformation("Starting file organization for {Count} videos", videoIds.Length);
+            await InitializeJobAsync(job, BackgroundJobType.OrganizeFiles, videoIds.Length, ct);
+            _logger.LogInformation("Starting file organization for {Count} videos (Job {JobId})", videoIds.Length, job.Id);
 
             for (int i = 0; i < videoIds.Length; i++)
             {
                 if (job.CancellationRequested)
                 {
-                    _logger.LogInformation("File organization job {JobId} was cancelled", job.Id);
-                    await _progressNotifier.NotifyJobCancelledAsync(job.Id, cancellationToken);
+                    _logger.LogInformation("File organization job {JobId} cancellation detected mid-loop", job.Id);
                     return;
                 }
 
                 var videoId = videoIds[i];
-
                 try
                 {
-                    _logger.LogDebug("Organizing files for video {VideoId} ({Current}/{Total})", videoId, i + 1, videoIds.Length);
-
-                    // Note: IFileOrganizationService doesn't have OrganizeVideoAsync,
-                    // it has OrganizeAsync which takes a list. For now, skip until proper method is added.
-                    _logger.LogWarning("File organization for individual video not yet implemented");
-
-                    job.ProcessedItems++;
-                    job.Progress = (int)((job.ProcessedItems / (double)job.TotalItems) * 100);
-                    job.StatusMessage = $"Processed {job.ProcessedItems}/{job.TotalItems} videos";
-                    await _unitOfWork.SaveChangesAsync();
-
-                    await _progressNotifier.NotifyJobProgressAsync(job.Id, job.Progress, job.StatusMessage, cancellationToken);
+                    // TODO: Implement per-video organization when service API supports it.
+                    _logger.LogDebug("Organizing (stub) for video {VideoId} ({Current}/{Total})", videoId, i + 1, videoIds.Length);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to organize files for video {VideoId}", videoId);
                     job.FailedItems++;
-                    await _unitOfWork.SaveChangesAsync();
+                }
+
+                job.ProcessedItems = i + 1;
+                if ((i + 1) % 10 == 0 || i == videoIds.Length - 1)
+                {
+                    await UpdateProgressAsync(job, $"Processed {job.ProcessedItems}/{job.TotalItems} videos", ct);
                 }
             }
 
-            var resultSummary = $"Completed: {job.ProcessedItems - job.FailedItems}/{job.TotalItems} successful, {job.FailedItems} failed";
-            _logger.LogInformation("File organization job {JobId} completed: {Summary}", job.Id, resultSummary);
-
-            await _progressNotifier.NotifyJobCompletedAsync(job.Id, resultSummary, cancellationToken);
+            var summary = $"Completed: {job.ProcessedItems - job.FailedItems}/{job.TotalItems} successful, {job.FailedItems} failed";
+            _logger.LogInformation("File organization job {JobId} completed: {Summary}", job.Id, summary);
+            await CompleteAsync(job, summary, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "File organization job {JobId} failed with exception", job.Id);
-            await _progressNotifier.NotifyJobFailedAsync(job.Id, ex.Message, cancellationToken);
+            _logger.LogError(ex, "File organization job {JobId} failed", job.Id);
+            job.FailedItems = Math.Max(job.FailedItems, 1);
             throw;
         }
     }

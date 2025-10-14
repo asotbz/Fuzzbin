@@ -1160,6 +1160,96 @@ CREATE INDEX idx_videos_year ON Videos(Year);
 }
 ```
 
+## Background Job Orchestration (Implemented)
+
+Fuzzbin includes a lightweight, extensible background job orchestration layer purpose‑built for library‑wide and long‑running maintenance operations (metadata refresh, file organization, verification, export, backup, thumbnail regeneration).
+
+### Core Model
+
+- Job Entity: [`BackgroundJob`](Fuzzbin.Core/Entities/BackgroundJob.cs:8) – single row per logical execution with lifecycle & progress fields (Type, Status, Progress %, Item counts, StatusMessage, CancellationRequested, ParametersJson, ResultJson, Timestamps).
+- Structured Result: [`BackgroundJobResult`](Fuzzbin.Core/Entities/BackgroundJobResult.cs:9) – normalized terminal payload (counts, timing, summary, error/cancel flags) serialized into `BackgroundJob.ResultJson` for consistent API/UI consumption.
+
+### Enumerations
+
+- Types (extensible): RefreshMetadata, OrganizeFiles, GenerateThumbnails, VerifySourceUrls, ExportNfo, DeleteVideos, Backup, RegenerateAllThumbnails (see [`BackgroundJobType`](Fuzzbin.Core/Entities/BackgroundJob.cs:81)).
+- Statuses: Pending → Running → (Completed | Failed | Cancelled) (see [`BackgroundJobStatus`](Fuzzbin.Core/Entities/BackgroundJob.cs:93)).
+
+### Execution & Processing
+
+A hosted service (`BackgroundJobProcessorService`, not shown in this doc) polls for Pending jobs on a short interval and:
+
+1. Enforces in-queue singleton per job type: only the earliest Pending job of a given `BackgroundJobType` is executed; later duplicates are immediately marked Cancelled (duplicate guard).
+2. Transitions job: Pending → Running (sets StartedAt).
+3. Dispatches to type-specific executors (e.g. Metadata refresh, File organization, Source verification, plus stub executors for ExportNfo / Backup / RegenerateAllThumbnails).
+4. Serializes a terminal [`BackgroundJobResult`](Fuzzbin.Core/Entities/BackgroundJobResult.cs:50) upon completion, cancellation, or failure.
+
+### Singleton Enqueue Semantics
+
+The service layer exposes `TryEnqueueSingletonJobAsync(type, params)` (see `BackgroundJobService`, not displayed here) which wraps a short transaction:
+- If an active (Pending or Running) job of the same type exists, it returns the existing job (idempotent UX).
+- Otherwise it creates a new Pending job.
+
+This dual guard (enqueue + processor duplicate cancellation) eliminates race conditions under concurrent client requests.
+
+### Progress & Cancellation
+
+Executors derive from a shared base providing uniform progress reporting & termination helpers: [`BaseJobExecutor`](Fuzzbin.Services/BackgroundJobs/BaseJobExecutor.cs:15).
+
+Key behaviors:
+- Cooperative cancellation: setting `CancellationRequested` instructs executors to gracefully stop between work units; processor finalizes status as Cancelled (with structured result summary).
+- Itemized progress auto-calculation: when `TotalItems > 0` progress = floor(processed / total * 100).
+- StatusMessage provides granular human context (current phase / item).
+
+### Real-Time Notifications
+
+SignalR hub: `JobProgressHub` exposes group subscription per job (`SubscribeToJob(Guid)` adds connection to `job_{id}` group).
+Notifier: [`SignalRJobProgressNotifier`](Fuzzbin.Web/Services/SignalRJobProgressNotifier.cs:12) emits lifecycle events to that group:
+- JobStarted (JobId, Type, StartedAt)
+- JobProgress (JobId, Progress, StatusMessage, UpdatedAt)
+- JobCompleted (JobId, ResultSummary, CompletedAt)
+- JobFailed (JobId, ErrorMessage, FailedAt)
+- JobCancelled (JobId, CancelledAt)
+
+Client pattern: subscribe → await event sequence → optional polling fallback for missed terminal events.
+
+### Structured Result Contract
+
+Each terminal job state embeds a serialized result (`ResultJson`) created via [`BackgroundJobResult.Create`](Fuzzbin.Core/Entities/BackgroundJobResult.cs:50) ensuring consistent schema:
+- Identification: JobId, Type
+- Counts: TotalItems, ProcessedItems, FailedItems, SucceededItems (computed)
+- Timing: StartedAt, CompletedAt, DurationSeconds
+- Outcome: Summary, ErrorMessage (if any), Cancelled flag
+
+This enables UI timelines, analytics, and retention pruning without schema inference.
+
+### Retention Policy
+
+Retention (currently implemented in service layer) keeps the 200 most recent terminal (Completed/Failed/Cancelled) jobs (configurable in future). Older historical rows beyond that window are purged to bound storage without sacrificing recency insight.
+
+### Extensibility Guidelines
+
+To add a new job type:
+1. Append enum value to [`BackgroundJobType`](Fuzzbin.Core/Entities/BackgroundJob.cs:81).
+2. Implement an executor deriving from [`BaseJobExecutor`](Fuzzbin.Services/BackgroundJobs/BaseJobExecutor.cs:15) with:
+   - Initialization (`InitializeJobAsync`)
+   - Iterative loop updating `ProcessedItems` & calling `UpdateProgressAsync`
+   - Finalization via `CompleteAsync`
+3. Register dependencies in DI; extend processor switch to handle the new type.
+4. Optionally add UI enqueue affordance & subscribe for progress.
+
+### Failure & Crash Recovery
+
+- Executor exceptions are caught; job marked Failed with `ErrorMessage` & structured result including summary message.
+- (Future enhancement) On application startup, any Running jobs can be auto-transitioned to Failed (crash recovery) or rescheduled; placeholder for subsequent milestone.
+
+### Observability
+
+- Consistent SignalR events per lifecycle stage.
+- Structured result enables log enrichment (Activity/Tracing) and future metrics (mean duration per type, failure rate).
+- Cancellation semantics ensure partial work states are explicit (Cancelled with partial counts & progress < 100).
+
+---
+
 ## Summary
 
 This architecture provides:
@@ -1171,5 +1261,6 @@ This architecture provides:
 5. **Secure Storage**: API keys encrypted in database using Data Protection API
 6. **Simple Deployment**: Just mount volumes and access the web UI
 7. **Zero External Dependencies**: Everything configured internally
+8. **Uniform Background Job Orchestration**: Singleton-safe execution, structured results, real-time progress, bounded retention
 
 The system is now truly self-hosted and self-contained, requiring only Docker and volume mounts to run.

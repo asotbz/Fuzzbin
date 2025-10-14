@@ -11,113 +11,99 @@ using Fuzzbin.Services.Models;
 
 namespace Fuzzbin.Services.BackgroundJobs
 {
-    public class SourceVerificationJobExecutor
+    /// <summary>
+    /// Source verification executor refactored to use BaseJobExecutor for unified progress & result handling.
+    /// Still exposes Guid-based ExecuteAsync signature for compatibility with existing processor call.
+    /// </summary>
+    public class SourceVerificationJobExecutor : BaseJobExecutor
     {
-        private readonly ILogger<SourceVerificationJobExecutor> _logger;
         private readonly IBackgroundJobService _jobService;
         private readonly ISourceVerificationService _verificationService;
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IJobProgressNotifier _progressNotifier;
 
         public SourceVerificationJobExecutor(
-            ILogger<SourceVerificationJobExecutor> logger,
             IBackgroundJobService jobService,
             ISourceVerificationService verificationService,
             IUnitOfWork unitOfWork,
-            IJobProgressNotifier progressNotifier)
+            IJobProgressNotifier notifier,
+            ILogger<SourceVerificationJobExecutor> logger)
+            : base(unitOfWork, notifier, logger)
         {
-            _logger = logger;
             _jobService = jobService;
             _verificationService = verificationService;
-            _unitOfWork = unitOfWork;
-            _progressNotifier = progressNotifier;
         }
 
-        public async Task ExecuteAsync(Guid jobId, List<Guid> videoIds, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Execute verification for provided video IDs (must be provided; no implicit enumeration).
+        /// </summary>
+        public async Task ExecuteAsync(Guid jobId, List<Guid> videoIds, CancellationToken ct = default)
         {
+            var job = await _unitOfWork.BackgroundJobs.GetByIdAsync(jobId);
+            if (job == null)
+            {
+                _logger.LogWarning("Cannot execute source verification - job {JobId} not found", jobId);
+                return;
+            }
+
             try
             {
-                await _jobService.StartJobAsync(jobId, cancellationToken);
-                await _progressNotifier.NotifyJobStartedAsync(jobId, BackgroundJobType.VerifySourceUrls, cancellationToken);
-
+                // Processor already set status Running; initialize counts + notify started.
                 var videos = new List<Video>();
-                foreach (var videoId in videoIds)
+                foreach (var vid in videoIds)
                 {
-                    var video = await _unitOfWork.Videos.GetByIdAsync(videoId);
-                    if (video != null)
-                    {
-                        videos.Add(video);
-                    }
+                    var video = await _unitOfWork.Videos.GetByIdAsync(vid);
+                    if (video != null) videos.Add(video);
                 }
 
-                await _jobService.UpdateItemCountsAsync(jobId, videos.Count, 0, 0, cancellationToken);
+                await InitializeJobAsync(job, BackgroundJobType.VerifySourceUrls, videos.Count, ct);
+                _logger.LogInformation("Source verification job {JobId} starting for {Count} videos", job.Id, videos.Count);
 
-                var processed = 0;
-                var failed = 0;
+                int processed = 0;
+                int failed = 0;
 
                 foreach (var video in videos)
                 {
-                    if (await _jobService.IsCancellationRequestedAsync(jobId, cancellationToken))
+                    if (job.CancellationRequested)
                     {
-                        _logger.LogInformation("Source verification job {JobId} cancelled", jobId);
-                        await _jobService.FailJobAsync(jobId, "Job was cancelled by user", cancellationToken);
-                        await _progressNotifier.NotifyJobCancelledAsync(jobId);
+                        _logger.LogInformation("Source verification job {JobId} cancellation detected mid-loop", job.Id);
                         return;
                     }
 
                     try
                     {
-                        // Create an empty request (service will use video's existing source URLs)
                         var request = new SourceVerificationRequest();
-                        
-                        // Verify the video
-                        var verification = await _verificationService.VerifyVideoAsync(
-                            video,
-                            request,
-                            cancellationToken);
+                        var verification = await _verificationService.VerifyVideoAsync(video, request, ct);
 
-                        processed++;
-
-                        // Count failures
                         if (verification.Status == VideoSourceVerificationStatus.Failed ||
                             verification.Status == VideoSourceVerificationStatus.SourceMissing)
                         {
                             failed++;
                         }
-
-                        var progress = (int)((processed / (double)videos.Count) * 100);
-                        await _jobService.UpdateProgressAsync(
-                            jobId,
-                            progress,
-                            $"Verified {processed} of {videos.Count} videos",
-                            cancellationToken);
-
-                        await _progressNotifier.NotifyJobProgressAsync(
-                            jobId,
-                            progress,
-                            $"Verified {processed} of {videos.Count} videos");
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Error verifying source for video {VideoId}", video.Id);
                         failed++;
-                        processed++;
+                    }
+
+                    processed++;
+                    job.ProcessedItems = processed;
+                    job.FailedItems = failed;
+
+                    if (processed % 5 == 0 || processed == videos.Count)
+                    {
+                        await UpdateProgressAsync(job, $"Verified {processed}/{videos.Count} videos", ct);
                     }
                 }
 
-                await _jobService.UpdateItemCountsAsync(jobId, videos.Count, processed, failed, cancellationToken);
-                await _jobService.CompleteJobAsync(jobId, cancellationToken: cancellationToken);
-                await _progressNotifier.NotifyJobCompletedAsync(jobId, $"Verified {processed} videos, {failed} failed", cancellationToken);
-
-                _logger.LogInformation(
-                    "Source verification job {JobId} completed. Verified: {Processed}, Failed: {Failed}",
-                    jobId, processed, failed);
+                var summary = $"Verified {processed} videos, {failed} failed";
+                await CompleteAsync(job, summary, ct);
+                _logger.LogInformation("Source verification job {JobId} completed. {Summary}", job.Id, summary);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error executing source verification job {JobId}", jobId);
-                await _jobService.FailJobAsync(jobId, ex.Message, cancellationToken);
-                await _progressNotifier.NotifyJobFailedAsync(jobId, ex.Message);
+                _logger.LogError(ex, "Source verification job {JobId} failed", job.Id);
+                // Allow processor to mark Failed and serialize failure result.
+                throw;
             }
         }
     }

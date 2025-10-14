@@ -30,7 +30,7 @@
 @inject KeyboardShortcutService KeyboardService
 @inject ILogger<Videos> Logger
 @implements IAsyncDisposable
-
+@inject HttpClient Http
 <PageTitle>Video Library - Fuzzbin</PageTitle>
 
 <VideoContextMenu @ref="_contextMenu"
@@ -1008,15 +1008,31 @@
             return;
         }
 
-        // TODO: Implement long-running job service
-        Snackbar.Add("Library metadata refresh has been queued. This will run in the background.", Severity.Info);
-        
-        // Placeholder for long-running job implementation
-        // This should:
-        // 1. Create a job in the job registry
-        // 2. Send progress updates via SignalR
-        // 3. Allow cancellation
-        // 4. Show completion status
+        try
+        {
+            Snackbar.Add("Queuing library metadata refresh...", Severity.Info);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/jobs/RefreshMetadata");
+            var response = await Http.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
+            {
+                Snackbar.Add("Library metadata refresh job queued.", Severity.Success);
+            }
+            else if (response.IsSuccessStatusCode)
+            {
+                // 200 OK indicates an existing singleton job already active
+                Snackbar.Add("Library metadata refresh already running.", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add($"Failed to queue metadata refresh (HTTP {(int)response.StatusCode}).", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error queuing metadata refresh: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task OrganizeLibraryFiles()
@@ -1035,15 +1051,30 @@
             return;
         }
 
-        // TODO: Implement long-running job service
-        Snackbar.Add("Library file organization has been queued. This will run in the background.", Severity.Info);
-        
-        // Placeholder for long-running job implementation
-        // This should:
-        // 1. Create a job in the job registry
-        // 2. Send progress updates via SignalR
-        // 3. Allow cancellation
-        // 4. Show completion status
+        try
+        {
+            Snackbar.Add("Queuing library file organization...", Severity.Info);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/jobs/OrganizeFiles");
+            var response = await Http.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
+            {
+                Snackbar.Add("Library organization job queued.", Severity.Success);
+            }
+            else if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Library organization already running.", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add($"Failed to queue library organization (HTTP {(int)response.StatusCode}).", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error queuing library organization: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task OpenNfoExportDialog()

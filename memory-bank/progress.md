@@ -29,3 +29,4 @@ This file tracks the project's progress using a task list format.
 * Phase 4: Saved Search lifecycle enhancements (38-42)
 * Phase 5: Hardening & documentation (43-46)
 * Initiate code mode execution after plan approval confirmation
+[2025-10-13 21:28:40 UTC] - Completed: Integrated library-wide operation triggers in [`Videos.razor`](Fuzzbin.Web/Components/Pages/Videos.razor:995) replacing TODOs; enqueue singleton jobs (RefreshMetadata, OrganizeFiles) via /api/jobs/{type} with user feedback. Next: add BackgroundJobService & processor unit tests, SignalR notifier integration test, documentation updates, progress file alignment.

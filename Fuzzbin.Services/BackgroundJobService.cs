@@ -203,21 +203,85 @@ namespace Fuzzbin.Services
 
         public async Task CleanupOldJobsAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
         {
-            var cutoffDate = DateTime.UtcNow - olderThan;
-            var oldJobs = _unitOfWork.BackgroundJobs
+            // Retention policy: keep the 200 most recent (by CompletedAt / CreatedAt) terminal-state jobs (Completed/Failed/Cancelled).
+            const int retentionCount = 200;
+
+            var terminalStatuses = new[]
+            {
+                BackgroundJobStatus.Completed,
+                BackgroundJobStatus.Failed,
+                BackgroundJobStatus.Cancelled
+            };
+
+            // Query IDs beyond retention window
+            var excessJobIds = _unitOfWork.BackgroundJobs
                 .GetQueryable()
-                .Where(j => j.CompletedAt.HasValue && j.CompletedAt.Value < cutoffDate)
+                .Where(j => terminalStatuses.Contains(j.Status))
+                .OrderByDescending(j => j.CompletedAt ?? j.CreatedAt)
+                .Skip(retentionCount)
+                .Select(j => j.Id)
                 .ToList();
 
-            foreach (var job in oldJobs)
+            if (excessJobIds.Count == 0)
             {
-                await _unitOfWork.BackgroundJobs.DeleteByIdAsync(job.Id);
+                return;
             }
 
-            if (oldJobs.Count > 0)
+            foreach (var jobId in excessJobIds)
             {
-                await _unitOfWork.SaveChangesAsync();
-                _logger.LogInformation("Cleaned up {Count} old background jobs", oldJobs.Count);
+                await _unitOfWork.BackgroundJobs.DeleteByIdAsync(jobId);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+            _logger.LogInformation("Retention cleanup removed {Count} background jobs beyond most recent {Retention}", excessJobIds.Count, retentionCount);
+        }
+
+        /// <summary>
+        /// Get the currently active (Pending or Running) job for the specified type, if any.
+        /// </summary>
+        public Task<BackgroundJob?> GetActiveJobByTypeAsync(BackgroundJobType type, CancellationToken cancellationToken = default)
+        {
+            var job = _unitOfWork.BackgroundJobs
+                .GetQueryable()
+                .Where(j =>
+                    j.Type == type &&
+                    (j.Status == BackgroundJobStatus.Pending || j.Status == BackgroundJobStatus.Running) &&
+                    j.IsActive)
+                .OrderByDescending(j => j.CreatedAt)
+                .FirstOrDefault();
+
+            return Task.FromResult(job);
+        }
+
+        /// <summary>
+        /// Attempt to enqueue a singleton job. If an active job of this type exists returns (false, existing).
+        /// Otherwise creates a new Pending job and returns (true, createdJob).
+        /// Wrapped in a transaction to reduce race conditions under concurrent requests.
+        /// </summary>
+        public async Task<(bool created, BackgroundJob job)> TryEnqueueSingletonJobAsync(
+            BackgroundJobType type,
+            string? parametersJson = null,
+            CancellationToken cancellationToken = default)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var existing = await GetActiveJobByTypeAsync(type, cancellationToken);
+                if (existing != null)
+                {
+                    await _unitOfWork.RollbackTransactionAsync();
+                    return (false, existing);
+                }
+
+                var createdJob = await CreateJobAsync(type, parametersJson, cancellationToken);
+                await _unitOfWork.CommitTransactionAsync();
+                return (true, createdJob);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to enqueue singleton job of type {JobType}", type);
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
             }
         }
     }

@@ -6,7 +6,8 @@ using Fuzzbin.Web.Hubs;
 namespace Fuzzbin.Web.Services;
 
 /// <summary>
-/// Notifies clients about background job progress via SignalR
+/// Notifies subscribed clients (per-job SignalR group) about background job lifecycle & progress.
+/// Unified notifier (replaces duplicate JobProgressNotifier inside hub).
 /// </summary>
 public class SignalRJobProgressNotifier : IJobProgressNotifier
 {
@@ -21,19 +22,22 @@ public class SignalRJobProgressNotifier : IJobProgressNotifier
         _logger = logger;
     }
 
+    private IClientProxy Group(Guid jobId) => _hubContext.Clients.Group($"job_{jobId}");
+
     public async Task NotifyJobStartedAsync(Guid jobId, BackgroundJobType type, CancellationToken cancellationToken = default)
     {
         try
         {
-            await _hubContext.Clients.All.SendAsync(
-                "JobStarted",
-                jobId,
-                type.ToString(),
-                cancellationToken);
+            await Group(jobId).SendAsync("JobStarted", new
+            {
+                JobId = jobId,
+                Type = type,
+                StartedAt = DateTime.UtcNow
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send job started notification for job {JobId}", jobId);
+            _logger.LogWarning(ex, "Failed to send JobStarted for {JobId}", jobId);
         }
     }
 
@@ -41,16 +45,17 @@ public class SignalRJobProgressNotifier : IJobProgressNotifier
     {
         try
         {
-            await _hubContext.Clients.All.SendAsync(
-                "JobProgress",
-                jobId,
-                progress,
-                statusMessage,
-                cancellationToken);
+            await Group(jobId).SendAsync("JobProgress", new
+            {
+                JobId = jobId,
+                Progress = progress,
+                StatusMessage = statusMessage,
+                UpdatedAt = DateTime.UtcNow
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send job progress notification for job {JobId}", jobId);
+            _logger.LogWarning(ex, "Failed to send JobProgress for {JobId}", jobId);
         }
     }
 
@@ -58,15 +63,16 @@ public class SignalRJobProgressNotifier : IJobProgressNotifier
     {
         try
         {
-            await _hubContext.Clients.All.SendAsync(
-                "JobCompleted",
-                jobId,
-                resultSummary,
-                cancellationToken);
+            await Group(jobId).SendAsync("JobCompleted", new
+            {
+                JobId = jobId,
+                ResultSummary = resultSummary,
+                CompletedAt = DateTime.UtcNow
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send job completion notification for job {JobId}", jobId);
+            _logger.LogWarning(ex, "Failed to send JobCompleted for {JobId}", jobId);
         }
     }
 
@@ -74,15 +80,16 @@ public class SignalRJobProgressNotifier : IJobProgressNotifier
     {
         try
         {
-            await _hubContext.Clients.All.SendAsync(
-                "JobFailed",
-                jobId,
-                errorMessage,
-                cancellationToken);
+            await Group(jobId).SendAsync("JobFailed", new
+            {
+                JobId = jobId,
+                ErrorMessage = errorMessage,
+                FailedAt = DateTime.UtcNow
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send job failed notification for job {JobId}", jobId);
+            _logger.LogWarning(ex, "Failed to send JobFailed for {JobId}", jobId);
         }
     }
 
@@ -90,14 +97,15 @@ public class SignalRJobProgressNotifier : IJobProgressNotifier
     {
         try
         {
-            await _hubContext.Clients.All.SendAsync(
-                "JobCancelled",
-                jobId,
-                cancellationToken);
+            await Group(jobId).SendAsync("JobCancelled", new
+            {
+                JobId = jobId,
+                CancelledAt = DateTime.UtcNow
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send job cancelled notification for job {JobId}", jobId);
+            _logger.LogWarning(ex, "Failed to send JobCancelled for {JobId}", jobId);
         }
     }
 }

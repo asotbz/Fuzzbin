@@ -85,7 +85,9 @@ namespace Fuzzbin.Core.Entities
         GenerateThumbnails = 3,
         VerifySourceUrls = 4,
         ExportNfo = 5,
-        DeleteVideos = 6
+        DeleteVideos = 6,
+        Backup = 7,
+        RegenerateAllThumbnails = 8
     }
 
     public enum BackgroundJobStatus

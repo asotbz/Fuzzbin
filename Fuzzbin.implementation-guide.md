@@ -2072,6 +2072,61 @@ services:
     # No environment variables needed!
 ```
 
+## Background Job Orchestration Implementation (Added)
+
+The background job system enables uniform execution, monitoring, and cancellation of long‑running library operations (metadata refresh, file organization, verification, exports, backups, thumbnail regeneration).
+
+### Core Components
+
+- Entity & Lifecycle: [`BackgroundJob`](Fuzzbin.Core/Entities/BackgroundJob.cs:8) with Type, Status (Pending/Running/Completed/Failed/Cancelled), Progress %, item counts, timestamps, cancellation flag, parameters & result JSON.
+- Structured Result: [`BackgroundJobResult`](Fuzzbin.Core/Entities/BackgroundJobResult.cs:9) serialized into `BackgroundJob.ResultJson` providing stable schema (counts, timing, summary, error, cancelled flag).
+- Processor Service: `BackgroundJobProcessorService` (hosted) polls Pending jobs, enforces singleton per `BackgroundJobType` (cancels later duplicates before execution), transitions status, invokes type-specific executors, captures terminal result.
+- Executors: Derived from [`BaseJobExecutor`](Fuzzbin.Services/BackgroundJobs/BaseJobExecutor.cs:15) which supplies helper methods:
+  - InitializeJobAsync: set totals & emit JobStarted (also used defensively even though processor emits Start—future consolidation possible).
+  - UpdateProgressAsync: recomputes progress (when TotalItems > 0) and broadcasts via notifier, cooperatively aborts if `CancellationRequested`.
+  - CompleteAsync: finalizes progress (100%), writes structured result, emits JobCompleted.
+- Stub Executors Implemented: Export NFO, Backup, RegenerateAllThumbnails (scaffolding progress pattern for future full logic).
+- Real-Time Events: SignalR hub (`JobProgressHub`) + notifier [`SignalRJobProgressNotifier`](Fuzzbin.Web/Services/SignalRJobProgressNotifier.cs:12) broadcasting:
+  - JobStarted, JobProgress, JobCompleted, JobFailed, JobCancelled (group name: `job_{JobId}`).
+- API Endpoints: `/api/jobs` list/filter, `/api/jobs/{id}`, `/api/jobs/{type}` (singleton enqueue), `/api/jobs/{id}/cancel`.
+- Enqueue Guard: `TryEnqueueSingletonJobAsync` (transactional) prevents duplicate active job creation; processor duplicate pass ensures race-free enforcement.
+- Retention: Service-level pruning keeps most recent 200 terminal jobs (configurable later) bounding storage while preserving recency for UI analytics.
+
+### Cancellation Semantics
+
+Setting `CancellationRequested` (via API) causes executors to short‑circuit between work units; processor marks final state Cancelled and produces a structured result with partial counts (progress coerced below 100 if necessary).
+
+### Failure Handling
+
+Exceptions inside executor bubble to processor; processor marks Failed, records `ErrorMessage`, serializes structured result including summary & timing, and emits JobFailed.
+
+### Extending with a New Job Type
+
+1. Add enum member to `BackgroundJobType`.
+2. Implement executor subclass of `BaseJobExecutor`.
+3. Add switch case in processor dispatch to call new executor.
+4. Register DI dependencies; add enqueue UI/endpoint if user-triggered.
+5. Add unit tests (executor logic, state transitions) + integration test (SignalR events sequence).
+
+### Integration Test Coverage
+
+A smoke integration test (`SignalRJobProgressTests`) verifies:
+- Creation of a pending job
+- Subscription to its SignalR group
+- Receipt of `JobStarted` followed by a terminal (`JobCompleted` or `JobFailed`) event sequence within a bounded time window.
+
+This ensures notifier wiring, hub routing, and processor execution pipeline function end-to-end without relying on external services.
+
+### Future Enhancements (Planned)
+
+- Crash recovery: Mark orphaned Running jobs as Failed on startup (or resume strategy).
+- Unified Job Dashboard UI listing active + historical jobs with cancel/retry.
+- Configurable retention & per-type concurrency (e.g., allowing limited parallelism for certain non-conflicting operations).
+- Retry policy & exponential backoff metadata.
+- Metrics: aggregate duration, success/failure rates, moving averages for progress velocity.
+
+---
+
 ## Testing Strategy
 
 ### Unit Tests
