@@ -1,0 +1,132 @@
+@using Fuzzbin.Core.Entities
+@using System.Net.Http.Json
+@using MudBlazor
+@inject HttpClient HttpClient
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Are you sure you want to delete the following tags? This action cannot be undone.
+        </MudText>
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Tags to delete:</MudText>
+        <MudList T="string" Dense="true" Class="mb-4">
+            @foreach (var tag in _tags.Take(10))
+            {
+                <MudListItem T="string">
+                    <MudText Typo="Typo.body2">
+                        <strong>@tag.Name</strong> (@tag.Videos.Count video(s))
+                    </MudText>
+                </MudListItem>
+            }
+            @if (_tags.Count > 10)
+            {
+                <MudListItem T="string">
+                    <MudText Typo="Typo.body2" Style="font-style: italic;">
+                        ... and @(_tags.Count - 10) more
+                    </MudText>
+                </MudListItem>
+            }
+        </MudList>
+
+        @if (_sampleVideos.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Sample impacted videos:</MudText>
+            <MudList T="string" Dense="true" Class="mb-4">
+                @foreach (var video in _sampleVideos)
+                {
+                    <MudListItem T="string">
+                        <MudText Typo="Typo.body2">@video.Title - @video.Artist</MudText>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+
+        <MudAlert Severity="Severity.Warning">
+            Total: @_tags.Count tag(s) will be deleted and removed from approximately @_totalVideos video(s).
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@_submitting">
+            @if (_submitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+                <text>Delete All</text>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public List<Tag> Tags { get; set; } = new();
+
+    private List<Tag> _tags = new();
+    private List<Video> _sampleVideos = new();
+    private int _totalVideos;
+    private bool _submitting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _tags = Tags ?? new List<Tag>();
+        _totalVideos = _tags.Sum(t => t.Videos.Count);
+
+        // Load sample videos for the first tag
+        if (_tags.Count > 0)
+        {
+            try
+            {
+                var response = await HttpClient.GetFromJsonAsync<List<Video>>($"/api/tags/{_tags[0].Id}/videos?maxCount=5");
+                _sampleVideos = response ?? new List<Video>();
+            }
+            catch
+            {
+                _sampleVideos = new List<Video>();
+            }
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        _submitting = true;
+        try
+        {
+            var request = new { Ids = _tags.Select(t => t.Id).ToList() };
+            var response = await HttpClient.PostAsJsonAsync("/api/tags/bulk-delete", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Successfully deleted {_tags.Count} tag(s)", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add($"Failed to delete tags: {response.ReasonPhrase}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting tags: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

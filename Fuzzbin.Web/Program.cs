@@ -216,6 +216,8 @@ try
     builder.Services.AddScoped<IBackupService, BackupService>();
     builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
     builder.Services.AddSingleton<IJobProgressNotifier, Fuzzbin.Web.Services.SignalRJobProgressNotifier>();
+    builder.Services.AddScoped<IGenreService, GenreService>();
+    builder.Services.AddScoped<ITagService, TagService>();
     
     // Add HttpContextAccessor for ActivityLogService
     builder.Services.AddHttpContextAccessor();
@@ -501,6 +503,167 @@ try
     })
     .WithName("CancelJob");
 
+    // Genre Management API Endpoints
+    app.MapGet("/api/genres", async (
+        IGenreService genreService,
+        string? search,
+        string? sortBy,
+        string? sortDirection,
+        int page = 1,
+        int pageSize = 50,
+        CancellationToken ct = default) =>
+    {
+        var result = await genreService.GetGenresAsync(search, sortBy, sortDirection, page, pageSize, ct);
+        return Results.Ok(result);
+    })
+    .WithName("GetGenres")
+    .RequireAuthorization();
+
+    app.MapPost("/api/genres", async (
+        IGenreService genreService,
+        GenreCreateRequest request,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            var genre = await genreService.CreateGenreAsync(request.Name, request.Description, ct);
+            return Results.Created($"/api/genres/{genre.Id}", genre);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { message = ex.Message });
+        }
+    })
+    .WithName("CreateGenre")
+    .RequireAuthorization();
+
+    app.MapPost("/api/genres/generalize", async (
+        IGenreService genreService,
+        GeneralizeGenresRequest request,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            await genreService.GeneralizeGenresAsync(request.SourceGenreIds, request.TargetGenreId, ct);
+            return Results.Ok(new { message = "Genres generalized successfully" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { message = ex.Message });
+        }
+    })
+    .WithName("GeneralizeGenres")
+    .RequireAuthorization();
+
+    app.MapDelete("/api/genres/{id:guid}", async (
+        IGenreService genreService,
+        Guid id,
+        CancellationToken ct = default) =>
+    {
+        await genreService.DeleteGenreAsync(id, ct);
+        return Results.NoContent();
+    })
+    .WithName("DeleteGenre")
+    .RequireAuthorization();
+
+    app.MapPost("/api/genres/bulk-delete", async (
+        IGenreService genreService,
+        BulkDeleteRequest request,
+        CancellationToken ct = default) =>
+    {
+        await genreService.DeleteGenresAsync(request.Ids, ct);
+        return Results.Ok(new { message = $"Deleted {request.Ids.Count()} genres" });
+    })
+    .WithName("BulkDeleteGenres")
+    .RequireAuthorization();
+
+    // Tag Management API Endpoints
+    app.MapGet("/api/tags", async (
+        ITagService tagService,
+        string? search,
+        string? sortBy,
+        string? sortDirection,
+        int page = 1,
+        int pageSize = 50,
+        CancellationToken ct = default) =>
+    {
+        var result = await tagService.GetTagsAsync(search, sortBy, sortDirection, page, pageSize, ct);
+        return Results.Ok(result);
+    })
+    .WithName("GetTags")
+    .RequireAuthorization();
+
+    app.MapGet("/api/tags/{id:guid}/videos", async (
+        ITagService tagService,
+        Guid id,
+        int maxCount = 5,
+        CancellationToken ct = default) =>
+    {
+        var videos = await tagService.GetVideosForTagAsync(id, maxCount, ct);
+        return Results.Ok(videos);
+    })
+    .WithName("GetTagVideos")
+    .RequireAuthorization();
+
+    app.MapPost("/api/tags", async (
+        ITagService tagService,
+        TagCreateRequest request,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            var tag = await tagService.CreateTagAsync(request.Name, request.Color, ct);
+            return Results.Created($"/api/tags/{tag.Id}", tag);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new { message = ex.Message });
+        }
+    })
+    .WithName("CreateTag")
+    .RequireAuthorization();
+
+    app.MapPut("/api/tags/{id:guid}", async (
+        ITagService tagService,
+        Guid id,
+        TagUpdateRequest request,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            var tag = await tagService.RenameTagAsync(id, request.Name, ct);
+            return Results.Ok(tag);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { message = ex.Message });
+        }
+    })
+    .WithName("UpdateTag")
+    .RequireAuthorization();
+
+    app.MapDelete("/api/tags/{id:guid}", async (
+        ITagService tagService,
+        Guid id,
+        CancellationToken ct = default) =>
+    {
+        await tagService.DeleteTagAsync(id, ct);
+        return Results.NoContent();
+    })
+    .WithName("DeleteTag")
+    .RequireAuthorization();
+
+    app.MapPost("/api/tags/bulk-delete", async (
+        ITagService tagService,
+        BulkDeleteRequest request,
+        CancellationToken ct = default) =>
+    {
+        await tagService.DeleteTagsAsync(request.Ids, ct);
+        return Results.Ok(new { message = $"Deleted {request.Ids.Count()} tags" });
+    })
+    .WithName("BulkDeleteTags")
+    .RequireAuthorization();
+
     app.MapGet("/api/videos/stream", async (
         string path,
         ILibraryPathManager libraryPathManager,
@@ -709,6 +872,13 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+// Request/Response DTOs for API endpoints
+record GenreCreateRequest(string Name, string? Description);
+record GeneralizeGenresRequest(IEnumerable<Guid> SourceGenreIds, Guid TargetGenreId);
+record TagCreateRequest(string Name, string? Color);
+record TagUpdateRequest(string Name);
+record BulkDeleteRequest(IEnumerable<Guid> Ids);
 
 // Make the implicit Program class public so test projects can access it
 public partial class Program { }

@@ -121,7 +121,7 @@ namespace Fuzzbin.Tests.Integration
             // Assert
             Assert.Contains(jobId, started);
             Assert.True(completed.Contains(jobId) ^ failed.Any(f => f.Id == jobId), "Job should be either completed or failed, not both.");
-            Assert.Empty(cancelled.Where(c => c == jobId));
+            Assert.DoesNotContain(jobId, cancelled);
 
             // If it failed, ensure error is captured
             if (failed.Any(f => f.Id == jobId))

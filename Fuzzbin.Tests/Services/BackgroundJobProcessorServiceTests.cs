@@ -236,11 +236,32 @@ public class BackgroundJobProcessorServiceTests
 
     private sealed class NoOpFileOrganizationService : IFileOrganizationService
     {
+        public Task<string> OrganizeVideoFileAsync(Video video, string sourceFilePath, CancellationToken cancellationToken = default) =>
+            Task.FromResult(sourceFilePath);
+
+        public string GenerateFilePath(Video video, string pattern) =>
+            $"/organized/{video.Artist}/{video.Title}.mp4";
+
+        public bool ValidatePattern(string pattern) => true;
+
+        public Dictionary<string, string> GetAvailablePatternVariables() =>
+            new Dictionary<string, string>();
+
+        public string PreviewOrganizedPath(Video video, string pattern) =>
+            $"/preview/{video.Artist}/{video.Title}.mp4";
+
+        public Task<ReorganizeResult> ReorganizeLibraryAsync(string newPattern, IProgress<ReorganizeProgress>? progress = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ReorganizeResult { TotalVideos = 0, SuccessfulMoves = 0, FailedMoves = 0 });
+
+        public Task<bool> MoveVideoFileAsync(Video video, string newPath, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+
+        public void EnsureDirectoryExists(string filePath) { }
     }
 
     private sealed class NoOpSourceVerificationService : ISourceVerificationService
     {
-        public Task<VideoSourceVerification> VerifyVideoAsync(Video video, object request, CancellationToken cancellationToken = default)
+        public Task<VideoSourceVerification> VerifyVideoAsync(Video video, Fuzzbin.Services.Models.SourceVerificationRequest request, CancellationToken cancellationToken = default)
         {
             var verification = new VideoSourceVerification
             {
@@ -252,5 +273,20 @@ public class BackgroundJobProcessorServiceTests
             };
             return Task.FromResult(verification);
         }
+
+        public Task<IReadOnlyList<VideoSourceVerification>> VerifyVideosAsync(IEnumerable<Video> videos, Fuzzbin.Services.Models.SourceVerificationRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<VideoSourceVerification>>(new List<VideoSourceVerification>());
+
+        public Task<VideoSourceVerification?> GetLatestAsync(Guid videoId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<VideoSourceVerification?>(null);
+
+        public Task<VideoSourceVerification> OverrideAsync(Guid verificationId, Fuzzbin.Services.Models.SourceVerificationOverride overrideRequest, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new VideoSourceVerification
+            {
+                Id = verificationId,
+                Status = VideoSourceVerificationStatus.Verified,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
     }
 }

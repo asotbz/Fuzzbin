@@ -1,0 +1,95 @@
+@using Fuzzbin.Core.Entities
+@using System.Net.Http.Json
+@using MudBlazor
+@inject HttpClient HttpClient
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Are you sure you want to delete the following genres? This action cannot be undone.
+        </MudText>
+
+        <MudList T="string" Dense="true" Class="mb-4">
+            @foreach (var genre in _genres)
+            {
+                <MudListItem T="string">
+                    <MudText Typo="Typo.body2">
+                        <strong>@genre.Name</strong> (@genre.Videos.Count video(s))
+                    </MudText>
+                </MudListItem>
+            }
+        </MudList>
+
+        <MudAlert Severity="Severity.Warning">
+            Total: @_genres.Count genre(s) will be deleted and removed from approximately @_totalVideos video(s).
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@_submitting">
+            @if (_submitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            else
+            {
+                <text>Delete All</text>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public List<Genre> Genres { get; set; } = new();
+
+    private List<Genre> _genres = new();
+    private int _totalVideos;
+    private bool _submitting;
+
+    protected override void OnParametersSet()
+    {
+        _genres = Genres ?? new List<Genre>();
+        _totalVideos = _genres.Sum(g => g.Videos.Count);
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        _submitting = true;
+        try
+        {
+            var request = new { Ids = _genres.Select(g => g.Id).ToList() };
+            var response = await HttpClient.PostAsJsonAsync("/api/genres/bulk-delete", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Successfully deleted {_genres.Count} genre(s)", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add($"Failed to delete genres: {response.ReasonPhrase}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting genres: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

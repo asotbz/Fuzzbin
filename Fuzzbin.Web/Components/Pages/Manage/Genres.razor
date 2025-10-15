@@ -1,0 +1,257 @@
+@page "/manage/genres"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Specifications.Queries
+@using Fuzzbin.Web.Components.Dialogs
+@using System.Net.Http.Json
+@inject HttpClient HttpClient
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Manage Genres</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Genre Management</MudText>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="8">
+                <MudTextField @bind-Value="_searchText"
+                              Label="Search genres"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              OnKeyUp="@HandleSearchKeyUp"
+                              Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="@OpenCreateDialog">
+                    Create Genre
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_selectedGenres.Count > 0)
+    {
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">
+                @_selectedGenres.Count genre(s) selected
+            </MudText>
+            <MudButtonGroup Variant="Variant.Outlined">
+                <MudButton StartIcon="@Icons.Material.Filled.MergeType"
+                           OnClick="@OpenGeneralizeDialog"
+                           Color="Color.Primary">
+                    Generalize
+                </MudButton>
+                <MudButton StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="@OpenBulkDeleteDialog"
+                           Color="Color.Error">
+                    Delete Selected
+                </MudButton>
+                <MudButton StartIcon="@Icons.Material.Filled.Clear"
+                           OnClick="@ClearSelection">
+                    Clear Selection
+                </MudButton>
+            </MudButtonGroup>
+        </MudPaper>
+    }
+
+    <MudTable @ref="_table"
+              T="Genre"
+              ServerData="@LoadGenres"
+              Dense="true"
+              Hover="true"
+              Loading="@_loading"
+              LoadingProgressColor="Color.Primary"
+              MultiSelection="true"
+              @bind-SelectedItems="_selectedGenres">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="Genre" SortLabel="name">Name</MudTableSortLabel>
+            </MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Genre" SortLabel="videocount">Videos</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Genre" SortLabel="createdat">Created</MudTableSortLabel>
+            </MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">
+                <MudText Typo="Typo.body2" Style="font-weight: 500;">@context.Name</MudText>
+            </MudTd>
+            <MudTd DataLabel="Description">
+                <MudText Typo="Typo.body2">@(context.Description ?? "-")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Videos">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Videos.Count</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Created">
+                <MudText Typo="Typo.body2">@context.CreatedAt.ToString("yyyy-MM-dd")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteGenre(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<Genre> _table = null!;
+    private HashSet<Genre> _selectedGenres = new();
+    private string _searchText = string.Empty;
+    private bool _loading = false;
+
+    private async Task<TableData<Genre>> LoadGenres(TableState state, CancellationToken cancellationToken)
+    {
+        _loading = true;
+        try
+        {
+            var sortBy = state.SortLabel ?? "name";
+            var sortDirection = state.SortDirection == SortDirection.Descending ? "desc" : "asc";
+            
+            var url = $"/api/genres?search={Uri.EscapeDataString(_searchText)}&sortBy={sortBy}&sortDirection={sortDirection}&page={state.Page + 1}&pageSize={state.PageSize}";
+            var response = await HttpClient.GetFromJsonAsync<PagedResult<Genre>>(url, cancellationToken);
+
+            if (response == null)
+            {
+                return new TableData<Genre> { Items = Array.Empty<Genre>(), TotalItems = 0 };
+            }
+
+            return new TableData<Genre>
+            {
+                Items = response.Items,
+                TotalItems = response.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load genres: {ex.Message}", Severity.Error);
+            return new TableData<Genre> { Items = Array.Empty<Genre>(), TotalItems = 0 };
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private void ClearSelection()
+    {
+        _selectedGenres.Clear();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Title", "Create Genre" }
+        };
+
+        var dialog = await DialogService.ShowAsync<GenreCreateDialog>("Create Genre", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task OpenGeneralizeDialog()
+    {
+        if (_selectedGenres.Count < 2)
+        {
+            Snackbar.Add("Please select at least 2 genres to generalize", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { "SelectedGenres", _selectedGenres.ToList() }
+        };
+
+        var dialog = await DialogService.ShowAsync<GeneralizeGenresDialog>("Generalize Genres", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            _selectedGenres.Clear();
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task OpenBulkDeleteDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Genres", _selectedGenres.ToList() }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<GenreBulkDeleteDialog>("Delete Genres", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            _selectedGenres.Clear();
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task DeleteGenre(Genre genre)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete the genre '{genre.Name}'? This will remove it from {genre.Videos.Count} video(s)." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Genre", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                var response = await HttpClient.DeleteAsync($"/api/genres/{genre.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Genre '{genre.Name}' deleted successfully", Severity.Success);
+                    await _table.ReloadServerData();
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to delete genre: {response.ReasonPhrase}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting genre: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

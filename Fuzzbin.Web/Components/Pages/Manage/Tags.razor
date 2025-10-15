@@ -1,0 +1,303 @@
+@page "/manage/tags"
+@using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Specifications.Queries
+@using Fuzzbin.Web.Components.Dialogs
+@using System.Net.Http.Json
+@inject HttpClient HttpClient
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Manage Tags</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Tag Management</MudText>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_searchText"
+                              Label="Search tags"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              OnKeyUp="@HandleSearchKeyUp"
+                              Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" Class="d-flex align-center gap-2">
+                <MudTextField @bind-Value="_newTagName"
+                              Label="New tag name"
+                              Variant="Variant.Outlined"
+                              OnKeyUp="@HandleCreateKeyUp"
+                              Immediate="true" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="@CreateTag"
+                           Disabled="@(string.IsNullOrWhiteSpace(_newTagName) || _creating)">
+                    @if (_creating)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        <text>Create</text>
+                    }
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_selectedTags.Count > 0)
+    {
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">
+                @_selectedTags.Count tag(s) selected
+            </MudText>
+            <MudButtonGroup Variant="Variant.Outlined">
+                <MudButton StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="@OpenBulkDeleteDialog"
+                           Color="Color.Error">
+                    Delete Selected
+                </MudButton>
+                <MudButton StartIcon="@Icons.Material.Filled.Clear"
+                           OnClick="@ClearSelection">
+                    Clear Selection
+                </MudButton>
+            </MudButtonGroup>
+        </MudPaper>
+    }
+
+    <MudTable @ref="_table"
+              T="Tag"
+              ServerData="@LoadTags"
+              Dense="true"
+              Hover="true"
+              Loading="@_loading"
+              LoadingProgressColor="Color.Primary"
+              MultiSelection="true"
+              @bind-SelectedItems="_selectedTags">
+        <HeaderContent>
+            <MudTh>
+                <MudTableSortLabel T="Tag" SortLabel="name">Name</MudTableSortLabel>
+            </MudTh>
+            <MudTh>Color</MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Tag" SortLabel="videocount">Videos</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="Tag" SortLabel="createdat">Created</MudTableSortLabel>
+            </MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">
+                <MudText Typo="Typo.body2" Style="font-weight: 500;">@context.Name</MudText>
+            </MudTd>
+            <MudTd DataLabel="Color">
+                @if (!string.IsNullOrWhiteSpace(context.Color))
+                {
+                    <MudChip T="string" Size="Size.Small" Style="@($"background-color: {context.Color}")">@context.Color</MudChip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">-</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Videos">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Videos.Count</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Created">
+                <MudText Typo="Typo.body2">@context.CreatedAt.ToString("yyyy-MM-dd")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Edit"
+                                 OnClick="@(() => OpenRenameDialog(context))">
+                        Rename
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Delete"
+                                 OnClick="@(() => DeleteTag(context))">
+                        Delete
+                    </MudMenuItem>
+                </MudMenu>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<Tag> _table = null!;
+    private HashSet<Tag> _selectedTags = new();
+    private string _searchText = string.Empty;
+    private string _newTagName = string.Empty;
+    private bool _loading = false;
+    private bool _creating = false;
+
+    private async Task<TableData<Tag>> LoadTags(TableState state, CancellationToken cancellationToken)
+    {
+        _loading = true;
+        try
+        {
+            var sortBy = state.SortLabel ?? "name";
+            var sortDirection = state.SortDirection == SortDirection.Descending ? "desc" : "asc";
+            
+            var url = $"/api/tags?search={Uri.EscapeDataString(_searchText)}&sortBy={sortBy}&sortDirection={sortDirection}&page={state.Page + 1}&pageSize={state.PageSize}";
+            var response = await HttpClient.GetFromJsonAsync<PagedResult<Tag>>(url, cancellationToken);
+
+            if (response == null)
+            {
+                return new TableData<Tag> { Items = Array.Empty<Tag>(), TotalItems = 0 };
+            }
+
+            return new TableData<Tag>
+            {
+                Items = response.Items,
+                TotalItems = response.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load tags: {ex.Message}", Severity.Error);
+            return new TableData<Tag> { Items = Array.Empty<Tag>(), TotalItems = 0 };
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task HandleCreateKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newTagName))
+        {
+            await CreateTag();
+        }
+    }
+
+    private async Task CreateTag()
+    {
+        if (string.IsNullOrWhiteSpace(_newTagName)) return;
+
+        _creating = true;
+        try
+        {
+            var request = new { Name = _newTagName, Color = (string?)null };
+            var response = await HttpClient.PostAsJsonAsync("/api/tags", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Tag '{_newTagName}' created successfully", Severity.Success);
+                _newTagName = string.Empty;
+                await _table.ReloadServerData();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                Snackbar.Add(error?.Message ?? "Tag already exists", Severity.Error);
+            }
+            else
+            {
+                Snackbar.Add($"Failed to create tag: {response.ReasonPhrase}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating tag: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private void ClearSelection()
+    {
+        _selectedTags.Clear();
+    }
+
+    private async Task OpenRenameDialog(Tag tag)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Tag", tag }
+        };
+
+        var dialog = await DialogService.ShowAsync<TagRenameDialog>("Rename Tag", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task OpenBulkDeleteDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Tags", _selectedTags.ToList() }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<TagBulkDeleteDialog>("Delete Tags", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            _selectedTags.Clear();
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task DeleteTag(Tag tag)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete the tag '{tag.Name}'? This will remove it from {tag.Videos.Count} video(s)." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Tag", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                var response = await HttpClient.DeleteAsync($"/api/tags/{tag.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Tag '{tag.Name}' deleted successfully", Severity.Success);
+                    await _table.ReloadServerData();
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to delete tag: {response.ReasonPhrase}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting tag: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private record ErrorResponse(string Message);
+}
