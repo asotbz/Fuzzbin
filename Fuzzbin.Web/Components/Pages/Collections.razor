@@ -1,11 +1,12 @@
 @page "/collections"
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Services
+@using Fuzzbin.Services.Interfaces
 @using Fuzzbin.Web.Components.Dialogs
 @using MudBlazor
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Text.Json
-@inject CollectionService CollectionService
+@inject ICollectionService CollectionService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
@@ -24,18 +25,36 @@
                                 Collections
                             </MudText>
                         </MudItem>
-                        <MudItem xs="12" sm="6" Class="d-flex justify-end">
-                            <MudButton Variant="Variant.Filled" 
-                                     Color="Color.Primary" 
+                        <MudItem xs="12" sm="6" Class="d-flex justify-end align-center gap-2">
+                            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                                <MudIconButton Icon="@Icons.Material.Filled.GridView"
+                                             Color="@(viewMode == ViewMode.Grid ? Color.Primary : Color.Default)"
+                                             OnClick="@(() => viewMode = ViewMode.Grid)"
+                                             Title="Grid View" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ViewList"
+                                             Color="@(viewMode == ViewMode.List ? Color.Primary : Color.Default)"
+                                             OnClick="@(() => viewMode = ViewMode.List)"
+                                             Title="List View" />
+                            </MudButtonGroup>
+                            @if (selectedCollections.Any())
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                         Color="Color.Error"
+                                         StartIcon="@Icons.Material.Filled.Delete"
+                                         OnClick="BulkDeleteCollections">
+                                    Delete (@selectedCollections.Count)
+                                </MudButton>
+                            }
+                            <MudButton Variant="Variant.Filled"
+                                     Color="Color.Primary"
                                      StartIcon="@Icons.Material.Filled.Add"
                                      OnClick="OpenCreateDialog">
                                 Create Collection
                             </MudButton>
-                            <MudButton Variant="Variant.Outlined" 
-                                     Color="Color.Secondary" 
+                            <MudButton Variant="Variant.Outlined"
+                                     Color="Color.Secondary"
                                      StartIcon="@Icons.Material.Filled.Upload"
-                                     OnClick="OpenImportDialog"
-                                     Class="ml-2">
+                                     OnClick="OpenImportDialog">
                                 Import Playlist
                             </MudButton>
                         </MudItem>
@@ -78,7 +97,7 @@
             </MudCard>
         </MudItem>
 
-        <!-- Collections Grid -->
+        <!-- Collections Grid/List -->
         <MudItem xs="12">
             @if (isLoading)
             {
@@ -86,92 +105,162 @@
             }
             else if (collections?.Any() == true)
             {
-                <MudGrid>
-                    @foreach (var collection in filteredCollections)
-                    {
-                        <MudItem xs="12" sm="6" md="4" lg="3">
-                            <MudCard>
-                                <MudCardContent>
-                                    <div class="d-flex justify-space-between align-center mb-2">
-                                        <MudText Typo="Typo.h6" Class="text-truncate">
-                                            @collection.Name
-                                        </MudText>
-                                        <div>
-                                            @if (collection.IsFavorite)
-                                            {
-                                                <MudIcon Icon="@Icons.Material.Filled.Star" 
-                                                       Color="Color.Warning" 
+                @if (viewMode == ViewMode.Grid)
+                {
+                    <MudGrid>
+                        @foreach (var collection in filteredCollections)
+                        {
+                            <MudItem xs="12" sm="6" md="4" lg="3">
+                                <MudCard>
+                                    <MudCardContent>
+                                        <div class="d-flex justify-space-between align-center mb-2">
+                                            <MudCheckBox T="bool"
+                                                       Value="@selectedCollections.Contains(collection.Id)"
+                                                       ValueChanged="@((bool value) => ToggleSelection(collection.Id, value))"
+                                                       Color="Color.Primary"
                                                        Size="Size.Small" />
-                                            }
-                                            @if (!collection.IsPublic)
-                                            {
-                                                <MudIcon Icon="@Icons.Material.Filled.Lock" 
-                                                       Color="Color.Secondary" 
-                                                       Size="Size.Small" />
-                                            }
+                                            <MudText Typo="Typo.h6" Class="text-truncate flex-grow-1">
+                                                @collection.Name
+                                            </MudText>
+                                            <div>
+                                                @if (collection.IsFavorite)
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Star"
+                                                           Color="Color.Warning"
+                                                           Size="Size.Small" />
+                                                }
+                                                @if (!collection.IsPublic)
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Lock"
+                                                           Color="Color.Secondary"
+                                                           Size="Size.Small" />
+                                                }
+                                            </div>
                                         </div>
-                                    </div>
-                                    
-                                    <MudText Typo="Typo.caption" Class="mb-2">
-                                        <MudChip T="string" Size="Size.Small" Color="GetCollectionTypeColor(collection.Type)">
-                                            @collection.Type
-                                        </MudChip>
-                                    </MudText>
-
-                                    @if (!string.IsNullOrEmpty(collection.Description))
-                                    {
-                                        <MudText Typo="Typo.body2" Class="text-truncate-2 mb-2">
-                                            @collection.Description
+                                        
+                                        <MudText Typo="Typo.caption" Class="mb-2">
+                                            <MudChip T="string" Size="Size.Small" Color="GetCollectionTypeColor(collection.Type)">
+                                                @collection.Type
+                                            </MudChip>
                                         </MudText>
+
+                                        @if (!string.IsNullOrEmpty(collection.Description))
+                                        {
+                                            <MudText Typo="Typo.body2" Class="text-truncate-2 mb-2">
+                                                @collection.Description
+                                            </MudText>
+                                        }
+
+                                        <MudGrid>
+                                            <MudItem xs="6">
+                                                <MudText Typo="Typo.caption">Videos</MudText>
+                                                <MudText Typo="Typo.body1">@collection.VideoCount</MudText>
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudText Typo="Typo.caption">Duration</MudText>
+                                                <MudText Typo="Typo.body1">@FormatDuration(collection.TotalDuration)</MudText>
+                                            </MudItem>
+                                        </MudGrid>
+
+                                        <MudDivider Class="my-2" />
+                                        
+                                        <MudGrid>
+                                            <MudItem xs="12" Class="d-flex justify-space-between">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                                             Color="Color.Primary"
+                                                             Size="Size.Small"
+                                                             Title="View Contents"
+                                                             OnClick="@(() => ViewCollectionContents(collection.Id))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                                             Color="Color.Primary"
+                                                             Size="Size.Small"
+                                                             Title="Play Collection"
+                                                             OnClick="@(() => PlayCollection(collection.Id))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                             Color="Color.Info"
+                                                             Size="Size.Small"
+                                                             Title="Rename Collection"
+                                                             OnClick="@(() => RenameCollection(collection.Id))" />
+                                                <MudIconButton Icon="@(collection.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)"
+                                                             Color="Color.Warning"
+                                                             Size="Size.Small"
+                                                             Title="Toggle Favorite"
+                                                             OnClick="@(() => ToggleFavorite(collection.Id))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Download"
+                                                             Color="Color.Success"
+                                                             Size="Size.Small"
+                                                             Title="Export Collection"
+                                                             OnClick="@(() => ExportCollection(collection.Id))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                             Color="Color.Error"
+                                                             Size="Size.Small"
+                                                             Title="Delete Collection"
+                                                             OnClick="@(() => DeleteCollection(collection.Id))" />
+                                            </MudItem>
+                                        </MudGrid>
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else
+                {
+                    <MudTable Items="@filteredCollections" Hover="true" Dense="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>
+                                <MudCheckBox T="bool"
+                                           Value="@(filteredCollections.All(c => selectedCollections.Contains(c.Id)))"
+                                           ValueChanged="@ToggleSelectAll"
+                                           Color="Color.Primary" />
+                            </MudTh>
+                            <MudTh>Name</MudTh>
+                            <MudTh>Type</MudTh>
+                            <MudTh>Videos</MudTh>
+                            <MudTh>Duration</MudTh>
+                            <MudTh>Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Select">
+                                <MudCheckBox T="bool"
+                                           Value="@selectedCollections.Contains(context.Id)"
+                                           ValueChanged="@((bool value) => ToggleSelection(context.Id, value))"
+                                           Color="Color.Primary" />
+                            </MudTd>
+                            <MudTd DataLabel="Name">
+                                <div class="d-flex align-center gap-2">
+                                    @if (context.IsFavorite)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" />
                                     }
-
-                                    <MudGrid>
-                                        <MudItem xs="6">
-                                            <MudText Typo="Typo.caption">Videos</MudText>
-                                            <MudText Typo="Typo.body1">@collection.VideoCount</MudText>
-                                        </MudItem>
-                                        <MudItem xs="6">
-                                            <MudText Typo="Typo.caption">Duration</MudText>
-                                            <MudText Typo="Typo.body1">@FormatDuration(collection.TotalDuration)</MudText>
-                                        </MudItem>
-                                    </MudGrid>
-
-                                    <MudDivider Class="my-2" />
-                                    
-                                    <MudGrid>
-                                        <MudItem xs="12" Class="d-flex justify-space-between">
-                                            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
-                                                         Color="Color.Primary" 
-                                                         Size="Size.Small"
-                                                         Title="Play Collection"
-                                                         OnClick="@(() => PlayCollection(collection.Id))" />
-                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                                                         Color="Color.Info" 
-                                                         Size="Size.Small"
-                                                         Title="Edit Collection"
-                                                         OnClick="@(() => EditCollection(collection.Id))" />
-                                            <MudIconButton Icon="@(collection.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)" 
-                                                         Color="Color.Warning" 
-                                                         Size="Size.Small"
-                                                         Title="Toggle Favorite"
-                                                         OnClick="@(() => ToggleFavorite(collection.Id))" />
-                                            <MudIconButton Icon="@Icons.Material.Filled.Download" 
-                                                         Color="Color.Success" 
-                                                         Size="Size.Small"
-                                                         Title="Export Collection"
-                                                         OnClick="@(() => ExportCollection(collection.Id))" />
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                                         Color="Color.Error" 
-                                                         Size="Size.Small"
-                                                         Title="Delete Collection"
-                                                         OnClick="@(() => DeleteCollection(collection.Id))" />
-                                        </MudItem>
-                                    </MudGrid>
-                                </MudCardContent>
-                            </MudCard>
-                        </MudItem>
-                    }
-                </MudGrid>
+                                    @if (!context.IsPublic)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Secondary" Size="Size.Small" />
+                                    }
+                                    <MudText>@context.Name</MudText>
+                                </div>
+                            </MudTd>
+                            <MudTd DataLabel="Type">
+                                <MudChip T="string" Size="Size.Small" Color="GetCollectionTypeColor(context.Type)">
+                                    @context.Type
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Videos">@context.VideoCount</MudTd>
+                            <MudTd DataLabel="Duration">@FormatDuration(context.TotalDuration)</MudTd>
+                            <MudTd DataLabel="Actions">
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Visibility" OnClick="@(() => ViewCollectionContents(context.Id))">View Contents</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.PlayArrow" OnClick="@(() => PlayCollection(context.Id))">Play</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => RenameCollection(context.Id))">Rename</MudMenuItem>
+                                    <MudMenuItem Icon="@(context.IsFavorite ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder)" OnClick="@(() => ToggleFavorite(context.Id))">Toggle Favorite</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="@(() => ExportCollection(context.Id))">Export</MudMenuItem>
+                                    <MudDivider />
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Delete" OnClick="@(() => DeleteCollection(context.Id))">Delete</MudMenuItem>
+                                </MudMenu>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
             }
             else
             {
@@ -192,6 +281,8 @@
 </MudContainer>
 
 @code {
+    private enum ViewMode { Grid, List }
+    
     private bool isLoading = true;
     private List<Collection> collections = new();
     private IEnumerable<Collection> filteredCollections => FilterCollections();
@@ -199,6 +290,8 @@
     private string filterType = "";
     private bool showFavoritesOnly = false;
     private bool showPublicOnly = false;
+    private ViewMode viewMode = ViewMode.Grid;
+    private HashSet<Guid> selectedCollections = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -282,21 +375,14 @@
 
     private async Task OpenImportDialog()
     {
-        var parameters = new DialogParameters<ImportDialog>();
-        var options = new DialogOptions
-        {
-            CloseButton = true,
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
+        // TODO: Create ImportDialog component
+        Snackbar.Add("Import functionality coming soon", Severity.Info);
+        await Task.CompletedTask;
+    }
 
-        var dialog = await DialogService.ShowAsync<ImportDialog>("Import Playlist", parameters, options);
-        var result = await dialog.Result;
-
-        if (result is { Canceled: false })
-        {
-            await LoadCollections();
-        }
+    private void ViewCollectionContents(Guid collectionId)
+    {
+        NavigationManager.NavigateTo($"/search?collection={collectionId}");
     }
 
     private Task PlayCollection(Guid collectionId)
@@ -305,10 +391,25 @@
         return Task.CompletedTask;
     }
 
-    private Task EditCollection(Guid collectionId)
+    private async Task RenameCollection(Guid collectionId)
     {
-        NavigationManager.NavigateTo($"/collections/{collectionId}");
-        return Task.CompletedTask;
+        var collection = collections.FirstOrDefault(c => c.Id == collectionId);
+        if (collection == null) return;
+
+        // Open edit dialog with existing collection
+        var dialogParams = new DialogParameters<CollectionDialog>
+        {
+            { x => x.Collection, collection }
+        };
+        var dialogOptions = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CollectionDialog>("Edit Collection", dialogParams, dialogOptions);
+        var dialogResult = await dialog.Result;
+
+        if (dialogResult is { Canceled: false })
+        {
+            await LoadCollections();
+            Snackbar.Add("Collection updated successfully", Severity.Success);
+        }
     }
 
     private async Task ToggleFavorite(Guid collectionId)
@@ -364,10 +465,15 @@
         var collection = collections.FirstOrDefault(c => c.Id == collectionId);
         if (collection == null) return;
 
+        var confirmMessage = collection.Type == CollectionType.Smart
+            ? $"Are you sure you want to delete the smart collection '{collection.Name}'? The collection rules will be removed, but videos remain in your library."
+            : $"Are you sure you want to delete '{collection.Name}'? This removes the collection but keeps all videos in your library.";
+
         var result = await DialogService.ShowMessageBox(
             "Delete Collection",
-            $"Are you sure you want to delete '{collection.Name}'? This action cannot be undone.",
-            yesText: "Delete", cancelText: "Cancel");
+            new MarkupString($"<div>{confirmMessage}</div><br/><div><strong>Videos in collection:</strong> {collection.VideoCount}</div>"),
+            yesText: "Delete", cancelText: "Cancel",
+            options: new DialogOptions { MaxWidth = MaxWidth.Small });
 
         if (result == true)
         {
@@ -376,8 +482,9 @@
                 var success = await CollectionService.DeleteCollectionAsync(collectionId);
                 if (success)
                 {
+                    selectedCollections.Remove(collectionId);
                     await LoadCollections();
-                    Snackbar.Add("Collection deleted successfully", Severity.Success);
+                    Snackbar.Add($"Collection '{collection.Name}' deleted successfully", Severity.Success);
                 }
                 else
                 {
@@ -386,8 +493,111 @@
             }
             catch (Exception ex)
             {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                Snackbar.Add($"Error deleting collection: {ex.Message}", Severity.Error);
             }
+        }
+    }
+
+    private async Task BulkDeleteCollections()
+    {
+        if (!selectedCollections.Any()) return;
+
+        var selectedNames = collections
+            .Where(c => selectedCollections.Contains(c.Id))
+            .Select(c => c.Name)
+            .ToList();
+
+        var smartCollectionCount = collections
+            .Where(c => selectedCollections.Contains(c.Id) && c.Type == CollectionType.Smart)
+            .Count();
+
+        var listItems = string.Join("", selectedNames.Take(5).Select(n => "<li>" + n + "</li>"));
+        var moreItems = selectedNames.Count > 5 ? $"<li><em>...and {selectedNames.Count - 5} more</em></li>" : "";
+        var smartNote = smartCollectionCount > 0 ? $"<div><strong>Note:</strong> {smartCollectionCount} smart collection(s) included.</div>" : "";
+        
+        var message = $"<div>You are about to delete <strong>{selectedCollections.Count}</strong> collection(s):</div>" +
+                     $"<ul>{listItems}{moreItems}</ul>" +
+                     smartNote +
+                     "<div>Videos will remain in your library.</div>";
+
+        var result = await DialogService.ShowMessageBox(
+            "Delete Collections",
+            new MarkupString(message),
+            yesText: "Delete All", cancelText: "Cancel",
+            options: new DialogOptions { MaxWidth = MaxWidth.Medium });
+
+        if (result == true)
+        {
+            try
+            {
+                var deleteCount = 0;
+                var errors = new List<string>();
+
+                foreach (var collectionId in selectedCollections.ToList())
+                {
+                    try
+                    {
+                        var success = await CollectionService.DeleteCollectionAsync(collectionId);
+                        if (success)
+                        {
+                            deleteCount++;
+                        }
+                        else
+                        {
+                            var collectionName = collections.FirstOrDefault(c => c.Id == collectionId)?.Name ?? "Unknown";
+                            errors.Add(collectionName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        var collectionName = collections.FirstOrDefault(c => c.Id == collectionId)?.Name ?? "Unknown";
+                        errors.Add($"{collectionName}: {ex.Message}");
+                    }
+                }
+
+                selectedCollections.Clear();
+                await LoadCollections();
+
+                if (errors.Any())
+                {
+                    Snackbar.Add($"Deleted {deleteCount} collection(s). {errors.Count} failed.", Severity.Warning);
+                }
+                else
+                {
+                    Snackbar.Add($"Successfully deleted {deleteCount} collection(s)", Severity.Success);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error during bulk delete: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void ToggleSelection(Guid collectionId, bool selected)
+    {
+        if (selected)
+        {
+            selectedCollections.Add(collectionId);
+        }
+        else
+        {
+            selectedCollections.Remove(collectionId);
+        }
+    }
+
+    private void ToggleSelectAll(bool selectAll)
+    {
+        if (selectAll)
+        {
+            foreach (var collection in filteredCollections)
+            {
+                selectedCollections.Add(collection.Id);
+            }
+        }
+        else
+        {
+            selectedCollections.Clear();
         }
     }
 
