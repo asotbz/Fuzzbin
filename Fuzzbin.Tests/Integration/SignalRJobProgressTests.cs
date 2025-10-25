@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using System.Text.Json;
 
 namespace Fuzzbin.Tests.Integration
 {
@@ -25,7 +26,15 @@ namespace Fuzzbin.Tests.Integration
 
         public SignalRJobProgressTests()
         {
-            _factory = new WebApplicationFactory<Program>();
+            _factory = new WebApplicationFactory<Program>()
+                .WithWebHostBuilder(builder =>
+                {
+                    builder.ConfigureServices(services =>
+                    {
+                        // Register BackgroundJobProcessorService for tests
+                        services.AddScoped<Fuzzbin.Services.BackgroundJobProcessorService>();
+                    });
+                });
         }
 
         public async Task InitializeAsync()
@@ -73,26 +82,31 @@ namespace Fuzzbin.Tests.Integration
             var completed = new ConcurrentBag<Guid>();
             var failed = new ConcurrentBag<(Guid Id, string Error)>();
             var cancelled = new ConcurrentBag<Guid>();
+            var observedEvents = new ConcurrentBag<string>();
 
             // Register handlers
-            _connection!.On<object>("JobStarted", payload =>
+            _connection!.On<JsonElement>("JobStarted", payload =>
             {
+                observedEvents.Add($"Started:{payload}");
                 var id = ExtractGuid(payload, "JobId");
                 if (id != Guid.Empty) started.Add(id);
             });
-            _connection.On<object>("JobCompleted", payload =>
+            _connection.On<JsonElement>("JobCompleted", payload =>
             {
+                observedEvents.Add($"Completed:{payload}");
                 var id = ExtractGuid(payload, "JobId");
                 if (id != Guid.Empty) completed.Add(id);
             });
-            _connection.On<object>("JobFailed", payload =>
+            _connection.On<JsonElement>("JobFailed", payload =>
             {
+                observedEvents.Add($"Failed:{payload}");
                 var id = ExtractGuid(payload, "JobId");
                 var err = ExtractString(payload, "ErrorMessage");
                 if (id != Guid.Empty) failed.Add((id, err ?? string.Empty));
             });
-            _connection.On<object>("JobCancelled", payload =>
+            _connection.On<JsonElement>("JobCancelled", payload =>
             {
+                observedEvents.Add($"Cancelled:{payload}");
                 var id = ExtractGuid(payload, "JobId");
                 if (id != Guid.Empty) cancelled.Add(id);
             });
@@ -119,7 +133,8 @@ namespace Fuzzbin.Tests.Integration
             }
 
             // Assert
-            Assert.Contains(jobId, started);
+            var eventsSnapshot = observedEvents.ToArray();
+            Assert.True(started.Contains(jobId), $"Expected JobStarted for {jobId}, observed events: {string.Join(" | ", eventsSnapshot)}");
             Assert.True(completed.Contains(jobId) ^ failed.Any(f => f.Id == jobId), "Job should be either completed or failed, not both.");
             Assert.DoesNotContain(jobId, cancelled);
 
@@ -133,16 +148,57 @@ namespace Fuzzbin.Tests.Integration
 
         private static Guid ExtractGuid(object payload, string propertyName)
         {
+            if (TryGetJsonValue(payload, propertyName, out var value))
+            {
+                if (value.ValueKind == JsonValueKind.String &&
+                    Guid.TryParse(value.GetString(), out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
             var prop = payload.GetType().GetProperty(propertyName);
             if (prop?.GetValue(payload) is Guid g) return g;
-            if (prop?.GetValue(payload) is string s && Guid.TryParse(s, out var parsed)) return parsed;
+            if (prop?.GetValue(payload) is string s && Guid.TryParse(s, out var parsedGuid)) return parsedGuid;
             return Guid.Empty;
         }
 
         private static string? ExtractString(object payload, string propertyName)
         {
+            if (TryGetJsonValue(payload, propertyName, out var value))
+            {
+                return value.ValueKind switch
+                {
+                    JsonValueKind.String => value.GetString(),
+                    JsonValueKind.Number => value.ToString(),
+                    JsonValueKind.True => bool.TrueString,
+                    JsonValueKind.False => bool.FalseString,
+                    _ => value.ToString()
+                };
+            }
+
             var prop = payload.GetType().GetProperty(propertyName);
             return prop?.GetValue(payload)?.ToString();
+        }
+
+        private static bool TryGetJsonValue(object payload, string propertyName, out JsonElement value)
+        {
+            if (payload is JsonElement element && element.ValueKind == JsonValueKind.Object)
+            {
+                if (element.TryGetProperty(propertyName, out value))
+                {
+                    return true;
+                }
+
+                var camel = char.ToLowerInvariant(propertyName[0]) + propertyName.Substring(1);
+                if (element.TryGetProperty(camel, out value))
+                {
+                    return true;
+                }
+            }
+
+            value = default;
+            return false;
         }
     }
 }

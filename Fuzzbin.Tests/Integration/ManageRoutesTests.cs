@@ -2,15 +2,16 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
 namespace Fuzzbin.Tests.Integration;
 
-public class ManageRoutesTests : IClassFixture<WebApplicationFactory>
+public class ManageRoutesTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client;
 
-    public ManageRoutesTests(WebApplicationFactory factory)
+    public ManageRoutesTests(WebApplicationFactory<Program> factory)
     {
         _client = factory.CreateClient();
     }
@@ -25,7 +26,7 @@ public class ManageRoutesTests : IClassFixture<WebApplicationFactory>
 
         // Assert - Either 200 OK or 302 Redirect (to login if auth is required)
         Assert.True(
-            response.StatusCode == HttpStatusCode.OK || 
+            response.StatusCode == HttpStatusCode.OK ||
             response.StatusCode == HttpStatusCode.Redirect ||
             response.StatusCode == HttpStatusCode.Found,
             $"Expected 200 or redirect, but got {response.StatusCode} for {url}");
@@ -41,20 +42,5 @@ public class ManageRoutesTests : IClassFixture<WebApplicationFactory>
 
         // Assert - Should not be 404
         Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-    }
-}
-
-public class WebApplicationFactory : IDisposable
-{
-    // Minimal factory for testing - would need proper setup for full integration tests
-    public HttpClient CreateClient()
-    {
-        // This is a placeholder - real implementation would use WebApplicationFactory<Program>
-        return new HttpClient { BaseAddress = new Uri("http://localhost") };
-    }
-
-    public void Dispose()
-    {
-        // Cleanup
     }
 }

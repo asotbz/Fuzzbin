@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -53,17 +54,51 @@ public class BackgroundJobProcessorServiceTests
         }
     }
 
-    private static (ServiceProvider Provider,
-        ApplicationDbContext Db,
-        IUnitOfWork Uow,
-        TestJobProgressNotifier Notifier,
-        BackgroundJobProcessorService Processor) CreateSystem()
+    private sealed class TestEnvironment : IAsyncDisposable
+    {
+        private readonly SqliteConnection _connection;
+        private bool _disposed;
+
+        public TestEnvironment(ServiceProvider provider, SqliteConnection connection, TestJobProgressNotifier notifier, BackgroundJobProcessorService processor)
+        {
+            Provider = provider;
+            _connection = connection;
+            Notifier = notifier;
+            Processor = processor;
+        }
+
+        public ServiceProvider Provider { get; }
+        public TestJobProgressNotifier Notifier { get; }
+        public BackgroundJobProcessorService Processor { get; }
+
+        public IServiceScope CreateScope() => Provider.CreateScope();
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            await Provider.DisposeAsync();
+            await _connection.DisposeAsync();
+        }
+    }
+
+    private static TestEnvironment CreateSystem()
     {
         var services = new ServiceCollection();
 
-        // EF Core InMemory
+        // SQLite in-memory database - maintains data across scopes as long as connection stays open
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+
         services.AddDbContext<ApplicationDbContext>(o =>
-            o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        {
+            o.UseSqlite(connection);
+            o.EnableSensitiveDataLogging();
+        });
 
         // Logging
         services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Debug));
@@ -84,116 +119,173 @@ public class BackgroundJobProcessorServiceTests
         services.AddScoped<BackgroundJobProcessorService>();
 
         var provider = services.BuildServiceProvider();
-        var scope = provider.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var processor = scope.ServiceProvider.GetRequiredService<BackgroundJobProcessorService>();
 
-        return (provider, db, uow, notifier, processor);
+        // Create the database schema
+        using (var setupScope = provider.CreateScope())
+        {
+            var dbContext = setupScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            dbContext.Database.EnsureCreated();
+        }
+
+        // Create the processor using the service provider (not from a scope)
+        // so it can create its own scopes internally
+        var processor = ActivatorUtilities.CreateInstance<BackgroundJobProcessorService>(provider);
+
+        return new TestEnvironment(provider, connection, notifier, processor);
+    }
+
+    private static async Task WithUnitOfWorkAsync(TestEnvironment env, Func<IUnitOfWork, Task> action)
+    {
+        using var scope = env.CreateScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await action(uow);
+    }
+
+    private static async Task<T> WithUnitOfWorkAsync<T>(TestEnvironment env, Func<IUnitOfWork, Task<T>> action)
+    {
+        using var scope = env.CreateScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await action(uow);
+    }
+
+    private static async Task<BackgroundJob?> GetJobSnapshotAsync(TestEnvironment env, Guid jobId)
+    {
+        using var scope = env.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await dbContext.BackgroundJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == jobId);
     }
 
     [Fact]
     public async Task ProcessOnce_ExecutesPendingJob_CompletesSuccessfully()
     {
-        var (_, _, uow, notifier, processor) = CreateSystem();
+        await using var system = CreateSystem();
 
-        // Arrange: create one pending RefreshMetadata job
-        var job = new BackgroundJob
+        var jobId = await WithUnitOfWorkAsync(system, async uow =>
         {
-            Type = BackgroundJobType.RefreshMetadata,
-            Status = BackgroundJobStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
-        await uow.BackgroundJobs.AddAsync(job);
-        await uow.SaveChangesAsync();
+            var job = new BackgroundJob
+            {
+                Type = BackgroundJobType.RefreshMetadata,
+                Status = BackgroundJobStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
 
-        // Act
-        await processor.ProcessOnceForTestsAsync();
+            await uow.BackgroundJobs.AddAsync(job);
+            await uow.SaveChangesAsync();
+            return job.Id;
+        });
 
-        // Assert
-        var reloaded = await uow.BackgroundJobs.GetByIdAsync(job.Id);
+        await system.Processor.ProcessOnceForTestsAsync();
+
+        var reloaded = await WithUnitOfWorkAsync(system, uow => uow.BackgroundJobs.GetByIdAsync(jobId));
         Assert.NotNull(reloaded);
         Assert.Equal(BackgroundJobStatus.Completed, reloaded!.Status);
         Assert.Equal(100, reloaded.Progress);
-        Assert.Contains(notifier.Events, e => e.StartsWith("Started"));
-        Assert.Contains(notifier.Events, e => e.StartsWith("Completed"));
+        Assert.Contains(system.Notifier.Events, e => e.StartsWith("Started") && e.Contains(jobId.ToString()));
+        Assert.Contains(system.Notifier.Events, e => e.StartsWith("Completed") && e.Contains(jobId.ToString()));
     }
 
     [Fact]
     public async Task ProcessOnce_CancelsDuplicatePendingSingletons()
     {
-        var (_, _, uow, notifier, processor) = CreateSystem();
+        await using var system = CreateSystem();
 
-        var first = new BackgroundJob
+        var (firstId, duplicateId) = await WithUnitOfWorkAsync(system, async uow =>
         {
-            Type = BackgroundJobType.OrganizeFiles,
-            Status = BackgroundJobStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
-        var duplicate = new BackgroundJob
-        {
-            Type = BackgroundJobType.OrganizeFiles,
-            Status = BackgroundJobStatus.Pending,
-            CreatedAt = DateTime.UtcNow.AddSeconds(1)
-        };
-        await uow.BackgroundJobs.AddAsync(first);
-        await uow.BackgroundJobs.AddAsync(duplicate);
-        await uow.SaveChangesAsync();
+            var first = new BackgroundJob
+            {
+                Type = BackgroundJobType.OrganizeFiles,
+                Status = BackgroundJobStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            var duplicate = new BackgroundJob
+            {
+                Type = BackgroundJobType.OrganizeFiles,
+                Status = BackgroundJobStatus.Pending,
+                CreatedAt = DateTime.UtcNow.AddSeconds(1),
+                IsActive = true
+            };
 
-        await processor.ProcessOnceForTestsAsync();
+            await uow.BackgroundJobs.AddAsync(first);
+            await uow.SaveChangesAsync();
 
-        var j1 = await uow.BackgroundJobs.GetByIdAsync(first.Id);
-        var j2 = await uow.BackgroundJobs.GetByIdAsync(duplicate.Id);
+            await uow.BackgroundJobs.AddAsync(duplicate);
+            await uow.SaveChangesAsync();
 
-        Assert.Equal(BackgroundJobStatus.Completed, j1!.Status);
-        Assert.Equal(BackgroundJobStatus.Cancelled, j2!.Status);
-        Assert.Contains(notifier.Events, e => e.StartsWith("Cancelled") && e.Contains(j2.Id.ToString()));
+            return (first.Id, duplicate.Id);
+        });
+
+        await system.Processor.ProcessOnceForTestsAsync();
+
+        var firstJob = await GetJobSnapshotAsync(system, firstId);
+        var duplicateJob = await GetJobSnapshotAsync(system, duplicateId);
+
+        var events = system.Notifier.Events.ToArray();
+        var stateDump = $"FirstId={firstId}, FirstCreatedAt={firstJob?.CreatedAt:o}, FirstStatus={firstJob?.Status}, FirstCancelledFlag={firstJob?.CancellationRequested}, DuplicateId={duplicateId}, DuplicateCreatedAt={duplicateJob?.CreatedAt:o}, DuplicateStatus={duplicateJob?.Status}, DuplicateCancelledFlag={duplicateJob?.CancellationRequested}";
+
+        Assert.True(firstJob!.Status == BackgroundJobStatus.Completed,
+            $"Expected primary OrganizeFiles job to complete but saw {firstJob.Status}. Events: {string.Join(", ", events)}. State: {stateDump}");
+        Assert.True(duplicateJob!.Status == BackgroundJobStatus.Cancelled,
+            $"Expected duplicate OrganizeFiles job to be cancelled but saw {duplicateJob.Status}. Events: {string.Join(", ", events)}. State: {stateDump}");
+        Assert.Contains(events, e => e.StartsWith("Cancelled") && e.Contains(duplicateId.ToString()));
     }
 
     [Fact]
     public async Task ProcessOnce_RespectsPreExecutionCancellation()
     {
-        var (_, _, uow, notifier, processor) = CreateSystem();
+        await using var system = CreateSystem();
 
-        var job = new BackgroundJob
+        var jobId = await WithUnitOfWorkAsync(system, async uow =>
         {
-            Type = BackgroundJobType.RefreshMetadata,
-            Status = BackgroundJobStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-            CancellationRequested = true
-        };
-        await uow.BackgroundJobs.AddAsync(job);
-        await uow.SaveChangesAsync();
+            var job = new BackgroundJob
+            {
+                Type = BackgroundJobType.RefreshMetadata,
+                Status = BackgroundJobStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                CancellationRequested = true,
+                IsActive = true
+            };
 
-        await processor.ProcessOnceForTestsAsync();
+            await uow.BackgroundJobs.AddAsync(job);
+            await uow.SaveChangesAsync();
+            return job.Id;
+        });
 
-        var reloaded = await uow.BackgroundJobs.GetByIdAsync(job.Id);
+        await system.Processor.ProcessOnceForTestsAsync();
+
+        var reloaded = await WithUnitOfWorkAsync(system, uow => uow.BackgroundJobs.GetByIdAsync(jobId));
         Assert.Equal(BackgroundJobStatus.Cancelled, reloaded!.Status);
-        Assert.Contains(notifier.Events, e => e.StartsWith("Cancelled") && e.Contains(job.Id.ToString()));
-        Assert.DoesNotContain(notifier.Events, e => e.StartsWith("Started") && e.Contains(job.Id.ToString()));
+        Assert.Contains(system.Notifier.Events, e => e.StartsWith("Cancelled") && e.Contains(jobId.ToString()));
+        Assert.DoesNotContain(system.Notifier.Events, e => e.StartsWith("Started") && e.Contains(jobId.ToString()));
     }
 
     [Fact]
     public async Task ProcessOnce_UnknownJobType_FailsJob()
     {
-        var (_, _, uow, notifier, processor) = CreateSystem();
+        await using var system = CreateSystem();
 
-        // Use a job type not currently implemented in ExecuteJobAsync switch: DeleteVideos
-        var job = new BackgroundJob
+        var jobId = await WithUnitOfWorkAsync(system, async uow =>
         {
-            Type = BackgroundJobType.DeleteVideos,
-            Status = BackgroundJobStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
-        await uow.BackgroundJobs.AddAsync(job);
-        await uow.SaveChangesAsync();
+            var job = new BackgroundJob
+            {
+                Type = BackgroundJobType.DeleteVideos,
+                Status = BackgroundJobStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
 
-        await processor.ProcessOnceForTestsAsync();
+            await uow.BackgroundJobs.AddAsync(job);
+            await uow.SaveChangesAsync();
+            return job.Id;
+        });
 
-        var reloaded = await uow.BackgroundJobs.GetByIdAsync(job.Id);
+        await system.Processor.ProcessOnceForTestsAsync();
+
+        var reloaded = await WithUnitOfWorkAsync(system, uow => uow.BackgroundJobs.GetByIdAsync(jobId));
         Assert.Equal(BackgroundJobStatus.Failed, reloaded!.Status);
         Assert.NotNull(reloaded.ErrorMessage);
-        Assert.Contains(notifier.Events, e => e.StartsWith("Failed") && e.Contains(job.Id.ToString()));
+        Assert.Contains(system.Notifier.Events, e => e.StartsWith("Failed") && e.Contains(jobId.ToString()));
     }
 
     // --- No-op service implementations for executor dependencies ---
