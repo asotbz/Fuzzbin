@@ -17,5 +17,16 @@ namespace Fuzzbin.Services.Interfaces
         Task<List<DownloadQueueItem>> GetPendingDownloadsAsync();
         Task<bool> RetryDownloadAsync(Guid queueId);
         Task UpdateFilePathAsync(Guid itemId, string? filePath, string? outputPath = null);
+        
+        // Bulk operations
+        Task<int> ClearQueueByStatusAsync(Fuzzbin.Core.Entities.DownloadStatus status);
+        Task<int> RetryAllFailedAsync();
+        Task<bool> RemoveFromQueueAsync(Guid queueId);
+        
+        // Duplicate detection
+        Task<bool> IsUrlAlreadyQueuedAsync(string url);
+        
+        // Get items by status
+        Task<List<DownloadQueueItem>> GetItemsByStatusAsync(Fuzzbin.Core.Entities.DownloadStatus status, int limit = 100);
     }
 }

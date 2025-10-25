@@ -10,6 +10,7 @@ using Fuzzbin.Core.Interfaces;
 using Fuzzbin.Core.Specifications.DownloadQueue;
 using Fuzzbin.Services.Interfaces;
 using DownloadStatusEnum = Fuzzbin.Core.Entities.DownloadStatus;
+using IDownloadQueueServiceInterface = Fuzzbin.Services.Interfaces.IDownloadQueueService;
 
 namespace Fuzzbin.Services
 {
@@ -41,6 +42,12 @@ namespace Fuzzbin.Services
         {
             try
             {
+                // Check for duplicate URL
+                if (await IsUrlAlreadyQueuedAsync(url))
+                {
+                    throw new InvalidOperationException($"URL is already queued: {url}");
+                }
+
                 var options = _settingsProvider.GetOptions();
                 var resolvedOutputPath = string.IsNullOrWhiteSpace(outputPath)
                     ? options.OutputDirectory
@@ -455,6 +462,17 @@ namespace Fuzzbin.Services
                 {
                     item.VideoId = videoId;
                     item.UpdatedAt = DateTime.UtcNow;
+                    
+                    // Populate title from video metadata if not already set
+                    if (string.IsNullOrWhiteSpace(item.Title))
+                    {
+                        var video = await _unitOfWork.Videos.GetByIdAsync(videoId.Value);
+                        if (video != null)
+                        {
+                            item.Title = $"{video.Artist} - {video.Title}";
+                        }
+                    }
+                    
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
                 }
@@ -465,6 +483,111 @@ namespace Fuzzbin.Services
         {
             var specification = new DownloadQueueByIdSpecification(queueId, track);
             return await _unitOfWork.DownloadQueueItems.FirstOrDefaultAsync(specification);
+        }
+
+        public async Task<int> ClearQueueByStatusAsync(DownloadStatusEnum status)
+        {
+            try
+            {
+                var specification = new DownloadQueueByStatusSpecification(status, includeVideo: false);
+                var items = await _unitOfWork.DownloadQueueItems.ListAsync(specification);
+
+                var count = 0;
+                foreach (var item in items)
+                {
+                    item.IsDeleted = true;
+                    item.DeletedDate = DateTime.UtcNow;
+                    item.UpdatedAt = DateTime.UtcNow;
+                    await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
+                    count++;
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                _logger.LogInformation("Cleared {Count} items with status {Status}", count, status);
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing queue by status: {Status}", status);
+                throw;
+            }
+        }
+
+        public async Task<int> RetryAllFailedAsync()
+        {
+            try
+            {
+                var specification = new DownloadQueueByStatusSpecification(DownloadStatusEnum.Failed, includeVideo: false);
+                var failedItems = await _unitOfWork.DownloadQueueItems.ListAsync(specification);
+
+                var count = 0;
+                foreach (var item in failedItems)
+                {
+                    item.Status = DownloadStatusEnum.Queued;
+                    item.RetryCount++;
+                    item.ErrorMessage = null;
+                    item.StartedDate = null;
+                    item.CompletedDate = null;
+                    item.Progress = 0;
+                    item.DownloadSpeed = null;
+                    item.ETA = null;
+                    item.UpdatedAt = DateTime.UtcNow;
+                    await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
+                    await _taskQueue.QueueAsync(item.Id);
+                    count++;
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                _logger.LogInformation("Queued {Count} failed items for retry", count);
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrying all failed downloads");
+                throw;
+            }
+        }
+
+        public async Task<bool> IsUrlAlreadyQueuedAsync(string url)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    return false;
+                }
+
+                var normalizedUrl = url.Trim().ToLowerInvariant();
+                
+                var allItems = await _unitOfWork.DownloadQueueItems
+                    .GetAllAsync(includeDeleted: false);
+
+                return allItems.Any(item =>
+                    !string.IsNullOrWhiteSpace(item.Url) &&
+                    item.Url.Trim().ToLowerInvariant() == normalizedUrl &&
+                    (item.Status == DownloadStatusEnum.Queued ||
+                     item.Status == DownloadStatusEnum.Downloading));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking for duplicate URL: {Url}", url);
+                return false;
+            }
+        }
+
+        public async Task<List<DownloadQueueItem>> GetItemsByStatusAsync(DownloadStatusEnum status, int limit = 100)
+        {
+            try
+            {
+                var specification = new DownloadQueueByStatusSpecification(status, includeVideo: true);
+                var items = await _unitOfWork.DownloadQueueItems.ListAsync(specification);
+                return items.Take(limit).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting items by status: {Status}", status);
+                throw;
+            }
         }
     }
 }

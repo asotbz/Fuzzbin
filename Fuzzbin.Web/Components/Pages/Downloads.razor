@@ -5,10 +5,12 @@
 @using Fuzzbin.Services.Interfaces
 @using DownloadStatus = Fuzzbin.Core.Entities.DownloadStatus
 @using MudBlazor
+@using Fuzzbin.Web.Components.Dialogs
 @inject IUnitOfWork UnitOfWork
 @inject Fuzzbin.Services.Interfaces.IDownloadQueueService DownloadQueueService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @implements IAsyncDisposable
 
 <PageTitle>Downloads - Fuzzbin</PageTitle>
@@ -302,7 +304,7 @@
         </MudItem>
         
         <!-- Bulk Actions -->
-        @if (_queuedItems.Any() || _failedItems.Any())
+        @if (_queuedItems.Any() || _failedItems.Any() || _completedItems.Any())
         {
             <MudItem xs="12">
                 <MudCard>
@@ -311,18 +313,35 @@
                         <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
                             @if (_failedItems.Any())
                             {
-                                <MudButton StartIcon="@Icons.Material.Filled.Refresh" 
+                                <MudButton StartIcon="@Icons.Material.Filled.Refresh"
                                          Color="Color.Primary"
-                                         OnClick="RetryAllFailed">
+                                         OnClick="RetryAllFailed"
+                                         Disabled="@_isProcessing">
                                     Retry All Failed
                                 </MudButton>
-                            }
-                            @if (_queuedItems.Any() || _failedItems.Any())
-                            {
-                                <MudButton StartIcon="@Icons.Material.Filled.ClearAll" 
+                                <MudButton StartIcon="@Icons.Material.Filled.ClearAll"
                                          Color="Color.Error"
-                                         OnClick="ClearQueue">
-                                    Clear Queue
+                                         OnClick="@(() => ClearQueueByStatus(DownloadStatus.Failed))"
+                                         Disabled="@_isProcessing">
+                                    Clear Failed
+                                </MudButton>
+                            }
+                            @if (_queuedItems.Any())
+                            {
+                                <MudButton StartIcon="@Icons.Material.Filled.ClearAll"
+                                         Color="Color.Error"
+                                         OnClick="@(() => ClearQueueByStatus(DownloadStatus.Queued))"
+                                         Disabled="@_isProcessing">
+                                    Clear Queued
+                                </MudButton>
+                            }
+                            @if (_completedItems.Any())
+                            {
+                                <MudButton StartIcon="@Icons.Material.Filled.ClearAll"
+                                         Color="Color.Default"
+                                         OnClick="@(() => ClearQueueByStatus(DownloadStatus.Completed))"
+                                         Disabled="@_isProcessing">
+                                    Clear Completed
                                 </MudButton>
                             }
                         </MudButtonGroup>
@@ -339,6 +358,7 @@
     private string _newDownloadUrl = "";
     private int _priority = 5;
     private bool _isAdding = false;
+    private bool _isProcessing = false;
     
     private List<DownloadQueueItem> _activeDownloads = new();
     private List<DownloadQueueItem> _queuedItems = new();
@@ -430,18 +450,29 @@
         try
         {
             // Determine if it's a URL or search query
-            bool isUrl = _newDownloadUrl.StartsWith("http://") || 
+            bool isUrl = _newDownloadUrl.StartsWith("http://") ||
                         _newDownloadUrl.StartsWith("https://") ||
                         _newDownloadUrl.Contains("youtube.com") ||
                         _newDownloadUrl.Contains("youtu.be");
             
             string url = isUrl ? _newDownloadUrl : $"ytsearch:{_newDownloadUrl}";
             
+            // Check for duplicates
+            if (await DownloadQueueService.IsUrlAlreadyQueuedAsync(url))
+            {
+                Snackbar.Add("This URL is already in the queue", Severity.Warning);
+                return;
+            }
+            
             await DownloadQueueService.AddToQueueAsync(url, _priority);
             
             Snackbar.Add("Added to download queue", Severity.Success);
             _newDownloadUrl = "";
             await RefreshQueue();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already queued"))
+        {
+            Snackbar.Add("This URL is already in the queue", Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -483,39 +514,89 @@
     
     private async Task RetryDownload(DownloadQueueItem item)
     {
-        item.Status = DownloadStatus.Queued;
-        item.ErrorMessage = null;
-        item.RetryCount++;
-        await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
-        await UnitOfWork.SaveChangesAsync();
-        await RefreshQueue();
-        Snackbar.Add("Download queued for retry", Severity.Info);
+        try
+        {
+            await DownloadQueueService.RetryDownloadAsync(item.Id);
+            await RefreshQueue();
+            Snackbar.Add("Download queued for retry", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error retrying download: {ex.Message}", Severity.Error);
+        }
     }
     
     private async Task RetryAllFailed()
     {
-        foreach (var item in _failedItems)
+        if (_failedItems.Count == 0)
         {
-            item.Status = DownloadStatus.Queued;
-            item.ErrorMessage = null;
-            item.RetryCount++;
-            await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+            return;
         }
-        await UnitOfWork.SaveChangesAsync();
-        await RefreshQueue();
-        Snackbar.Add($"Queued {_failedItems.Count} items for retry", Severity.Info);
+        
+        _isProcessing = true;
+        try
+        {
+            var count = await DownloadQueueService.RetryAllFailedAsync();
+            await RefreshQueue();
+            Snackbar.Add($"Queued {count} items for retry", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error retrying failed downloads: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
     }
     
-    private async Task ClearQueue()
+    private async Task ClearQueueByStatus(DownloadStatus status)
     {
-        foreach (var item in _queuedItems.Concat(_failedItems))
+        var items = status switch
         {
-            item.IsDeleted = true;
-            await UnitOfWork.DownloadQueueItems.UpdateAsync(item);
+            DownloadStatus.Failed => _failedItems,
+            DownloadStatus.Queued => _queuedItems,
+            DownloadStatus.Completed => _completedItems,
+            _ => new List<DownloadQueueItem>()
+        };
+        
+        if (items.Count == 0)
+        {
+            return;
         }
-        await UnitOfWork.SaveChangesAsync();
-        await RefreshQueue();
-        Snackbar.Add("Queue cleared", Severity.Success);
+        
+        var parameters = new DialogParameters
+        {
+            { "Status", status },
+            { "ItemCount", items.Count },
+            { "Items", items }
+        };
+        
+        var dialog = await DialogService.ShowAsync<ConfirmClearQueueDialog>(
+            "Confirm Clear Queue",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small });
+        
+        var result = await dialog.Result;
+        
+        if (result != null && !result.Canceled)
+        {
+            _isProcessing = true;
+            try
+            {
+                var count = await DownloadQueueService.ClearQueueByStatusAsync(status);
+                await RefreshQueue();
+                Snackbar.Add($"Cleared {count} items from queue", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error clearing queue: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _isProcessing = false;
+            }
+        }
     }
     
     private async Task ClearFromHistory(DownloadQueueItem item)
@@ -526,11 +607,15 @@
         await RefreshQueue();
     }
     
-    private void PlayVideo(DownloadQueueItem item)
+    private async Task PlayVideo(DownloadQueueItem item)
     {
         if (item.VideoId.HasValue)
         {
             Navigation.NavigateTo($"/player/{item.VideoId}");
+        }
+        else
+        {
+            Snackbar.Add("Video not found in library", Severity.Warning);
         }
     }
     

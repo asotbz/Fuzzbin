@@ -1,0 +1,67 @@
+@using Fuzzbin.Core.Entities
+@using MudBlazor
+@using DownloadStatusEnum = Fuzzbin.Core.Entities.DownloadStatus
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            @if (Status == DownloadStatusEnum.Failed)
+            {
+                <text>Are you sure you want to clear all <strong>@ItemCount failed</strong> download(s) from the queue?</text>
+            }
+            else if (Status == DownloadStatusEnum.Completed)
+            {
+                <text>Are you sure you want to clear all <strong>@ItemCount completed</strong> download(s) from history?</text>
+            }
+            else if (Status == DownloadStatusEnum.Queued)
+            {
+                <text>Are you sure you want to clear all <strong>@ItemCount queued</strong> download(s)?</text>
+            }
+            else
+            {
+                <text>Are you sure you want to clear <strong>@ItemCount</strong> item(s)?</text>
+            }
+        </MudText>
+        
+        @if (Status == DownloadStatusEnum.Queued)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-2">
+                This will remove all pending downloads from the queue. This action cannot be undone.
+            </MudAlert>
+        }
+        
+        @if (Items != null && Items.Count > 0 && Items.Count <= 10)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Items to be removed:</MudText>
+            <MudList T="string" Dense="true" Class="mud-background-gray pa-2" Style="max-height: 200px; overflow-y: auto;">
+                @foreach (var item in Items.Take(10))
+                {
+                    <MudListItem T="string">
+                        <MudText Typo="Typo.caption">@(item.Title ?? item.Url)</MudText>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="Confirm">Clear Queue</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public DownloadStatusEnum Status { get; set; }
+
+    [Parameter]
+    public int ItemCount { get; set; }
+
+    [Parameter]
+    public List<DownloadQueueItem>? Items { get; set; }
+
+    private void Cancel() => MudDialog.Cancel();
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(true));
+}

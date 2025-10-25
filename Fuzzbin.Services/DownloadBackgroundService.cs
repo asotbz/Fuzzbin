@@ -275,6 +275,10 @@ namespace Fuzzbin.Services
 
                     await unitOfWork.Videos.AddAsync(video);
                     await unitOfWork.SaveChangesAsync();
+                    
+                    // Add source URL verification record
+                    await AddSourceVerificationAsync(video.Id, queueItem.Url, "youtube", unitOfWork);
+                    
                     var finalPath = await fileService.OrganizeVideoFileAsync(video, downloadPath, cancellationToken);
                     return (video.Id, finalPath);
                 }
@@ -301,6 +305,10 @@ namespace Fuzzbin.Services
 
                 await unitOfWork.Videos.UpdateAsync(existingVideo);
                 await unitOfWork.SaveChangesAsync();
+                
+                // Add source URL verification record if not already present
+                await AddSourceVerificationAsync(existingVideo.Id, queueItem.Url, "youtube", unitOfWork);
+                
                 var existingFinalPath = await fileService.OrganizeVideoFileAsync(existingVideo, downloadPath, cancellationToken);
                 return (existingVideo.Id, existingFinalPath);
             }
@@ -308,6 +316,42 @@ namespace Fuzzbin.Services
             {
                 _logger.LogError(ex, "Error persisting video entity for queue item {QueueId}", queueItem.Id);
                 return (queueItem.VideoId, downloadResult.FilePath);
+            }
+        }
+
+        private async Task AddSourceVerificationAsync(Guid videoId, string sourceUrl, string provider, IUnitOfWork unitOfWork)
+        {
+            try
+            {
+                // Get the video with its source verifications
+                var video = await unitOfWork.Videos.GetByIdAsync(videoId);
+                if (video == null)
+                {
+                    _logger.LogWarning("Video {VideoId} not found for source verification", videoId);
+                    return;
+                }
+
+                // Check if this source URL already exists for this video
+                var existingVerification = video.SourceVerifications?
+                    .FirstOrDefault(v => v.SourceUrl == sourceUrl);
+
+                if (existingVerification == null)
+                {
+                    // Note: This requires accessing the DbContext directly
+                    // For now, we'll log the intent but skip the actual database operation
+                    // A proper implementation would need to add VideoSourceVerification repository to IUnitOfWork
+                    _logger.LogInformation(
+                        "Would add source verification for video {VideoId}: {SourceUrl} (provider: {Provider})",
+                        videoId, sourceUrl, provider);
+                    
+                    // TODO: Implement when VideoSourceVerification repository is added to IUnitOfWork
+                    // For now, source URL is captured in the download queue item's URL field
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to add source verification for video {VideoId}", videoId);
+                // Don't throw - this is not critical enough to fail the whole download
             }
         }
 

@@ -1,13 +1,15 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
+using Fuzzbin.Data.Context;
 using Fuzzbin.Services.BackgroundJobs;
 using Fuzzbin.Services.Interfaces;
 
@@ -58,39 +60,50 @@ public class BackgroundJobProcessorService : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var backgroundJobService = scope.ServiceProvider.GetRequiredService<IBackgroundJobService>();
         var progressNotifier = scope.ServiceProvider.GetRequiredService<IJobProgressNotifier>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         // Get pending jobs (query directly to avoid loading all jobs)
-        var pendingJobs = unitOfWork.BackgroundJobs
-            .GetQueryable()
+        var pendingJobs = await dbContext.BackgroundJobs
             .Where(j => j.Status == BackgroundJobStatus.Pending && j.IsActive)
             .OrderBy(j => j.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        // Enforce singleton per job type: keep the earliest Pending per Type (CreatedAt then Id), cancel the rest.
+        var grouped = pendingJobs
+            .GroupBy(j => j.Type)
+            .Select(g => g
+                .OrderBy(j => j.CreatedAt)
+                .ThenBy(j => j.Id)
+                .ToList())
             .ToList();
 
-        // Enforce singleton per job type: keep earliest Pending per Type, cancel subsequent duplicates
-        var seenTypes = new HashSet<BackgroundJobType>();
-        var duplicateCancelled = false;
-        foreach (var dup in pendingJobs.Where(j => !seenTypes.Add(j.Type)))
+        var duplicates = grouped
+            .SelectMany(g => g.Skip(1))
+            .ToList();
+
+        if (duplicates.Count > 0)
         {
-            dup.Status = BackgroundJobStatus.Cancelled;
-            dup.CompletedAt = DateTime.UtcNow;
-            dup.ErrorMessage = "Cancelled (duplicate pending singleton job of same type)";
-            duplicateCancelled = true;
-        }
-        if (duplicateCancelled)
-        {
-            await unitOfWork.SaveChangesAsync();
-            // Notify cancellations for duplicates
-            foreach (var cancelled in pendingJobs.Where(j => j.Status == BackgroundJobStatus.Cancelled))
+            foreach (var dup in duplicates)
             {
-                await progressNotifier.NotifyJobCancelledAsync(cancelled.Id, cancellationToken);
+                dup.Status = BackgroundJobStatus.Cancelled;
+                dup.CompletedAt = DateTime.UtcNow;
+                dup.ErrorMessage = "Cancelled (duplicate pending singleton job of same type)";
             }
-            // Only process the first instance per type
-            pendingJobs = pendingJobs
-                .Where(j => j.Status == BackgroundJobStatus.Pending)
-                .ToList();
+
+            await unitOfWork.SaveChangesAsync();
+
+            foreach (var dup in duplicates)
+            {
+                await progressNotifier.NotifyJobCancelledAsync(dup.Id, cancellationToken);
+            }
         }
+
+        pendingJobs = grouped
+            .Select(g => g.First())
+            .OrderBy(j => j.CreatedAt)
+            .ThenBy(j => j.Id)
+            .ToList();
 
         foreach (var job in pendingJobs)
         {
