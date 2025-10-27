@@ -124,6 +124,163 @@ public class ExternalSearchServiceTests
         Assert.Empty(result.Items);
     }
 
+    [Fact]
+    public async Task SearchAsync_WithDefaultToggles_IncludesBothSources()
+    {
+        // Arrange
+        var imvdbApi = new FakeImvdbApi
+        {
+            SearchResponse = new ImvdbSearchResponse
+            {
+                Results =
+                {
+                    new ImvdbVideoSummary
+                    {
+                        Id = 102,
+                        Artist = "Test Artist",
+                        SongTitle = "Test Song",
+                        Title = "Test Song",
+                        ImageUrl = "https://imvdb.test/thumb",
+                        Url = "https://imvdb.test/video"
+                    }
+                }
+            }
+        };
+
+        var youtubeService = new FakeYtDlpService
+        {
+            Results =
+            {
+                new YtSearchResult
+                {
+                    Title = "Test Artist - Test Song",
+                    Url = "https://youtube.test/watch?v=456",
+                    ThumbnailUrl = "https://youtube.test/thumb",
+                    Duration = TimeSpan.FromMinutes(3)
+                }
+            }
+        };
+
+        var apiKeyProvider = new FakeApiKeyProvider(() => "test-key");
+        var service = new ExternalSearchService(imvdbApi, youtubeService, apiKeyProvider, NullLogger<ExternalSearchService>.Instance);
+
+        // Act - Query with default toggles (both true)
+        var query = new ExternalSearchQuery
+        {
+            SearchText = "Test Artist Test Song",
+            MaxResults = 10,
+            IncludeImvdb = true,
+            IncludeYtDlp = true
+        };
+
+        var result = await service.SearchAsync(query);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.ImvdbEnabled);
+        Assert.True(result.YtDlpEnabled);
+        Assert.NotEmpty(result.Items);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithImvdbDisabled_OnlyReturnsYtDlpResults()
+    {
+        // Arrange
+        var imvdbApi = new FakeImvdbApi();
+        var youtubeService = new FakeYtDlpService
+        {
+            Results =
+            {
+                new YtSearchResult
+                {
+                    Title = "Test Video",
+                    Url = "https://youtube.test/watch?v=789",
+                    ThumbnailUrl = "https://youtube.test/thumb"
+                }
+            }
+        };
+
+        var apiKeyProvider = new FakeApiKeyProvider(() => "test-key");
+        var service = new ExternalSearchService(imvdbApi, youtubeService, apiKeyProvider, NullLogger<ExternalSearchService>.Instance);
+
+        // Act
+        var query = new ExternalSearchQuery
+        {
+            SearchText = "Test Video",
+            MaxResults = 10,
+            IncludeImvdb = false,
+            IncludeYtDlp = true
+        };
+
+        var result = await service.SearchAsync(query);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.ImvdbEnabled);
+        Assert.True(result.YtDlpEnabled);
+        Assert.NotEmpty(result.Items);
+        Assert.All(result.Items, item => Assert.True(item.Source == ExternalSearchSource.YtDlp));
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithYtDlpDisabled_OnlyReturnsImvdbResults()
+    {
+        // Arrange
+        var imvdbApi = new FakeImvdbApi
+        {
+            SearchResponse = new ImvdbSearchResponse
+            {
+                Results =
+                {
+                    new ImvdbVideoSummary
+                    {
+                        Id = 103,
+                        Artist = "Artist Name",
+                        SongTitle = "Song Title",
+                        Title = "Song Title",
+                        ImageUrl = "https://imvdb.test/thumb",
+                        Url = "https://imvdb.test/video"
+                    }
+                }
+            },
+            VideoResponses =
+            {
+                ["103"] = new ImvdbVideoResponse
+                {
+                    Id = 103,
+                    Artist = "Artist Name",
+                    SongTitle = "Song Title",
+                    ReleaseDate = "2020-01-01",
+                    ThumbnailUrl = "https://imvdb.test/detail-thumb",
+                    ImvdbUrl = "https://imvdb.test/video",
+                    Genres = new List<ImvdbGenre> { new() { Name = "Pop" } }
+                }
+            }
+        };
+
+        var youtubeService = new FakeYtDlpService();
+        var apiKeyProvider = new FakeApiKeyProvider(() => "test-key");
+        var service = new ExternalSearchService(imvdbApi, youtubeService, apiKeyProvider, NullLogger<ExternalSearchService>.Instance);
+
+        // Act
+        var query = new ExternalSearchQuery
+        {
+            SearchText = "Artist Name Song Title",
+            MaxResults = 10,
+            IncludeImvdb = true,
+            IncludeYtDlp = false
+        };
+
+        var result = await service.SearchAsync(query);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.ImvdbEnabled);
+        Assert.False(result.YtDlpEnabled);
+        Assert.NotEmpty(result.Items);
+        Assert.All(result.Items, item => Assert.True(item.Source == ExternalSearchSource.Imvdb));
+    }
+
     private sealed class FakeImvdbApi : IImvdbApi
     {
         public ImvdbSearchResponse SearchResponse { get; set; } = new();

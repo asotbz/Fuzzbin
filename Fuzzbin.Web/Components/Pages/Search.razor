@@ -8,9 +8,11 @@
 @inject Fuzzbin.Services.Interfaces.IVideoService VideoService
 @inject Fuzzbin.Services.Interfaces.ICollectionService CollectionService
 @inject Fuzzbin.Services.Interfaces.IExternalSearchService ExternalSearchService
+@inject Fuzzbin.Services.Interfaces.IDownloadQueueService DownloadQueueService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
+@inject ILogger<Search> Logger
 
 <PageTitle>Advanced Search - Fuzzbin</PageTitle>
 
@@ -186,7 +188,20 @@
                                                     }
                                                     @if (!string.IsNullOrWhiteSpace(item.YtDlp.Url))
                                                     {
-                                                        <MudLink Href="@item.YtDlp.Url" Target="_blank">Open Source</MudLink>
+                                                        <MudStack Row="true" Spacing="1">
+                                                            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew"
+                                                                         Size="Size.Small"
+                                                                         Href="@item.YtDlp.Url"
+                                                                         Target="_blank"
+                                                                         rel="noopener"
+                                                                         Color="Color.Primary"
+                                                                         Title="Open source in new tab" />
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                                         Size="Size.Small"
+                                                                         OnClick="@(async () => await QueueExternalDownload(item))"
+                                                                         Color="Color.Secondary"
+                                                                         Title="Add to download queue" />
+                                                        </MudStack>
                                                     }
                                                 </MudStack>
                                             }
@@ -209,7 +224,7 @@
         <!-- Search Filters -->
         <MudItem xs="12" md="3">
             <MudPaper Class="pa-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Search Filters</MudText>
+                <MudText Typo="Typo.h6" Class="mb-3">Local Library</MudText>
                 
                 <!-- Text Search -->
                 <MudTextField @bind-Value="_searchQuery.SearchText" Label="Search Text" 
@@ -350,7 +365,7 @@
                 <MudGrid AlignItems="Center" Class="mb-3">
                     <MudItem xs="6">
                         <MudText Typo="Typo.h6">
-                            Results (@_searchResult?.TotalCount ?? 0 videos)
+                            Results (@(_searchResult?.TotalCount.ToString() ?? "0") videos)
                         </MudText>
                     </MudItem>
                     <MudItem xs="6" Class="text-right">
@@ -444,7 +459,12 @@
     private bool _isSearching;
     private bool _hasSearched;
 
-    private ExternalSearchQuery _externalQuery = new() { MaxResults = 8 };
+    private ExternalSearchQuery _externalQuery = new()
+    {
+        MaxResults = 8,
+        IncludeImvdb = true,
+        IncludeYtDlp = true
+    };
     private ExternalSearchResult? _externalResult;
     private bool _isExternalSearching;
 
@@ -800,6 +820,51 @@
         if (_selectedSavedSearch != null)
         {
             await LoadSavedSearch(_selectedSavedSearch);
+        }
+    }
+
+    private async Task QueueExternalDownload(ExternalSearchItem item)
+    {
+        try
+        {
+            // Get URL from the item
+            string? url = item.YtDlp?.Url;
+            
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                Snackbar.Add("No downloadable URL found for this item", Severity.Warning);
+                return;
+            }
+
+            // Check for duplicate - the service handles this, but we provide user feedback
+            var isDuplicate = await DownloadQueueService.IsUrlAlreadyQueuedAsync(url);
+            if (isDuplicate)
+            {
+                Snackbar.Add("This video is already in the download queue", Severity.Info);
+                return;
+            }
+
+            // Create a title from the item
+            string title = !string.IsNullOrWhiteSpace(item.Artist) && !string.IsNullOrWhiteSpace(item.Title)
+                ? $"{item.Artist} - {item.Title}"
+                : item.Title;
+
+            // Add to queue (priority parameter is already included in the method signature)
+            await DownloadQueueService.AddToQueueAsync(url, priority: 0);
+            
+            // Note: The title will need to be set separately if the service supports it
+            // For now, the service will extract metadata from the URL
+            
+            Snackbar.Add($"Added '{title}' to download queue", Severity.Success);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already queued"))
+        {
+            Snackbar.Add("This video is already in the download queue", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to queue external download");
+            Snackbar.Add($"Failed to add to queue: {ex.Message}", Severity.Error);
         }
     }
 }
