@@ -23,5 +23,6 @@ public sealed class VideoByIdSpecification : BaseSpecification<Video>
         AddInclude(v => v.FeaturedArtists);
         AddInclude(v => v.CollectionVideos);
         AddInclude($"{nameof(Video.CollectionVideos)}.{nameof(CollectionVideo.Collection)}");
+        AddInclude(v => v.SourceVerifications);
     }
 }

@@ -24,12 +24,22 @@
                 <MudExpansionPanels Elevation="0">
                     <MudExpansionPanel Text="Filters" Icon="@Icons.Material.Filled.FilterList">
                         <MudGrid>
-                            <MudItem xs="12" md="4">
+                            <MudItem xs="12" md="3">
                                 <MudTextField @bind-Value="searchTerm" 
                                             Label="Search" 
                                             Variant="Variant.Outlined"
                                             Adornment="Adornment.Start"
                                             AdornmentIcon="@Icons.Material.Filled.Search"
+                                            DebounceInterval="300"
+                                            OnDebounceIntervalElapsed="@(async () => await ApplyFilters())" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudTextField @bind-Value="userFilter"
+                                            Label="User"
+                                            Variant="Variant.Outlined"
+                                            Adornment="Adornment.Start"
+                                            AdornmentIcon="@Icons.Material.Filled.Person"
                                             DebounceInterval="300"
                                             OnDebounceIntervalElapsed="@(async () => await ApplyFilters())" />
                             </MudItem>
@@ -80,16 +90,6 @@
                                 </MudSelect>
                             </MudItem>
 
-                            <MudItem xs="12" md="2">
-                                <MudButton Color="Color.Primary" 
-                                         Variant="Variant.Filled" 
-                                         StartIcon="@Icons.Material.Filled.Search"
-                                         OnClick="ApplyFilters"
-                                         FullWidth="true">
-                                    Apply Filters
-                                </MudButton>
-                            </MudItem>
-
                             <MudItem xs="12" md="3">
                                 <MudDatePicker Label="Start Date" 
                                              @bind-Date="startDate"
@@ -104,7 +104,7 @@
                                              DateFormat="yyyy-MM-dd" />
                             </MudItem>
 
-                            <MudItem xs="12" md="3">
+                            <MudItem xs="12" md="2">
                                 <MudSelect T="int" Label="Days Range" Variant="Variant.Outlined" 
                                          @bind-Value="daysRange" 
                                          AnchorOrigin="Origin.BottomCenter">
@@ -116,7 +116,17 @@
                                 </MudSelect>
                             </MudItem>
 
-                            <MudItem xs="12" md="3">
+                            <MudItem xs="12" md="2">
+                                <MudButton Color="Color.Primary" 
+                                         Variant="Variant.Filled" 
+                                         StartIcon="@Icons.Material.Filled.Search"
+                                         OnClick="ApplyFilters"
+                                         FullWidth="true">
+                                    Apply Filters
+                                </MudButton>
+                            </MudItem>
+
+                            <MudItem xs="12" md="2">
                                 <MudButton Color="Color.Secondary" 
                                          Variant="Variant.Outlined" 
                                          StartIcon="@Icons.Material.Filled.Clear"
@@ -172,6 +182,15 @@
                     </MudCardContent>
                 </MudCard>
             </MudItem>
+
+            @if (!isLoading && logs.Count == 0)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                        No activity yet. Actions like downloads, metadata refresh, and deletes will show up here once they run.
+                    </MudAlert>
+                </MudItem>
+            }
 
             <!-- Activity Log Table -->
             <MudItem xs="12">
@@ -258,7 +277,7 @@
                         <MudTablePager />
                     </PagerContent>
                     <NoRecordsContent>
-                        <MudText>No activity logs found</MudText>
+                        <MudText>No activity logs found for the current filters.</MudText>
                     </NoRecordsContent>
                 </MudTable>
             </MudItem>
@@ -410,6 +429,7 @@
 
     // Filters
     private string searchTerm = "";
+    private string userFilter = "";
     private string selectedCategory = "";
     private string selectedAction = "";
     private bool? selectedSuccess = null;
@@ -488,11 +508,13 @@
 
         try
         {
+            var userIdFilter = string.IsNullOrWhiteSpace(userFilter) ? null : userFilter;
+
             var result = await ActivityLogService.SearchLogsAsync(
                 searchTerm,
                 string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
                 string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
-                null,
+                userIdFilter,
                 startDate,
                 endDate,
                 selectedSuccess,
@@ -505,7 +527,7 @@
             var count = await ActivityLogService.GetLogCountAsync(
                 string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
                 string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
-                null,
+                userIdFilter,
                 startDate,
                 endDate,
                 selectedSuccess
@@ -537,11 +559,13 @@
     {
         try
         {
+            var userIdFilter = string.IsNullOrWhiteSpace(userFilter) ? null : userFilter;
+
             // Get counts
             totalCount = await ActivityLogService.GetLogCountAsync(
                 string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
                 string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
-                null,
+                userIdFilter,
                 startDate,
                 endDate,
                 null
@@ -550,7 +574,7 @@
             successCount = await ActivityLogService.GetLogCountAsync(
                 string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
                 string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
-                null,
+                userIdFilter,
                 startDate,
                 endDate,
                 true
@@ -559,7 +583,7 @@
             failedCount = await ActivityLogService.GetLogCountAsync(
                 string.IsNullOrWhiteSpace(selectedCategory) ? null : selectedCategory,
                 string.IsNullOrWhiteSpace(selectedAction) ? null : selectedAction,
-                null,
+                userIdFilter,
                 startDate,
                 endDate,
                 false
@@ -644,6 +668,7 @@
     private async Task ClearFilters()
     {
         searchTerm = "";
+        userFilter = "";
         selectedCategory = "";
         selectedAction = "";
         selectedSuccess = null;

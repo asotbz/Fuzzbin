@@ -1,0 +1,165 @@
+@using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Core.Entities
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-4">Manual Match Selection Required</MudText>
+        
+        @if (Video != null)
+        {
+            <MudPaper Class="pa-3 mb-4" Elevation="1">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Video Being Matched:</MudText>
+                <MudText Typo="Typo.body1"><strong>@Video.Artist</strong> - @Video.Title</MudText>
+                @if (Video.Year.HasValue)
+                {
+                    <MudText Typo="Typo.caption">Year: @Video.Year</MudText>
+                }
+            </MudPaper>
+        }
+
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Automatic matching found a result with low confidence (@((MatchConfidence * 100).ToString("F1"))%).
+            Please review the top matches below and select the correct one, or skip this video.
+        </MudAlert>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_matches != null && _matches.Any())
+        {
+            <MudText Typo="Typo.subtitle1" Class="mb-3">Top @_matches.Count Match@(_matches.Count > 1 ? "es" : ""):</MudText>
+            
+            <MudList T="string" Clickable="true" Dense="true">
+                @foreach (var match in _matches.Select((m, i) => new { Match = m, Index = i }))
+                {
+                    <MudListItem @key="match.Index" OnClick="() => SelectMatch(match.Index)">
+                        <MudPaper Class="pa-3 mb-2" Elevation="@(match.Index == _selectedIndex ? 3 : 1)" 
+                                  Style="@(match.Index == _selectedIndex ? "border: 2px solid var(--mud-palette-primary);" : "")">
+                            <MudGrid Spacing="2">
+                                <MudItem xs="12" sm="8">
+                                    <div class="d-flex align-center gap-2 mb-2">
+                                        <MudIcon Icon="@(match.Index == _selectedIndex ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" 
+                                                 Color="@(match.Index == _selectedIndex ? Color.Primary : Color.Default)" />
+                                        <MudText Typo="Typo.h6">@match.Match.Title</MudText>
+                                    </div>
+                                    <MudText Typo="Typo.body2"><strong>Artist:</strong> @match.Match.Artist</MudText>
+                                    @if (match.Match.Year.HasValue)
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Year:</strong> @match.Match.Year</MudText>
+                                    }
+                                    @if (!string.IsNullOrEmpty(match.Match.Director))
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Director:</strong> @match.Match.Director</MudText>
+                                    }
+                                    @if (!string.IsNullOrEmpty(match.Match.RecordLabel))
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Label:</strong> @match.Match.RecordLabel</MudText>
+                                    }
+                                    @if (match.Match.Genres?.Any() == true)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @string.Join(", ", match.Match.Genres)
+                                        </MudText>
+                                    }
+                                </MudItem>
+                                <MudItem xs="12" sm="4" Class="d-flex flex-column align-center">
+                                    @if (!string.IsNullOrEmpty(match.Match.ImageUrl))
+                                    {
+                                        <MudImage Src="@match.Match.ImageUrl" Alt="Thumbnail" 
+                                                  Width="120" Height="120" ObjectFit="ObjectFit.Cover" 
+                                                  Class="rounded mb-2" />
+                                    }
+                                    <MudChip T="string" Size="Size.Small" Color="@GetConfidenceColor(match.Match.Confidence)">
+                                        @((match.Match.Confidence * 100).ToString("F1"))% Match
+                                    </MudChip>
+                                    @if (match.Match.ImvdbId.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                                            IMVDb ID: @match.Match.ImvdbId
+                                        </MudText>
+                                    }
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info">No matches found</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Skip" Variant="Variant.Text">
+            Skip Video
+        </MudButton>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">
+            Cancel
+        </MudButton>
+        <MudButton OnClick="Accept" Color="Color.Primary" Variant="Variant.Filled" 
+                   Disabled="@(_selectedIndex < 0 || _loading)">
+            Accept Selected Match
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public Video? Video { get; set; }
+    [Parameter] public double MatchConfidence { get; set; }
+    [Parameter] public List<ImvdbMetadata>? Matches { get; set; }
+    
+    private List<ImvdbMetadata>? _matches;
+    private int _selectedIndex = -1;
+    private bool _loading = false;
+
+    protected override void OnParametersSet()
+    {
+        _matches = Matches;
+        
+        // Pre-select the highest confidence match if available
+        if (_matches?.Any() == true)
+        {
+            _selectedIndex = 0;
+        }
+    }
+
+    private void SelectMatch(int index)
+    {
+        _selectedIndex = index;
+    }
+
+    private void Accept()
+    {
+        if (_selectedIndex >= 0 && _matches != null && _selectedIndex < _matches.Count)
+        {
+            var selectedMatch = _matches[_selectedIndex];
+            MudDialog.Close(DialogResult.Ok(selectedMatch));
+        }
+    }
+
+    private void Skip()
+    {
+        MudDialog.Close(DialogResult.Ok<ImvdbMetadata?>(null));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private Color GetConfidenceColor(double confidence)
+    {
+        return confidence switch
+        {
+            >= 0.9 => Color.Success,
+            >= 0.7 => Color.Info,
+            >= 0.5 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+}

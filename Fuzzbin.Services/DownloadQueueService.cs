@@ -20,17 +20,20 @@ namespace Fuzzbin.Services
         private readonly ILogger<DownloadQueueService> _logger;
         private readonly IDownloadTaskQueue _taskQueue;
         private readonly IDownloadSettingsProvider _settingsProvider;
+        private readonly IActivityLogService _activityLogService;
         
         public DownloadQueueService(
             IUnitOfWork unitOfWork,
             ILogger<DownloadQueueService> logger,
             IDownloadTaskQueue taskQueue,
-            IDownloadSettingsProvider settingsProvider)
+            IDownloadSettingsProvider settingsProvider,
+            IActivityLogService activityLogService)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _taskQueue = taskQueue;
             _settingsProvider = settingsProvider;
+            _activityLogService = activityLogService;
         }
         
         public async Task<DownloadQueueItem> AddToQueueAsync(
@@ -82,13 +85,29 @@ namespace Fuzzbin.Services
                 await _unitOfWork.SaveChangesAsync();
 
                 await _taskQueue.QueueAsync(queueItem.Id);
-                
+
                 _logger.LogInformation("Added URL to download queue: {Url}", url);
+
+                await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.Queue,
+                    entityType: nameof(DownloadQueue),
+                    entityId: queueItem.Id.ToString(),
+                    entityName: queueItem.Title ?? title ?? queueItem.Url,
+                    details: $"Queued download for {queueItem.Url}"));
                 return queueItem;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error adding URL to queue: {Url}", url);
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.Queue,
+                    ex.Message,
+                    entityType: nameof(DownloadQueue),
+                    entityId: null,
+                    entityName: url,
+                    details: "Failed to queue download"));
                 throw;
             }
         }
@@ -180,11 +199,41 @@ namespace Fuzzbin.Services
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
                     _logger.LogInformation("Updated queue item {Id} status to {Status}", queueId, status);
+
+                    if (status == DownloadStatusEnum.Downloading)
+                    {
+                        await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                            ActivityCategories.Download,
+                            ActivityActions.StartDownload,
+                            entityType: nameof(DownloadQueue),
+                            entityId: item.Id.ToString(),
+                            entityName: item.Title ?? item.Url,
+                            details: $"Started download for {item.Url}"));
+                    }
+                    else if (status == DownloadStatusEnum.Failed)
+                    {
+                        await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                            ActivityCategories.Download,
+                            ActivityActions.FailDownload,
+                            errorMessage,
+                            entityType: nameof(DownloadQueue),
+                            entityId: item.Id.ToString(),
+                            entityName: item.Title ?? item.Url,
+                            details: "Download failed"));
+                    }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating queue item status: {Id}", queueId);
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.Update,
+                    ex.Message,
+                    entityType: nameof(DownloadQueue),
+                    entityId: queueId.ToString(),
+                    entityName: null,
+                    details: "Failed to update download status"));
                 throw;
             }
         }
@@ -261,9 +310,16 @@ namespace Fuzzbin.Services
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
                     await _taskQueue.QueueAsync(queueId);
-                    
-                    _logger.LogInformation("Retrying download {QueueId} (attempt #{RetryCount})", 
+
+                    _logger.LogInformation("Retrying download {QueueId} (attempt #{RetryCount})",
                         queueId, item.RetryCount);
+                    await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                        ActivityCategories.Download,
+                        ActivityActions.Queue,
+                        entityType: nameof(DownloadQueue),
+                        entityId: item.Id.ToString(),
+                        entityName: item.Title ?? item.Url,
+                        details: $"Retry #{item.RetryCount} queued for {item.Url}"));
                     return true;
                 }
                 return false;
@@ -271,6 +327,14 @@ namespace Fuzzbin.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrying download: {Id}", queueId);
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.Queue,
+                    ex.Message,
+                    entityType: nameof(DownloadQueue),
+                    entityId: queueId.ToString(),
+                    entityName: null,
+                    details: "Failed to retry download"));
                 throw;
             }
         }
@@ -293,11 +357,29 @@ namespace Fuzzbin.Services
                 await _unitOfWork.SaveChangesAsync();
                 var count = completed.Count;
                 _logger.LogInformation("Cleared {Count} completed downloads", count);
+                if (count > 0)
+                {
+                    await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                        ActivityCategories.Download,
+                        ActivityActions.BulkDelete,
+                        entityType: nameof(DownloadQueue),
+                        entityId: null,
+                        entityName: null,
+                        details: $"Cleared {count} completed downloads"));
+                }
                 return count;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error clearing completed items from queue");
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.BulkDelete,
+                    ex.Message,
+                    entityType: nameof(DownloadQueue),
+                    entityId: null,
+                    entityName: null,
+                    details: "Failed to clear completed downloads"));
                 throw;
             }
         }
@@ -455,6 +537,8 @@ namespace Fuzzbin.Services
         {
             await UpdateQueueItemStatusAsync(itemId, DownloadStatusEnum.Completed, null);
 
+            DownloadQueueItem? itemForLogging = null;
+
             if (videoId.HasValue)
             {
                 var item = await GetQueueItemAsync(itemId, track: true);
@@ -462,6 +546,7 @@ namespace Fuzzbin.Services
                 {
                     item.VideoId = videoId;
                     item.UpdatedAt = DateTime.UtcNow;
+                    itemForLogging = item;
                     
                     // Populate title from video metadata if not already set
                     if (string.IsNullOrWhiteSpace(item.Title))
@@ -476,6 +561,25 @@ namespace Fuzzbin.Services
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
                 }
+            }
+            else
+            {
+                itemForLogging = await GetQueueItemAsync(itemId, track: false);
+            }
+
+            if (itemForLogging != null)
+            {
+                var details = videoId.HasValue
+                    ? $"Completed download. VideoId={videoId}"
+                    : "Completed download";
+
+                await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.CompleteDownload,
+                    entityType: nameof(DownloadQueue),
+                    entityId: itemForLogging.Id.ToString(),
+                    entityName: itemForLogging.Title ?? itemForLogging.Url,
+                    details: details));
             }
         }
 
@@ -504,11 +608,29 @@ namespace Fuzzbin.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 _logger.LogInformation("Cleared {Count} items with status {Status}", count, status);
+                if (count > 0)
+                {
+                    await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                        ActivityCategories.Download,
+                        ActivityActions.BulkDelete,
+                        entityType: nameof(DownloadQueue),
+                        entityId: null,
+                        entityName: null,
+                        details: $"Cleared {count} downloads with status {status}"));
+                }
                 return count;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error clearing queue by status: {Status}", status);
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.BulkDelete,
+                    ex.Message,
+                    entityType: nameof(DownloadQueue),
+                    entityId: null,
+                    entityName: null,
+                    details: $"Failed to clear downloads with status {status}"));
                 throw;
             }
         }
@@ -539,11 +661,29 @@ namespace Fuzzbin.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 _logger.LogInformation("Queued {Count} failed items for retry", count);
+                if (count > 0)
+                {
+                    await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                        ActivityCategories.Download,
+                        ActivityActions.Queue,
+                        entityType: nameof(DownloadQueue),
+                        entityId: null,
+                        entityName: null,
+                        details: $"Queued {count} failed downloads for retry"));
+                }
                 return count;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrying all failed downloads");
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Download,
+                    ActivityActions.Queue,
+                    ex.Message,
+                    entityType: nameof(DownloadQueue),
+                    entityId: null,
+                    entityName: null,
+                    details: "Failed to retry failed downloads"));
                 throw;
             }
         }
@@ -587,6 +727,18 @@ namespace Fuzzbin.Services
             {
                 _logger.LogError(ex, "Error getting items by status: {Status}", status);
                 throw;
+            }
+        }
+
+        private async Task LogActivityAsync(Func<Task> logOperation)
+        {
+            try
+            {
+                await logOperation();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to write activity log entry");
             }
         }
     }

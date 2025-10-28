@@ -1,6 +1,8 @@
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Services.Interfaces
 @inject IMetadataService MetadataService
+@inject IVideoService VideoService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -211,21 +213,53 @@
         _loading = true;
         try
         {
-            // TODO: Load video from repository if not provided
-            _video = Video;
+            // Load video from repository if not provided or if we need fresh data with relations
+            if (_video == null || VideoId != Guid.Empty)
+            {
+                var videoId = VideoId != Guid.Empty ? VideoId : _video?.Id ?? Guid.Empty;
+                if (videoId != Guid.Empty)
+                {
+                    _video = await VideoService.GetVideoByIdAsync(videoId);
+                }
+            }
             
             if (_video != null)
             {
-                // TODO: Build metadata from video entity and related data
+                // Build metadata from video entity and related data
                 _metadata = new VideoMetadata
                 {
                     Title = _video.Title,
                     Artist = _video.Artist,
                     RecordLabel = _video.Publisher,
                     Publisher = _video.Publisher,
-                    VerificationStatus = MetadataVerificationStatus.Unverified,
-                    // TODO: Load source URLs from VideoSourceVerification table
-                    // TODO: Load collections from CollectionVideo table
+                    VerificationStatus = DetermineVerificationStatus(_video),
+                    
+                    // Load source URLs from VideoSourceVerification
+                    SourceUrls = _video.SourceVerifications?
+                        .OrderByDescending(sv => sv.VerifiedAt ?? sv.CreatedAt)
+                        .Select(sv => new VideoSourceInfo
+                        {
+                            Url = sv.SourceUrl,
+                            Provider = sv.SourceProvider,
+                            Status = sv.Status,
+                            Confidence = sv.Confidence,
+                            VerifiedAt = sv.VerifiedAt
+                        })
+                        .ToList() ?? new List<VideoSourceInfo>(),
+                    
+                    // Load collections from CollectionVideo
+                    Collections = _video.CollectionVideos?
+                        .Where(cv => cv.Collection != null)
+                        .OrderBy(cv => cv.Collection.Name)
+                        .Select(cv => new CollectionMembershipInfo
+                        {
+                            CollectionId = cv.CollectionId,
+                            Name = cv.Collection.Name,
+                            Type = cv.Collection.Type,
+                            AddedAt = cv.AddedToCollectionDate,
+                            Position = cv.Position
+                        })
+                        .ToList() ?? new List<CollectionMembershipInfo>()
                 };
             }
         }
@@ -233,6 +267,32 @@
         {
             _loading = false;
         }
+    }
+
+    private MetadataVerificationStatus DetermineVerificationStatus(Video video)
+    {
+        // Determine verification status based on video metadata completeness
+        if (!string.IsNullOrEmpty(video.ImvdbId))
+        {
+            return MetadataVerificationStatus.Verified;
+        }
+        
+        if (video.SourceVerifications?.Any(sv => sv.Status == VideoSourceVerificationStatus.Verified) == true)
+        {
+            return MetadataVerificationStatus.Verified;
+        }
+        
+        if (video.SourceVerifications?.Any(sv => sv.IsManualOverride) == true)
+        {
+            return MetadataVerificationStatus.ManuallyVerified;
+        }
+        
+        if (video.SourceVerifications?.Any(sv => sv.Status == VideoSourceVerificationStatus.Mismatch) == true)
+        {
+            return MetadataVerificationStatus.NeedsReview;
+        }
+        
+        return MetadataVerificationStatus.Unverified;
     }
 
     private async Task RefreshMetadata()

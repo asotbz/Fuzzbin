@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -381,6 +382,54 @@ try
         return Results.Redirect(BuildLoginRedirect(returnUrlRaw, "invalidcredentials", identifier));
     }).AllowAnonymous();
 
+    app.MapPost("/api/account/change-password", async (
+        ClaimsPrincipal principal,
+        ChangePasswordRequest request,
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
+        ILogger<Program> logger) =>
+    {
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.CurrentPassword) ||
+            string.IsNullOrWhiteSpace(request.NewPassword) ||
+            string.IsNullOrWhiteSpace(request.ConfirmPassword))
+        {
+            return Results.BadRequest(new { message = "All password fields are required." });
+        }
+
+        if (!string.Equals(request.NewPassword, request.ConfirmPassword, StringComparison.Ordinal))
+        {
+            return Results.BadRequest(new { errors = new[] { "New password and confirmation do not match." } });
+        }
+
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = result.Errors
+                .Select(e => e.Description)
+                .Where(description => !string.IsNullOrWhiteSpace(description))
+                .ToArray();
+
+            if (errors.Length == 0)
+            {
+                errors = new[] { "Unable to change password." };
+            }
+
+            logger.LogWarning("Failed password change for user {UserId}: {Errors}", user.Id, string.Join("; ", errors));
+            return Results.BadRequest(new { errors });
+        }
+
+        await signInManager.RefreshSignInAsync(user);
+        logger.LogInformation("User {UserId} updated their password via settings.", user.Id);
+        return Results.Ok(new { message = "Password updated successfully." });
+    }).RequireAuthorization();
+
     app.MapGet("/auth/logout", async (
         HttpContext httpContext,
         SignInManager<ApplicationUser> signInManager,
@@ -665,14 +714,18 @@ try
     .RequireAuthorization();
 
     app.MapGet("/api/videos/stream", async (
-        string path,
+        string? path,
         ILibraryPathManager libraryPathManager,
         ILogger<Program> logger,
         CancellationToken cancellationToken) =>
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return Results.BadRequest(new { message = "File path is required." });
+            logger.LogWarning("Stream endpoint called with empty or missing path");
+            return Results.BadRequest(new {
+                message = "File path is required.",
+                errorCode = "MISSING_PATH"
+            });
         }
 
         try
@@ -688,43 +741,79 @@ try
             var videoRoot = await libraryPathManager.GetVideoRootAsync(cancellationToken).ConfigureAwait(false);
             candidates.Add(Path.Combine(videoRoot, normalized));
 
+            logger.LogDebug("Attempting to stream video. Original path: {OriginalPath}, Normalized: {Normalized}, Video root: {VideoRoot}, Candidates: {CandidateCount}",
+                path, normalized, videoRoot, candidates.Count);
+
             string? fullPath = null;
             foreach (var candidate in candidates)
             {
                 try
                 {
                     var resolved = Path.GetFullPath(candidate);
+                    logger.LogDebug("Checking candidate path: {Candidate} -> {Resolved}, Exists: {Exists}",
+                        candidate, resolved, File.Exists(resolved));
+                    
                     if (File.Exists(resolved))
                     {
                         fullPath = resolved;
                         break;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore invalid path combinations and continue.
+                    logger.LogDebug(ex, "Invalid path candidate: {Candidate}", candidate);
                 }
             }
 
             if (fullPath is null)
             {
-                logger.LogWarning("Stream requested for missing file {FilePath}", path);
-                return Results.NotFound();
+                logger.LogWarning("Stream requested for missing file. Path: {FilePath}, Normalized: {Normalized}, VideoRoot: {VideoRoot}, Checked {Count} candidates",
+                    path, normalized, videoRoot, candidates.Count);
+                return Results.NotFound(new {
+                    message = "Video file not found. The file may have been moved or deleted.",
+                    errorCode = "FILE_NOT_FOUND",
+                    requestedPath = path
+                });
             }
 
             var provider = new FileExtensionContentTypeProvider();
+            
+            // Add support for additional video formats not in the default provider
+            provider.Mappings[".mkv"] = "video/x-matroska";
+            provider.Mappings[".webm"] = "video/webm";
+            
             if (!provider.TryGetContentType(fullPath, out var contentType))
             {
                 contentType = "application/octet-stream";
             }
 
+            logger.LogDebug("Streaming video file: {FullPath}, ContentType: {ContentType}", fullPath, contentType);
             var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true);
             return Results.File(stream, contentType, enableRangeProcessing: true);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            logger.LogError(ex, "Access denied when streaming video {FilePath}", path);
+            return Results.Problem(
+                detail: "Access to the video file was denied. Please check file permissions.",
+                statusCode: 403,
+                title: "Access Denied");
+        }
+        catch (IOException ex)
+        {
+            logger.LogError(ex, "IO error when streaming video {FilePath}", path);
+            return Results.Problem(
+                detail: "Unable to read the video file. The file may be in use or corrupted.",
+                statusCode: 500,
+                title: "File Read Error");
+        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to stream video {FilePath}", path);
-            return Results.Problem("Unable to stream requested video.");
+            logger.LogError(ex, "Unexpected error when streaming video {FilePath}", path);
+            return Results.Problem(
+                detail: "An unexpected error occurred while streaming the video.",
+                statusCode: 500,
+                title: "Stream Error");
         }
     })
     .WithName("StreamVideo")
@@ -879,6 +968,7 @@ record GeneralizeGenresRequest(IEnumerable<Guid> SourceGenreIds, Guid TargetGenr
 record TagCreateRequest(string Name, string? Color);
 record TagUpdateRequest(string Name);
 record BulkDeleteRequest(IEnumerable<Guid> Ids);
+record ChangePasswordRequest(string CurrentPassword, string NewPassword, string ConfirmPassword);
 
 // Make the implicit Program class public so test projects can access it
 public partial class Program { }

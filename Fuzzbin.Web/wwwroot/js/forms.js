@@ -68,3 +68,26 @@ window.Fuzzbin.submitForm = async function (formId) {
         form.__fzSubmitting = false;
     }
 };
+
+window.Fuzzbin.triggerFileInput = function (element) {
+    if (!element) {
+        console.warn('File input element not found.');
+        return;
+    }
+
+    if (typeof element.click === 'function') {
+        element.click();
+    } else {
+        console.warn('Provided element does not support click().');
+    }
+};
+
+window.Fuzzbin.triggerFileInputById = function (elementId) {
+    if (!elementId) {
+        console.warn('No element id provided for file picker.');
+        return;
+    }
+
+    const element = document.getElementById(elementId);
+    window.Fuzzbin.triggerFileInput(element);
+};

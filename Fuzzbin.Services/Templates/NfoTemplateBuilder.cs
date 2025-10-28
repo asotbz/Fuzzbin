@@ -12,7 +12,10 @@ internal static class NfoTemplateBuilder
     public static XDocument BuildVideoDocument(
         Video video,
         IEnumerable<string>? overrideGenres = null,
-        IEnumerable<string>? additionalTags = null)
+        IEnumerable<string>? additionalTags = null,
+        bool includeFeaturedArtists = true,
+        bool appendFeaturedArtistsToTitle = false,
+        bool includeCollectionsAsTags = false)
     {
         ArgumentNullException.ThrowIfNull(video);
 
@@ -22,17 +25,30 @@ internal static class NfoTemplateBuilder
             : (TimeSpan?)null;
         var (width, height) = ParseResolution(video.Resolution);
 
-        AddElement(elements, "title", video.Title);
+        var featuredNames = video.FeaturedArtists?
+            .Select(f => f?.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
+
+        var effectiveTitle = video.Title;
+        if (appendFeaturedArtistsToTitle && featuredNames.Count > 0)
+        {
+            effectiveTitle = string.IsNullOrWhiteSpace(effectiveTitle)
+                ? $"feat. {string.Join(", ", featuredNames)}"
+                : $"{effectiveTitle} (feat. {string.Join(", ", featuredNames)})";
+        }
+
+        AddElement(elements, "title", effectiveTitle);
         AddElement(elements, "artist", video.Artist);
 
-        if (video.FeaturedArtists?.Any() == true)
+        if (includeFeaturedArtists)
         {
-            foreach (var featured in video.FeaturedArtists)
+            foreach (var featured in featuredNames)
             {
-                if (!string.IsNullOrWhiteSpace(featured.Name))
-                {
-                    AddElement(elements, "artist", featured.Name);
-                }
+                AddElement(elements, "artist", featured);
             }
         }
 
@@ -56,7 +72,7 @@ internal static class NfoTemplateBuilder
                 AddRepeatedElements(elements, "genre", resolvedGenres.Skip(1));
             }
         }
-        var resolvedTags = ResolveTagsForVideo(video, additionalTags);
+        var resolvedTags = ResolveTagsForVideo(video, additionalTags, includeCollectionsAsTags);
         AddRepeatedElements(elements, "tag", resolvedTags);
 
         AddElement(elements, "studio", video.ProductionCompany);
@@ -258,7 +274,10 @@ internal static class NfoTemplateBuilder
         return NormalizeGenres(video.Genres?.Select(g => g.Name));
     }
 
-    private static IReadOnlyList<string> ResolveTagsForVideo(Video video, IEnumerable<string>? additionalTags)
+    private static IReadOnlyList<string> ResolveTagsForVideo(
+        Video video,
+        IEnumerable<string>? additionalTags,
+        bool includeCollectionsAsTags)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -287,6 +306,11 @@ internal static class NfoTemplateBuilder
 
         AddRange(video.Tags?.Select(t => t.Name));
         AddRange(additionalTags);
+        if (includeCollectionsAsTags)
+        {
+            AddRange(video.CollectionVideos?
+                .Select(cv => cv?.Collection?.Name));
+        }
 
         return result;
     }

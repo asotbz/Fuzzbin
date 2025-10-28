@@ -117,7 +117,14 @@
 
     @if (!string.IsNullOrWhiteSpace(errorMessage))
     {
-        <MudAlert Severity="Severity.Warning" Class="mt-2">@errorMessage</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mt-2" Variant="Variant.Filled">
+            <MudText Typo="Typo.subtitle2">@errorTitle</MudText>
+            <MudText Typo="Typo.body2">@errorMessage</MudText>
+            @if (!string.IsNullOrWhiteSpace(errorDetails))
+            {
+                <MudText Typo="Typo.caption" Class="mt-1">@errorDetails</MudText>
+            }
+        </MudAlert>
     }
 </div>
 
@@ -147,6 +154,8 @@
     private System.Timers.Timer? updateTimer;
     private IJSRuntime? jsRuntime;
     private string? errorMessage;
+    private string? errorTitle;
+    private string? errorDetails;
     
     [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
     
@@ -182,13 +191,16 @@
     {
         try
         {
-            errorMessage = null;
+            ClearError();
             // Force video element to reload source
             await jsRuntime!.InvokeVoidAsync("eval", "const v = document.querySelector('video'); if(v) { v.load(); }");
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to load video: {ex.Message}");
+            await ReportErrorAsync(
+                "Failed to Load Video",
+                "Unable to load the video file.",
+                $"Error: {ex.Message}");
         }
     }
     
@@ -201,7 +213,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to play video: {ex.Message}");
+            await ReportErrorAsync(
+                "Playback Error",
+                "Failed to play video.",
+                $"Error: {ex.Message}");
         }
     }
     
@@ -214,7 +229,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to pause video: {ex.Message}");
+            await ReportErrorAsync(
+                "Playback Error",
+                "Failed to pause video.",
+                $"Error: {ex.Message}");
         }
     }
     
@@ -236,7 +254,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to seek: {ex.Message}");
+            await ReportErrorAsync(
+                "Seek Error",
+                "Failed to seek to the requested position.",
+                $"Error: {ex.Message}");
         }
     }
     
@@ -311,7 +332,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to change volume: {ex.Message}");
+            await ReportErrorAsync(
+                "Volume Error",
+                "Failed to change volume.",
+                $"Error: {ex.Message}");
         }
     }
 
@@ -324,7 +348,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to toggle mute: {ex.Message}");
+            await ReportErrorAsync(
+                "Mute Error",
+                "Failed to toggle mute.",
+                $"Error: {ex.Message}");
         }
     }
 
@@ -337,7 +364,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to change playback speed: {ex.Message}");
+            await ReportErrorAsync(
+                "Playback Speed Error",
+                "Failed to change playback speed.",
+                $"Error: {ex.Message}");
         }
     }
     
@@ -358,7 +388,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to toggle fullscreen: {ex.Message}");
+            await ReportErrorAsync(
+                "Fullscreen Error",
+                "Failed to toggle fullscreen mode.",
+                $"Error: {ex.Message}");
         }
     }
 
@@ -377,7 +410,10 @@
         }
         catch (Exception ex)
         {
-            await ReportErrorAsync($"Failed to toggle picture-in-picture: {ex.Message}");
+            await ReportErrorAsync(
+                "Picture-in-Picture Error",
+                "Failed to toggle picture-in-picture mode.",
+                $"Error: {ex.Message}");
         }
     }
     
@@ -395,13 +431,25 @@
 
     private async Task HandleVideoError(ErrorEventArgs _)
     {
-        await ReportErrorAsync("Unable to stream the video. Please verify that the media file exists and is accessible.");
+        await ReportErrorAsync(
+            "Video Streaming Error",
+            "Unable to stream the video file.",
+            "The video file may not exist, may have been moved, or there may be a permission issue. Please check the library path settings and ensure the video file is accessible.");
     }
 
-    private async Task ReportErrorAsync(string message)
+    private void ClearError()
     {
+        errorMessage = null;
+        errorTitle = null;
+        errorDetails = null;
+    }
+
+    private async Task ReportErrorAsync(string title, string message, string? details = null)
+    {
+        errorTitle = title;
         errorMessage = message;
-        await OnError.InvokeAsync(message);
+        errorDetails = details;
+        await OnError.InvokeAsync($"{title}: {message}");
         await InvokeAsync(StateHasChanged);
     }
     

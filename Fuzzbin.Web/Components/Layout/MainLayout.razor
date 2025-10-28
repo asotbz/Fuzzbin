@@ -21,7 +21,7 @@
         <MudTooltip Text="Launch onboarding tour (Alt+O)">
             <MudIconButton Icon="@Icons.Material.Filled.TipsAndUpdates" Color="Color.Inherit" OnClick="@ShowOnboardingTour" />
         </MudTooltip>
-        <MudTooltip Text="Keyboard shortcuts (F1)">
+        <MudTooltip Text="Keyboard shortcuts (F1 or Shift+?)">
             <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Inherit" OnClick="ShowKeyboardShortcuts" />
         </MudTooltip>
         <AuthorizeView>
@@ -90,6 +90,7 @@
     protected override async Task OnInitializedAsync()
     {
         ThemeService.ThemeChanged += OnThemeChanged;
+        AttachKeyboardHandlers();
         await ThemeService.EnsureInitializedAsync();
         _isDarkMode = ThemeService.IsDarkMode;
     }
@@ -126,11 +127,14 @@
         _drawerOpen = !_drawerOpen;
     }
 
-    private async void ShowKeyboardShortcuts()
+    private void ShowKeyboardShortcuts()
     {
-        var parameters = new DialogParameters();
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
-        await DialogService.ShowAsync<KeyboardShortcutsDialog>("Keyboard Shortcuts", parameters, options);
+        _ = InvokeAsync(async () =>
+        {
+            var parameters = new DialogParameters();
+            var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+            await DialogService.ShowAsync<KeyboardShortcutsDialog>("Keyboard Shortcuts", parameters, options);
+        });
     }
 
     private async Task ShowOnboardingTourAsync(bool manualTrigger)
@@ -185,6 +189,38 @@
         }
     }
 
+    private void AttachKeyboardHandlers()
+    {
+        if (_keyboardHandlersAttached)
+        {
+            return;
+        }
+
+        KeyboardService.OnShowHelp += HandleKeyboardShowHelp;
+        KeyboardService.OnSearch += HandleKeyboardSearch;
+        KeyboardService.OnEscape += HandleKeyboardEscape;
+        _keyboardHandlersAttached = true;
+    }
+
+    private void HandleKeyboardShowHelp()
+    {
+        ShowKeyboardShortcuts();
+    }
+
+    private void HandleKeyboardSearch()
+    {
+        _ = InvokeAsync(async () => await JS.InvokeVoidAsync("focusSearch"));
+    }
+
+    private void HandleKeyboardEscape()
+    {
+        if (_drawerOpen)
+        {
+            _drawerOpen = false;
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
     private static string GetDisplayName(ClaimsPrincipal principal)
     {
         return principal.Identity?.Name ?? principal.FindFirstValue("name") ?? "User";
@@ -216,6 +252,13 @@
     public ValueTask DisposeAsync()
     {
         ThemeService.ThemeChanged -= OnThemeChanged;
+        if (_keyboardHandlersAttached)
+        {
+            KeyboardService.OnShowHelp -= HandleKeyboardShowHelp;
+            KeyboardService.OnSearch -= HandleKeyboardSearch;
+            KeyboardService.OnEscape -= HandleKeyboardEscape;
+            _keyboardHandlersAttached = false;
+        }
         KeyboardService.Dispose();
         _disposed = true;
         return ValueTask.CompletedTask;
@@ -224,4 +267,5 @@
     private bool _isDarkMode;
     private bool _onboardingDialogOpen;
     private bool _disposed;
+    private bool _keyboardHandlersAttached;
 }

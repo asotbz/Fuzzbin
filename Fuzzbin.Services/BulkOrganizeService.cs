@@ -15,13 +15,16 @@ namespace Fuzzbin.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<BulkOrganizeService> _logger;
+        private readonly IActivityLogService _activityLogService;
         
         public BulkOrganizeService(
             IUnitOfWork unitOfWork,
-            ILogger<BulkOrganizeService> logger)
+            ILogger<BulkOrganizeService> logger,
+            IActivityLogService activityLogService)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _activityLogService = activityLogService;
         }
         
         public class OrganizeOptions
@@ -101,6 +104,38 @@ namespace Fuzzbin.Services
             }
             
             result.Duration = DateTime.UtcNow - startTime;
+
+            var summary = $"Organized {result.SuccessCount}/{result.TotalVideos} videos (Skipped {result.SkippedCount}, Errors {result.ErrorCount})";
+            await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                ActivityCategories.Video,
+                ActivityActions.Organize,
+                entityType: nameof(Video),
+                entityId: null,
+                entityName: null,
+                details: summary));
+
+            if (result.ErrorCount > 0)
+            {
+                var errorSamples = result.Items
+                    .Where(i => !i.Success && !string.IsNullOrWhiteSpace(i.ErrorMessage))
+                    .Take(3)
+                    .Select(i => $"{i.VideoId}: {i.ErrorMessage}")
+                    .ToList();
+
+                var details = errorSamples.Count > 0
+                    ? string.Join(" | ", errorSamples)
+                    : "See server logs for details.";
+
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Video,
+                    ActivityActions.Organize,
+                    "Organize operation encountered errors",
+                    entityType: nameof(Video),
+                    entityId: null,
+                    entityName: null,
+                    details: details));
+            }
+
             return result;
         }
         
@@ -444,6 +479,18 @@ namespace Fuzzbin.Services
                 "{resolution}/{artist} - {title}",
                 "{year}/{month}/{artist} - {title}"
             };
+        }
+
+        private async Task LogActivityAsync(Func<Task> logOperation)
+        {
+            try
+            {
+                await logOperation();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to write activity log entry for bulk organize operation");
+            }
         }
     }
 }

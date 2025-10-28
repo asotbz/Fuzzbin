@@ -353,17 +353,31 @@
             }
         }
 
-        // Show detailed feedback
-        var messages = new List<string>();
+        // Show comprehensive feedback with counts
+        var summaryParts = new List<string>();
+        
         if (added > 0)
-            messages.Add($"Added {added} video(s) to '{targetCollectionName}'");
+        {
+            summaryParts.Add($"✓ Added {added} video{(added == 1 ? "" : "s")}");
+        }
+        
         if (skipped > 0)
-            messages.Add($"Skipped {skipped} (already in collection)");
+        {
+            summaryParts.Add($"⊘ Skipped {skipped} (already in collection)");
+        }
+        
         if (failed > 0)
-            messages.Add($"Failed to add {failed} video(s)");
+        {
+            summaryParts.Add($"✗ Failed {failed}");
+        }
 
+        var summary = string.Join(" | ", summaryParts);
         var severity = added > 0 ? Severity.Success : (failed > 0 ? Severity.Warning : Severity.Info);
-        Snackbar.Add(string.Join(". ", messages), severity);
+        
+        Snackbar.Add($"Collection '{targetCollectionName}' updated: {summary}", severity, config =>
+        {
+            config.VisibleStateDuration = 5000;
+        });
     }
 
     private async Task ApplyRemoveAsync()
@@ -404,17 +418,41 @@
             }
         }
 
-        // Show detailed feedback per collection
-        var messages = new List<string>();
-        foreach (var (collectionName, (removed, notFound)) in collectionResults)
+        // Show comprehensive feedback per collection
+        var totalRemoved = collectionResults.Values.Sum(x => x.removed);
+        var totalNotFound = collectionResults.Values.Sum(x => x.notFound);
+        
+        if (totalRemoved > 0)
         {
-            if (removed > 0)
-                messages.Add($"'{collectionName}': removed {removed} video(s)");
-        }
-
-        if (messages.Count > 0)
-        {
-            Snackbar.Add(string.Join("; ", messages), Severity.Success);
+            var detailedMessages = new List<string>();
+            foreach (var (collectionName, (removed, notFound)) in collectionResults)
+            {
+                if (removed > 0)
+                {
+                    detailedMessages.Add($"'{collectionName}': {removed} removed");
+                }
+            }
+            
+            var summary = $"Removed {totalRemoved} video{(totalRemoved == 1 ? "" : "s")} from {collectionResults.Count} collection{(collectionResults.Count == 1 ? "" : "s")}";
+            
+            if (totalNotFound > 0)
+            {
+                summary += $" ({totalNotFound} not found in selected collections)";
+            }
+            
+            Snackbar.Add(summary, Severity.Success, config =>
+            {
+                config.VisibleStateDuration = 5000;
+            });
+            
+            // Show detailed breakdown if multiple collections
+            if (collectionResults.Count > 1)
+            {
+                foreach (var msg in detailedMessages)
+                {
+                    Snackbar.Add(msg, Severity.Info);
+                }
+            }
         }
         else
         {

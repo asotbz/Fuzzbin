@@ -81,8 +81,17 @@ public class NfoExportService : INfoExportService
         var additionalTags = settings.GeneralizeGenres && settings.WriteExternalGenreAsTag
             ? GetSpecificGenresForTags(video, settings)
             : null;
+        var includeFeaturedArtists = !settings.UsePrimaryArtistForNfo;
+        var appendFeaturedArtistsToTitle = settings.UsePrimaryArtistForNfo && settings.AppendFeaturedArtistsToTitle;
+        var includeCollectionsAsTags = settings.WriteCollectionsAsNfoTags;
 
-        var document = NfoTemplateBuilder.BuildVideoDocument(video, overrideGenres, additionalTags);
+        var document = NfoTemplateBuilder.BuildVideoDocument(
+            video,
+            overrideGenres,
+            additionalTags,
+            includeFeaturedArtists,
+            appendFeaturedArtistsToTitle,
+            includeCollectionsAsTags);
         return Serialize(document);
     }
 

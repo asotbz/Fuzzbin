@@ -25,6 +25,7 @@ public class VideoService : IVideoService
     private readonly ISearchService _searchService;
     private readonly ILibraryPathManager _libraryPathManager;
     private readonly ILogger<VideoService> _logger;
+    private readonly IActivityLogService _activityLogService;
 
     public VideoService(
         IRepository<Video> videoRepository,
@@ -32,7 +33,8 @@ public class VideoService : IVideoService
         IEnumerable<IVideoUpdateNotifier> updateNotifiers,
         ISearchService searchService,
         ILibraryPathManager libraryPathManager,
-        ILogger<VideoService> logger)
+        ILogger<VideoService> logger,
+        IActivityLogService activityLogService)
     {
         _videoRepository = videoRepository;
         _unitOfWork = unitOfWork;
@@ -40,6 +42,7 @@ public class VideoService : IVideoService
         _searchService = searchService;
         _libraryPathManager = libraryPathManager;
         _logger = logger;
+        _activityLogService = activityLogService;
     }
 
     public async Task<List<Video>> GetAllVideosAsync(CancellationToken cancellationToken = default)
@@ -177,13 +180,48 @@ public class VideoService : IVideoService
         var video = await _videoRepository.GetByIdAsync(id);
         if (video == null)
         {
+            await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                ActivityCategories.Video,
+                ActivityActions.Delete,
+                "Video not found",
+                entityType: nameof(Video),
+                entityId: id.ToString(),
+                entityName: null,
+                details: "Attempted to delete missing video"));
             return;
         }
 
-        await DeleteVideoInternalAsync(video, deleteFiles, cancellationToken);
-        await _unitOfWork.SaveChangesAsync();
-        _searchService.InvalidateFacetsCache();
-        await NotifyAsync(notifier => notifier.VideoDeletedAsync(id));
+        var displayName = GetVideoDisplayName(video);
+
+        try
+        {
+            await DeleteVideoInternalAsync(video, deleteFiles, cancellationToken);
+            await _unitOfWork.SaveChangesAsync();
+            _searchService.InvalidateFacetsCache();
+            await NotifyAsync(notifier => notifier.VideoDeletedAsync(id));
+
+            await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                ActivityCategories.Video,
+                ActivityActions.Delete,
+                entityType: nameof(Video),
+                entityId: video.Id.ToString(),
+                entityName: displayName,
+                details: deleteFiles
+                    ? $"Deleted video {displayName} and moved files to recycle bin"
+                    : $"Deleted video {displayName} (files retained)"));
+        }
+        catch (Exception ex)
+        {
+            await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                ActivityCategories.Video,
+                ActivityActions.Delete,
+                ex.Message,
+                entityType: nameof(Video),
+                entityId: video.Id.ToString(),
+                entityName: displayName,
+                details: "Failed to delete video"));
+            throw;
+        }
     }
 
     public async Task<VideoDeletionResult> DeleteVideosAsync(IEnumerable<Guid> ids, bool deleteFiles = true, CancellationToken cancellationToken = default)
@@ -205,6 +243,7 @@ public class VideoService : IVideoService
         }
 
         var deletedIds = new List<Guid>();
+        var deletedSummaries = new List<(Guid VideoId, string DisplayName)>();
 
         foreach (var videoId in uniqueIds)
         {
@@ -220,11 +259,22 @@ public class VideoService : IVideoService
                         Title = "Unknown video",
                         Error = "Video not found"
                     });
+                    await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                        ActivityCategories.Video,
+                        ActivityActions.Delete,
+                        "Video not found",
+                        entityType: nameof(Video),
+                        entityId: videoId.ToString(),
+                        entityName: null,
+                        details: "Attempted to delete missing video"));
                     continue;
                 }
 
+                var displayName = GetVideoDisplayName(currentVideo);
+
                 await DeleteVideoInternalAsync(currentVideo, deleteFiles, cancellationToken);
                 deletedIds.Add(videoId);
+                deletedSummaries.Add((videoId, displayName));
                 result.DeletedCount++;
             }
             catch (Exception ex)
@@ -236,6 +286,15 @@ public class VideoService : IVideoService
                     Title = currentVideo?.Title ?? "Unknown",
                     Error = ex.Message
                 });
+                var displayName = currentVideo != null ? GetVideoDisplayName(currentVideo) : videoId.ToString();
+                await LogActivityAsync(() => _activityLogService.LogErrorAsync(
+                    ActivityCategories.Video,
+                    ActivityActions.Delete,
+                    ex.Message,
+                    entityType: nameof(Video),
+                    entityId: videoId.ToString(),
+                    entityName: displayName,
+                    details: "Failed to delete video"));
             }
         }
 
@@ -247,6 +306,19 @@ public class VideoService : IVideoService
             foreach (var videoId in deletedIds)
             {
                 await NotifyAsync(notifier => notifier.VideoDeletedAsync(videoId));
+            }
+
+            foreach (var summary in deletedSummaries)
+            {
+                await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
+                    ActivityCategories.Video,
+                    ActivityActions.Delete,
+                    entityType: nameof(Video),
+                    entityId: summary.VideoId.ToString(),
+                    entityName: summary.DisplayName,
+                    details: deleteFiles
+                        ? $"Deleted video {summary.DisplayName} and moved files to recycle bin"
+                        : $"Deleted video {summary.DisplayName} (files retained)"));
             }
         }
 
@@ -371,6 +443,33 @@ public class VideoService : IVideoService
         var specification = new VideoRecentImportsSpecification(count);
         var results = await _videoRepository.ListAsync(specification);
         return new List<Video>(results);
+    }
+
+    private static string GetVideoDisplayName(Video video)
+    {
+        if (!string.IsNullOrWhiteSpace(video.Artist) && !string.IsNullOrWhiteSpace(video.Title))
+        {
+            return $"{video.Artist} - {video.Title}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(video.Title))
+        {
+            return video.Title;
+        }
+
+        return video.Id.ToString();
+    }
+
+    private async Task LogActivityAsync(Func<Task> logOperation)
+    {
+        try
+        {
+            await logOperation();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write activity log entry for video service operation");
+        }
     }
 
     public async Task<PagedResult<Video>> GetVideosAsync(VideoQuery query, CancellationToken cancellationToken = default)

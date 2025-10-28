@@ -11,6 +11,12 @@ public sealed class MetadataSettings
 
     public bool WriteExternalGenreAsTag { get; init; }
 
+    public bool UsePrimaryArtistForNfo { get; init; }
+
+    public bool AppendFeaturedArtistsToTitle { get; init; }
+
+    public bool WriteCollectionsAsNfoTags { get; init; }
+
     public IReadOnlyDictionary<string, string> GenreMappings { get; init; }
         = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }

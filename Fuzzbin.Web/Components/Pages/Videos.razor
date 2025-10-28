@@ -935,20 +935,27 @@
                 var result = await MetadataService.EnrichVideoMetadataWithResultAsync(video, fetchOnlineMetadata: true);
                 
                 // For single video with low confidence, show manual selection dialog
-                if (isSingleVideo && result.RequiresManualReview && result.ImvdbMetadata != null)
+                if (isSingleVideo && result.RequiresManualReview)
                 {
+                    // Get top 5 matches for manual selection
+                    var topMatches = await MetadataService.GetTopMatchesAsync(video.Artist ?? "", video.Title ?? "", maxResults: 5);
+                    
                     var matchParameters = new DialogParameters
                     {
-                        { "Video", result.Video }
+                        { "Video", result.Video },
+                        { "MatchConfidence", result.MatchConfidence },
+                        { "Matches", topMatches }
                     };
 
-                    var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
-                    var matchDialog = await DialogService.ShowAsync<MetadataMatchDialog>("Select Metadata Match", matchParameters, options);
+                    var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
+                    var matchDialog = await DialogService.ShowAsync<ManualMatchSelectionDialog>("Manual Match Selection Required", matchParameters, options);
                     var matchResult = await matchDialog.Result;
 
-                    if (matchResult is { Canceled: false, Data: Video updatedVideo })
+                    if (matchResult is { Canceled: false, Data: ImvdbMetadata selectedMatch })
                     {
-                        _videoCache[updatedVideo.Id] = updatedVideo;
+                        // Apply selected match to video
+                        await MetadataService.UpdateVideoFromImvdbMetadataAsync(result.Video, selectedMatch);
+                        _videoCache[result.Video.Id] = result.Video;
                         refreshed++;
                     }
                     else
@@ -996,7 +1003,7 @@
     {
         var confirmParameters = new DialogParameters
         {
-            { "ContentText", "Refresh metadata for all videos in the library? This may take a long time." },
+            { "ContentText", "Refresh metadata for all videos in the library? This may take a long time. Videos requiring manual review will be skipped." },
             { "ButtonText", "Refresh Library" },
             { "Color", Color.Primary }
         };
@@ -1017,7 +1024,16 @@
 
             if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
             {
-                Snackbar.Add("Library metadata refresh job queued.", Severity.Success);
+                Snackbar.Add("Library metadata refresh job queued. You'll be notified when it completes.", Severity.Success);
+                
+                // Show job progress dialog
+                var progressParameters = new DialogParameters
+                {
+                    { "Title", "Library Metadata Refresh" },
+                    { "JobType", "RefreshMetadata" }
+                };
+                var progressOptions = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium };
+                await DialogService.ShowAsync<JobProgressDialog>("Metadata Refresh Progress", progressParameters, progressOptions);
             }
             else if (response.IsSuccessStatusCode)
             {

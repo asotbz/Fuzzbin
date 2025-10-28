@@ -3,7 +3,9 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.IO;
+using System.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
 
@@ -14,6 +16,7 @@ public class FileOrganizationService : IFileOrganizationService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<FileOrganizationService> _logger;
     private readonly ILibraryPathManager _libraryPathManager;
+    private bool? _normalizeFileNamesEnabled;
 
     private static readonly Regex _variablePattern = new(@"\{([^}]+)\}", RegexOptions.Compiled);
 
@@ -335,6 +338,7 @@ public class FileOrganizationService : IFileOrganizationService
         }
 
         var sanitizedSegments = new List<string>(segments.Length);
+        var shouldNormalize = ShouldNormalizeFileNames();
 
         for (var index = 0; index < segments.Length; index++)
         {
@@ -348,11 +352,20 @@ public class FileOrganizationService : IFileOrganizationService
                 var sanitized = _libraryPathManager.SanitizeFileName(
                     string.IsNullOrWhiteSpace(nameWithoutExtension) ? segment : nameWithoutExtension,
                     string.IsNullOrWhiteSpace(extension) ? null : extension.TrimStart('.'));
+                if (shouldNormalize)
+                {
+                    sanitized = NormalizeSegment(sanitized, isFile: true);
+                }
                 sanitizedSegments.Add(sanitized);
             }
             else
             {
-                sanitizedSegments.Add(_libraryPathManager.SanitizeDirectoryName(segment));
+                var sanitizedDirectory = _libraryPathManager.SanitizeDirectoryName(segment);
+                if (shouldNormalize)
+                {
+                    sanitizedDirectory = NormalizeSegment(sanitizedDirectory, isFile: false);
+                }
+                sanitizedSegments.Add(sanitizedDirectory);
             }
         }
 
@@ -408,6 +421,7 @@ public class FileOrganizationService : IFileOrganizationService
             "artist" => video.Artist ?? "Unknown Artist",
             "artist_safe" => _libraryPathManager.SanitizeDirectoryName(video.Artist ?? "Unknown Artist"),
             "artist_sort" => video.Artist ?? "Unknown Artist",
+            "primary_artist" => GetPrimaryArtistName(video),
 
             "title" => video.Title ?? "Unknown Title",
             "title_safe" => _libraryPathManager.SanitizeFileName(video.Title ?? "Unknown Title"),
@@ -451,6 +465,162 @@ public class FileOrganizationService : IFileOrganizationService
 
             _ => $"{{{variable}}}"
         };
+    }
+
+    private static string GetPrimaryArtistName(Video video)
+    {
+        var artist = video.Artist;
+        if (string.IsNullOrWhiteSpace(artist))
+        {
+            return "Unknown Artist";
+        }
+
+        var featuringTokens = new[] { " feat.", " ft.", " featuring" };
+        foreach (var token in featuringTokens)
+        {
+            var index = artist.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+            if (index > 0)
+            {
+                var trimmed = artist[..index].Trim().TrimEnd(',', '&', '+');
+                return string.IsNullOrWhiteSpace(trimmed) ? artist.Trim() : trimmed;
+            }
+        }
+
+        return artist.Trim();
+    }
+
+    private bool ShouldNormalizeFileNames()
+    {
+        if (_normalizeFileNamesEnabled.HasValue)
+        {
+            return _normalizeFileNamesEnabled.Value;
+        }
+
+        try
+        {
+            var config = _unitOfWork.Configurations
+                .FirstOrDefaultAsync(c => c.Key == "NormalizeFileNames" && c.Category == "Organization")
+                .GetAwaiter()
+                .GetResult();
+
+            if (config != null && bool.TryParse(config.Value, out var parsed))
+            {
+                _normalizeFileNamesEnabled = parsed;
+            }
+            else
+            {
+                _normalizeFileNamesEnabled = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to read NormalizeFileNames setting; defaulting to disabled.");
+            _normalizeFileNamesEnabled = false;
+        }
+
+        return _normalizeFileNamesEnabled.GetValueOrDefault();
+    }
+
+    private static string NormalizeSegment(string segment, bool isFile)
+    {
+        if (string.IsNullOrWhiteSpace(segment))
+        {
+            return isFile ? "item" : "segment";
+        }
+
+        string extension = string.Empty;
+        if (isFile)
+        {
+            extension = Path.GetExtension(segment);
+            segment = Path.GetFileNameWithoutExtension(segment);
+        }
+
+        var normalized = RemoveDiacritics(segment);
+        normalized = normalized.Replace(' ', '_');
+
+        var builder = new StringBuilder(normalized.Length);
+        foreach (var character in normalized)
+        {
+            if (char.IsLetterOrDigit(character) || character == '_')
+            {
+                builder.Append(character);
+            }
+            else if (char.IsWhiteSpace(character))
+            {
+                builder.Append('_');
+            }
+        }
+
+        var collapsed = CollapseUnderscores(builder.ToString()).Trim('_');
+        if (string.IsNullOrEmpty(collapsed))
+        {
+            collapsed = isFile ? "item" : "segment";
+        }
+
+        collapsed = collapsed.ToLowerInvariant();
+
+        if (isFile)
+        {
+            var cleanedExtension = RemoveDiacritics(extension).Trim();
+            if (!string.IsNullOrWhiteSpace(cleanedExtension))
+            {
+                cleanedExtension = cleanedExtension.TrimStart('.').ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(cleanedExtension))
+                {
+                    return $"{collapsed}.{cleanedExtension}";
+                }
+            }
+
+            return collapsed;
+        }
+
+        return collapsed;
+    }
+
+    private static string RemoveDiacritics(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+
+        foreach (var character in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category != UnicodeCategory.NonSpacingMark && category != UnicodeCategory.SpacingCombiningMark)
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString().Normalize(NormalizationForm.FormC);
+    }
+
+    private static string CollapseUnderscores(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        char previous = '\0';
+
+        foreach (var character in value)
+        {
+            if (character == '_' && previous == '_')
+            {
+                continue;
+            }
+
+            builder.Append(character);
+            previous = character;
+        }
+
+        return builder.ToString();
     }
 
     private static string ResolveFormat(Video video)

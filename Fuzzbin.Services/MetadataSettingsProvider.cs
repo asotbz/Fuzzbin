@@ -59,11 +59,19 @@ public sealed class MetadataSettingsProvider : IMetadataSettingsProvider
             var genreMappings = generalizeGenres
                 ? ReadGenreMappings(unitOfWork)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var usePrimaryArtistForNfo = ReadBool(unitOfWork, "Metadata", "UsePrimaryArtistForNfo", defaultValue: false);
+            var appendFeaturedArtistsToTitle = usePrimaryArtistForNfo
+                ? ReadBool(unitOfWork, "Metadata", "AppendFeaturedArtistsToTitle", defaultValue: false)
+                : false;
+            var writeCollectionsAsNfoTags = ReadBool(unitOfWork, "Metadata", "WriteCollectionsAsNfoTags", defaultValue: false);
 
             return new MetadataSettings
             {
                 GeneralizeGenres = generalizeGenres,
                 WriteExternalGenreAsTag = writeExternalGenreAsTag,
+                UsePrimaryArtistForNfo = usePrimaryArtistForNfo,
+                AppendFeaturedArtistsToTitle = appendFeaturedArtistsToTitle,
+                WriteCollectionsAsNfoTags = writeCollectionsAsNfoTags,
                 GenreMappings = genreMappings
             };
         }

@@ -24,6 +24,7 @@ namespace Fuzzbin.Data.Repositories
         private IRepository<CollectionVideo>? _collectionVideos;
         private IRepository<UserPreference>? _userPreferences;
         private IRepository<BackgroundJob>? _backgroundJobs;
+        private IRepository<VideoSourceVerification>? _videoSourceVerifications;
 
         public UnitOfWork(ApplicationDbContext context)
         {
@@ -40,6 +41,7 @@ namespace Fuzzbin.Data.Repositories
         public IRepository<CollectionVideo> CollectionVideos => _collectionVideos ??= new Repository<CollectionVideo>(_context);
         public IRepository<UserPreference> UserPreferences => _userPreferences ??= new Repository<UserPreference>(_context);
         public IRepository<BackgroundJob> BackgroundJobs => _backgroundJobs ??= new Repository<BackgroundJob>(_context);
+        public IRepository<VideoSourceVerification> VideoSourceVerifications => _videoSourceVerifications ??= new Repository<VideoSourceVerification>(_context);
 
         public async Task<int> SaveChangesAsync()
         {

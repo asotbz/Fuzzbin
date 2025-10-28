@@ -60,6 +60,11 @@ namespace Fuzzbin.Core.Interfaces
         IRepository<BackgroundJob> BackgroundJobs { get; }
 
         /// <summary>
+        /// Repository for VideoSourceVerification entities
+        /// </summary>
+        IRepository<VideoSourceVerification> VideoSourceVerifications { get; }
+
+        /// <summary>
         /// Save all changes to the database
         /// </summary>
         Task<int> SaveChangesAsync();

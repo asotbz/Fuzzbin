@@ -70,6 +70,7 @@ public static class FileOrganizationPatternVariables
         { "{artist}", "Artist name" },
         { "{artist_safe}", "Artist name (filesystem safe)" },
         { "{artist_sort}", "Artist sort name" },
+        { "{primary_artist}", "Primary artist without featured collaborators" },
         
         // Title variables  
         { "{title}", "Video title" },

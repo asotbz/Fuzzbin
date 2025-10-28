@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Fuzzbin.Core.Entities;
@@ -27,11 +28,18 @@ public class DownloadQueueServiceTests
         var unitOfWork = new UnitOfWork(context);
         var taskQueue = new DownloadTaskQueue();
         var settingsProvider = new TestDownloadSettingsProvider();
+        var activityLogRepository = new ActivityLogRepository(context);
+        var httpContextAccessor = new HttpContextAccessor();
+        var activityLogService = new ActivityLogService(
+            activityLogRepository,
+            httpContextAccessor,
+            NullLogger<ActivityLogService>.Instance);
         var service = new DownloadQueueService(
             unitOfWork,
             NullLogger<DownloadQueueService>.Instance,
             taskQueue,
-            settingsProvider);
+            settingsProvider,
+            activityLogService);
         return (context, unitOfWork, service);
     }
 

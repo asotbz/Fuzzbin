@@ -6,6 +6,14 @@
     <DialogContent>
         <MudForm @ref="_form" Model="_model" OnValidSubmit="OnValidSubmit">
             <MudText Typo="Typo.h6" Class="mb-3">Edit Video</MudText>
+            
+            @if (_showSourceUrlWarning)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                    This video has no source URLs. Consider adding a source URL to enable verification and metadata updates.
+                </MudAlert>
+            }
+            
             <MudTextField @bind-Value="_model.Title" Label="Title" Required="true" RequiredError="Title is required" />
             <MudTextField @bind-Value="_model.Artist" Label="Artist" Required="true" RequiredError="Artist is required" />
             <MudTextField @bind-Value="_model.Album" Label="Album" />
@@ -32,6 +40,7 @@
     private readonly VideoEditModel _model = new();
     private MudForm? _form;
     private bool _isSaving;
+    private bool _showSourceUrlWarning;
 
     [CascadingParameter]
     private IMudDialogInstance Dialog { get; set; } = default!;
@@ -53,6 +62,10 @@
         }
 
         _model.LoadFrom(Video);
+        
+        // Check if video has any source URLs
+        _showSourceUrlWarning = Video.SourceVerifications == null ||
+                                !Video.SourceVerifications.Any(sv => !string.IsNullOrWhiteSpace(sv.SourceUrl));
     }
 
     private async Task Submit()

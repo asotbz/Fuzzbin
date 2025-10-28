@@ -337,15 +337,31 @@ namespace Fuzzbin.Services
 
                 if (existingVerification == null)
                 {
-                    // Note: This requires accessing the DbContext directly
-                    // For now, we'll log the intent but skip the actual database operation
-                    // A proper implementation would need to add VideoSourceVerification repository to IUnitOfWork
+                    // Create new source verification record
+                    var verification = new VideoSourceVerification
+                    {
+                        VideoId = videoId,
+                        SourceUrl = sourceUrl,
+                        SourceProvider = provider,
+                        Status = VideoSourceVerificationStatus.Verified,
+                        Confidence = 1.0, // Downloaded directly from source
+                        VerifiedAt = DateTime.UtcNow,
+                        Notes = "Automatically verified during download"
+                    };
+
+                    // Add verification using the repository
+                    await unitOfWork.VideoSourceVerifications.AddAsync(verification);
+                    await unitOfWork.SaveChangesAsync();
+
                     _logger.LogInformation(
-                        "Would add source verification for video {VideoId}: {SourceUrl} (provider: {Provider})",
+                        "Added source verification for video {VideoId}: {SourceUrl} (provider: {Provider})",
                         videoId, sourceUrl, provider);
-                    
-                    // TODO: Implement when VideoSourceVerification repository is added to IUnitOfWork
-                    // For now, source URL is captured in the download queue item's URL field
+                }
+                else
+                {
+                    _logger.LogDebug(
+                        "Source verification already exists for video {VideoId}: {SourceUrl}",
+                        videoId, sourceUrl);
                 }
             }
             catch (Exception ex)
