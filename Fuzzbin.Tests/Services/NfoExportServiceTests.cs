@@ -351,7 +351,7 @@ namespace Fuzzbin.Tests.Services;
         {
             Title = "Billie Jean",
             Artist = "Michael Jackson",
-            FeaturedArtists = null
+            FeaturedArtists = null!
         };
 
         // Act

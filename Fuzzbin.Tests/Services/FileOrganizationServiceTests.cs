@@ -153,7 +153,7 @@ public class FileOrganizationServiceTests : IDisposable
         // Arrange
         var video = new Video
         {
-            Artist = null,
+            Artist = null!,
             Title = "Unknown Track",
             Format = "mp4"
         };
@@ -329,10 +329,10 @@ public class FileOrganizationServiceTests : IDisposable
         // Arrange
         var video = new Video
         {
-            Artist = null,
-            Title = null,
+            Artist = null!,
+            Title = null!,
             Year = null,
-            Format = null,
+            Format = null!,
             FilePath = "/some/path/video.mp4"
         };
         var pattern = "{artist}/{title}.{format}";
@@ -368,7 +368,7 @@ public class FileOrganizationServiceTests : IDisposable
     #region Preview OrganizedPath Tests
 
     [Fact]
-    public async Task PreviewOrganizedPath_ReturnsFullPath()
+    public void PreviewOrganizedPath_ReturnsFullPath()
     {
         // Arrange
         var libraryRoot = "/library/videos";

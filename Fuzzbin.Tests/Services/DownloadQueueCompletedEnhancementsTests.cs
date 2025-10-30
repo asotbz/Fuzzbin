@@ -259,9 +259,9 @@ namespace Fuzzbin.Tests.Services
         // Test helper classes
         private class TestDownloadTaskQueue : IDownloadTaskQueue
         {
-            public Task QueueAsync(Guid queueId, System.Threading.CancellationToken cancellationToken = default)
+            public ValueTask QueueAsync(Guid queueId, System.Threading.CancellationToken cancellationToken = default)
             {
-                return Task.CompletedTask;
+                return ValueTask.CompletedTask;
             }
 
             public System.Collections.Generic.IAsyncEnumerable<Guid> DequeueAsync(System.Threading.CancellationToken cancellationToken = default)
@@ -272,9 +272,9 @@ namespace Fuzzbin.Tests.Services
 
         private class TestDownloadSettingsProvider : IDownloadSettingsProvider
         {
-            public Models.DownloadWorkerOptions GetOptions()
+            public Fuzzbin.Services.Models.DownloadWorkerOptions GetOptions()
             {
-                return new Models.DownloadWorkerOptions
+                return new Fuzzbin.Services.Models.DownloadWorkerOptions
                 {
                     OutputDirectory = "/tmp/downloads",
                     Format = "mp4",
@@ -285,24 +285,46 @@ namespace Fuzzbin.Tests.Services
                     TempDirectory = "/tmp"
                 };
             }
+
+            public string GetFfmpegPath() => "/usr/bin/ffmpeg";
+            public string GetFfprobePath() => "/usr/bin/ffprobe";
+            public void Invalidate() { }
         }
 
         private class TestActivityLogService : IActivityLogService
         {
+            public Task<ActivityLog> LogAsync(string category, string action, string? entityType = null, string? entityId = null, string? entityName = null, string? details = null, string? oldValue = null, string? newValue = null)
+                => Task.FromResult(new ActivityLog());
+
             public Task LogSuccessAsync(string category, string action, string? entityType = null, string? entityId = null, string? entityName = null, string? details = null)
                 => Task.CompletedTask;
 
             public Task LogErrorAsync(string category, string action, string? errorMessage = null, string? entityType = null, string? entityId = null, string? entityName = null, string? details = null)
                 => Task.CompletedTask;
 
-            public Task LogWarningAsync(string category, string action, string? message = null, string? entityType = null, string? entityId = null, string? entityName = null, string? details = null)
+            public Task<System.Collections.Generic.IEnumerable<ActivityLog>> GetRecentLogsAsync(int count = 100)
+                => Task.FromResult<System.Collections.Generic.IEnumerable<ActivityLog>>(new System.Collections.Generic.List<ActivityLog>());
+
+            public Task<System.Collections.Generic.IEnumerable<ActivityLog>> GetUserLogsAsync(string userId, DateTime? startDate = null, DateTime? endDate = null)
+                => Task.FromResult<System.Collections.Generic.IEnumerable<ActivityLog>>(new System.Collections.Generic.List<ActivityLog>());
+
+            public Task<System.Collections.Generic.IEnumerable<ActivityLog>> SearchLogsAsync(string? searchTerm = null, string? category = null, string? action = null, string? userId = null, DateTime? startDate = null, DateTime? endDate = null, bool? isSuccess = null, int skip = 0, int take = 100)
+                => Task.FromResult<System.Collections.Generic.IEnumerable<ActivityLog>>(new System.Collections.Generic.List<ActivityLog>());
+
+            public Task<System.Collections.Generic.Dictionary<string, int>> GetCategorySummaryAsync(DateTime? startDate = null, DateTime? endDate = null)
+                => Task.FromResult(new System.Collections.Generic.Dictionary<string, int>());
+
+            public Task<System.Collections.Generic.Dictionary<string, int>> GetActionSummaryAsync(DateTime? startDate = null, DateTime? endDate = null)
+                => Task.FromResult(new System.Collections.Generic.Dictionary<string, int>());
+
+            public Task<System.Collections.Generic.Dictionary<DateTime, int>> GetDailyActivityAsync(int days = 30)
+                => Task.FromResult(new System.Collections.Generic.Dictionary<DateTime, int>());
+
+            public Task<int> GetLogCountAsync(string? category = null, string? action = null, string? userId = null, DateTime? startDate = null, DateTime? endDate = null, bool? isSuccess = null)
+                => Task.FromResult(0);
+
+            public Task ClearOldLogsAsync(int daysToKeep = 90)
                 => Task.CompletedTask;
-
-            public Task<System.Collections.Generic.List<ActivityLog>> GetRecentActivityAsync(int count = 50, string? category = null, string? action = null)
-                => Task.FromResult(new System.Collections.Generic.List<ActivityLog>());
-
-            public Task<(System.Collections.Generic.List<ActivityLog> Items, int TotalCount)> GetPagedActivityAsync(int page = 1, int pageSize = 50, string? category = null, string? action = null, string? entityType = null, DateTime? startDate = null, DateTime? endDate = null)
-                => Task.FromResult((new System.Collections.Generic.List<ActivityLog>(), 0));
         }
     }
 }

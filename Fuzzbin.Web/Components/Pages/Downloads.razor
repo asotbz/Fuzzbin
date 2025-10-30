@@ -607,7 +607,7 @@
         await RefreshQueue();
     }
     
-    private async Task PlayVideo(DownloadQueueItem item)
+    private Task PlayVideo(DownloadQueueItem item)
     {
         if (item.VideoId.HasValue)
         {
@@ -617,6 +617,7 @@
         {
             Snackbar.Add("Video not found in library", Severity.Warning);
         }
+        return Task.CompletedTask;
     }
     
     private void ViewInLibrary(DownloadQueueItem item)

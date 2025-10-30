@@ -94,7 +94,7 @@ public class VideoStreamEndpointTests : IClassFixture<WebApplicationFactory<Prog
             Assert.Equal(testVideoContent.Length, response.Content.Headers.ContentLength.Value);
             
             // Verify range processing is enabled
-            Assert.True(response.Headers.AcceptRanges.Contains("bytes"));
+            Assert.Contains("bytes", response.Headers.AcceptRanges);
         }
         finally
         {
