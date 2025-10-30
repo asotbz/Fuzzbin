@@ -1,4 +1,5 @@
 using Fuzzbin.Core.Entities;
+using Fuzzbin.Core.Models;
 
 namespace Fuzzbin.Core.Interfaces;
 
@@ -18,6 +19,21 @@ public interface IFileOrganizationService
     /// Validates if a naming pattern is valid
     /// </summary>
     bool ValidatePattern(string pattern);
+    
+    /// <summary>
+    /// Validates a naming pattern with detailed results including errors and warnings
+    /// </summary>
+    PatternValidationResult ValidatePatternWithDetails(string pattern);
+    
+    /// <summary>
+    /// Generates an example filename from a pattern using sample data
+    /// </summary>
+    string GenerateExampleFilename(string pattern);
+    
+    /// <summary>
+    /// Gets a list of example patterns with descriptions
+    /// </summary>
+    List<PatternExample> GetPatternExamples();
     
     /// <summary>
     /// Gets available pattern variables for the UI

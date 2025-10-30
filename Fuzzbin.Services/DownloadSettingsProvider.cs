@@ -18,16 +18,19 @@ public sealed class DownloadSettingsProvider : IDownloadSettingsProvider
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConfigurationPathService _configPathService;
     private readonly IMemoryCache _cache;
     private readonly ILogger<DownloadSettingsProvider> _logger;
     private readonly object _syncRoot = new();
 
     public DownloadSettingsProvider(
         IServiceScopeFactory scopeFactory,
+        IConfigurationPathService configPathService,
         IMemoryCache cache,
         ILogger<DownloadSettingsProvider> logger)
     {
         _scopeFactory = scopeFactory;
+        _configPathService = configPathService;
         _cache = cache;
         _logger = logger;
     }
@@ -73,9 +76,11 @@ public sealed class DownloadSettingsProvider : IDownloadSettingsProvider
             using var scope = _scopeFactory.CreateScope();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            var outputDirectory = GetString(unitOfWork, "Downloads", "OutputDirectory", "downloads", "Default output directory for downloaded media",
-                ("Storage", "DownloadsPath"));
-            var tempDirectory = GetString(unitOfWork, "Downloads", "TempDirectory", Path.Combine(outputDirectory, "tmp"), "Temporary download staging directory");
+            var defaultDownloadsPath = _configPathService.GetDefaultDownloadsPath();
+            var outputDirectory = GetString(unitOfWork, "Storage", "DownloadsPath", defaultDownloadsPath,
+                "Path for downloaded videos");
+            var tempDirectory = GetString(unitOfWork, "Downloads", "TempDirectory", Path.Combine(outputDirectory, "tmp"),
+                "Temporary download staging directory");
             var format = GetString(unitOfWork, "Downloads", "Format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "Default yt-dlp format selector",
                 ("Download", "DefaultVideoFormat"));
             var bandwidthLimit = GetString(unitOfWork, "Downloads", "BandwidthLimit", string.Empty, "Optional bandwidth limit for downloads");

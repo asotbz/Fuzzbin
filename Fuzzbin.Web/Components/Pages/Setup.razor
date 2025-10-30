@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Core.Interfaces
+@using Fuzzbin.Core.Models
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Logging
 @using MudBlazor
@@ -14,6 +15,8 @@
 @inject ILogger<Setup> Logger
 @inject UserManager<ApplicationUser> UserManager
 @inject RoleManager<IdentityRole<Guid>> RoleManager
+@inject IConfigurationPathService ConfigPathService
+@inject IFileOrganizationService FileOrganizationService
 
 <PageTitle>Initial Setup - Fuzzbin</PageTitle>
 
@@ -38,30 +41,87 @@
             {
                 <MudGrid>
                     <MudItem xs="12">
-                        <MudTextField @bind-Value="_libraryPath" 
-                                    Label="Library Path" 
-                                    HelperText="Where your video files will be stored"
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                            Configuration directory: <strong>@_configDirectory</strong>
+                        </MudAlert>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_libraryPath"
+                                    Label="Library Path"
+                                    HelperText="@($"Where your organized video files will be stored. Default: {_defaultLibraryPath}")"
                                     Variant="Variant.Outlined"
                                     Adornment="Adornment.End"
                                     AdornmentIcon="@Icons.Material.Filled.Folder"
                                     FullWidth="true" />
                     </MudItem>
                     <MudItem xs="12">
-                        <MudTextField @bind-Value="_downloadsPath" 
-                                    Label="Downloads Path" 
-                                    HelperText="Temporary location for downloads"
+                        <MudTextField @bind-Value="_downloadsPath"
+                                    Label="Downloads Path"
+                                    HelperText="@($"Temporary location for downloads. Default: {_defaultDownloadsPath}")"
                                     Variant="Variant.Outlined"
                                     Adornment="Adornment.End"
                                     AdornmentIcon="@Icons.Material.Filled.Download"
                                     FullWidth="true" />
                     </MudItem>
                     <MudItem xs="12">
-                        <MudTextField @bind-Value="_namingPattern" 
-                                    Label="File Naming Pattern" 
-                                    HelperText="How files should be organized (e.g., {artist}/{year} - {title}.{format})"
+                        <MudTextField @bind-Value="_namingPattern"
+                                    Label="File Naming Pattern"
+                                    HelperText="How files should be organized in your library"
                                     Variant="Variant.Outlined"
                                     Lines="2"
+                                    OnBlur="ValidateNamingPattern"
+                                    Error="@(_patternValidationResult?.IsValid == false)"
+                                    ErrorText="@(_patternValidationResult?.Errors.FirstOrDefault())"
                                     FullWidth="true" />
+                        
+                        @if (_patternValidationResult?.ExampleFilename != null)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Info" Class="mt-2">
+                                <strong>Example:</strong> @_patternValidationResult.ExampleFilename
+                            </MudText>
+                        }
+                        
+                        @if (_patternValidationResult?.Warnings?.Any() == true)
+                        {
+                            @foreach (var warning in _patternValidationResult.Warnings)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Warning" Class="mt-1">
+                                    ⚠️ @warning
+                                </MudText>
+                            }
+                        }
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudExpansionPanels Dense="true">
+                            <MudExpansionPanel Text="Pattern Examples" IsInitiallyExpanded="false">
+                                <MudStack Spacing="1">
+                                    @foreach (var example in _patternExamples)
+                                    {
+                                        <MudChip T="string"
+                                                Size="Size.Small"
+                                                Color="Color.Primary"
+                                                Variant="Variant.Text"
+                                                OnClick="@(() => ApplyPatternExample(example.Pattern))">
+                                            @example.Pattern
+                                        </MudChip>
+                                        <MudText Typo="Typo.caption" Class="ml-4">@example.Description</MudText>
+                                    }
+                                </MudStack>
+                            </MudExpansionPanel>
+                            <MudExpansionPanel Text="Available Variables" IsInitiallyExpanded="false">
+                                <MudSimpleTable Dense="true" Hover="true" Style="max-height: 300px; overflow-y: auto;">
+                                    <tbody>
+                                        @foreach (var variable in _availableVariables.OrderBy(kv => kv.Key))
+                                        {
+                                            <tr>
+                                                <td><code>@variable.Key</code></td>
+                                                <td>@variable.Value</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
                     </MudItem>
                 </MudGrid>
             }
@@ -307,10 +367,20 @@
     private int _currentStep = 1;
     private const int _totalSteps = 5;
     
+    // Configuration paths
+    private string _configDirectory = string.Empty;
+    private string _defaultLibraryPath = string.Empty;
+    private string _defaultDownloadsPath = string.Empty;
+    
     // Library Settings
-    private string _libraryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Fuzzbin", "Library");
-    private string _downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Fuzzbin", "Downloads");
+    private string _libraryPath = string.Empty;
+    private string _downloadsPath = string.Empty;
     private string _namingPattern = "{artist}/{title}.{format}";
+    
+    // Pattern validation
+    private PatternValidationResult? _patternValidationResult;
+    private List<PatternExample> _patternExamples = new();
+    private Dictionary<string, string> _availableVariables = new();
     
     // Download Settings
     private string _defaultVideoFormat = "mp4";
@@ -337,6 +407,22 @@
     {
         Logger.LogInformation("Setup component initialized at step {Step}", _currentStep);
 
+        // Initialize configuration paths
+        _configDirectory = ConfigPathService.GetConfigDirectory();
+        _defaultLibraryPath = ConfigPathService.GetDefaultLibraryPath();
+        _defaultDownloadsPath = ConfigPathService.GetDefaultDownloadsPath();
+        
+        // Set default values
+        _libraryPath = _defaultLibraryPath;
+        _downloadsPath = _defaultDownloadsPath;
+        
+        // Load pattern examples and available variables
+        _availableVariables = FileOrganizationService.GetAvailablePatternVariables();
+        _patternExamples = FileOrganizationService.GetPatternExamples();
+        
+        // Validate initial pattern
+        await ValidateNamingPattern();
+
         // Check if setup has already been completed
         var setupComplete = await UnitOfWork.Configurations
             .FirstOrDefaultAsync(c => c.Key == "SetupComplete" && c.Category == "System");
@@ -346,6 +432,18 @@
             Logger.LogInformation("Setup already completed; redirecting to home.");
             Navigation.NavigateTo("/");
         }
+    }
+
+    private async Task ValidateNamingPattern()
+    {
+        _patternValidationResult = FileOrganizationService.ValidatePatternWithDetails(_namingPattern);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplyPatternExample(string pattern)
+    {
+        _namingPattern = pattern;
+        _ = ValidateNamingPattern();
     }
 
     private async Task CompleteSetup()

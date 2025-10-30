@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Fuzzbin.Core.Entities;
+using Fuzzbin.Core.Interfaces;
 using Fuzzbin.Data.Context;
 using Fuzzbin.Data.Repositories;
 using Fuzzbin.Services;
@@ -37,7 +38,8 @@ public sealed class BackupServiceTests : IDisposable
         _context.Database.EnsureCreated();
 
         _unitOfWork = new UnitOfWork(_context);
-        _backupService = new BackupService(_context, _unitOfWork, NullLogger<BackupService>.Instance);
+        var configPathService = new TestConfigurationPathService(_workspace);
+        _backupService = new BackupService(_context, _unitOfWork, configPathService, NullLogger<BackupService>.Instance);
 
         _context.Configurations.Add(new Configuration
         {
@@ -120,5 +122,24 @@ public sealed class BackupServiceTests : IDisposable
         {
             // Ignore cleanup errors in tests
         }
+    }
+
+    private sealed class TestConfigurationPathService : IConfigurationPathService
+    {
+        private readonly string _workspace;
+
+        public TestConfigurationPathService(string workspace)
+        {
+            _workspace = workspace;
+        }
+
+        public string GetConfigDirectory() => _workspace;
+        public string GetDataDirectory() => Path.Combine(_workspace, "data");
+        public string GetBackupDirectory() => Path.Combine(_workspace, "backups");
+        public string GetLogsDirectory() => Path.Combine(_workspace, "logs");
+        public string GetDatabasePath() => Path.Combine(_workspace, "data", "fuzzbin.db");
+        public string GetDefaultLibraryPath() => Path.Combine(_workspace, "Library");
+        public string GetDefaultDownloadsPath() => Path.Combine(_workspace, "Downloads");
+        public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
     }
 }

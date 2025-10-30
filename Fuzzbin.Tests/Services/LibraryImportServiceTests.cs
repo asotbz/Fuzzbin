@@ -97,7 +97,8 @@ public class LibraryImportServiceTests : IAsyncLifetime
         var itemRepository = new Repository<LibraryImportItem>(context);
         var videoRepository = new Repository<Video>(context);
         var metadataService = new TestMetadataService();
-        var pathManager = new LibraryPathManager(unitOfWork, NullLogger<LibraryPathManager>.Instance);
+        var configPathService = new TestConfigurationPathService(_tempRoot);
+        var pathManager = new LibraryPathManager(unitOfWork, configPathService, NullLogger<LibraryPathManager>.Instance);
 
         var service = new LibraryImportService(
             NullLogger<LibraryImportService>.Instance,
@@ -171,5 +172,24 @@ public class LibraryImportServiceTests : IAsyncLifetime
         public Task<MetadataEnrichmentResult> EnrichVideoMetadataWithResultAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default) => Task.FromResult(new MetadataEnrichmentResult { Video = video, MatchConfidence = 1.0 });
         public Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default) => Task.FromResult(video);
         public Task<string?> EnsureThumbnailAsync(Video video, string? videoFilePath = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+    }
+
+    private sealed class TestConfigurationPathService : IConfigurationPathService
+    {
+        private readonly string _workspace;
+
+        public TestConfigurationPathService(string workspace)
+        {
+            _workspace = workspace;
+        }
+
+        public string GetConfigDirectory() => _workspace;
+        public string GetDataDirectory() => Path.Combine(_workspace, "data");
+        public string GetBackupDirectory() => Path.Combine(_workspace, "backups");
+        public string GetLogsDirectory() => Path.Combine(_workspace, "logs");
+        public string GetDatabasePath() => Path.Combine(_workspace, "data", "fuzzbin.db");
+        public string GetDefaultLibraryPath() => Path.Combine(_workspace, "Library");
+        public string GetDefaultDownloadsPath() => Path.Combine(_workspace, "Downloads");
+        public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
     }
 }

@@ -39,8 +39,12 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create directories for data and logs
-RUN mkdir -p /app/data /app/logs /app/media/videos /app/media/thumbnails
+# Create configuration directory structure
+RUN mkdir -p /config/data \
+             /config/logs \
+             /config/backups \
+             /config/Library \
+             /config/Downloads
 
 # Copy published application
 COPY --from=build /app/publish .
@@ -49,6 +53,7 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_RUNNING_IN_CONTAINER=true
+ENV FUZZBIN_CONFIG_DIR=/config
 
 # Expose port
 EXPOSE 8080
@@ -57,8 +62,8 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Volume for persistent data
-VOLUME ["/app/data", "/app/logs", "/app/media"]
+# Volume for persistent configuration and data
+VOLUME ["/config"]
 
 # Run the application
 ENTRYPOINT ["dotnet", "Fuzzbin.Web.dll"]

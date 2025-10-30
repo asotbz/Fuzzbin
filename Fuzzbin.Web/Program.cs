@@ -30,7 +30,7 @@ using Fuzzbin.Services.Interfaces;
 using Fuzzbin.Services.Models;
 using HeaderNames = Microsoft.Net.Http.Headers.HeaderNames;
 
-// Configure Serilog
+// Configure Serilog - will be reconfigured with proper paths after service provider is built
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
@@ -39,13 +39,6 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
     .WriteTo.Console(
         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
-        "logs/fuzzbin-.txt",
-        rollingInterval: RollingInterval.Day,
-        rollOnFileSizeLimit: true,
-        fileSizeLimitBytes: 10485760, // 10MB
-        retainedFileCountLimit: 30,
-        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
     .CreateLogger();
 
 try
@@ -107,33 +100,66 @@ try
     // SignalR for real-time updates
     builder.Services.AddSignalR();
 
-    // Configure SQLite with Entity Framework Core
-    var dataDirectory = Path.Combine(builder.Environment.ContentRootPath, "data");
-    Directory.CreateDirectory(dataDirectory);
-    var databasePath = Path.Combine(dataDirectory, "fuzzbin.db");
-    var connectionStringBuilder = new SqliteConnectionStringBuilder
+    // Register configuration path service first (required by other services)
+    builder.Services.AddSingleton<IConfigurationPathService, ConfigurationPathService>();
+
+    // Build a temporary service provider to resolve the configuration path service
+    // This is necessary to configure paths before the main application starts
+#pragma warning disable ASP0000 // BuildServiceProvider is intentionally used here to configure paths early
+    using (var tempProvider = builder.Services.BuildServiceProvider())
+#pragma warning restore ASP0000
     {
-        DataSource = databasePath,
-        Pooling = true,
-        Cache = SqliteCacheMode.Shared,
-        Mode = SqliteOpenMode.ReadWriteCreate
-    };
+        var configPathService = tempProvider.GetRequiredService<IConfigurationPathService>();
+        
+        // Configure SQLite with Entity Framework Core using new path structure
+        var databasePath = configPathService.GetDatabasePath();
+        var connectionStringBuilder = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Pooling = true,
+            Cache = SqliteCacheMode.Shared,
+            Mode = SqliteOpenMode.ReadWriteCreate
+        };
 
-    var connectionString = connectionStringBuilder.ToString();
+        var connectionString = connectionStringBuilder.ToString();
 
-    builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
-    {
-        options.UseSqlite(connectionString);
-        options.EnableSensitiveDataLogging(builder.Environment.IsDevelopment());
-        options.EnableDetailedErrors(builder.Environment.IsDevelopment());
-    });
+        builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
+        {
+            options.UseSqlite(connectionString);
+            options.EnableSensitiveDataLogging(builder.Environment.IsDevelopment());
+            options.EnableDetailedErrors(builder.Environment.IsDevelopment());
+        });
 
-    // Configure Data Protection for encryption
-    var keysDirectory = Path.Combine(dataDirectory, "keys");
-    Directory.CreateDirectory(keysDirectory);
-    builder.Services.AddDataProtection()
-        .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
-        .SetApplicationName("Fuzzbin");
+        // Configure Data Protection for encryption using new path structure
+        var keysDirectory = Path.Combine(configPathService.GetDataDirectory(), "keys");
+        configPathService.EnsureDirectoryExists(keysDirectory);
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
+            .SetApplicationName("Fuzzbin");
+        
+        // Reconfigure Serilog to use proper logs directory
+        var logsPath = Path.Combine(configPathService.GetLogsDirectory(), "fuzzbin-.txt");
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+            .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+            .Enrich.FromLogContext()
+            .WriteTo.Console(
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File(
+                logsPath,
+                rollingInterval: RollingInterval.Day,
+                rollOnFileSizeLimit: true,
+                fileSizeLimitBytes: 10485760, // 10MB
+                retainedFileCountLimit: 30,
+                outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .CreateLogger();
+
+        Log.Information("Configuration directory: {ConfigDir}", configPathService.GetConfigDirectory());
+        Log.Information("Database path: {DatabasePath}", databasePath);
+        Log.Information("Logs directory: {LogsDir}", configPathService.GetLogsDirectory());
+    }
 
     builder.Services.AddAntiforgery(options =>
     {
@@ -542,7 +568,7 @@ try
         .AddInteractiveServerRenderMode();
 
     app.MapHub<VideoUpdatesHub>("/hubs/updates");
-    app.MapHub<JobProgressHub>("/hubs/jobprogress");
+    app.MapHub<JobProgressHub>("/hubs/jobprogress").AllowAnonymous();
 
     app.MapGet("/api/system/build-info", () =>
     {

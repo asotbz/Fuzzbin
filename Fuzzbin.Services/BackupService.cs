@@ -23,6 +23,7 @@ public sealed class BackupService : IBackupService
 
     private readonly ApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfigurationPathService _configPathService;
     private readonly ILogger<BackupService> _logger;
     private readonly JsonSerializerOptions _serializerOptions = new()
     {
@@ -32,20 +33,25 @@ public sealed class BackupService : IBackupService
     public BackupService(
         ApplicationDbContext context,
         IUnitOfWork unitOfWork,
+        IConfigurationPathService configPathService,
         ILogger<BackupService> logger)
     {
         _context = context;
         _unitOfWork = unitOfWork;
+        _configPathService = configPathService;
         _logger = logger;
     }
 
     public async Task<BackupResult> CreateBackupAsync(CancellationToken cancellationToken = default)
     {
         var databasePath = GetDatabasePath();
-        var backupDirectory = EnsureBackupDirectoryExists(databasePath);
+        var backupDirectory = _configPathService.GetBackupDirectory();
         var timestamp = DateTimeOffset.UtcNow;
         var backupFileName = $"fuzzbin-backup-{timestamp:yyyyMMddHHmmss}.zip";
         var backupFilePath = Path.Combine(backupDirectory, backupFileName);
+
+        // Ensure backup directory exists
+        _configPathService.EnsureDirectoryExists(backupDirectory);
 
         _logger.LogInformation("Creating database backup at {BackupFilePath}", backupFilePath);
 
@@ -219,19 +225,6 @@ public sealed class BackupService : IBackupService
         }
     }
 
-    private string EnsureBackupDirectoryExists(string databasePath)
-    {
-        var databaseDirectory = Path.GetDirectoryName(databasePath) ?? throw new InvalidOperationException("Unable to determine database directory");
-        var backupDirectory = Path.Combine(databaseDirectory, "backups");
-
-        if (!Directory.Exists(backupDirectory))
-        {
-            Directory.CreateDirectory(backupDirectory);
-            _logger.LogInformation("Created backup directory at {BackupDirectory}", backupDirectory);
-        }
-
-        return backupDirectory;
-    }
 
     private string GetDatabasePath()
     {

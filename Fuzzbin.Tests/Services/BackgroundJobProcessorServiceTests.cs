@@ -349,6 +349,15 @@ public class BackgroundJobProcessorServiceTests
             Task.FromResult(true);
 
         public void EnsureDirectoryExists(string filePath) { }
+
+        public Fuzzbin.Core.Models.PatternValidationResult ValidatePatternWithDetails(string pattern) =>
+            new Fuzzbin.Core.Models.PatternValidationResult { IsValid = true };
+
+        public string GenerateExampleFilename(string pattern) =>
+            $"Example-Artist/Example-Title.mp4";
+
+        public List<Fuzzbin.Core.Models.PatternExample> GetPatternExamples() =>
+            new List<Fuzzbin.Core.Models.PatternExample>();
     }
 
     private sealed class NoOpSourceVerificationService : ISourceVerificationService

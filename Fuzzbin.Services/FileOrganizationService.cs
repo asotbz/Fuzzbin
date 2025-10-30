@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
+using Fuzzbin.Core.Models;
 
 namespace Fuzzbin.Services;
 
@@ -113,6 +114,123 @@ public class FileOrganizationService : IFileOrganizationService
     public Dictionary<string, string> GetAvailablePatternVariables()
     {
         return new Dictionary<string, string>(FileOrganizationPatternVariables.Variables);
+    }
+
+    public PatternValidationResult ValidatePatternWithDetails(string pattern)
+    {
+        var result = new PatternValidationResult();
+
+        // Check for empty pattern
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            result.Errors.Add("Pattern cannot be empty");
+            return result;
+        }
+
+        // Extract and validate variables
+        var matches = _variablePattern.Matches(pattern);
+        if (matches.Count == 0)
+        {
+            result.Errors.Add("Pattern must contain at least one variable (e.g., {artist}, {title})");
+            return result;
+        }
+
+        // Get all variables used in the pattern
+        var variables = matches.Select(m => m.Groups[1].Value.ToLowerInvariant()).ToList();
+        result.UsedVariables = variables.Distinct().ToList();
+
+        // Check for required variables
+        if (!variables.Contains("format"))
+        {
+            result.Errors.Add("Pattern must include {format} variable for file extension");
+        }
+
+        // Validate against known variables
+        var knownVariables = new HashSet<string>(GetAvailablePatternVariables().Keys, StringComparer.OrdinalIgnoreCase);
+        var unknownVars = result.UsedVariables.Where(v => !knownVariables.Contains(v)).ToList();
+        if (unknownVars.Any())
+        {
+            result.Errors.Add($"Unknown variables: {string.Join(", ", unknownVars.Select(v => $"{{{v}}}"))}");
+        }
+
+        // Check for invalid path characters outside of variables
+        var withoutVariables = _variablePattern.Replace(pattern, string.Empty);
+        var invalidPathChars = Path.GetInvalidPathChars()
+            .Where(c => c != Path.DirectorySeparatorChar && c != Path.AltDirectorySeparatorChar)
+            .ToList();
+
+        if (invalidPathChars.Any(c => withoutVariables.Contains(c, StringComparison.Ordinal)))
+        {
+            result.Errors.Add("Pattern contains invalid path characters");
+        }
+
+        // Generate warnings
+        if (!variables.Contains("artist") && !variables.Contains("title"))
+        {
+            result.Warnings.Add("Consider including {artist} or {title} for better organization");
+        }
+
+        if (pattern.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries).Length == 1)
+        {
+            result.Warnings.Add("Pattern has no directory structure - all files will be in the same folder");
+        }
+
+        // Generate example filename if pattern is otherwise valid
+        if (result.Errors.Count == 0)
+        {
+            try
+            {
+                result.ExampleFilename = GenerateExampleFilename(pattern);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to generate example filename for pattern: {Pattern}", pattern);
+                result.Warnings.Add("Could not generate example filename");
+            }
+        }
+
+        result.IsValid = result.Errors.Count == 0;
+        return result;
+    }
+
+    public string GenerateExampleFilename(string pattern)
+    {
+        var exampleVideo = new Video
+        {
+            Artist = "Example Artist",
+            Title = "Example Song",
+            Year = 2024,
+            Format = "mp4",
+            Resolution = "1920x1080",
+            VideoCodec = "h264",
+            Publisher = "Example Label",
+            Director = "Example Director",
+            ProductionCompany = "Example Productions",
+            Album = "Example Album",
+            MusicBrainzRecordingId = "12345678-1234-1234-1234-123456789012",
+            ImvdbId = "12345",
+            Bitrate = 5000,
+            FrameRate = 30.0,
+            Genres = new List<Genre> { new Genre { Name = "Rock" } },
+            Tags = new List<Tag> { new Tag { Name = "Favorite" } },
+            FeaturedArtists = new List<FeaturedArtist> { new FeaturedArtist { Name = "Featured Artist" } }
+        };
+
+        return GenerateFilePath(exampleVideo, pattern);
+    }
+
+    public List<PatternExample> GetPatternExamples()
+    {
+        return new List<PatternExample>
+        {
+            new PatternExample("{artist}/{title}.{format}", "Simple: Artist/Title.mp4"),
+            new PatternExample("{artist}/{year} - {title}.{format}", "With year: Artist/2024 - Title.mp4"),
+            new PatternExample("{year}/{artist}/{title}.{format}", "Year first: 2024/Artist/Title.mp4"),
+            new PatternExample("{genre}/{artist} - {title}.{format}", "By genre: Rock/Artist - Title.mp4"),
+            new PatternExample("{artist}/{artist} - {title} [{resolution}].{format}", "With quality: Artist/Artist - Title [1080p].mp4"),
+            new PatternExample("{artist_safe}/{year}/{title_safe}.{format}", "Safe names: Artist_Name/2024/Song_Title.mp4"),
+            new PatternExample("{label}/{artist}/{title}.{format}", "By label: Label/Artist/Title.mp4")
+        };
     }
 
     public string PreviewOrganizedPath(Video video, string pattern)

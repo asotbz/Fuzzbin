@@ -15,13 +15,15 @@ namespace Fuzzbin.Web.Middleware
 
         public async Task InvokeAsync(HttpContext context, IServiceProvider serviceProvider)
         {
-            // Skip check for setup page, static files, and health endpoints
+            // Skip check for setup page, static files, health endpoints, API endpoints, and SignalR hubs
             var path = context.Request.Path.Value?.ToLower() ?? "";
-            if (path == "/setup" || 
-                path.StartsWith("/_") || 
-                path.StartsWith("/css") || 
-                path.StartsWith("/js") || 
+            if (path == "/setup" ||
+                path.StartsWith("/_") ||
+                path.StartsWith("/css") ||
+                path.StartsWith("/js") ||
                 path.StartsWith("/health") ||
+                path.StartsWith("/api/") ||
+                path.StartsWith("/hubs/") ||
                 path.Contains(".css") ||
                 path.Contains(".js"))
             {

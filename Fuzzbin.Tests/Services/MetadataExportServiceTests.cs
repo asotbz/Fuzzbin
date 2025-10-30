@@ -113,7 +113,8 @@ public class MetadataExportServiceTests : IAsyncLifetime
         });
         await unitOfWork.SaveChangesAsync();
 
-        var pathManager = new LibraryPathManager(unitOfWork, NullLogger<LibraryPathManager>.Instance);
+        var configPathService = new TestConfigurationPathService(_tempRoot);
+        var pathManager = new LibraryPathManager(unitOfWork, configPathService, NullLogger<LibraryPathManager>.Instance);
         var metadataSettingsProvider = new TestMetadataSettingsProvider();
         var nfoService = new NfoExportService(metadataSettingsProvider);
 
@@ -189,5 +190,24 @@ public class MetadataExportServiceTests : IAsyncLifetime
         {
             // no-op for tests
         }
+    }
+
+    private sealed class TestConfigurationPathService : IConfigurationPathService
+    {
+        private readonly string _workspace;
+
+        public TestConfigurationPathService(string workspace)
+        {
+            _workspace = workspace;
+        }
+
+        public string GetConfigDirectory() => _workspace;
+        public string GetDataDirectory() => Path.Combine(_workspace, "data");
+        public string GetBackupDirectory() => Path.Combine(_workspace, "backups");
+        public string GetLogsDirectory() => Path.Combine(_workspace, "logs");
+        public string GetDatabasePath() => Path.Combine(_workspace, "data", "fuzzbin.db");
+        public string GetDefaultLibraryPath() => Path.Combine(_workspace, "Library");
+        public string GetDefaultDownloadsPath() => Path.Combine(_workspace, "Downloads");
+        public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
     }
 }

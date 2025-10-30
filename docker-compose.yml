@@ -9,12 +9,11 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./media:/app/media
+      - fuzzbin-config:/config
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
+      - FUZZBIN_CONFIG_DIR=/config
     restart: unless-stopped
     networks:
       - fuzzbin-network
@@ -24,6 +23,10 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+
+volumes:
+  fuzzbin-config:
+    driver: local
 
 networks:
   fuzzbin-network:

@@ -11,18 +11,13 @@ namespace Fuzzbin.Services;
 public class LibraryPathManager : ILibraryPathManager, IDisposable
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfigurationPathService _configPathService;
     private readonly ILogger<LibraryPathManager> _logger;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
 
     private bool _disposed;
     private bool _initialized;
-    private string _libraryRoot = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        "Fuzzbin",
-        "Library");
-    private string _videoRoot = string.Empty;
-    private string _metadataRoot = string.Empty;
-    private string _artworkRoot = string.Empty;
+    private string _libraryRoot = string.Empty;
 
     private static readonly char[] InvalidDirectoryChars = Path.GetInvalidPathChars()
         .Concat(new[] { ':', '*', '?', '"', '<', '>', '|', '\\', '/' })
@@ -34,9 +29,13 @@ public class LibraryPathManager : ILibraryPathManager, IDisposable
     private const string LibraryConfigKey = "LibraryPath";
     private const string LibraryConfigCategory = "Storage";
 
-    public LibraryPathManager(IUnitOfWork unitOfWork, ILogger<LibraryPathManager> logger)
+    public LibraryPathManager(
+        IUnitOfWork unitOfWork,
+        IConfigurationPathService configPathService,
+        ILogger<LibraryPathManager> logger)
     {
         _unitOfWork = unitOfWork;
+        _configPathService = configPathService;
         _logger = logger;
     }
 
@@ -49,19 +48,19 @@ public class LibraryPathManager : ILibraryPathManager, IDisposable
     public async Task<string> GetVideoRootAsync(CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-        return _videoRoot;
+        return _libraryRoot;
     }
 
     public async Task<string> GetMetadataRootAsync(CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-        return _metadataRoot;
+        return _libraryRoot;
     }
 
     public async Task<string> GetArtworkRootAsync(CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-        return _artworkRoot;
+        return _libraryRoot;
     }
 
     public string SanitizeFileName(string value, string? extension = null)
@@ -135,22 +134,18 @@ public class LibraryPathManager : ILibraryPathManager, IDisposable
             {
                 _libraryRoot = Environment.ExpandEnvironmentVariables(config.Value);
             }
+            else
+            {
+                // Use default path from configuration service
+                _libraryRoot = _configPathService.GetDefaultLibraryPath();
+            }
 
-            _videoRoot = Path.Combine(_libraryRoot, "videos");
-            _metadataRoot = Path.Combine(_libraryRoot, "metadata");
-            _artworkRoot = Path.Combine(_libraryRoot, "artwork");
-
+            // All library content (videos, metadata, artwork) stored in single directory
             Directory.CreateDirectory(_libraryRoot);
-            Directory.CreateDirectory(_videoRoot);
-            Directory.CreateDirectory(_metadataRoot);
-            Directory.CreateDirectory(_artworkRoot);
 
             _logger.LogDebug(
-                "Initialized library paths. Root: {Root}, Video: {VideoRoot}, Metadata: {MetadataRoot}, Artwork: {ArtworkRoot}",
-                _libraryRoot,
-                _videoRoot,
-                _metadataRoot,
-                _artworkRoot);
+                "Initialized library path: {Root}",
+                _libraryRoot);
 
             _initialized = true;
         }
