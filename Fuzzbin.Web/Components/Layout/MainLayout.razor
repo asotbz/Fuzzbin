@@ -7,7 +7,6 @@
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject Fuzzbin.Web.Services.ThemeService ThemeService
-@inject Fuzzbin.Web.Services.OnboardingService OnboardingService
 @inherits LayoutComponentBase
 
 <MudLayout>
@@ -17,9 +16,6 @@
         <MudSpacer />
         <MudTooltip Text="Toggle light/dark theme (Alt+T)">
             <MudIconButton Icon="@GetThemeIcon()" Color="Color.Inherit" OnClick="@ToggleTheme" />
-        </MudTooltip>
-        <MudTooltip Text="Launch onboarding tour (Alt+O)">
-            <MudIconButton Icon="@Icons.Material.Filled.TipsAndUpdates" Color="Color.Inherit" OnClick="@ShowOnboardingTour" />
         </MudTooltip>
         <MudTooltip Text="Keyboard shortcuts (F1 or Shift+?)">
             <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Inherit" OnClick="ShowKeyboardShortcuts" />
@@ -112,13 +108,7 @@
             KeyboardService.RegisterShortcut("Alt+L", "Global", () => Navigation.NavigateTo("/activity-log"), "Open activity log");
             KeyboardService.RegisterShortcut("Alt+S", "Global", () => Navigation.NavigateTo("/settings"), "Open settings");
             KeyboardService.RegisterShortcut("Alt+T", "Global", () => _ = ToggleThemeAsync(), "Toggle light or dark theme");
-            KeyboardService.RegisterShortcut("Alt+O", "Global", () => _ = ShowOnboardingTourAsync(manualTrigger: true), "Launch onboarding tour");
             KeyboardService.RegisterShortcut("Alt+Q", "Global", () => Navigation.NavigateTo("/player"), "Open player and queue");
-
-            if (await OnboardingService.ShouldShowAsync())
-            {
-                await ShowOnboardingTourAsync(manualTrigger: false);
-            }
         }
     }
 
@@ -135,37 +125,6 @@
             var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
             await DialogService.ShowAsync<KeyboardShortcutsDialog>("Keyboard Shortcuts", parameters, options);
         });
-    }
-
-    private async Task ShowOnboardingTourAsync(bool manualTrigger)
-    {
-        if (_onboardingDialogOpen)
-        {
-            return;
-        }
-
-        _onboardingDialogOpen = true;
-
-        try
-        {
-            var options = new DialogOptions { CloseButton = false, NoHeader = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
-            var dialogReference = await DialogService.ShowAsync<OnboardingDialog>(string.Empty, new DialogParameters(), options);
-            await dialogReference.Result;
-
-            if (!manualTrigger)
-            {
-                await OnboardingService.MarkCompletedAsync();
-            }
-        }
-        finally
-        {
-            _onboardingDialogOpen = false;
-        }
-    }
-
-    private Task ShowOnboardingTour()
-    {
-        return ShowOnboardingTourAsync(manualTrigger: true);
     }
 
     private async Task ToggleThemeAsync()
@@ -265,7 +224,6 @@
     }
 
     private bool _isDarkMode;
-    private bool _onboardingDialogOpen;
     private bool _disposed;
     private bool _keyboardHandlersAttached;
 }

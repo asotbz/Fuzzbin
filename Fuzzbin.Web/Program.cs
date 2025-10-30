@@ -277,7 +277,6 @@ try
     builder.Services.AddScoped<Fuzzbin.Web.Services.KeyboardShortcutService>();
     builder.Services.AddScoped<Fuzzbin.Web.Services.LoadingStateService>();
     builder.Services.AddScoped<Fuzzbin.Web.Services.ThemeService>();
-    builder.Services.AddScoped<Fuzzbin.Web.Services.OnboardingService>();
 
     // Configure CORS (if needed for API access)
     builder.Services.AddCors(options =>

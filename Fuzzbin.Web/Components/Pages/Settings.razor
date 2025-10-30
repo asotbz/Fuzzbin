@@ -18,7 +18,6 @@
 @inject ISnackbar Snackbar
 @inject IBackupService BackupService
 @inject IDialogService DialogService
-@inject OnboardingService OnboardingService
 @inject IJSRuntime JSRuntime
 @inject HttpClient Http
 @inject IGenreMappingDefaultsProvider GenreMappingDefaultsProvider
@@ -27,13 +26,6 @@
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
     <MudText Typo="Typo.h4" Class="mb-4">Settings</MudText>
-    <MudStack Row="true" Spacing="1" Class="mb-3">
-        <MudTooltip Text="Replay the onboarding tour to revisit key workflows">
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.School" OnClick="LaunchOnboardingAsync">
-                Replay onboarding tour
-            </MudButton>
-        </MudTooltip>
-    </MudStack>
     
     <LoadingContent Profile="LoadingProfile.FormSections" IsLoading="@_isLoading" LoadingMessage="Loading preferences...">
         <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6 fz-animate-fade-in">
@@ -1165,18 +1157,4 @@
         return Task.CompletedTask;
     }
     
-    private async Task LaunchOnboardingAsync()
-    {
-        await OnboardingService.ResetAsync();
-
-        var options = new DialogOptions
-        {
-            CloseButton = false,
-            MaxWidth = MaxWidth.Medium,
-            FullWidth = true
-        };
-
-        var dialog = await DialogService.ShowAsync<OnboardingDialog>(string.Empty, new DialogParameters(), options);
-        await dialog.Result;
-    }
 }
