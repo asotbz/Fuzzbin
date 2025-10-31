@@ -59,18 +59,17 @@ public sealed class MetadataSettingsProvider : IMetadataSettingsProvider
             var genreMappings = generalizeGenres
                 ? ReadGenreMappings(unitOfWork)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var usePrimaryArtistForNfo = ReadBool(unitOfWork, "Metadata", "UsePrimaryArtistForNfo", defaultValue: false);
-            var appendFeaturedArtistsToTitle = usePrimaryArtistForNfo
-                ? ReadBool(unitOfWork, "Metadata", "AppendFeaturedArtistsToTitle", defaultValue: false)
-                : false;
+            
+            // Read new artist mode configuration with backward compatibility
+            var artistMode = ReadArtistMode(unitOfWork);
+            
             var writeCollectionsAsNfoTags = ReadBool(unitOfWork, "Metadata", "WriteCollectionsAsNfoTags", defaultValue: false);
 
             return new MetadataSettings
             {
                 GeneralizeGenres = generalizeGenres,
                 WriteExternalGenreAsTag = writeExternalGenreAsTag,
-                UsePrimaryArtistForNfo = usePrimaryArtistForNfo,
-                AppendFeaturedArtistsToTitle = appendFeaturedArtistsToTitle,
+                ArtistMode = artistMode,
                 WriteCollectionsAsNfoTags = writeCollectionsAsNfoTags,
                 GenreMappings = genreMappings
             };
@@ -102,6 +101,47 @@ public sealed class MetadataSettingsProvider : IMetadataSettingsProvider
         {
             _logger.LogWarning(ex, "Failed to read configuration flag for {Category}/{Key}", category, key);
             return defaultValue;
+        }
+    }
+
+    private NfoArtistMode ReadArtistMode(IUnitOfWork unitOfWork)
+    {
+        try
+        {
+            // First try to read the new ArtistMode configuration
+            var config = unitOfWork.Configurations
+                .FirstOrDefaultAsync(c => c.Category == "Metadata" && c.Key == "ArtistMode")
+                .GetAwaiter()
+                .GetResult();
+
+            if (config is not null && !string.IsNullOrWhiteSpace(config.Value))
+            {
+                if (Enum.TryParse<NfoArtistMode>(config.Value, out var mode))
+                {
+                    return mode;
+                }
+            }
+
+            // Backward compatibility: read legacy settings
+            var usePrimaryArtistForNfo = ReadBool(unitOfWork, "Metadata", "UsePrimaryArtistForNfo", defaultValue: false);
+            var appendFeaturedArtistsToTitle = ReadBool(unitOfWork, "Metadata", "AppendFeaturedArtistsToTitle", defaultValue: false);
+
+            if (usePrimaryArtistForNfo && appendFeaturedArtistsToTitle)
+            {
+                return NfoArtistMode.FeaturedInTitle;
+            }
+            else if (usePrimaryArtistForNfo)
+            {
+                return NfoArtistMode.PrimaryOnly;
+            }
+
+            // Default: CombinedArtistField (includes featured artists in artist field)
+            return NfoArtistMode.CombinedArtistField;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read ArtistMode configuration; using default");
+            return NfoArtistMode.CombinedArtistField;
         }
     }
 

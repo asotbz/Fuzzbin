@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
 using Fuzzbin.Core.Entities;
+using Fuzzbin.Services.Models;
 
 namespace Fuzzbin.Services.Templates;
 
@@ -13,8 +14,7 @@ internal static class NfoTemplateBuilder
         Video video,
         IEnumerable<string>? overrideGenres = null,
         IEnumerable<string>? additionalTags = null,
-        bool includeFeaturedArtists = true,
-        bool appendFeaturedArtistsToTitle = false,
+        NfoArtistMode artistMode = NfoArtistMode.CombinedArtistField,
         bool includeCollectionsAsTags = false)
     {
         ArgumentNullException.ThrowIfNull(video);
@@ -33,23 +33,15 @@ internal static class NfoTemplateBuilder
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? new List<string>();
 
-        var effectiveTitle = video.Title;
-        if (appendFeaturedArtistsToTitle && featuredNames.Count > 0)
-        {
-            effectiveTitle = string.IsNullOrWhiteSpace(effectiveTitle)
-                ? $"feat. {string.Join(", ", featuredNames)}"
-                : $"{effectiveTitle} (feat. {string.Join(", ", featuredNames)})";
-        }
+        // Apply artist mode logic
+        var (effectiveTitle, artistElements) = ApplyArtistMode(video.Title, video.Artist, featuredNames, artistMode);
 
         AddElement(elements, "title", effectiveTitle);
-        AddElement(elements, "artist", video.Artist);
-
-        if (includeFeaturedArtists)
+        
+        // Add artist elements based on mode
+        foreach (var artistName in artistElements)
         {
-            foreach (var featured in featuredNames)
-            {
-                AddElement(elements, "artist", featured);
-            }
+            AddElement(elements, "artist", artistName);
         }
 
         AddElement(elements, "album", video.Album);
@@ -193,6 +185,82 @@ internal static class NfoTemplateBuilder
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement("musicvideo", elements));
+    }
+
+    private static (string EffectiveTitle, List<string> ArtistElements) ApplyArtistMode(
+        string? title,
+        string? primaryArtist,
+        List<string> featuredArtists,
+        NfoArtistMode mode)
+    {
+        var effectiveTitle = title ?? string.Empty;
+        var artistElements = new List<string>();
+
+        switch (mode)
+        {
+            case NfoArtistMode.PrimaryOnly:
+                // Write primary artist to NFO only. Ignore any featured artists.
+                if (!string.IsNullOrWhiteSpace(primaryArtist))
+                {
+                    artistElements.Add(primaryArtist);
+                }
+                break;
+
+            case NfoArtistMode.SeparateFields:
+                // Write primary artist and any additional featured artists as individual artist fields.
+                if (!string.IsNullOrWhiteSpace(primaryArtist))
+                {
+                    artistElements.Add(primaryArtist);
+                }
+                artistElements.AddRange(featuredArtists);
+                break;
+
+            case NfoArtistMode.CombinedArtistField:
+                // Write primary artist, "feat.", and any featured artists to a singular artist field (default behavior).
+                if (!string.IsNullOrWhiteSpace(primaryArtist))
+                {
+                    if (featuredArtists.Count > 0)
+                    {
+                        artistElements.Add($"{primaryArtist} feat. {string.Join(", ", featuredArtists)}");
+                    }
+                    else
+                    {
+                        artistElements.Add(primaryArtist);
+                    }
+                }
+                break;
+
+            case NfoArtistMode.FeaturedInTitle:
+                // Write primary artist to singular artist element. Write any featured artists to the title element.
+                if (!string.IsNullOrWhiteSpace(primaryArtist))
+                {
+                    artistElements.Add(primaryArtist);
+                }
+                if (featuredArtists.Count > 0)
+                {
+                    effectiveTitle = string.IsNullOrWhiteSpace(effectiveTitle)
+                        ? $"feat. {string.Join(", ", featuredArtists)}"
+                        : $"{effectiveTitle} (feat. {string.Join(", ", featuredArtists)})";
+                }
+                break;
+
+            default:
+                // Fallback to CombinedArtistField behavior
+                if (!string.IsNullOrWhiteSpace(primaryArtist))
+                {
+                    if (featuredArtists.Count > 0)
+                    {
+                        artistElements.Add($"{primaryArtist} feat. {string.Join(", ", featuredArtists)}");
+                    }
+                    else
+                    {
+                        artistElements.Add(primaryArtist);
+                    }
+                }
+                break;
+        }
+
+        return (effectiveTitle, artistElements);
     }
 
     public static XDocument BuildArtistDocument(FeaturedArtist artist, IEnumerable<Video> videos, Func<Video, IEnumerable<string>?>? genreSelector = null)

@@ -100,13 +100,12 @@ namespace Fuzzbin.Tests.Services;
         }
 
         [Fact]
-        public void GenerateNfoContent_UsePrimaryArtistTrue_ExcludesFeaturedArtists()
+        public void GenerateNfoContent_PrimaryOnly_ExcludesFeaturedArtists()
     {
         // Arrange
         var settings = new MetadataSettings
         {
-            UsePrimaryArtistForNfo = true,
-            AppendFeaturedArtistsToTitle = false
+            ArtistMode = NfoArtistMode.PrimaryOnly
         };
 
         var provider = new StubMetadataSettingsProvider(settings);
@@ -140,13 +139,12 @@ namespace Fuzzbin.Tests.Services;
         }
 
         [Fact]
-        public void GenerateNfoContent_UsePrimaryArtistFalse_IncludesFeaturedArtists()
+        public void GenerateNfoContent_SeparateFields_IncludesFeaturedArtists()
     {
         // Arrange
         var settings = new MetadataSettings
         {
-            UsePrimaryArtistForNfo = false,
-            AppendFeaturedArtistsToTitle = false
+            ArtistMode = NfoArtistMode.SeparateFields
         };
 
         var provider = new StubMetadataSettingsProvider(settings);
@@ -180,13 +178,12 @@ namespace Fuzzbin.Tests.Services;
         }
 
         [Fact]
-        public void GenerateNfoContent_AppendFeaturedTrue_AppendsToTitle()
+        public void GenerateNfoContent_FeaturedInTitle_AppendsToTitle()
     {
         // Arrange
         var settings = new MetadataSettings
         {
-            UsePrimaryArtistForNfo = true,
-            AppendFeaturedArtistsToTitle = true
+            ArtistMode = NfoArtistMode.FeaturedInTitle
         };
 
         var provider = new StubMetadataSettingsProvider(settings);
@@ -214,13 +211,12 @@ namespace Fuzzbin.Tests.Services;
         }
 
         [Fact]
-        public void GenerateNfoContent_AppendFeaturedFalse_LeavesTitleUnchanged()
+        public void GenerateNfoContent_CombinedArtistField_CombinesInArtistField()
     {
         // Arrange
         var settings = new MetadataSettings
         {
-            UsePrimaryArtistForNfo = true,
-            AppendFeaturedArtistsToTitle = false
+            ArtistMode = NfoArtistMode.CombinedArtistField
         };
 
         var provider = new StubMetadataSettingsProvider(settings);
@@ -245,7 +241,16 @@ namespace Fuzzbin.Tests.Services;
         Assert.NotNull(title);
         Assert.Equal("Work", title);
         Assert.DoesNotContain("feat.", title, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("Drake", title);
+        
+        var artists = document.Root?
+            .Elements("artist")
+            .Select(element => element.Value)
+            .ToList() ?? new List<string>();
+        
+        Assert.Single(artists);
+        Assert.Contains("feat.", artists[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Rihanna", artists[0]);
+            Assert.Contains("Drake", artists[0]);
         }
 
         [Fact]
@@ -340,8 +345,7 @@ namespace Fuzzbin.Tests.Services;
         // Arrange
         var settings = new MetadataSettings
         {
-            UsePrimaryArtistForNfo = true,
-            AppendFeaturedArtistsToTitle = true
+            ArtistMode = NfoArtistMode.FeaturedInTitle
         };
 
         var provider = new StubMetadataSettingsProvider(settings);
