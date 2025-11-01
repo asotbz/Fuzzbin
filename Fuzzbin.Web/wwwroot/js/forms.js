@@ -71,23 +71,41 @@ window.Fuzzbin.submitForm = async function (formId) {
 
 window.Fuzzbin.triggerFileInput = function (element) {
     if (!element) {
-        console.warn('File input element not found.');
+        console.warn('Fuzzbin.triggerFileInput: file input element not found.');
         return;
     }
 
     if (typeof element.click === 'function') {
+        console.debug('Fuzzbin.triggerFileInput: invoking click on provided element.', element);
         element.click();
     } else {
-        console.warn('Provided element does not support click().');
+        console.warn('Fuzzbin.triggerFileInput: provided element does not support click().', element);
     }
 };
 
 window.Fuzzbin.triggerFileInputById = function (elementId) {
     if (!elementId) {
-        console.warn('No element id provided for file picker.');
+        console.warn('Fuzzbin.triggerFileInputById: no element id provided for file picker.');
         return;
     }
 
     const element = document.getElementById(elementId);
+    if (!element) {
+        console.warn('Fuzzbin.triggerFileInputById: element not found for id:', elementId);
+    } else {
+        console.debug('Fuzzbin.triggerFileInputById: triggering element by id.', elementId);
+    }
     window.Fuzzbin.triggerFileInput(element);
+};
+
+window.Fuzzbin.downloadFileFromStream = async function (fileName, contentStreamReference) {
+    const arrayBuffer = await contentStreamReference.arrayBuffer();
+    const blob = new Blob([arrayBuffer]);
+    const url = URL.createObjectURL(blob);
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = fileName ?? '';
+    anchorElement.click();
+    anchorElement.remove();
+    URL.revokeObjectURL(url);
 };

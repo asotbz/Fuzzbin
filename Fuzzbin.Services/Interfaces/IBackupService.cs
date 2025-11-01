@@ -12,6 +12,14 @@ public interface IBackupService
     Task<BackupResult> CreateBackupAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Get a backup file as a stream for downloading.
+    /// </summary>
+    /// <param name="filePath">Path to the backup file.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>Stream containing the backup file.</returns>
+    Task<Stream> GetBackupFileStreamAsync(string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Restore the application database from a previously created backup archive.
     /// </summary>
     /// <param name="backupStream">Stream containing the backup archive.</param>

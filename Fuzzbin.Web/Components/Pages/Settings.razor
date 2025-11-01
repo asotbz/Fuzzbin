@@ -532,12 +532,13 @@
                             Select backup file…
                         </MudButton>
                     </MudStack>
-                    <InputFile @key="_restoreInputKey"
+                    <InputFile @ref="_restoreInputFile"
+                               @key="_restoreInputKey"
+                               id="@RestoreInputElementId"
                                OnChange="RestoreDatabase"
                                Accept=".zip"
                                Disabled="_isRestoreInProgress"
-                               id="@RestoreInputElementId"
-                               style="display:none" />
+                               style="position:absolute;left:-9999px;opacity:0;" />
                     @if (_isRestoreInProgress)
                     {
                         <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-2" />
@@ -634,7 +635,8 @@
     private Guid _restoreInputKey = Guid.NewGuid();
     private string? _restoreStatusMessage;
     private Severity _restoreStatusSeverity = Severity.Info;
-    private const string RestoreInputElementId = "restore-upload-input";
+    private InputFile? _restoreInputFile;
+    private const string RestoreInputElementId = "restore-file-input";
     
     private class GenreMapping
     {
@@ -1034,8 +1036,15 @@
 
         try
         {
+            // Create the backup (retained in local storage)
             var result = await BackupService.CreateBackupAsync();
-            Snackbar.Add($"Backup created at {result.FilePath}", Severity.Success);
+            
+            // Send backup file to user as downloadable file
+            await using var stream = await BackupService.GetBackupFileStreamAsync(result.FilePath);
+            using var streamRef = new DotNetStreamReference(stream: stream);
+            await JSRuntime.InvokeVoidAsync("Fuzzbin.downloadFileFromStream", result.FileName, streamRef);
+            
+            Snackbar.Add($"Backup created in /backups and downloaded: {result.FileName}", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -1055,12 +1064,39 @@
             return;
         }
 
+        if (_restoreInputFile is null)
+        {
+            const string message = "File input element is not available. Please refresh the page.";
+            _restoreStatusSeverity = Severity.Error;
+            _restoreStatusMessage = message;
+            Snackbar.Add(message, Severity.Error);
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
         try
         {
             _restoreStatusMessage = null;
             _restoreStatusSeverity = Severity.Info;
+            await JSRuntime.InvokeVoidAsync("console.debug", "Settings: initiating restore file picker.");
             await InvokeAsync(StateHasChanged);
-            await JSRuntime.InvokeVoidAsync("Fuzzbin.triggerFileInputById", RestoreInputElementId);
+
+            var hasElementReference = !string.IsNullOrEmpty(_restoreInputFile.Element.Id);
+
+            if (hasElementReference)
+            {
+                await JSRuntime.InvokeVoidAsync("console.debug", "Settings: triggering restore input via element reference.");
+                await JSRuntime.InvokeVoidAsync("Fuzzbin.triggerFileInput", _restoreInputFile.Element);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("console.debug", "Settings: element reference not yet available, falling back to triggering by id.");
+                await JSRuntime.InvokeVoidAsync("Fuzzbin.triggerFileInputById", RestoreInputElementId);
+            }
+
+            await InvokeAsync(StateHasChanged);
+            _restoreStatusMessage = "Waiting for backup selection…";
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
@@ -1081,6 +1117,7 @@
         }
 
         var file = args.File;
+        await JSRuntime.InvokeVoidAsync("console.debug", $"Settings: restore change event received. File count: {args.FileCount}.");
 
         if (args.FileCount == 0 || file is null)
         {
@@ -1128,6 +1165,7 @@
         _isRestoreInProgress = true;
         _restoreStatusSeverity = Severity.Info;
         _restoreStatusMessage = $"Restoring {file.Name} ({FormatFileSize(file.Size)})…";
+        await JSRuntime.InvokeVoidAsync("console.debug", $"Settings: beginning restore for {file.Name} with size {file.Size} bytes.");
         await InvokeAsync(StateHasChanged);
 
         try
@@ -1138,6 +1176,7 @@
             _restoreStatusSeverity = Severity.Success;
             _restoreStatusMessage = successMessage;
             Snackbar.Add(successMessage, Severity.Success);
+            await JSRuntime.InvokeVoidAsync("console.debug", "Settings: database restore reported success.");
         }
         catch (IOException ioEx)
         {
@@ -1145,6 +1184,7 @@
             _restoreStatusSeverity = Severity.Error;
             _restoreStatusMessage = message;
             Snackbar.Add(message, Severity.Error);
+            await JSRuntime.InvokeVoidAsync("console.error", $"Settings: restore IO exception - {ioEx.Message}");
         }
         catch (Exception ex)
         {
@@ -1152,12 +1192,14 @@
             _restoreStatusSeverity = Severity.Error;
             _restoreStatusMessage = message;
             Snackbar.Add(message, Severity.Error);
+            await JSRuntime.InvokeVoidAsync("console.error", $"Settings: restore general exception - {ex.Message}");
         }
         finally
         {
             _isRestoreInProgress = false;
             _restoreInputKey = Guid.NewGuid();
             await InvokeAsync(StateHasChanged);
+            await JSRuntime.InvokeVoidAsync("console.debug", "Settings: restore pipeline finalized; input key rotated.");
         }
     }
 

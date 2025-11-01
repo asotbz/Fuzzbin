@@ -72,6 +72,22 @@ public sealed class BackupService : IBackupService
         return new BackupResult(backupFilePath, info.Length, timestamp);
     }
 
+    public Task<Stream> GetBackupFileStreamAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            throw new ArgumentException("Backup file path cannot be empty", nameof(filePath));
+        }
+
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Backup file not found: {filePath}", filePath);
+        }
+
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return Task.FromResult<Stream>(stream);
+    }
+
     public async Task RestoreBackupAsync(Stream backupStream, CancellationToken cancellationToken = default)
     {
         if (backupStream is null)
