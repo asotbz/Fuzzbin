@@ -152,6 +152,7 @@ public class MbRelease : BaseEntity
     public string? Date { get; set; }
     public string? Country { get; set; }
     public string? Barcode { get; set; }
+    public string? RecordLabel { get; set; }
     public DateTime LastSeenAt { get; set; }
     
     // Navigation
@@ -1293,7 +1294,21 @@ public class MbRelease
     [JsonPropertyName("country")] public string? Country { get; set; }  // NEW
     [JsonPropertyName("barcode")] public string? Barcode { get; set; }  // NEW
     [JsonPropertyName("track-count")] public int? TrackCount { get; set; }  // NEW
+    [JsonPropertyName("label-info")] public List<MbLabelInfo>? LabelInfo { get; set; }  // NEW
     [JsonPropertyName("release-group")] public MbReleaseGroup? ReleaseGroup { get; set; }  // Enhanced
+}
+
+// NEW: Label info data
+public class MbLabelInfo
+{
+    [JsonPropertyName("catalog-number")] public string? CatalogNumber { get; set; }
+    [JsonPropertyName("label")] public MbLabel? Label { get; set; }
+}
+
+public class MbLabel
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
 }
 
 // NEW: Release group data - CRITICAL for year scoring
@@ -1403,7 +1418,7 @@ public class MusicBrainzClient : IMusicBrainzClient
         {
             var query = $"artist:\"{artist}\" AND recording:\"{title}\"";
             var url = $"recording?query={HttpUtility.UrlEncode(query)}&fmt=json&limit={limit}" +
-                     "&inc=artist-credits+releases+release-groups+tags+genres";
+                     "&inc=artist-credits+releases+release-groups+labels+tags+genres";
 
             var client = _httpClientFactory.CreateClient("MusicBrainz");
             var response = await client.GetAsync(url, cancellationToken);
@@ -1433,7 +1448,7 @@ public class MusicBrainzClient : IMusicBrainzClient
         {
             var includeParam = include != null && include.Length > 0
                 ? $"&inc={string.Join("+", include)}"
-                : "&inc=artist-credits+releases+release-groups+tags+genres";
+                : "&inc=artist-credits+releases+release-groups+labels+tags+genres";
 
             var url = $"recording/{mbid}?fmt=json{includeParam}";
 
