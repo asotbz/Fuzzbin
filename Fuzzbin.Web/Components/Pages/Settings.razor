@@ -23,6 +23,8 @@
 @inject IGenreMappingDefaultsProvider GenreMappingDefaultsProvider
 @inject IHttpContextAccessor HttpContextAccessor
 @inject UserManager<ApplicationUser> UserManager
+@inject IMetadataCacheService MetadataCacheService
+@inject ILogger<Settings> Logger
 
 <PageTitle>Settings - Fuzzbin</PageTitle>
 
@@ -437,8 +439,102 @@
                     </MudStack>
                 </MudItem>
                 <MudItem xs="12">
-                    <MudButton Variant="Variant.Filled" 
-                             Color="Color.Primary" 
+                    <MudDivider Class="my-4" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-2 mt-4">External Metadata Cache</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">Configure caching for MusicBrainz, IMVDb, and YouTube metadata</MudText>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_cacheTtlHours"
+                                     Label="Cache Lifetime (hours)"
+                                     Min="0"
+                                     Max="720"
+                                     Step="24"
+                                     Variant="Variant.Outlined"
+                                     HelperText="How long to keep cached metadata (0 = disabled)" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_cacheStats"
+                                  Label="Cache Status"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  HelperText="Current cache statistics" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                        Caches metadata from MusicBrainz, IMVDb, and YouTube to reduce API calls and improve performance.
+                        Set to 0 to disable caching (always fetch fresh data). Default: 336 hours (14 days), Max: 720 hours (30 days).
+                    </MudAlert>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_enableAutomaticPurge"
+                                 Label="Enable Automatic Maintenance"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Automatically perform background maintenance tasks
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_maintenanceIntervalHours"
+                                     Label="Maintenance Interval (hours)"
+                                     Min="1"
+                                     Max="168"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_enableAutomaticPurge)"
+                                     HelperText="How often to run maintenance (default: 8 hours)" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Background maintenance includes cache purging, orphaned data cleanup, and other housekeeping tasks.
+                        Tasks run automatically on the configured schedule.
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudStack Row="true" Spacing="2" Class="mt-2">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Info"
+                                   StartIcon="@Icons.Material.Filled.Info"
+                                   OnClick="ShowCacheStats">
+                            View Cache Statistics
+                        </MudButton>
+                        
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.CleaningServices"
+                                   OnClick="TriggerMaintenance"
+                                   Disabled="_isMaintenanceInProgress">
+                            @if (_isMaintenanceInProgress)
+                            {
+                                <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                                <span>Running...</span>
+                            }
+                            else
+                            {
+                                <span>Run Maintenance Now</span>
+                            }
+                        </MudButton>
+                        
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.DeleteSweep"
+                                   OnClick="ClearMetadataCache"
+                                   Disabled="_isCacheClearInProgress">
+                            @if (_isCacheClearInProgress)
+                            {
+                                <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                                <span>Clearing...</span>
+                            }
+                            else
+                            {
+                                <span>Clear All Cached Data</span>
+                            }
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled"
+                             Color="Color.Primary"
                              OnClick="SaveMetadataSettings"
                              StartIcon="@Icons.Material.Filled.Save">
                         Save Metadata Settings
@@ -623,6 +719,14 @@
         }
     }
     
+    // External Cache Settings
+    private int _cacheTtlHours = 336;
+    private string _cacheStats = "Loading...";
+    private bool _enableAutomaticPurge = true;
+    private int _maintenanceIntervalHours = 8;
+    private bool _isMaintenanceInProgress;
+    private bool _isCacheClearInProgress;
+    
     // Advanced Settings
     private int _databaseBackupDays = 30;
     private int _logRetentionDays = 30;
@@ -773,6 +877,12 @@
             _genreMappings = LoadDefaultGenreMappings();
         }
 
+        // Load External Cache Settings
+        _cacheTtlHours = GetInt("ExternalCache", "CacheTtlHours", 336);
+        _enableAutomaticPurge = GetBool("ExternalCache", "EnableAutomaticPurge", true);
+        _maintenanceIntervalHours = GetInt("ExternalCache", "MaintenanceIntervalHours", 8);
+        await UpdateCacheStatsAsync();
+        
         // Load Advanced Settings
         _databaseBackupDays = GetInt("System", "DatabaseBackupDays", 30);
         _logRetentionDays = GetInt("System", "LogRetentionDays", 30);
@@ -962,7 +1072,10 @@
             ("WriteExternalGenreAsTag", _writeExternalGenreAsTag.ToString(), "Metadata"),
             ("ArtistMode", _artistMode.ToString(), "Metadata"),
             ("WriteCollectionsAsNfoTags", _writeCollectionsAsNfoTags.ToString(), "Metadata"),
-            ("GenreMappings", genreMappingJson, "Metadata")
+            ("GenreMappings", genreMappingJson, "Metadata"),
+            ("CacheTtlHours", _cacheTtlHours.ToString(), "ExternalCache"),
+            ("EnableAutomaticPurge", _enableAutomaticPurge.ToString(), "ExternalCache"),
+            ("MaintenanceIntervalHours", _maintenanceIntervalHours.ToString(), "ExternalCache")
         });
         
         Snackbar.Add("Metadata settings saved successfully", Severity.Success);
@@ -1230,6 +1343,154 @@
         // TODO: Implement cache clearing
         Snackbar.Add("Cache cleared successfully", Severity.Success);
         return Task.CompletedTask;
+    }
+    
+    private async Task UpdateCacheStatsAsync()
+    {
+        try
+        {
+            var stats = await MetadataCacheService.GetStatisticsAsync();
+            _cacheStats = $"{stats.TotalQueries} queries, {stats.HitRate:P0} hit rate";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load cache statistics");
+            _cacheStats = "Unable to load stats";
+        }
+    }
+    
+    private async Task ShowCacheStats()
+    {
+        try
+        {
+            var stats = await MetadataCacheService.GetStatisticsAsync();
+            
+            var parameters = new DialogParameters
+            {
+                { "TotalQueries", stats.TotalQueries },
+                { "HitRate", stats.HitRate },
+                { "CacheSize", _cacheStats },
+                { "TtlHours", _cacheTtlHours },
+                { "LastMaintenance", DateTime.UtcNow.AddHours(-_maintenanceIntervalHours) }, // Approximate
+                { "MusicBrainzCount", stats.MusicBrainzCount },
+                { "MusicBrainzSuccessRate", stats.MusicBrainzSuccessRate },
+                { "ImvdbCount", stats.ImvdbCount },
+                { "ImvdbSuccessRate", stats.ImvdbSuccessRate },
+                { "YouTubeCount", stats.YouTubeCount },
+                { "YouTubeSuccessRate", stats.YouTubeSuccessRate },
+                { "RecentEntries", stats.RecentEntries },
+                { "AvgQueryTimeMs", stats.AvgQueryTimeMs },
+                { "CacheHitsToday", stats.CacheHitsToday },
+                { "CacheMissesToday", stats.CacheMissesToday },
+                { "NextMaintenance", _enableAutomaticPurge ? DateTime.UtcNow.AddHours(_maintenanceIntervalHours) : (DateTime?)null },
+                { "OnRefresh", EventCallback.Factory.Create(this, UpdateCacheStatsAsync) }
+            };
+            
+            var options = new DialogOptions
+            {
+                MaxWidth = MaxWidth.Large,
+                FullWidth = true,
+                CloseOnEscapeKey = true
+            };
+            
+            await DialogService.ShowAsync<CacheStatsDialog>("Cache Statistics", parameters, options);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to show cache statistics");
+            Snackbar.Add($"Failed to load cache statistics: {ex.Message}", Severity.Error);
+        }
+    }
+    
+    private async Task TriggerMaintenance()
+    {
+        if (_isMaintenanceInProgress)
+        {
+            return;
+        }
+        
+        var confirm = await DialogService.ShowMessageBox(
+            "Run Maintenance Now",
+            "This will run cache purging and cleanup tasks. This may take a few moments. Continue?",
+            "Run Maintenance",
+            "Cancel");
+        
+        if (confirm != true)
+        {
+            return;
+        }
+        
+        _isMaintenanceInProgress = true;
+        await InvokeAsync(StateHasChanged);
+        
+        try
+        {
+            // Call the maintenance API endpoint
+            using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            var response = await httpClient.PostAsync("/api/maintenance/run", null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Maintenance tasks completed successfully", Severity.Success);
+                await UpdateCacheStatsAsync();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Logger.LogWarning("Maintenance request failed: {Status} - {Error}", response.StatusCode, error);
+                Snackbar.Add($"Maintenance failed: {response.StatusCode}", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to trigger maintenance");
+            Snackbar.Add($"Maintenance failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isMaintenanceInProgress = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    
+    private async Task ClearMetadataCache()
+    {
+        if (_isCacheClearInProgress)
+        {
+            return;
+        }
+        
+        var confirm = await DialogService.ShowMessageBox(
+            "Clear All Cached Data",
+            "This will permanently delete all cached metadata from MusicBrainz, IMVDb, and YouTube. You cannot undo this action. Continue?",
+            "Clear Cache",
+            "Cancel");
+        
+        if (confirm != true)
+        {
+            return;
+        }
+        
+        _isCacheClearInProgress = true;
+        await InvokeAsync(StateHasChanged);
+        
+        try
+        {
+            await MetadataCacheService.ClearCacheAsync();
+            
+            Snackbar.Add("All cached metadata cleared successfully", Severity.Success);
+            await UpdateCacheStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to clear metadata cache");
+            Snackbar.Add($"Failed to clear cache: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCacheClearInProgress = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
     
 }

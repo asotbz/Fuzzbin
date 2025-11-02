@@ -5,7 +5,7 @@ namespace Fuzzbin.Core.Entities;
 /// <summary>
 /// Join table linking recordings to releases with track information
 /// </summary>
-public class MbRecordingRelease
+public class MbRecordingRelease : BaseEntity
 {
     public Guid RecordingId { get; set; }
     public Guid ReleaseId { get; set; }

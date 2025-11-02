@@ -41,6 +41,14 @@ namespace Fuzzbin.Data.Repositories
         private IRepository<YtVideo>? _ytVideos;
         private IRepository<YtVideoCandidate>? _ytVideoCandidates;
         private IRepository<MvLink>? _mvLinks;
+        
+        // Join table repository instances
+        private IRepository<MbRecordingArtist>? _mbRecordingArtists;
+        private IRepository<MbRecordingRelease>? _mbRecordingReleases;
+        private IRepository<MbReleaseToGroup>? _mbReleaseToGroups;
+        private IRepository<MbTag>? _mbTags;
+        private IRepository<ImvdbVideoArtist>? _imvdbVideoArtists;
+        private IRepository<ImvdbVideoSource>? _imvdbVideoSources;
 
         public UnitOfWork(ApplicationDbContext context)
         {
@@ -74,6 +82,14 @@ namespace Fuzzbin.Data.Repositories
         public IRepository<YtVideo> YtVideos => _ytVideos ??= new Repository<YtVideo>(_context);
         public IRepository<YtVideoCandidate> YtVideoCandidates => _ytVideoCandidates ??= new Repository<YtVideoCandidate>(_context);
         public IRepository<MvLink> MvLinks => _mvLinks ??= new Repository<MvLink>(_context);
+        
+        // Join table repositories
+        public IRepository<MbRecordingArtist> MbRecordingArtists => _mbRecordingArtists ??= new Repository<MbRecordingArtist>(_context);
+        public IRepository<MbRecordingRelease> MbRecordingReleases => _mbRecordingReleases ??= new Repository<MbRecordingRelease>(_context);
+        public IRepository<MbReleaseToGroup> MbReleaseToGroups => _mbReleaseToGroups ??= new Repository<MbReleaseToGroup>(_context);
+        public IRepository<MbTag> MbTags => _mbTags ??= new Repository<MbTag>(_context);
+        public IRepository<ImvdbVideoArtist> ImvdbVideoArtists => _imvdbVideoArtists ??= new Repository<ImvdbVideoArtist>(_context);
+        public IRepository<ImvdbVideoSource> ImvdbVideoSources => _imvdbVideoSources ??= new Repository<ImvdbVideoSource>(_context);
 
         public async Task<int> SaveChangesAsync()
         {

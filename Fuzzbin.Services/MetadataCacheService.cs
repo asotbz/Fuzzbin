@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -137,8 +138,40 @@ public class MetadataCacheService : IMetadataCacheService
 
         if (!string.IsNullOrEmpty(candidate.FeaturedArtists))
         {
-            // TODO: Parse and create FeaturedArtist entities
-            _logger.LogDebug("Featured artists found: {FeaturedArtists}", candidate.FeaturedArtists);
+            // Parse comma-separated featured artists
+            var featuredNames = candidate.FeaturedArtists
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(n => n.Trim())
+                .Where(n => !string.IsNullOrEmpty(n))
+                .ToList();
+            
+            // Clear existing featured artists relationship
+            video.FeaturedArtists.Clear();
+            
+            // Add or get featured artists and associate with video
+            foreach (var name in featuredNames)
+            {
+                var featuredArtist = await _unitOfWork.FeaturedArtists
+                    .GetQueryable()
+                    .FirstOrDefaultAsync(fa => fa.Name == name, cancellationToken);
+                
+                if (featuredArtist == null)
+                {
+                    featuredArtist = new FeaturedArtist
+                    {
+                        Name = name,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                        IsActive = true
+                    };
+                    await _unitOfWork.FeaturedArtists.AddAsync(featuredArtist);
+                }
+                
+                video.FeaturedArtists.Add(featuredArtist);
+            }
+            
+            _logger.LogInformation("Added {Count} featured artists to video {VideoId}",
+                featuredNames.Count, video.Id);
         }
 
         if (!string.IsNullOrEmpty(candidate.Director))
@@ -154,8 +187,33 @@ public class MetadataCacheService : IMetadataCacheService
         // Apply genres
         if (candidate.Genres.Any())
         {
-            // TODO: Map genres to video entity
-            _logger.LogDebug("Genres found: {Genres}", string.Join(", ", candidate.Genres));
+            // Clear existing genres relationship
+            video.Genres.Clear();
+            
+            // Add or get genres and associate with video (take top 3)
+            foreach (var genreName in candidate.Genres.Take(3))
+            {
+                var genre = await _unitOfWork.Genres
+                    .GetQueryable()
+                    .FirstOrDefaultAsync(g => g.Name == genreName, cancellationToken);
+                
+                if (genre == null)
+                {
+                    genre = new Genre
+                    {
+                        Name = genreName,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                        IsActive = true
+                    };
+                    await _unitOfWork.Genres.AddAsync(genre);
+                }
+                
+                video.Genres.Add(genre);
+            }
+            
+            _logger.LogInformation("Added {Count} genres to video {VideoId}",
+                candidate.Genres.Take(3).Count(), video.Id);
         }
 
         await _unitOfWork.SaveChangesAsync();
@@ -320,8 +378,162 @@ public class MetadataCacheService : IMetadataCacheService
             }
 
             // Store recordings and create candidates
-            // TODO: Implement full MusicBrainz entity storage and candidate creation
-            _logger.LogInformation("Found {Count} MusicBrainz recordings for {Artist} - {Title}", 
+            int rank = 1;
+            foreach (var recording in response.Recordings.Take(5))
+            {
+                try
+                {
+                    // 1. Upsert MbArtist entities from recording.ArtistCredit
+                    foreach (var artistCredit in recording.ArtistCredit)
+                    {
+                        await UpsertMbArtistAsync(artistCredit.Artist, cancellationToken);
+                    }
+                    
+                    // 2. Upsert MbRecording entity
+                    var mbRecording = await UpsertMbRecordingAsync(recording, cancellationToken);
+                    
+                    // 3. Create artist-recording relationships
+                    var existingRelations = await _unitOfWork.MbRecordingArtists
+                        .GetQueryable()
+                        .Where(ra => ra.RecordingId == mbRecording.Id)
+                        .ToListAsync(cancellationToken);
+                    
+                    foreach (var old in existingRelations)
+                    {
+                        await _unitOfWork.MbRecordingArtists.DeleteAsync(old);
+                    }
+                    
+                    for (int i = 0; i < recording.ArtistCredit.Count; i++)
+                    {
+                        var artistMbid = Guid.Parse(recording.ArtistCredit[i].Artist.Id);
+                        var artistEntity = await _unitOfWork.MbArtists
+                            .GetQueryable()
+                            .FirstOrDefaultAsync(a => a.Mbid == artistMbid, cancellationToken);
+                        
+                        if (artistEntity != null)
+                        {
+                            var recordingArtist = new MbRecordingArtist
+                            {
+                                RecordingId = mbRecording.Id,
+                                ArtistId = artistEntity.Id,
+                                ArtistOrder = i + 1,
+                                CreditedName = recording.ArtistCredit[i].Name,
+                                JoinPhrase = recording.ArtistCredit[i].JoinPhrase,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow,
+                                IsActive = true
+                            };
+                            await _unitOfWork.MbRecordingArtists.AddAsync(recordingArtist);
+                        }
+                    }
+                    
+                    // 4. Upsert MbRelease and MbReleaseGroup entities
+                    foreach (var release in recording.Releases.Take(3))
+                    {
+                        var mbRelease = await UpsertMbReleaseAsync(release, cancellationToken);
+                        
+                        if (release.ReleaseGroup != null)
+                        {
+                            var mbReleaseGroup = await UpsertMbReleaseGroupAsync(release.ReleaseGroup, cancellationToken);
+                            
+                            // Create release-to-releasegroup relationship
+                            var existingRel = await _unitOfWork.MbReleaseToGroups
+                                .GetQueryable()
+                                .FirstOrDefaultAsync(rtg => rtg.ReleaseId == mbRelease.Id && rtg.ReleaseGroupId == mbReleaseGroup.Id, cancellationToken);
+                            
+                            if (existingRel == null)
+                            {
+                                var releaseToGroup = new MbReleaseToGroup
+                                {
+                                    ReleaseId = mbRelease.Id,
+                                    ReleaseGroupId = mbReleaseGroup.Id,
+                                    CreatedAt = DateTime.UtcNow,
+                                    UpdatedAt = DateTime.UtcNow,
+                                    IsActive = true
+                                };
+                                await _unitOfWork.MbReleaseToGroups.AddAsync(releaseToGroup);
+                            }
+                        }
+                        
+                        // Create recording-release relationship
+                        var existingRecRel = await _unitOfWork.MbRecordingReleases
+                            .GetQueryable()
+                            .FirstOrDefaultAsync(rr => rr.RecordingId == mbRecording.Id && rr.ReleaseId == mbRelease.Id, cancellationToken);
+                        
+                        if (existingRecRel == null)
+                        {
+                            var recordingRelease = new MbRecordingRelease
+                            {
+                                RecordingId = mbRecording.Id,
+                                ReleaseId = mbRelease.Id,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow,
+                                IsActive = true
+                            };
+                            await _unitOfWork.MbRecordingReleases.AddAsync(recordingRelease);
+                        }
+                    }
+                    
+                    // 5. Upsert MbTag entities
+                    foreach (var tag in recording.Tags.Take(10))
+                    {
+                        await UpsertMbTagAsync(mbRecording.Id, "recording", tag, cancellationToken);
+                    }
+                    
+                    // 6. Create MbRecordingCandidate with scoring
+                    var earliestYear = ParseYear(recording.Releases
+                        .SelectMany(r => r.ReleaseGroup != null ? new[] { r.ReleaseGroup.FirstReleaseDate } : Array.Empty<string?>())
+                        .Where(d => d != null)
+                        .OrderBy(d => d)
+                        .FirstOrDefault());
+                    
+                    var score = CandidateScorer.Score(
+                        normQueryTitle: query.NormTitle,
+                        normQueryArtist: query.NormArtist,
+                        candidateTitleNorm: QueryNormalizer.NormalizeTitle(recording.Title),
+                        candidateArtistNorm: QueryNormalizer.NormalizeArtist(recording.ArtistCredit.FirstOrDefault()?.Name ?? ""),
+                        candidateDurationSec: recording.Length.HasValue ? recording.Length.Value / 1000 : null,
+                        mbReferenceDurationSec: recording.Length.HasValue ? recording.Length.Value / 1000 : null,
+                        candidateYear: earliestYear,
+                        mbEarliestYear: earliestYear,
+                        hasOfficialSourceFromImvdb: false
+                    );
+                    
+                    // Check if candidate already exists
+                    var existingCandidate = await _unitOfWork.MbRecordingCandidates
+                        .GetQueryable()
+                        .FirstOrDefaultAsync(c => c.QueryId == query.Id && c.RecordingId == mbRecording.Id, cancellationToken);
+                    
+                    if (existingCandidate == null)
+                    {
+                        var candidate = new MbRecordingCandidate
+                        {
+                            QueryId = query.Id,
+                            RecordingId = mbRecording.Id,
+                            TitleNorm = QueryNormalizer.NormalizeTitle(recording.Title),
+                            ArtistNorm = QueryNormalizer.NormalizeArtist(recording.ArtistCredit.FirstOrDefault()?.Name ?? ""),
+                            TextScore = score.TextScore,
+                            YearScore = score.YearScore,
+                            DurationScore = score.DurationScore,
+                            OverallScore = score.Overall,
+                            Rank = rank++,
+                            Selected = false,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            IsActive = true
+                        };
+                        
+                        await _unitOfWork.MbRecordingCandidates.AddAsync(candidate);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing MusicBrainz recording {RecordingId}", recording.Id);
+                }
+            }
+            
+            await _unitOfWork.SaveChangesAsync();
+            _logger.LogInformation("Stored {Count} MusicBrainz recordings for {Artist} - {Title}",
                 response.Recordings.Count, artist, title);
         }
         catch (Exception ex)
@@ -357,8 +569,142 @@ public class MetadataCacheService : IMetadataCacheService
             }
 
             // Store videos and create candidates
-            // TODO: Implement full IMVDb entity storage and candidate creation
-            _logger.LogInformation("Found {Count} IMVDb videos for {Artist} - {Title}",
+            int rank = 1;
+            foreach (var videoSummary in response.Results.Take(5))
+            {
+                try
+                {
+                    // 1. Fetch full video details (includes sources array)
+                    var videoDetail = await _imvdbApi.GetVideoAsync(
+                        videoSummary.Id.ToString(),
+                        include: "artists,directors,sources",
+                        cancellationToken);
+                    
+                    // 2. Upsert ImvdbArtist entities
+                    foreach (var artistCredit in videoDetail.Artists)
+                    {
+                        await UpsertImvdbArtistAsync(artistCredit, cancellationToken);
+                    }
+                    
+                    // 3. Upsert ImvdbVideo entity
+                    var imvdbVideo = await UpsertImvdbVideoAsync(videoDetail, cancellationToken);
+                    
+                    // 4. Create artist-video relationships
+                    var existingRelations = await _unitOfWork.ImvdbVideoArtists
+                        .GetQueryable()
+                        .Where(va => va.VideoId == imvdbVideo.Id)
+                        .ToListAsync(cancellationToken);
+                    
+                    foreach (var old in existingRelations)
+                    {
+                        await _unitOfWork.ImvdbVideoArtists.DeleteAsync(old);
+                    }
+                    
+                    foreach (var artistCredit in videoDetail.Artists)
+                    {
+                        // Find the artist entity by ImvdbId
+                        var artistEntity = await _unitOfWork.ImvdbArtists
+                            .GetQueryable()
+                            .FirstOrDefaultAsync(a => a.ImvdbId == artistCredit.Id, cancellationToken);
+                        
+                        if (artistEntity != null)
+                        {
+                            var videoArtist = new ImvdbVideoArtist
+                            {
+                                VideoId = imvdbVideo.Id,
+                                ArtistId = artistEntity.Id,
+                                Role = artistCredit.Role,
+                                ArtistOrder = artistCredit.Order,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow,
+                                IsActive = true
+                            };
+                            await _unitOfWork.ImvdbVideoArtists.AddAsync(videoArtist);
+                        }
+                    }
+                    
+                    // 5. Upsert ImvdbVideoSource entities (CRITICAL for has_sources flag)
+                    var existingSources = await _unitOfWork.ImvdbVideoSources
+                        .GetQueryable()
+                        .Where(vs => vs.VideoId == imvdbVideo.Id)
+                        .ToListAsync(cancellationToken);
+                    
+                    foreach (var old in existingSources)
+                    {
+                        await _unitOfWork.ImvdbVideoSources.DeleteAsync(old);
+                    }
+                    
+                    foreach (var source in videoDetail.Sources)
+                    {
+                        var videoSource = new ImvdbVideoSource
+                        {
+                            VideoId = imvdbVideo.Id,
+                            Source = source.Source,
+                            ExternalId = source.ExternalId,
+                            IsOfficial = source.IsOfficial,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            IsActive = true
+                        };
+                        await _unitOfWork.ImvdbVideoSources.AddAsync(videoSource);
+                    }
+                    
+                    // Update has_sources flag
+                    imvdbVideo.HasSources = videoDetail.Sources.Any();
+                    await _unitOfWork.ImvdbVideos.UpdateAsync(imvdbVideo);
+                    
+                    // 6. Create ImvdbVideoCandidate with scoring
+                    var primaryArtist = videoDetail.Artists
+                        .Where(a => a.Role == "primary")
+                        .OrderBy(a => a.Order)
+                        .FirstOrDefault();
+                    
+                    var score = CandidateScorer.Score(
+                        normQueryTitle: query.NormTitle,
+                        normQueryArtist: query.NormArtist,
+                        candidateTitleNorm: QueryNormalizer.NormalizeTitle(videoDetail.SongTitle ?? videoDetail.VideoTitle ?? ""),
+                        candidateArtistNorm: QueryNormalizer.NormalizeArtist(primaryArtist?.Name ?? ""),
+                        candidateDurationSec: null,
+                        mbReferenceDurationSec: null,
+                        candidateYear: null,
+                        mbEarliestYear: null,
+                        hasOfficialSourceFromImvdb: videoDetail.Sources.Any(s => s.IsOfficial)
+                    );
+                    
+                    // Check if candidate already exists
+                    var existingCandidate = await _unitOfWork.ImvdbVideoCandidates
+                        .GetQueryable()
+                        .FirstOrDefaultAsync(c => c.QueryId == query.Id && c.VideoId == imvdbVideo.Id, cancellationToken);
+                    
+                    if (existingCandidate == null)
+                    {
+                        var candidate = new ImvdbVideoCandidate
+                        {
+                            QueryId = query.Id,
+                            VideoId = imvdbVideo.Id,
+                            TitleNorm = QueryNormalizer.NormalizeTitle(videoDetail.SongTitle ?? videoDetail.VideoTitle ?? ""),
+                            ArtistNorm = QueryNormalizer.NormalizeArtist(primaryArtist?.Name ?? ""),
+                            TextScore = score.TextScore,
+                            SourceBonus = score.SourceBonus,
+                            OverallScore = score.Overall,
+                            Rank = rank++,
+                            Selected = false,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            IsActive = true
+                        };
+                        
+                        await _unitOfWork.ImvdbVideoCandidates.AddAsync(candidate);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing IMVDb video {VideoId}", videoSummary.Id);
+                }
+            }
+            
+            await _unitOfWork.SaveChangesAsync();
+            _logger.LogInformation("Stored {Count} IMVDb videos for {Artist} - {Title}",
                 response.Results.Count, artist, title);
         }
         catch (Exception ex)
@@ -379,10 +725,81 @@ public class MetadataCacheService : IMetadataCacheService
         {
             _logger.LogDebug("Fetching YouTube metadata for {Artist} - {Title}", artist, title);
 
-            // TODO: Implement YouTube search via yt-dlp
-            // This will require extending IYtDlpService with search capabilities
-
-            await UpdateSourceCacheAsync(query.Id, "youtube", 200, "Search not yet implemented", cancellationToken);
+            var searchQuery = $"{artist} {title} music video";
+            var results = await _ytDlpService.SearchVideosAsync(searchQuery, maxResults: 5, cancellationToken);
+            
+            // Update source cache
+            await UpdateSourceCacheAsync(query.Id, "youtube",
+                200,
+                $"Found {results.Count} videos",
+                cancellationToken);
+            
+            if (!results.Any())
+            {
+                _logger.LogDebug("No YouTube results for {Artist} - {Title}", artist, title);
+                return;
+            }
+            
+            // Store videos and create candidates
+            int rank = 1;
+            foreach (var result in results)
+            {
+                try
+                {
+                    // 1. Upsert YtVideo entity
+                    var ytVideo = await UpsertYtVideoAsync(result, cancellationToken);
+                    
+                    // 2. Create YtVideoCandidate with scoring
+                    var score = CandidateScorer.Score(
+                        normQueryTitle: query.NormTitle,
+                        normQueryArtist: query.NormArtist,
+                        candidateTitleNorm: QueryNormalizer.NormalizeTitle(result.Title),
+                        candidateArtistNorm: QueryNormalizer.NormalizeArtist(result.Channel ?? ""),
+                        candidateDurationSec: result.Duration.HasValue ? (int)result.Duration.Value.TotalSeconds : null,
+                        mbReferenceDurationSec: knownDurationSeconds,
+                        candidateYear: result.UploadDate?.Year,
+                        mbEarliestYear: null,
+                        hasOfficialSourceFromImvdb: false,
+                        youtubeChannelName: result.Channel,
+                        youtubeChannelId: null,
+                        rawDisplayTitle: result.Title
+                    );
+                    
+                    // Check if candidate already exists
+                    var existingCandidate = await _unitOfWork.YtVideoCandidates
+                        .GetQueryable()
+                        .FirstOrDefaultAsync(c => c.QueryId == query.Id && c.VideoId == result.Id, cancellationToken);
+                    
+                    if (existingCandidate == null)
+                    {
+                        var candidate = new YtVideoCandidate
+                        {
+                            QueryId = query.Id,
+                            VideoId = result.Id,
+                            TitleNorm = QueryNormalizer.NormalizeTitle(result.Title),
+                            ArtistNorm = QueryNormalizer.NormalizeArtist(result.Channel ?? ""),
+                            TextScore = score.TextScore,
+                            ChannelBonus = score.ChannelBonus,
+                            DurationScore = score.DurationScore,
+                            OverallScore = score.Overall,
+                            Rank = rank++,
+                            Selected = false,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            IsActive = true
+                        };
+                        
+                        await _unitOfWork.YtVideoCandidates.AddAsync(candidate);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing YouTube video {VideoId}", result.Id);
+                }
+            }
+            
+            await _unitOfWork.SaveChangesAsync();
+            _logger.LogInformation("Stored {Count} YouTube videos for {Artist} - {Title}", results.Count, artist, title);
         }
         catch (Exception ex)
         {
@@ -644,4 +1061,392 @@ public class MetadataCacheService : IMetadataCacheService
 
         return null;
     }
+    
+    // Helper methods for entity upserts
+    
+    private async Task<Core.Entities.MbArtist> UpsertMbArtistAsync(External.MusicBrainz.MbArtist apiArtist, CancellationToken ct)
+    {
+        var mbid = Guid.Parse(apiArtist.Id);
+        var existing = await _unitOfWork.MbArtists
+            .GetQueryable()
+            .FirstOrDefaultAsync(a => a.Mbid == mbid, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.Name = apiArtist.Name;
+            existing.SortName = apiArtist.SortName;
+            existing.Disambiguation = apiArtist.Disambiguation;
+            existing.Country = apiArtist.Country;
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.MbArtists.UpdateAsync(existing);
+            return existing;
+        }
+        else
+        {
+            var newArtist = new Core.Entities.MbArtist
+            {
+                Mbid = mbid,
+                Name = apiArtist.Name,
+                SortName = apiArtist.SortName,
+                Disambiguation = apiArtist.Disambiguation,
+                Country = apiArtist.Country,
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.MbArtists.AddAsync(newArtist);
+            await _unitOfWork.SaveChangesAsync();
+            return newArtist;
+        }
+    }
+    
+    private async Task<Core.Entities.MbRecording> UpsertMbRecordingAsync(External.MusicBrainz.MbRecording apiRecording, CancellationToken ct)
+    {
+        var mbid = Guid.Parse(apiRecording.Id);
+        var existing = await _unitOfWork.MbRecordings
+            .GetQueryable()
+            .FirstOrDefaultAsync(r => r.Mbid == mbid, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.Title = apiRecording.Title;
+            existing.DurationMs = apiRecording.Length;
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.MbRecordings.UpdateAsync(existing);
+            return existing;
+        }
+        
+        var newRecording = new Core.Entities.MbRecording
+        {
+            Mbid = mbid,
+            Title = apiRecording.Title,
+            DurationMs = apiRecording.Length,
+            LastSeenAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+        
+        await _unitOfWork.MbRecordings.AddAsync(newRecording);
+        await _unitOfWork.SaveChangesAsync();
+        return newRecording;
+    }
+    
+    private async Task<Core.Entities.MbRelease> UpsertMbReleaseAsync(External.MusicBrainz.MbRelease apiRelease, CancellationToken ct)
+    {
+        var mbid = Guid.Parse(apiRelease.Id);
+        var existing = await _unitOfWork.MbReleases
+            .GetQueryable()
+            .FirstOrDefaultAsync(r => r.Mbid == mbid, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.Title = apiRelease.Title;
+            existing.ReleaseDate = apiRelease.Date;
+            existing.Country = apiRelease.Country;
+            existing.Barcode = apiRelease.Barcode;
+            existing.TrackCount = apiRelease.TrackCount;
+            existing.RecordLabel = apiRelease.LabelInfo?.FirstOrDefault()?.Label?.Name;
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.MbReleases.UpdateAsync(existing);
+            return existing;
+        }
+        else
+        {
+            var newRelease = new Core.Entities.MbRelease
+            {
+                Mbid = mbid,
+                Title = apiRelease.Title,
+                ReleaseDate = apiRelease.Date,
+                Country = apiRelease.Country,
+                Barcode = apiRelease.Barcode,
+                TrackCount = apiRelease.TrackCount,
+                RecordLabel = apiRelease.LabelInfo?.FirstOrDefault()?.Label?.Name,
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.MbReleases.AddAsync(newRelease);
+            await _unitOfWork.SaveChangesAsync();
+            return newRelease;
+        }
+    }
+    
+    private async Task<Core.Entities.MbReleaseGroup> UpsertMbReleaseGroupAsync(External.MusicBrainz.MbReleaseGroup apiReleaseGroup, CancellationToken ct)
+    {
+        var mbid = Guid.Parse(apiReleaseGroup.Id);
+        var existing = await _unitOfWork.MbReleaseGroups
+            .GetQueryable()
+            .FirstOrDefaultAsync(rg => rg.Mbid == mbid, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.Title = apiReleaseGroup.Title;
+            existing.FirstReleaseDate = apiReleaseGroup.FirstReleaseDate;
+            existing.PrimaryType = apiReleaseGroup.PrimaryType;
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.MbReleaseGroups.UpdateAsync(existing);
+            return existing;
+        }
+        else
+        {
+            var newReleaseGroup = new Core.Entities.MbReleaseGroup
+            {
+                Mbid = mbid,
+                Title = apiReleaseGroup.Title,
+                FirstReleaseDate = apiReleaseGroup.FirstReleaseDate,
+                PrimaryType = apiReleaseGroup.PrimaryType,
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.MbReleaseGroups.AddAsync(newReleaseGroup);
+            await _unitOfWork.SaveChangesAsync();
+            return newReleaseGroup;
+        }
+    }
+    
+    private async Task UpsertMbTagAsync(Guid entityId, string entityType, External.MusicBrainz.MbTag apiTag, CancellationToken ct)
+    {
+        var existing = await _unitOfWork.MbTags
+            .GetQueryable()
+            .FirstOrDefaultAsync(t => t.EntityId == entityId && t.EntityType == entityType && t.Name == apiTag.Name, ct);
+        
+        if (existing != null)
+        {
+            // Update count if provided
+            if (apiTag.Count.HasValue)
+            {
+                existing.Count = apiTag.Count.Value;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await _unitOfWork.MbTags.UpdateAsync(existing);
+            }
+        }
+        else
+        {
+            var newTag = new Core.Entities.MbTag
+            {
+                EntityId = entityId,
+                EntityType = entityType,
+                Name = apiTag.Name,
+                Count = apiTag.Count ?? 0,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.MbTags.AddAsync(newTag);
+        }
+    }
+    
+    private async Task<ImvdbArtist> UpsertImvdbArtistAsync(ImvdbArtistCredit apiArtist, CancellationToken ct)
+    {
+        var existing = await _unitOfWork.ImvdbArtists
+            .GetQueryable()
+            .FirstOrDefaultAsync(a => a.ImvdbId == apiArtist.Id, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.Name = apiArtist.Name;
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.ImvdbArtists.UpdateAsync(existing);
+            return existing;
+        }
+        else
+        {
+            var newArtist = new ImvdbArtist
+            {
+                ImvdbId = apiArtist.Id,
+                Name = apiArtist.Name,
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.ImvdbArtists.AddAsync(newArtist);
+            await _unitOfWork.SaveChangesAsync();
+            return newArtist;
+        }
+    }
+    
+    private async Task<ImvdbVideo> UpsertImvdbVideoAsync(ImvdbVideoResponse apiVideo, CancellationToken ct)
+    {
+        var existing = await _unitOfWork.ImvdbVideos
+            .GetQueryable()
+            .FirstOrDefaultAsync(v => v.ImvdbId == apiVideo.Id, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.SongTitle = apiVideo.SongTitle;
+            existing.VideoTitle = apiVideo.VideoTitle;
+            existing.ReleaseDate = apiVideo.ReleaseDate;
+            existing.RuntimeSeconds = apiVideo.RuntimeSeconds;
+            existing.ThumbnailUrl = apiVideo.Thumbnail?.Url;
+            existing.DirectorCredit = apiVideo.Directors.Any() ? string.Join(", ", apiVideo.Directors.Select(d => d.Name)) : null;
+            existing.HasSources = apiVideo.Sources.Any();
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.ImvdbVideos.UpdateAsync(existing);
+            return existing;
+        }
+        else
+        {
+            var newVideo = new ImvdbVideo
+            {
+                ImvdbId = apiVideo.Id,
+                SongTitle = apiVideo.SongTitle,
+                VideoTitle = apiVideo.VideoTitle,
+                ReleaseDate = apiVideo.ReleaseDate,
+                RuntimeSeconds = apiVideo.RuntimeSeconds,
+                ThumbnailUrl = apiVideo.Thumbnail?.Url,
+                DirectorCredit = apiVideo.Directors.Any() ? string.Join(", ", apiVideo.Directors.Select(d => d.Name)) : null,
+                HasSources = apiVideo.Sources.Any(),
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.ImvdbVideos.AddAsync(newVideo);
+            await _unitOfWork.SaveChangesAsync();
+            return newVideo;
+        }
+    }
+    
+    private async Task<YtVideo> UpsertYtVideoAsync(Core.Interfaces.SearchResult apiVideo, CancellationToken ct)
+    {
+        var existing = await _unitOfWork.YtVideos
+            .GetQueryable()
+            .FirstOrDefaultAsync(v => v.VideoId == apiVideo.Id, ct);
+        
+        if (existing != null)
+        {
+            // Update fields
+            existing.Title = apiVideo.Title;
+            existing.ChannelId = null; // SearchResult doesn't have ChannelId
+            existing.ChannelName = apiVideo.Channel;
+            existing.DurationSeconds = apiVideo.Duration.HasValue ? (int)apiVideo.Duration.Value.TotalSeconds : null;
+            existing.ViewCount = apiVideo.ViewCount;
+            existing.ThumbnailUrl = apiVideo.ThumbnailUrl;
+            existing.PublishedAt = apiVideo.UploadDate?.ToString("yyyy-MM-dd");
+            existing.LastSeenAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
+            
+            await _unitOfWork.YtVideos.UpdateAsync(existing);
+            return existing;
+        }
+        else
+        {
+            var newVideo = new YtVideo
+            {
+                VideoId = apiVideo.Id,
+                Title = apiVideo.Title,
+                ChannelId = null,
+                ChannelName = apiVideo.Channel,
+                DurationSeconds = apiVideo.Duration.HasValue ? (int)apiVideo.Duration.Value.TotalSeconds : null,
+                ViewCount = apiVideo.ViewCount,
+                ThumbnailUrl = apiVideo.ThumbnailUrl,
+                PublishedAt = apiVideo.UploadDate?.ToString("yyyy-MM-dd"),
+                LastSeenAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            
+            await _unitOfWork.YtVideos.AddAsync(newVideo);
+            await _unitOfWork.SaveChangesAsync();
+            return newVideo;
+        }
+    }
+    
+    public async Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+    {
+        var totalQueries = await _unitOfWork.Queries
+            .GetQueryable()
+            .CountAsync(cancellationToken);
+        
+        var sourceCaches = await _unitOfWork.QuerySourceCaches
+            .GetQueryable()
+            .ToListAsync(cancellationToken);
+        
+        var mbCaches = sourceCaches.Where(sc => sc.Source == "musicbrainz").ToList();
+        var imvdbCaches = sourceCaches.Where(sc => sc.Source == "imvdb").ToList();
+        var ytCaches = sourceCaches.Where(sc => sc.Source == "youtube").ToList();
+        
+        // Calculate success rates (queries with successful status codes)
+        var mbSuccessRate = mbCaches.Any()
+            ? (double)mbCaches.Count(sc => sc.HttpStatus >= 200 && sc.HttpStatus < 300) / mbCaches.Count
+            : 0;
+        var imvdbSuccessRate = imvdbCaches.Any()
+            ? (double)imvdbCaches.Count(sc => sc.HttpStatus >= 200 && sc.HttpStatus < 300) / imvdbCaches.Count
+            : 0;
+        var ytSuccessRate = ytCaches.Any()
+            ? (double)ytCaches.Count(sc => sc.HttpStatus >= 200 && sc.HttpStatus < 300) / ytCaches.Count
+            : 0;
+        
+        // Get recent entries
+        var recentQueries = await _unitOfWork.Queries
+            .GetQueryable()
+            .Include(q => q.SourceCaches)
+            .OrderByDescending(q => q.UpdatedAt)
+            .Take(10)
+            .ToListAsync(cancellationToken);
+        
+        var recentEntries = recentQueries.Select(q => new CacheEntry
+        {
+            Artist = q.RawArtist,
+            Title = q.RawTitle,
+            Sources = q.SourceCaches.Select(sc => sc.Source).ToList(),
+            CachedAt = q.UpdatedAt
+        }).ToList();
+        
+        // Calculate overall hit rate
+        var queriesWithCandidates = await _unitOfWork.Queries
+            .GetQueryable()
+            .Where(q => q.MbRecordingCandidates.Any() || q.ImvdbVideoCandidates.Any() || q.YtVideoCandidates.Any())
+            .CountAsync(cancellationToken);
+        
+        var hitRate = totalQueries > 0 ? (double)queriesWithCandidates / totalQueries : 0;
+        
+        return new CacheStatistics
+        {
+            TotalQueries = totalQueries,
+            HitRate = hitRate,
+            MusicBrainzCount = mbCaches.Count,
+            MusicBrainzSuccessRate = mbSuccessRate,
+            ImvdbCount = imvdbCaches.Count,
+            ImvdbSuccessRate = imvdbSuccessRate,
+            YouTubeCount = ytCaches.Count,
+            YouTubeSuccessRate = ytSuccessRate,
+            RecentEntries = recentEntries,
+            AvgQueryTimeMs = 125.0, // TODO: Track actual query times with timing
+            CacheHitsToday = 0, // TODO: Track daily statistics
+            CacheMissesToday = 0 // TODO: Track daily statistics
+        };
+    }
 }
+

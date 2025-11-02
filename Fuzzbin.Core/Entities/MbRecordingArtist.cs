@@ -5,7 +5,7 @@ namespace Fuzzbin.Core.Entities;
 /// <summary>
 /// Join table linking recordings to artists with credit information
 /// </summary>
-public class MbRecordingArtist
+public class MbRecordingArtist : BaseEntity
 {
     public Guid RecordingId { get; set; }
     public Guid ArtistId { get; set; }
@@ -14,6 +14,16 @@ public class MbRecordingArtist
     /// Order of this artist in the credit (0-based)
     /// </summary>
     public int ArtistOrder { get; set; }
+    
+    /// <summary>
+    /// Credited name (may differ from artist name)
+    /// </summary>
+    public string? CreditedName { get; set; }
+    
+    /// <summary>
+    /// Join phrase from MusicBrainz (e.g., " feat. ", " & ", " with ")
+    /// </summary>
+    public string? JoinPhrase { get; set; }
     
     /// <summary>
     /// Whether the join phrase indicates a featured artist (e.g., "feat.", "ft.")

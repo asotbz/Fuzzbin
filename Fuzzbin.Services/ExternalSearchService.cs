@@ -189,9 +189,9 @@ public class ExternalSearchService : IExternalSearchService
                 metadata ??= new ImvdbMetadata
                 {
                     ImvdbId = (int?)summary.Id,
-                    Title = ImvdbMapper.FirstNonEmpty(summary.SongTitle, summary.Title) ?? string.Empty,
-                    Artist = summary.Artist ?? string.Empty,
-                    ImageUrl = summary.ImageUrl,
+                    Title = summary.SongTitle ?? summary.VideoTitle ?? string.Empty,
+                    Artist = summary.Artists.FirstOrDefault()?.Name ?? string.Empty,
+                    ImageUrl = summary.Thumbnail?.Url,
                     VideoUrl = summary.Url,
                     Confidence = matchConfidence
                 };

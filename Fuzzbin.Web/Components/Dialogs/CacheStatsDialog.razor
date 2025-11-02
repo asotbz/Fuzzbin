@@ -1,0 +1,284 @@
+@using Fuzzbin.Core.Interfaces
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="mr-2" />
+            Cache Statistics
+        </MudText>
+    </TitleContent>
+    
+    <DialogContent>
+        <MudGrid>
+            <!-- Overall Statistics Card -->
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Overall Statistics</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                                         Color="Color.Default" 
+                                         Size="Size.Small"
+                                         OnClick="RefreshStats" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Total Queries Cached</strong></td>
+                                    <td class="text-right">@TotalQueries</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Cache Hit Rate</strong></td>
+                                    <td class="text-right">
+                                        <MudChip T="string" Size="Size.Small" Color="@GetHitRateColor(HitRate)">
+                                            @($"{HitRate:P1}")
+                                        </MudChip>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Cache Size</strong></td>
+                                    <td class="text-right">@CacheSize</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>TTL Configuration</strong></td>
+                                    <td class="text-right">@TtlHours hours</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Last Maintenance</strong></td>
+                                    <td class="text-right">
+                                        <MudText Typo="Typo.caption">@LastMaintenanceDisplay</MudText>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <!-- Source Breakdown Card -->
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Source Breakdown</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th class="text-right">Entries</th>
+                                    <th class="text-right">Success Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.LibraryMusic" Variant="Variant.Outlined">
+                                            MusicBrainz
+                                        </MudChip>
+                                    </td>
+                                    <td class="text-right">@MusicBrainzCount</td>
+                                    <td class="text-right">@($"{MusicBrainzSuccessRate:P0}")</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Movie" Variant="Variant.Outlined">
+                                            IMVDb
+                                        </MudChip>
+                                    </td>
+                                    <td class="text-right">@ImvdbCount</td>
+                                    <td class="text-right">@($"{ImvdbSuccessRate:P0}")</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.PlayCircle" Variant="Variant.Outlined">
+                                            YouTube
+                                        </MudChip>
+                                    </td>
+                                    <td class="text-right">@YouTubeCount</td>
+                                    <td class="text-right">@($"{YouTubeSuccessRate:P0}")</td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <!-- Recent Activity Card -->
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Recent Cache Activity</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (RecentEntries == null || !RecentEntries.Any())
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">No recent activity</MudText>
+                        }
+                        else
+                        {
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <thead>
+                                    <tr>
+                                        <th>Query</th>
+                                        <th>Sources</th>
+                                        <th class="text-right">Cached At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var entry in RecentEntries.Take(10))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <MudText Typo="Typo.body2">@entry.Artist - @entry.Title</MudText>
+                                            </td>
+                                            <td>
+                                                <MudStack Row="true" Spacing="1">
+                                                    @foreach (var source in entry.Sources)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@source</MudChip>
+                                                    }
+                                                </MudStack>
+                                            </td>
+                                            <td class="text-right">
+                                                <MudText Typo="Typo.caption">@GetRelativeTime(entry.CachedAt)</MudText>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <!-- Performance Metrics Card -->
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Performance Metrics</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="6" sm="3">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Avg Query Time</MudText>
+                                <MudText Typo="Typo.h6">@($"{AvgQueryTimeMs}ms")</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Cache Hits Today</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Success">@CacheHitsToday</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Cache Misses Today</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Warning">@CacheMissesToday</MudText>
+                            </MudItem>
+                            <MudItem xs="6" sm="3">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Next Maintenance</MudText>
+                                <MudText Typo="Typo.h6">@NextMaintenanceDisplay</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Filled" Color="Color.Primary">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    // Overall Statistics
+    [Parameter] public int TotalQueries { get; set; }
+    [Parameter] public double HitRate { get; set; }
+    [Parameter] public string CacheSize { get; set; } = "0 KB";
+    [Parameter] public int TtlHours { get; set; }
+    [Parameter] public DateTime? LastMaintenance { get; set; }
+    
+    // Source Breakdown
+    [Parameter] public int MusicBrainzCount { get; set; }
+    [Parameter] public double MusicBrainzSuccessRate { get; set; }
+    [Parameter] public int ImvdbCount { get; set; }
+    [Parameter] public double ImvdbSuccessRate { get; set; }
+    [Parameter] public int YouTubeCount { get; set; }
+    [Parameter] public double YouTubeSuccessRate { get; set; }
+    
+    // Recent Activity
+    [Parameter] public List<CacheEntry> RecentEntries { get; set; } = new();
+    
+    // Performance Metrics
+    [Parameter] public double AvgQueryTimeMs { get; set; }
+    [Parameter] public int CacheHitsToday { get; set; }
+    [Parameter] public int CacheMissesToday { get; set; }
+    [Parameter] public DateTime? NextMaintenance { get; set; }
+    
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    
+    private string LastMaintenanceDisplay => LastMaintenance.HasValue 
+        ? GetRelativeTime(LastMaintenance.Value)
+        : "Never";
+    
+    private string NextMaintenanceDisplay => NextMaintenance.HasValue 
+        ? GetRelativeTime(NextMaintenance.Value)
+        : "N/A";
+    
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+    
+    private async Task RefreshStats()
+    {
+        if (OnRefresh.HasDelegate)
+        {
+            await OnRefresh.InvokeAsync();
+        }
+    }
+    
+    private Color GetHitRateColor(double rate)
+    {
+        return rate switch
+        {
+            >= 0.8 => Color.Success,
+            >= 0.6 => Color.Info,
+            >= 0.4 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+    
+    private string GetRelativeTime(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+        
+        if (timeSpan.TotalSeconds < 60)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+        if (timeSpan.TotalDays < 30)
+            return $"{(int)(timeSpan.TotalDays / 7)}w ago";
+        
+        return dateTime.ToString("MMM d, yyyy");
+    }
+    
+}

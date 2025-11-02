@@ -423,7 +423,7 @@ namespace Fuzzbin.Data.Context
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Mbid).IsRequired().HasMaxLength(36);
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
-                entity.Property(e => e.Date).HasMaxLength(10);
+                entity.Property(e => e.ReleaseDate).HasMaxLength(10);
                 entity.Property(e => e.Country).HasMaxLength(2);
                 entity.Property(e => e.Barcode).HasMaxLength(50);
                 entity.Property(e => e.RecordLabel).HasMaxLength(500);
@@ -491,10 +491,10 @@ namespace Fuzzbin.Data.Context
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.EntityType).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.Tag).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
                 
                 entity.HasIndex(e => new { e.EntityType, e.EntityId });
-                entity.HasIndex(e => e.Tag);
+                entity.HasIndex(e => e.Name);
             });
             
             modelBuilder.Entity<MbRecordingCandidate>(entity =>

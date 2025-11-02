@@ -5,10 +5,8 @@ namespace Fuzzbin.Core.Entities;
 /// <summary>
 /// Represents a MusicBrainz tag/genre associated with an entity
 /// </summary>
-public class MbTag
+public class MbTag : BaseEntity
 {
-    public Guid Id { get; set; }
-    
     /// <summary>
     /// Entity type: 'artist', 'recording', 'release_group'
     /// </summary>
@@ -22,10 +20,10 @@ public class MbTag
     /// <summary>
     /// Tag name (e.g., "rock", "pop", "electronic")
     /// </summary>
-    public string Tag { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     
     /// <summary>
     /// Tag vote count from MusicBrainz
     /// </summary>
-    public int? Count { get; set; }
+    public int Count { get; set; }
 }

@@ -18,7 +18,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = "Anti-Hero"
         };
 
@@ -38,7 +38,7 @@ public class ImvdbMapperTests
         var expectedTitle = "ANTI-HERO";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = "Anti-Hero"
         };
 
@@ -58,7 +58,7 @@ public class ImvdbMapperTests
         var expectedTitle = "  Anti-Hero  ";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = "Anti-Hero"
         };
 
@@ -77,7 +77,11 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift feat. Drake",
+            Artists = new()
+            {
+                new ImvdbArtistCredit { Name = "Taylor Swift" },
+                new ImvdbArtistCredit { Name = "Drake" }
+            },
             SongTitle = "Anti-Hero"
         };
 
@@ -97,7 +101,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = "Anti-Hero (Official Video)"
         };
 
@@ -117,7 +121,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Beyoncé",
+            Artists = new() { new ImvdbArtistCredit { Name = "Beyoncé" } },
             SongTitle = "Formation"
         };
 
@@ -151,7 +155,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = "Anti-Hero"
         };
 
@@ -170,7 +174,7 @@ public class ImvdbMapperTests
         var expectedTitle = "";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = "Anti-Hero"
         };
 
@@ -189,7 +193,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "",
+            Artists = new(),
             SongTitle = ""
         };
 
@@ -208,9 +212,9 @@ public class ImvdbMapperTests
         var expectedTitle = "Anti-Hero";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Taylor Swift",
+            Artists = new() { new ImvdbArtistCredit { Name = "Taylor Swift" } },
             SongTitle = null,
-            Title = "Anti-Hero"
+            VideoTitle = "Anti-Hero"
         };
 
         // Act
@@ -228,7 +232,7 @@ public class ImvdbMapperTests
         var expectedTitle = "T.N.T.";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "AC/DC",
+            Artists = new() { new ImvdbArtistCredit { Name = "AC/DC" } },
             SongTitle = "T.N.T."
         };
 
@@ -247,7 +251,7 @@ public class ImvdbMapperTests
         var expectedTitle = "What's My Age Again?";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Blink-182",
+            Artists = new() { new ImvdbArtistCredit { Name = "Blink-182" } },
             SongTitle = "What's My Age Again?"
         };
 
@@ -266,7 +270,11 @@ public class ImvdbMapperTests
         var expectedTitle = "God's Plan";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Drake feat. The Weeknd",
+            Artists = new()
+            {
+                new ImvdbArtistCredit { Name = "Drake" },
+                new ImvdbArtistCredit { Name = "The Weeknd" }
+            },
             SongTitle = "God's Plan"
         };
 
@@ -294,7 +302,9 @@ public class ImvdbMapperTests
         {
             var summary = new ImvdbVideoSummary
             {
-                Artist = resultArtist,
+                Artists = string.IsNullOrEmpty(resultArtist)
+                    ? new()
+                    : new() { new ImvdbArtistCredit { Name = resultArtist } },
                 SongTitle = resultTitle
             };
 
@@ -315,7 +325,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Sound of Silence";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Simon Garfunkel",
+            Artists = new() { new ImvdbArtistCredit { Name = "Simon Garfunkel" } },
             SongTitle = "The Sound of Silence"
         };
 
@@ -334,7 +344,7 @@ public class ImvdbMapperTests
         var expectedTitle = "Hey Jude";
         var summary = new ImvdbVideoSummary
         {
-            Artist = "Beatles Tribute Band",
+            Artists = new() { new ImvdbArtistCredit { Name = "Beatles Tribute Band" } },
             SongTitle = "Hey Jude Cover"
         };
 

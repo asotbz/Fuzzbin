@@ -2,8 +2,10 @@
 @using MudBlazor
 @using System.Text.Json
 @using Fuzzbin.Core.Entities
+@using Fuzzbin.Core.Interfaces
 @using Fuzzbin.Services.Interfaces
 @using Fuzzbin.Services.Models
+@using Fuzzbin.Web.Components.Dialogs
 @using static Fuzzbin.Services.Interfaces.IPlaylistService
 @inject IVideoService VideoService
 @inject IThumbnailService ThumbnailService
@@ -11,6 +13,9 @@
 @inject IPlaylistService PlaylistService
 @inject NavigationManager Navigation
 @inject ISourceVerificationService SourceVerificationService
+@inject IMetadataCacheService MetadataCacheService
+@inject IDialogService DialogService
+@inject IMetadataService MetadataService
 
 <PageTitle>Video Details - Fuzzbin</PageTitle>
 
@@ -59,7 +64,21 @@
                 </MudItem>
                 <MudItem xs="12" md="8">
                     <div class="d-flex justify-space-between align-center mb-2">
-                        <MudText Typo="Typo.h5">Metadata</MudText>
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h5">Metadata</MudText>
+                            @if (_metadataSource != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="@GetMetadataSourceColor(_metadataSource)" Variant="Variant.Outlined">
+                                    @GetMetadataSourceLabel(_metadataSource)
+                                </MudChip>
+                            }
+                            @if (_metadataConfidence.HasValue)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="@GetConfidenceColor(_metadataConfidence.Value)" Variant="Variant.Outlined">
+                                    @($"{_metadataConfidence.Value:P0} confidence")
+                                </MudChip>
+                            }
+                        </MudStack>
                         @if (_isEditing)
                         {
                             <MudStack Row="true" Spacing="1">
@@ -80,9 +99,17 @@
                         }
                         else
                         {
-                            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="BeginEdit">
-                                Edit
-                            </MudButton>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Variant="Variant.Text"
+                                           StartIcon="@Icons.Material.Filled.Refresh"
+                                           OnClick="RefreshMetadataAsync"
+                                           Disabled="_isRefreshingMetadata">
+                                    @(_isRefreshingMetadata ? "Refreshing..." : "Refresh Metadata")
+                                </MudButton>
+                                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="BeginEdit">
+                                    Edit
+                                </MudButton>
+                            </MudStack>
                         }
                     </div>
 
@@ -318,9 +345,12 @@
     private string _overrideNotes = string.Empty;
     private bool _isEditing;
     private bool _isSaving;
+    private bool _isRefreshingMetadata;
     private MudForm? _editForm;
     private readonly VideoEditModel _editModel = new();
     private string? _editError;
+    private string? _metadataSource;
+    private double? _metadataConfidence;
 
     [SupplyParameterFromQuery(Name = "edit")]
     public bool StartInEditMode { get; set; }
@@ -343,6 +373,7 @@
             else
             {
                 await LoadVerificationAsync();
+                await LoadMetadataStatusAsync();
                 if (StartInEditMode && !_isEditing)
                 {
                     BeginEdit();
@@ -661,6 +692,150 @@
         {
             _isSaving = false;
         }
+    }
+
+    private async Task LoadMetadataStatusAsync()
+    {
+        if (_video == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Check if video has cached metadata by looking for IMVDb, MusicBrainz, or YouTube IDs
+            if (!string.IsNullOrEmpty(_video.ImvdbId))
+            {
+                _metadataSource = "IMVDb";
+            }
+            else if (!string.IsNullOrEmpty(_video.MusicBrainzRecordingId))
+            {
+                _metadataSource = "MusicBrainz";
+            }
+            else if (!string.IsNullOrEmpty(_video.YouTubeId))
+            {
+                _metadataSource = "YouTube";
+            }
+
+            // Check cache for confidence score
+            if (!string.IsNullOrWhiteSpace(_video.Artist) && !string.IsNullOrWhiteSpace(_video.Title))
+            {
+                var isCached = await MetadataCacheService.IsCachedAsync(_video.Artist, _video.Title);
+                if (isCached)
+                {
+                    var cacheResult = await MetadataCacheService.SearchAsync(_video.Artist, _video.Title, _video.Duration);
+                    if (cacheResult.Found && cacheResult.BestMatch != null)
+                    {
+                        _metadataConfidence = cacheResult.BestMatch.OverallConfidence;
+                        _metadataSource ??= cacheResult.BestMatch.PrimarySource;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Silently fail - metadata status is informational only
+            Console.WriteLine($"Failed to load metadata status: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshMetadataAsync()
+    {
+        if (_video == null || _isRefreshingMetadata)
+        {
+            return;
+        }
+
+        _isRefreshingMetadata = true;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_video.Artist) || string.IsNullOrWhiteSpace(_video.Title))
+            {
+                Snackbar.Add("Video must have artist and title to refresh metadata", Severity.Warning);
+                return;
+            }
+
+            // Get fresh metadata from cache service
+            var cacheResult = await MetadataCacheService.SearchAsync(
+                _video.Artist,
+                _video.Title,
+                _video.Duration);
+
+            if (!cacheResult.Found)
+            {
+                Snackbar.Add("No metadata found for this video", Severity.Info);
+                return;
+            }
+
+            if (cacheResult.RequiresManualSelection && cacheResult.AlternativeCandidates.Any())
+            {
+                // Show candidate selection dialog
+                var candidates = new List<AggregatedCandidate> { cacheResult.BestMatch! }
+                    .Concat(cacheResult.AlternativeCandidates)
+                    .ToList();
+
+                var parameters = new DialogParameters
+                {
+                    ["Candidates"] = candidates,
+                    ["QueryArtist"] = _video.Artist,
+                    ["QueryTitle"] = _video.Title
+                };
+
+                var dialog = await DialogService.ShowAsync<CandidateSelectionDialog>(
+                    "Select Metadata Match",
+                    parameters,
+                    new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+
+                var result = await dialog.Result;
+
+                if (!result.Canceled && result.Data is AggregatedCandidate selectedCandidate)
+                {
+                    _video = await MetadataCacheService.ApplyMetadataAsync(_video, selectedCandidate);
+                    await LoadMetadataStatusAsync();
+                    Snackbar.Add("Metadata updated successfully", Severity.Success);
+                }
+            }
+            else if (cacheResult.BestMatch != null)
+            {
+                // Auto-apply high-confidence match
+                _video = await MetadataCacheService.ApplyMetadataAsync(_video, cacheResult.BestMatch);
+                await LoadMetadataStatusAsync();
+                Snackbar.Add($"Metadata refreshed from {cacheResult.BestMatch.PrimarySource}", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to refresh metadata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isRefreshingMetadata = false;
+        }
+    }
+
+    private Color GetMetadataSourceColor(string source) => source.ToLowerInvariant() switch
+    {
+        "imvdb" => Color.Primary,
+        "musicbrainz" => Color.Secondary,
+        "youtube" => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetMetadataSourceLabel(string source) => source.ToLowerInvariant() switch
+    {
+        "imvdb" => "IMVDb",
+        "musicbrainz" => "MusicBrainz",
+        "youtube" => "YouTube",
+        _ => source
+    };
+
+    private Color GetConfidenceColor(double confidence)
+    {
+        if (confidence >= 0.9) return Color.Success;
+        if (confidence >= 0.7) return Color.Info;
+        if (confidence >= 0.5) return Color.Warning;
+        return Color.Error;
     }
 
     private sealed class VideoEditModel

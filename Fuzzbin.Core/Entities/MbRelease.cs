@@ -9,9 +9,9 @@ namespace Fuzzbin.Core.Entities;
 public class MbRelease : BaseEntity
 {
     /// <summary>
-    /// MusicBrainz identifier (MBID)
+    /// MusicBrainz identifier (MBID) - stored as Guid
     /// </summary>
-    public string Mbid { get; set; } = string.Empty;
+    public Guid Mbid { get; set; }
     
     /// <summary>
     /// Release title
@@ -21,7 +21,7 @@ public class MbRelease : BaseEntity
     /// <summary>
     /// Release date in YYYY-MM-DD format
     /// </summary>
-    public string? Date { get; set; }
+    public string? ReleaseDate { get; set; }
     
     /// <summary>
     /// Country code (ISO 3166-1 alpha-2)
@@ -32,6 +32,11 @@ public class MbRelease : BaseEntity
     /// Barcode (UPC/EAN)
     /// </summary>
     public string? Barcode { get; set; }
+    
+    /// <summary>
+    /// Number of tracks on this release
+    /// </summary>
+    public int? TrackCount { get; set; }
     
     /// <summary>
     /// Record label name

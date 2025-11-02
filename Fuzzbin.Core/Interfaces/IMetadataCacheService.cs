@@ -69,6 +69,13 @@ public interface IMetadataCacheService
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     Task ClearCacheAsync(CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Gets detailed cache statistics for monitoring and display
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Cache statistics including hit rates and recent entries</returns>
+    Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -178,4 +185,34 @@ public class AggregatedCandidate
     /// MvLink entity ID for cross-linked metadata
     /// </summary>
     public Guid? MvLinkId { get; set; }
+}
+
+/// <summary>
+/// Cache statistics for monitoring and display
+/// </summary>
+public class CacheStatistics
+{
+    public int TotalQueries { get; set; }
+    public double HitRate { get; set; }
+    public int MusicBrainzCount { get; set; }
+    public double MusicBrainzSuccessRate { get; set; }
+    public int ImvdbCount { get; set; }
+    public double ImvdbSuccessRate { get; set; }
+    public int YouTubeCount { get; set; }
+    public double YouTubeSuccessRate { get; set; }
+    public List<CacheEntry> RecentEntries { get; set; } = new();
+    public double AvgQueryTimeMs { get; set; }
+    public int CacheHitsToday { get; set; }
+    public int CacheMissesToday { get; set; }
+}
+
+/// <summary>
+/// Individual cache entry for recent queries display
+/// </summary>
+public class CacheEntry
+{
+    public string Artist { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public List<string> Sources { get; set; } = new();
+    public DateTime CachedAt { get; set; }
 }

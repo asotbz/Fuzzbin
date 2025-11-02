@@ -27,6 +27,7 @@ public class MetadataService : IMetadataService
     private readonly IOptionsMonitor<ImvdbOptions> _imvdbOptions;
     private readonly IImvdbApiKeyProvider _apiKeyProvider;
     private readonly IThumbnailService _thumbnailService;
+    private readonly IMetadataCacheService? _metadataCacheService;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public MetadataService(
@@ -37,7 +38,8 @@ public class MetadataService : IMetadataService
         IImvdbApi imvdbApi,
         IOptionsMonitor<ImvdbOptions> imvdbOptions,
         IImvdbApiKeyProvider apiKeyProvider,
-        IThumbnailService thumbnailService)
+        IThumbnailService thumbnailService,
+        IMetadataCacheService? metadataCacheService = null)
     {
         _logger = logger;
         _unitOfWork = unitOfWork;
@@ -46,6 +48,7 @@ public class MetadataService : IMetadataService
         _imvdbOptions = imvdbOptions;
         _apiKeyProvider = apiKeyProvider;
         _thumbnailService = thumbnailService;
+        _metadataCacheService = metadataCacheService;
         _httpClient = httpClientFactory.CreateClient();
         _jsonOptions = new JsonSerializerOptions
         {
@@ -777,49 +780,92 @@ public class MetadataService : IMetadataService
             // Fetch online metadata if enabled
             if (fetchOnlineMetadata && !string.IsNullOrWhiteSpace(video.Artist) && !string.IsNullOrWhiteSpace(video.Title))
             {
-                // Try to get IMVDb metadata
-                var imvdbMetadata = await GetImvdbMetadataAsync(video.Artist, video.Title, cancellationToken);
-                if (imvdbMetadata != null)
+                // Use cache service if available, otherwise fall back to direct calls
+                if (_metadataCacheService != null)
                 {
-                    result.ImvdbMetadata = imvdbMetadata;
-                    result.MatchConfidence = imvdbMetadata.Confidence;
-
-                    if (imvdbMetadata.Confidence >= 0.9)
+                    var cacheResult = await _metadataCacheService.SearchAsync(
+                        video.Artist,
+                        video.Title,
+                        video.Duration,
+                        cancellationToken);
+                    
+                    if (cacheResult.Found && cacheResult.BestMatch != null)
                     {
-                        video.ImvdbId = imvdbMetadata.ImvdbId?.ToString();
-                        video.Director ??= imvdbMetadata.Director;
-                        video.ProductionCompany ??= imvdbMetadata.ProductionCompany;
-                        video.Publisher ??= imvdbMetadata.RecordLabel;
-                        video.Description ??= imvdbMetadata.Description;
-                        video.Year ??= imvdbMetadata.Year;
+                        result.MatchConfidence = cacheResult.BestMatch.OverallConfidence;
                         
-                        // Convert featured artists string to entities
-                        if (!string.IsNullOrEmpty(imvdbMetadata.FeaturedArtists) && !video.FeaturedArtists.Any())
+                        if (cacheResult.RequiresManualSelection)
                         {
-                            foreach (var artistName in imvdbMetadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                            {
-                                video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
-                            }
+                            result.RequiresManualReview = true;
+                            _logger.LogInformation(
+                                "Video {VideoId} requires manual metadata selection (confidence: {Confidence:P0})",
+                                video.Id,
+                                cacheResult.BestMatch.OverallConfidence);
                         }
-                        result.MetadataApplied = true;
-                    }
-                    else
-                    {
-                        result.RequiresManualReview = true;
-                        _logger.LogInformation(
-                            "Skipping automatic IMVDb metadata apply for video {VideoId} due to low confidence {Confidence:P0}",
-                            video.Id,
-                            imvdbMetadata.Confidence);
+                        else
+                        {
+                            // Auto-apply high-confidence match
+                            video = await _metadataCacheService.ApplyMetadataAsync(
+                                video,
+                                cacheResult.BestMatch,
+                                cancellationToken);
+                            result.MetadataApplied = true;
+                            result.Video = video;
+                            
+                            _logger.LogInformation(
+                                "Applied metadata from cache to video {VideoId} (source: {Source}, confidence: {Confidence:P0})",
+                                video.Id,
+                                cacheResult.BestMatch.PrimarySource,
+                                cacheResult.BestMatch.OverallConfidence);
+                        }
                     }
                 }
-                
-                // Try to get MusicBrainz metadata
-                var mbMetadata = await GetMusicBrainzMetadataAsync(video.Artist, video.Title, cancellationToken);
-                if (mbMetadata != null)
+                else
                 {
-                    video.MusicBrainzRecordingId ??= mbMetadata.RecordingId;
-                    video.Album ??= mbMetadata.Album;
-                    video.Publisher ??= mbMetadata.RecordLabel;
+                    // Fallback to legacy direct calls if cache service not available
+                    // Try to get IMVDb metadata
+                    var imvdbMetadata = await GetImvdbMetadataAsync(video.Artist, video.Title, cancellationToken);
+                    if (imvdbMetadata != null)
+                    {
+                        result.ImvdbMetadata = imvdbMetadata;
+                        result.MatchConfidence = imvdbMetadata.Confidence;
+
+                        if (imvdbMetadata.Confidence >= 0.9)
+                        {
+                            video.ImvdbId = imvdbMetadata.ImvdbId?.ToString();
+                            video.Director ??= imvdbMetadata.Director;
+                            video.ProductionCompany ??= imvdbMetadata.ProductionCompany;
+                            video.Publisher ??= imvdbMetadata.RecordLabel;
+                            video.Description ??= imvdbMetadata.Description;
+                            video.Year ??= imvdbMetadata.Year;
+                            
+                            // Convert featured artists string to entities
+                            if (!string.IsNullOrEmpty(imvdbMetadata.FeaturedArtists) && !video.FeaturedArtists.Any())
+                            {
+                                foreach (var artistName in imvdbMetadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
+                                }
+                            }
+                            result.MetadataApplied = true;
+                        }
+                        else
+                        {
+                            result.RequiresManualReview = true;
+                            _logger.LogInformation(
+                                "Skipping automatic IMVDb metadata apply for video {VideoId} due to low confidence {Confidence:P0}",
+                                video.Id,
+                                imvdbMetadata.Confidence);
+                        }
+                    }
+                    
+                    // Try to get MusicBrainz metadata
+                    var mbMetadata = await GetMusicBrainzMetadataAsync(video.Artist, video.Title, cancellationToken);
+                    if (mbMetadata != null)
+                    {
+                        video.MusicBrainzRecordingId ??= mbMetadata.RecordingId;
+                        video.Album ??= mbMetadata.Album;
+                        video.Publisher ??= mbMetadata.RecordLabel;
+                    }
                 }
             }
             

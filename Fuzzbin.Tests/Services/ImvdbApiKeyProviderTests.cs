@@ -112,6 +112,14 @@ public class ImvdbApiKeyProviderTests
         public IRepository<YtVideo> YtVideos => throw new NotSupportedException();
         public IRepository<YtVideoCandidate> YtVideoCandidates => throw new NotSupportedException();
         public IRepository<MvLink> MvLinks => throw new NotSupportedException();
+        
+        // Join table repositories
+        public IRepository<MbRecordingArtist> MbRecordingArtists => throw new NotSupportedException();
+        public IRepository<MbRecordingRelease> MbRecordingReleases => throw new NotSupportedException();
+        public IRepository<MbReleaseToGroup> MbReleaseToGroups => throw new NotSupportedException();
+        public IRepository<MbTag> MbTags => throw new NotSupportedException();
+        public IRepository<ImvdbVideoArtist> ImvdbVideoArtists => throw new NotSupportedException();
+        public IRepository<ImvdbVideoSource> ImvdbVideoSources => throw new NotSupportedException();
 
         public Task<int> SaveChangesAsync() => Task.FromResult(0);
         public Task BeginTransactionAsync() => Task.CompletedTask;

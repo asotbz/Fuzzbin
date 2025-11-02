@@ -11,7 +11,7 @@ public class ImvdbVideo : BaseEntity
     /// <summary>
     /// IMVDb numeric identifier
     /// </summary>
-    public int ImvdbId { get; set; }
+    public long ImvdbId { get; set; }
     
     /// <summary>
     /// Song title
@@ -27,6 +27,16 @@ public class ImvdbVideo : BaseEntity
     /// Release date in YYYY-MM-DD format
     /// </summary>
     public string? ReleaseDate { get; set; }
+    
+    /// <summary>
+    /// Video runtime in seconds
+    /// </summary>
+    public int? RuntimeSeconds { get; set; }
+    
+    /// <summary>
+    /// Thumbnail URL
+    /// </summary>
+    public string? ThumbnailUrl { get; set; }
     
     /// <summary>
     /// Director credit information

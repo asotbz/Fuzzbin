@@ -34,6 +34,7 @@ namespace Fuzzbin.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMetadataService _metadataService;
         private readonly ILibraryPathManager _libraryPathManager;
+        private readonly IMetadataCacheService? _metadataCacheService;
 
         public LibraryImportService(
             ILogger<LibraryImportService> logger,
@@ -42,7 +43,8 @@ namespace Fuzzbin.Services
             IRepository<Video> videoRepository,
             IUnitOfWork unitOfWork,
             IMetadataService metadataService,
-            ILibraryPathManager libraryPathManager)
+            ILibraryPathManager libraryPathManager,
+            IMetadataCacheService? metadataCacheService = null)
         {
             _logger = logger;
             _sessionRepository = sessionRepository;
@@ -51,6 +53,7 @@ namespace Fuzzbin.Services
             _unitOfWork = unitOfWork;
             _metadataService = metadataService;
             _libraryPathManager = libraryPathManager;
+            _metadataCacheService = metadataCacheService;
         }
 
         public async Task<LibraryImportSession> StartImportAsync(LibraryImportRequest request, CancellationToken cancellationToken = default)
@@ -246,6 +249,46 @@ namespace Fuzzbin.Services
 
                     ApplyImportMetadata(video, session, item);
                     await _videoRepository.UpdateAsync(video).ConfigureAwait(false);
+
+                    // Enrich with cached metadata if available
+                    if (_metadataCacheService != null &&
+                        !string.IsNullOrWhiteSpace(video.Artist) &&
+                        !string.IsNullOrWhiteSpace(video.Title))
+                    {
+                        try
+                        {
+                            var cacheResult = await _metadataCacheService.SearchAsync(
+                                video.Artist,
+                                video.Title,
+                                video.Duration,
+                                cancellationToken).ConfigureAwait(false);
+                            
+                            if (cacheResult.Found &&
+                                cacheResult.BestMatch != null &&
+                                !cacheResult.RequiresManualSelection &&
+                                cacheResult.BestMatch.OverallConfidence >= 0.9)
+                            {
+                                video = await _metadataCacheService.ApplyMetadataAsync(
+                                    video,
+                                    cacheResult.BestMatch,
+                                    cancellationToken).ConfigureAwait(false);
+                                
+                                _logger.LogInformation(
+                                    "Applied cached metadata to imported video {VideoId} (source: {Source}, confidence: {Confidence:P0})",
+                                    video.Id,
+                                    cacheResult.BestMatch.PrimarySource,
+                                    cacheResult.BestMatch.OverallConfidence);
+                            }
+                            else if (cacheResult.RequiresManualSelection)
+                            {
+                                item.Notes = AppendNote(item.Notes, "Metadata enrichment requires manual review");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to enrich imported video {VideoId} with cached metadata", video.Id);
+                        }
+                    }
 
                     item.IsCommitted = true;
                     item.ReviewedAt = DateTime.UtcNow;

@@ -35,5 +35,8 @@ public class Query : BaseEntity
     
     // Navigation properties
     public virtual ICollection<QuerySourceCache> SourceCaches { get; set; } = new List<QuerySourceCache>();
+    public virtual ICollection<MbRecordingCandidate> MbRecordingCandidates { get; set; } = new List<MbRecordingCandidate>();
+    public virtual ICollection<ImvdbVideoCandidate> ImvdbVideoCandidates { get; set; } = new List<ImvdbVideoCandidate>();
+    public virtual ICollection<YtVideoCandidate> YtVideoCandidates { get; set; } = new List<YtVideoCandidate>();
     public virtual QueryResolution? Resolution { get; set; }
 }

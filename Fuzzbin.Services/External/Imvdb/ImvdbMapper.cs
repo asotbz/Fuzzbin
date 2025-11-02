@@ -29,8 +29,8 @@ public static class ImvdbMapper
 
         foreach (var result in results)
         {
-            var resultArtist = result.Artist ?? string.Empty;
-            var resultTitle = result.SongTitle ?? result.Title ?? string.Empty;
+            var resultArtist = result.Artists.FirstOrDefault()?.Name ?? string.Empty;
+            var resultTitle = result.SongTitle ?? result.VideoTitle ?? string.Empty;
 
             var resultArtistKey = NormalizeKey(resultArtist);
             var resultTitleKey = NormalizeKey(resultTitle);
@@ -64,13 +64,15 @@ public static class ImvdbMapper
         var metadata = new ImvdbMetadata
         {
             ImvdbId = (int?)video.Id,
-            Title = FirstNonEmpty(video.SongTitle, video.Title, summary.SongTitle, summary.Title),
-            Artist = FirstNonEmpty(video.Artist, summary.Artist),
-            Description = video.Description,
-            ImageUrl = FirstNonEmpty(video.ThumbnailUrl, summary.ImageUrl),
-            VideoUrl = FirstNonEmpty(video.ImvdbUrl, summary.Url),
-            IsExplicit = video.IsExplicit ?? false,
-            IsUnofficial = video.IsUnofficial ?? false
+            Title = FirstNonEmpty(video.SongTitle, video.VideoTitle, summary.SongTitle, summary.VideoTitle),
+            Artist = FirstNonEmpty(
+                video.Artists.FirstOrDefault()?.Name,
+                summary.Artists.FirstOrDefault()?.Name),
+            Description = null, // Removed legacy field
+            ImageUrl = FirstNonEmpty(video.Thumbnail?.Url, summary.Thumbnail?.Url),
+            VideoUrl = FirstNonEmpty(video.Url, summary.Url),
+            IsExplicit = false, // Removed legacy field
+            IsUnofficial = false // Removed legacy field
         };
 
         if (!string.IsNullOrWhiteSpace(video.ReleaseDate))
@@ -87,36 +89,20 @@ public static class ImvdbMapper
             }
         }
 
-        var genres = (video.Genres ?? Enumerable.Empty<ImvdbGenre>())
-            .Select(g => g.Name)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // Extract genres from structured data (if available in future)
+        metadata.Genres = new List<string>();
 
-        if (genres.Count > 0)
-        {
-            metadata.Genres = genres;
-        }
+        // Extract director from Directors array
+        metadata.Director = video.Directors.FirstOrDefault()?.Name;
+        
+        // Note: ProductionCompany and RecordLabel not available in current API structure
+        metadata.ProductionCompany = null;
+        metadata.RecordLabel = null;
 
-        var credits = video.Credits
-            .Where(c => !string.IsNullOrWhiteSpace(c.Role) && !string.IsNullOrWhiteSpace(c.Person?.Name))
-            .Select(c => new DomainImvdbCredit
-            {
-                Role = c.Role,
-                Name = c.Person!.Name
-            })
-            .ToList();
-
-        metadata.Credits = credits;
-        metadata.Director = FindCreditName(credits, "Director");
-        metadata.ProductionCompany = FindCreditName(credits, "Production Company") ?? FindCreditName(credits, "Production");
-        metadata.RecordLabel = FindCreditName(credits, "Record Label") ?? FindCreditName(credits, "Label");
-
-        var featured = credits
-            .Where(c => string.Equals(c.Role, "Featured Artist", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.Role, "Featuring", StringComparison.OrdinalIgnoreCase))
-            .Select(c => c.Name)
+        // Extract featured artists from Artists array with 'featured' role
+        var featured = video.Artists
+            .Where(a => string.Equals(a.Role, "featured", StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -124,6 +110,9 @@ public static class ImvdbMapper
         {
             metadata.FeaturedArtists = string.Join(", ", featured);
         }
+
+        // Legacy credits structure removed
+        metadata.Credits = new List<DomainImvdbCredit>();
 
         metadata.Confidence = Math.Clamp(confidence, 0, 1);
         return metadata;
@@ -136,8 +125,8 @@ public static class ImvdbMapper
             return 0;
         }
 
-        var resultArtist = summary.Artist ?? string.Empty;
-        var resultTitle = FirstNonEmpty(summary.SongTitle, summary.Title) ?? string.Empty;
+        var resultArtist = summary.Artists.FirstOrDefault()?.Name ?? string.Empty;
+        var resultTitle = FirstNonEmpty(summary.SongTitle, summary.VideoTitle) ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(expectedArtist) || string.IsNullOrWhiteSpace(expectedTitle) ||
             (string.IsNullOrWhiteSpace(resultArtist) && string.IsNullOrWhiteSpace(resultTitle)))

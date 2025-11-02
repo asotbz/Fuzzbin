@@ -16,7 +16,6 @@ using Fuzzbin.Services;
 using Fuzzbin.Services.External.Imvdb;
 using Fuzzbin.Services.Interfaces;
 using Fuzzbin.Services.Models;
-using ApiImvdbCredit = Fuzzbin.Services.External.Imvdb.ImvdbCredit;
 
 namespace Fuzzbin.Tests.Services;
 
@@ -272,11 +271,16 @@ public class MetadataServiceTests : IAsyncLifetime
             {
                 Id = 12345,
                 SongTitle = "Test Song",
-                Artist = "Test Artist",
-                Description = "Test description",
+                VideoTitle = "Test Song",
                 ReleaseDate = "2024-01-01",
-                Credits = new List<ApiImvdbCredit>(),
-                Genres = new List<ImvdbGenre>()
+                Url = "https://imvdb.com/test",
+                Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.com/thumb.jpg" },
+                Artists = new List<ImvdbArtistCredit>
+                {
+                    new ImvdbArtistCredit { Id = 1, Name = "Test Artist", Role = "primary", Order = 0 }
+                },
+                Directors = new List<ImvdbDirector>(),
+                Sources = new List<ImvdbSource>()
             });
         }
 
@@ -284,20 +288,28 @@ public class MetadataServiceTests : IAsyncLifetime
         {
             // Create a summary that will produce the desired confidence when compared
             // Use sufficiently different strings to produce lower confidence scores
+            var artistName = MockConfidence.HasValue && MockConfidence.Value >= 0.9
+                ? "Test Artist"
+                : MockConfidence.HasValue && MockConfidence.Value < 0.9
+                    ? "Completely Different Artist Name"
+                    : "Test Artist Different";
+            
+            var songTitle = MockConfidence.HasValue && MockConfidence.Value >= 0.9
+                ? "Test Song"
+                : MockConfidence.HasValue && MockConfidence.Value < 0.9
+                    ? "Completely Different Song Title"
+                    : "Test Song Different";
+            
             var summary = new ImvdbVideoSummary
             {
                 Id = 12345,
-                Artist = MockConfidence.HasValue && MockConfidence.Value >= 0.9
-                    ? "Test Artist"
-                    : MockConfidence.HasValue && MockConfidence.Value < 0.9
-                        ? "Completely Different Artist Name"
-                        : "Test Artist Different",
-                SongTitle = MockConfidence.HasValue && MockConfidence.Value >= 0.9
-                    ? "Test Song"
-                    : MockConfidence.HasValue && MockConfidence.Value < 0.9
-                        ? "Completely Different Song Title"
-                        : "Test Song Different",
-                Title = "Test Song",
+                SongTitle = songTitle,
+                VideoTitle = songTitle,
+                Artists = new List<ImvdbArtistCredit>
+                {
+                    new ImvdbArtistCredit { Id = 1, Name = artistName, Role = "primary", Order = 0 }
+                },
+                Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.com/thumb.jpg" },
                 Url = "https://imvdb.com/test"
             };
 

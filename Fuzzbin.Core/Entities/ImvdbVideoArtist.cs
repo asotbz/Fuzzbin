@@ -5,7 +5,7 @@ namespace Fuzzbin.Core.Entities;
 /// <summary>
 /// Join table linking IMVDb videos to artists with role information
 /// </summary>
-public class ImvdbVideoArtist
+public class ImvdbVideoArtist : BaseEntity
 {
     public Guid VideoId { get; set; }
     public Guid ArtistId { get; set; }

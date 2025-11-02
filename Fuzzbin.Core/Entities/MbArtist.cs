@@ -9,9 +9,9 @@ namespace Fuzzbin.Core.Entities;
 public class MbArtist : BaseEntity
 {
     /// <summary>
-    /// MusicBrainz identifier (MBID)
+    /// MusicBrainz identifier (MBID) - stored as Guid
     /// </summary>
-    public string Mbid { get; set; } = string.Empty;
+    public Guid Mbid { get; set; }
     
     /// <summary>
     /// Artist name

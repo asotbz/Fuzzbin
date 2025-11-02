@@ -136,6 +136,38 @@ namespace Fuzzbin.Core.Interfaces
         /// </summary>
         IRepository<MvLink> MvLinks { get; }
 
+        // Join table repositories for metadata relationships
+
+        /// <summary>
+        /// Repository for MusicBrainz Recording-Artist relationships
+        /// </summary>
+        IRepository<MbRecordingArtist> MbRecordingArtists { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Recording-Release relationships
+        /// </summary>
+        IRepository<MbRecordingRelease> MbRecordingReleases { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Release-ReleaseGroup relationships
+        /// </summary>
+        IRepository<MbReleaseToGroup> MbReleaseToGroups { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Tags
+        /// </summary>
+        IRepository<MbTag> MbTags { get; }
+
+        /// <summary>
+        /// Repository for IMVDb Video-Artist relationships
+        /// </summary>
+        IRepository<ImvdbVideoArtist> ImvdbVideoArtists { get; }
+
+        /// <summary>
+        /// Repository for IMVDb Video Sources
+        /// </summary>
+        IRepository<ImvdbVideoSource> ImvdbVideoSources { get; }
+
         /// <summary>
         /// Save all changes to the database
         /// </summary>

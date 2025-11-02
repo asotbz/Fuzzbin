@@ -9,9 +9,9 @@ namespace Fuzzbin.Core.Entities;
 public class MbReleaseGroup : BaseEntity
 {
     /// <summary>
-    /// MusicBrainz identifier (MBID)
+    /// MusicBrainz identifier (MBID) - stored as Guid
     /// </summary>
-    public string Mbid { get; set; } = string.Empty;
+    public Guid Mbid { get; set; }
     
     /// <summary>
     /// Release group title

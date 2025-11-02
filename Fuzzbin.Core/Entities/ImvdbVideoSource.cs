@@ -5,9 +5,8 @@ namespace Fuzzbin.Core.Entities;
 /// <summary>
 /// Represents a video source (YouTube/Vimeo) for an IMVDb video
 /// </summary>
-public class ImvdbVideoSource
+public class ImvdbVideoSource : BaseEntity
 {
-    public Guid Id { get; set; }
     public Guid VideoId { get; set; }
     
     /// <summary>

@@ -6,8 +6,6 @@ using Fuzzbin.Services.External.Imvdb;
 using Fuzzbin.Services.Interfaces;
 using Fuzzbin.Services.Models;
 using YtSearchResult = Fuzzbin.Core.Interfaces.SearchResult;
-using ApiImvdbCredit = Fuzzbin.Services.External.Imvdb.ImvdbCredit;
-using ApiImvdbPerson = Fuzzbin.Services.External.Imvdb.ImvdbPerson;
 
 namespace Fuzzbin.Tests.Services;
 
@@ -25,10 +23,13 @@ public class ExternalSearchServiceTests
                     new ImvdbVideoSummary
                     {
                         Id = 101,
-                        Artist = "Daft Punk",
                         SongTitle = "Around the World",
-                        Title = "Around the World",
-                        ImageUrl = "https://imvdb.test/thumb",
+                        VideoTitle = "Around the World",
+                        Artists = new List<ImvdbArtistCredit>
+                        {
+                            new ImvdbArtistCredit { Id = 1, Name = "Daft Punk", Role = "primary", Order = 0 }
+                        },
+                        Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.test/thumb" },
                         Url = "https://imvdb.test/video"
                     }
                 }
@@ -38,20 +39,20 @@ public class ExternalSearchServiceTests
                 ["101"] = new ImvdbVideoResponse
                 {
                     Id = 101,
-                    Artist = "Daft Punk",
                     SongTitle = "Around the World",
+                    VideoTitle = "Around the World",
                     ReleaseDate = "1997-03-17",
-                    ThumbnailUrl = "https://imvdb.test/detail-thumb",
-                    ImvdbUrl = "https://imvdb.test/video",
-                    Genres = new List<ImvdbGenre> { new() { Name = "Electronic" } },
-                    Credits = new List<ApiImvdbCredit>
+                    Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.test/detail-thumb" },
+                    Url = "https://imvdb.test/video",
+                    Artists = new List<ImvdbArtistCredit>
                     {
-                        new ApiImvdbCredit
-                        {
-                            Role = "Director",
-                            Person = new ApiImvdbPerson { Name = "Michel Gondry" }
-                        }
-                    }
+                        new ImvdbArtistCredit { Id = 1, Name = "Daft Punk", Role = "primary", Order = 0 }
+                    },
+                    Directors = new List<ImvdbDirector>
+                    {
+                        new ImvdbDirector { Id = 1, Name = "Michel Gondry" }
+                    },
+                    Sources = new List<ImvdbSource>()
                 }
             }
         };
@@ -137,10 +138,13 @@ public class ExternalSearchServiceTests
                     new ImvdbVideoSummary
                     {
                         Id = 102,
-                        Artist = "Test Artist",
                         SongTitle = "Test Song",
-                        Title = "Test Song",
-                        ImageUrl = "https://imvdb.test/thumb",
+                        VideoTitle = "Test Song",
+                        Artists = new List<ImvdbArtistCredit>
+                        {
+                            new ImvdbArtistCredit { Id = 1, Name = "Test Artist", Role = "primary", Order = 0 }
+                        },
+                        Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.test/thumb" },
                         Url = "https://imvdb.test/video"
                     }
                 }
@@ -235,10 +239,13 @@ public class ExternalSearchServiceTests
                     new ImvdbVideoSummary
                     {
                         Id = 103,
-                        Artist = "Artist Name",
                         SongTitle = "Song Title",
-                        Title = "Song Title",
-                        ImageUrl = "https://imvdb.test/thumb",
+                        VideoTitle = "Song Title",
+                        Artists = new List<ImvdbArtistCredit>
+                        {
+                            new ImvdbArtistCredit { Id = 1, Name = "Artist Name", Role = "primary", Order = 0 }
+                        },
+                        Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.test/thumb" },
                         Url = "https://imvdb.test/video"
                     }
                 }
@@ -248,12 +255,17 @@ public class ExternalSearchServiceTests
                 ["103"] = new ImvdbVideoResponse
                 {
                     Id = 103,
-                    Artist = "Artist Name",
                     SongTitle = "Song Title",
+                    VideoTitle = "Song Title",
                     ReleaseDate = "2020-01-01",
-                    ThumbnailUrl = "https://imvdb.test/detail-thumb",
-                    ImvdbUrl = "https://imvdb.test/video",
-                    Genres = new List<ImvdbGenre> { new() { Name = "Pop" } }
+                    Thumbnail = new ImvdbThumbnail { Url = "https://imvdb.test/detail-thumb" },
+                    Url = "https://imvdb.test/video",
+                    Artists = new List<ImvdbArtistCredit>
+                    {
+                        new ImvdbArtistCredit { Id = 1, Name = "Artist Name", Role = "primary", Order = 0 }
+                    },
+                    Directors = new List<ImvdbDirector>(),
+                    Sources = new List<ImvdbSource>()
                 }
             }
         };

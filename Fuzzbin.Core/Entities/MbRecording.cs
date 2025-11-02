@@ -9,9 +9,9 @@ namespace Fuzzbin.Core.Entities;
 public class MbRecording : BaseEntity
 {
     /// <summary>
-    /// MusicBrainz identifier (MBID)
+    /// MusicBrainz identifier (MBID) - stored as Guid
     /// </summary>
-    public string Mbid { get; set; } = string.Empty;
+    public Guid Mbid { get; set; }
     
     /// <summary>
     /// Recording title
@@ -19,9 +19,9 @@ public class MbRecording : BaseEntity
     public string Title { get; set; } = string.Empty;
     
     /// <summary>
-    /// Length in milliseconds
+    /// Duration in milliseconds
     /// </summary>
-    public int? LengthMs { get; set; }
+    public int? DurationMs { get; set; }
     
     /// <summary>
     /// Last time this recording was seen in a MusicBrainz response

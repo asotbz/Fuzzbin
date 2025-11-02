@@ -1,0 +1,191 @@
+@using Fuzzbin.Core.Interfaces
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Class="mr-2" />
+            Select Metadata Match
+        </MudText>
+    </TitleContent>
+    
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">
+            Multiple metadata matches found for: <strong>@QueryArtist - @QueryTitle</strong>
+        </MudText>
+        
+        @if (Candidates == null || !Candidates.Any())
+        {
+            <MudAlert Severity="Severity.Info">No candidates available</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+                Showing top @Math.Min(MaxResults, Candidates.Count) matches ranked by confidence
+            </MudText>
+            
+            @foreach (var candidate in Candidates.Take(MaxResults))
+            {
+                <MudCard Class="mb-3" Elevation="2">
+                    <MudCardContent>
+                        <MudStack Spacing="2">
+                            <!-- Header Row with Confidence and Source -->
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudChip T="string"
+                                    Color="@GetConfidenceColor(candidate.OverallConfidence)"
+                                    Size="Size.Small"
+                                    Icon="@GetConfidenceIcon(candidate.OverallConfidence)">
+                                    @($"{candidate.OverallConfidence:P0}")
+                                </MudChip>
+                                
+                                <MudChip T="string"
+                                    Variant="Variant.Outlined"
+                                    Size="Size.Small"
+                                    Icon="@GetSourceIcon(candidate.PrimarySource)">
+                                    @candidate.PrimarySource.ToUpper()
+                                </MudChip>
+                                
+                                <MudSpacer />
+                                
+                                <MudButton 
+                                    Variant="Variant.Filled" 
+                                    Color="Color.Primary"
+                                    Size="Size.Small"
+                                    OnClick="@(() => SelectCandidate(candidate))">
+                                    Apply This Match
+                                </MudButton>
+                            </MudStack>
+                            
+                            <!-- Main Metadata -->
+                            <MudDivider />
+                            
+                            <MudGrid Spacing="1">
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.body1">
+                                        <strong>@candidate.Artist</strong> - @candidate.Title
+                                    </MudText>
+                                </MudItem>
+                                
+                                @if (!string.IsNullOrEmpty(candidate.FeaturedArtists))
+                                {
+                                    <MudItem xs="12">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" Class="mr-1" />
+                                            feat. @candidate.FeaturedArtists
+                                        </MudText>
+                                    </MudItem>
+                                }
+                                
+                                @if (candidate.Year.HasValue)
+                                {
+                                    <MudItem xs="6" sm="4">
+                                        <MudText Typo="Typo.caption">
+                                            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-1" />
+                                            @candidate.Year
+                                        </MudText>
+                                    </MudItem>
+                                }
+                                
+                                @if (candidate.Genres.Any())
+                                {
+                                    <MudItem xs="12" sm="8">
+                                        <MudText Typo="Typo.caption">
+                                            <MudIcon Icon="@Icons.Material.Filled.MusicNote" Size="Size.Small" Class="mr-1" />
+                                            @string.Join(", ", candidate.Genres.Take(3))
+                                        </MudText>
+                                    </MudItem>
+                                }
+                                
+                                @if (!string.IsNullOrEmpty(candidate.RecordLabel))
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            <MudIcon Icon="@Icons.Material.Filled.Album" Size="Size.Small" Class="mr-1" />
+                                            @candidate.RecordLabel
+                                        </MudText>
+                                    </MudItem>
+                                }
+                                
+                                @if (!string.IsNullOrEmpty(candidate.Director))
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            <MudIcon Icon="@Icons.Material.Filled.Videocam" Size="Size.Small" Class="mr-1" />
+                                            Director: @candidate.Director
+                                        </MudText>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            }
+        }
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">
+            Skip - Keep Existing Data
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] 
+    public List<AggregatedCandidate> Candidates { get; set; } = new();
+    
+    [Parameter] 
+    public string QueryTitle { get; set; } = string.Empty;
+    
+    [Parameter] 
+    public string QueryArtist { get; set; } = string.Empty;
+    
+    [Parameter]
+    public int MaxResults { get; set; } = 5;
+    
+    private void SelectCandidate(AggregatedCandidate candidate)
+    {
+        MudDialog.Close(DialogResult.Ok(candidate));
+    }
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private Color GetConfidenceColor(double confidence)
+    {
+        return confidence switch
+        {
+            >= 0.9 => Color.Success,
+            >= 0.7 => Color.Info,
+            >= 0.5 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+    
+    private string GetConfidenceIcon(double confidence)
+    {
+        return confidence switch
+        {
+            >= 0.9 => Icons.Material.Filled.CheckCircle,
+            >= 0.7 => Icons.Material.Filled.Info,
+            >= 0.5 => Icons.Material.Filled.Warning,
+            _ => Icons.Material.Filled.Error
+        };
+    }
+    
+    private string GetSourceIcon(string source)
+    {
+        return source.ToLowerInvariant() switch
+        {
+            "imvdb" => Icons.Material.Filled.Movie,
+            "musicbrainz" => Icons.Material.Filled.LibraryMusic,
+            "youtube" => Icons.Material.Filled.PlayCircle,
+            _ => Icons.Material.Filled.Source
+        };
+    }
+}

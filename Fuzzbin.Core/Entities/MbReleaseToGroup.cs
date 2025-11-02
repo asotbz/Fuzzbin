@@ -5,7 +5,7 @@ namespace Fuzzbin.Core.Entities;
 /// <summary>
 /// Join table linking releases to release groups
 /// </summary>
-public class MbReleaseToGroup
+public class MbReleaseToGroup : BaseEntity
 {
     public Guid ReleaseId { get; set; }
     public Guid ReleaseGroupId { get; set; }
