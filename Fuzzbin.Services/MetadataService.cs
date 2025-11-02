@@ -260,7 +260,8 @@ public class MetadataService : IMetadataService
 
             var videoResponse = await _imvdbApi.GetVideoAsync(
                 bestMatch.Id.ToString(CultureInfo.InvariantCulture),
-                cancellationToken).ConfigureAwait(false);
+                include: "artists,directors,sources",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
 
             if (videoResponse == null)
             {
@@ -351,7 +352,8 @@ public class MetadataService : IMetadataService
                     var confidence = ImvdbMapper.ComputeMatchConfidence(trimmedArtist, trimmedTitle, summary);
                     var videoResponse = await _imvdbApi.GetVideoAsync(
                         summary.Id.ToString(CultureInfo.InvariantCulture),
-                        cancellationToken).ConfigureAwait(false);
+                        include: "artists,directors,sources",
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
 
                     if (videoResponse != null)
                     {

@@ -175,7 +175,8 @@ public class ExternalSearchService : IExternalSearchService
                     {
                         var detail = await _imvdbApi.GetVideoAsync(
                             summary.Id.ToString(),
-                            cancellationToken).ConfigureAwait(false);
+                            include: "artists,directors,sources",
+                            cancellationToken: cancellationToken).ConfigureAwait(false);
                         metadata = ImvdbMapper.MapToMetadata(detail, summary, matchConfidence);
                     }
                     catch (ApiException apiException)
@@ -187,7 +188,7 @@ public class ExternalSearchService : IExternalSearchService
 
                 metadata ??= new ImvdbMetadata
                 {
-                    ImvdbId = summary.Id,
+                    ImvdbId = (int?)summary.Id,
                     Title = ImvdbMapper.FirstNonEmpty(summary.SongTitle, summary.Title) ?? string.Empty,
                     Artist = summary.Artist ?? string.Empty,
                     ImageUrl = summary.ImageUrl,

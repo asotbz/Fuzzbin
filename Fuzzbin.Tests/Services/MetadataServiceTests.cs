@@ -266,7 +266,7 @@ public class MetadataServiceTests : IAsyncLifetime
     {
         public double? MockConfidence { get; set; }
 
-        public Task<ImvdbVideoResponse> GetVideoAsync(string id, CancellationToken cancellationToken = default)
+        public Task<ImvdbVideoResponse> GetVideoAsync(string id, string? include = "artists,directors,sources", CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new ImvdbVideoResponse
             {
@@ -304,7 +304,9 @@ public class MetadataServiceTests : IAsyncLifetime
             return Task.FromResult(new ImvdbSearchResponse
             {
                 Results = new List<ImvdbVideoSummary> { summary },
-                Meta = new ImvdbSearchMeta { Total = 1, Page = 1, PerPage = 20 }
+                Page = 1,
+                PerPage = 20,
+                TotalResults = 1
             });
         }
     }

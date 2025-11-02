@@ -63,7 +63,7 @@ public static class ImvdbMapper
     {
         var metadata = new ImvdbMetadata
         {
-            ImvdbId = video.Id,
+            ImvdbId = (int?)video.Id,
             Title = FirstNonEmpty(video.SongTitle, video.Title, summary.SongTitle, summary.Title),
             Artist = FirstNonEmpty(video.Artist, summary.Artist),
             Description = video.Description,

@@ -286,7 +286,7 @@ public class ExternalSearchServiceTests
         public ImvdbSearchResponse SearchResponse { get; set; } = new();
         public Dictionary<string, ImvdbVideoResponse> VideoResponses { get; } = new();
 
-        public Task<ImvdbVideoResponse> GetVideoAsync(string id, CancellationToken cancellationToken = default)
+        public Task<ImvdbVideoResponse> GetVideoAsync(string id, string? include = "artists,directors,sources", CancellationToken cancellationToken = default)
         {
             if (VideoResponses.TryGetValue(id, out var response))
             {

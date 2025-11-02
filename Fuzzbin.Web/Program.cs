@@ -26,6 +26,7 @@ using Fuzzbin.Core.Interfaces;
 using Fuzzbin.Data.Context;
 using Fuzzbin.Data.Repositories;
 using Fuzzbin.Services;
+using Fuzzbin.Services.External.MusicBrainz;
 using Fuzzbin.Services.Http;
 using Fuzzbin.Services.Interfaces;
 using Fuzzbin.Services.Models;
@@ -266,6 +267,9 @@ try
     // Register HTTP infrastructure for external APIs with retry and rate limiting
     builder.Services.AddSingleton<MusicBrainzRateLimiter>();
     builder.Services.AddTransient<MusicBrainzHttpMessageHandler>();
+    
+    // Register MusicBrainz client
+    builder.Services.AddScoped<IMusicBrainzClient, MusicBrainzClient>();
 
     // Configure MusicBrainz HTTP client with rate limiting and retry policy
     builder.Services.AddHttpClient("MusicBrainz", (sp, client) =>
