@@ -34,7 +34,7 @@ namespace Fuzzbin.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMetadataService _metadataService;
         private readonly ILibraryPathManager _libraryPathManager;
-        private readonly IMetadataCacheService? _metadataCacheService;
+        private readonly IMetadataCacheService _metadataCacheService;
 
         public LibraryImportService(
             ILogger<LibraryImportService> logger,
@@ -44,7 +44,7 @@ namespace Fuzzbin.Services
             IUnitOfWork unitOfWork,
             IMetadataService metadataService,
             ILibraryPathManager libraryPathManager,
-            IMetadataCacheService? metadataCacheService = null)
+            IMetadataCacheService metadataCacheService)
         {
             _logger = logger;
             _sessionRepository = sessionRepository;
@@ -53,7 +53,7 @@ namespace Fuzzbin.Services
             _unitOfWork = unitOfWork;
             _metadataService = metadataService;
             _libraryPathManager = libraryPathManager;
-            _metadataCacheService = metadataCacheService;
+            _metadataCacheService = metadataCacheService ?? throw new ArgumentNullException(nameof(metadataCacheService));
         }
 
         public async Task<LibraryImportSession> StartImportAsync(LibraryImportRequest request, CancellationToken cancellationToken = default)
@@ -250,9 +250,8 @@ namespace Fuzzbin.Services
                     ApplyImportMetadata(video, session, item);
                     await _videoRepository.UpdateAsync(video).ConfigureAwait(false);
 
-                    // Enrich with cached metadata if available
-                    if (_metadataCacheService != null &&
-                        !string.IsNullOrWhiteSpace(video.Artist) &&
+                    // Enrich with cached metadata
+                    if (!string.IsNullOrWhiteSpace(video.Artist) &&
                         !string.IsNullOrWhiteSpace(video.Title))
                     {
                         try

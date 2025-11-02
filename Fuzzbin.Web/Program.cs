@@ -227,6 +227,7 @@ try
     builder.Services.AddScoped<Fuzzbin.Services.Interfaces.IDownloadQueueService, DownloadQueueService>();
     builder.Services.AddScoped<ILibraryPathManager, LibraryPathManager>();
     builder.Services.AddScoped<IFileOrganizationService, FileOrganizationService>();
+    builder.Services.AddScoped<IMetadataCacheService, MetadataCacheService>();
     builder.Services.AddScoped<IMetadataService, MetadataService>();
     builder.Services.AddScoped<IMetadataExportService, MetadataExportService>();
     builder.Services.AddScoped<Fuzzbin.Services.Interfaces.ICollectionService, Fuzzbin.Services.CollectionService>();
@@ -1039,6 +1040,20 @@ try
             }
         }
     }
+    
+    Log.Information("Fuzzbin application started successfully");
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Fuzzbin application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+// Helper functions
 static string NormalizeReturnUrl(string? returnUrl)
 {
     if (string.IsNullOrWhiteSpace(returnUrl))
@@ -1087,18 +1102,6 @@ static bool ParseCheckboxValue(string? value)
     return value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
            value.Equals("on", StringComparison.OrdinalIgnoreCase) ||
            value.Equals("1", StringComparison.OrdinalIgnoreCase);
-}
-
-    Log.Information("Fuzzbin application started successfully");
-    app.Run();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "Fuzzbin application terminated unexpectedly");
-}
-finally
-{
-    Log.CloseAndFlush();
 }
 
 // Request/Response DTOs for API endpoints

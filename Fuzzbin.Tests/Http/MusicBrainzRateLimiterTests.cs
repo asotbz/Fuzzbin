@@ -135,7 +135,7 @@ public class MusicBrainzRateLimiterTests : IDisposable
     }
     
     [Fact]
-    public async Task TryAcquire_FirstRequest_SucceedsImmediately()
+    public void TryAcquire_FirstRequest_SucceedsImmediately()
     {
         // Act
         var lease = _rateLimiter.TryAcquire();
@@ -148,7 +148,7 @@ public class MusicBrainzRateLimiterTests : IDisposable
     }
     
     [Fact]
-    public async Task TryAcquire_SecondImmediateRequest_Fails()
+    public void TryAcquire_SecondImmediateRequest_Fails()
     {
         // Arrange
         var lease1 = _rateLimiter.TryAcquire();

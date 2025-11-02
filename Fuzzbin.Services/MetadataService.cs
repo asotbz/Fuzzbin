@@ -22,33 +22,21 @@ public class MetadataService : IMetadataService
     private readonly ILogger<MetadataService> _logger;
     private readonly IUnitOfWork _unitOfWork;
     private readonly HttpClient _httpClient;
-    private readonly IMemoryCache _cache;
-    private readonly IImvdbApi _imvdbApi;
-    private readonly IOptionsMonitor<ImvdbOptions> _imvdbOptions;
-    private readonly IImvdbApiKeyProvider _apiKeyProvider;
     private readonly IThumbnailService _thumbnailService;
-    private readonly IMetadataCacheService? _metadataCacheService;
+    private readonly IMetadataCacheService _metadataCacheService;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public MetadataService(
         ILogger<MetadataService> logger,
         IUnitOfWork unitOfWork,
         IHttpClientFactory httpClientFactory,
-        IMemoryCache cache,
-        IImvdbApi imvdbApi,
-        IOptionsMonitor<ImvdbOptions> imvdbOptions,
-        IImvdbApiKeyProvider apiKeyProvider,
         IThumbnailService thumbnailService,
-        IMetadataCacheService? metadataCacheService = null)
+        IMetadataCacheService metadataCacheService)
     {
         _logger = logger;
         _unitOfWork = unitOfWork;
-        _cache = cache;
-        _imvdbApi = imvdbApi;
-        _imvdbOptions = imvdbOptions;
-        _apiKeyProvider = apiKeyProvider;
         _thumbnailService = thumbnailService;
-        _metadataCacheService = metadataCacheService;
+        _metadataCacheService = metadataCacheService ?? throw new ArgumentNullException(nameof(metadataCacheService));
         _httpClient = httpClientFactory.CreateClient();
         _jsonOptions = new JsonSerializerOptions
         {
@@ -212,316 +200,6 @@ public class MetadataService : IMetadataService
         }
         
         return metadata;
-    }
-
-    public async Task<ImvdbMetadata?> GetImvdbMetadataAsync(string artist, string title, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
-        {
-            _logger.LogWarning("Cannot query IMVDb with missing artist or title (Artist: '{Artist}', Title: '{Title}')", artist, title);
-            return null;
-        }
-
-        var trimmedArtist = artist.Trim();
-        var trimmedTitle = title.Trim();
-        var cacheKey = ImvdbMapper.BuildCacheKey(trimmedArtist, trimmedTitle);
-
-        if (_cache.TryGetValue<ImvdbMetadata>(cacheKey, out var cachedMetadata))
-        {
-            return cachedMetadata;
-        }
-
-        var apiKey = await _apiKeyProvider.GetApiKeyAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            _logger.LogWarning("IMVDb API key not configured; skipping lookup for {Artist} - {Title}", trimmedArtist, trimmedTitle);
-            return null;
-        }
-
-        try
-        {
-            var query = $"{trimmedArtist} {trimmedTitle}";
-            var searchResponse = await _imvdbApi.SearchVideosAsync(
-                query,
-                perPage: 10,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (searchResponse?.Results == null || searchResponse.Results.Count == 0)
-            {
-                _logger.LogInformation("IMVDb returned no results for {Artist} - {Title}", trimmedArtist, trimmedTitle);
-                return null;
-            }
-
-            var bestMatch = ImvdbMapper.FindBestMatch(searchResponse.Results, trimmedArtist, trimmedTitle);
-            if (bestMatch == null)
-            {
-                _logger.LogInformation("IMVDb search results did not contain a suitable match for {Artist} - {Title}", trimmedArtist, trimmedTitle);
-                return null;
-            }
-
-            var confidence = ImvdbMapper.ComputeMatchConfidence(trimmedArtist, trimmedTitle, bestMatch);
-
-            var videoResponse = await _imvdbApi.GetVideoAsync(
-                bestMatch.Id.ToString(CultureInfo.InvariantCulture),
-                include: "artists,directors,sources",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (videoResponse == null)
-            {
-                _logger.LogInformation("IMVDb did not return video details for ID {Id}", bestMatch.Id);
-                return null;
-            }
-
-            var metadata = ImvdbMapper.MapToMetadata(videoResponse, bestMatch, confidence);
-
-            if (confidence < 0.9)
-            {
-                _logger.LogInformation(
-                    "IMVDb match confidence {Confidence:P0} below automatic update threshold for {Artist} - {Title}",
-                    confidence,
-                    trimmedArtist,
-                    trimmedTitle);
-            }
-
-            var options = _imvdbOptions.CurrentValue;
-            var expiration = options.CacheDuration <= TimeSpan.Zero
-                ? TimeSpan.FromHours(24)
-                : options.CacheDuration;
-
-            _cache.Set(cacheKey, metadata, new MemoryCacheEntryOptions
-            {
-                SlidingExpiration = expiration
-            });
-
-            return metadata;
-        }
-        catch (ApiException apiException)
-        {
-            _logger.LogWarning(apiException, "IMVDb API request failed with status {StatusCode} for {Artist} - {Title}",
-                apiException.StatusCode,
-                trimmedArtist,
-                trimmedTitle);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching IMVDb metadata for {Artist} - {Title}", trimmedArtist, trimmedTitle);
-        }
-
-        return null;
-    }
-
-    public async Task<List<ImvdbMetadata>> GetTopMatchesAsync(string artist, string title, int maxResults = 5, CancellationToken cancellationToken = default)
-    {
-        var results = new List<ImvdbMetadata>();
-
-        if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
-        {
-            _logger.LogWarning("Cannot query IMVDb with missing artist or title");
-            return results;
-        }
-
-        var trimmedArtist = artist.Trim();
-        var trimmedTitle = title.Trim();
-
-        var apiKey = await _apiKeyProvider.GetApiKeyAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            _logger.LogWarning("IMVDb API key not configured");
-            return results;
-        }
-
-        try
-        {
-            var query = $"{trimmedArtist} {trimmedTitle}";
-            var searchResponse = await _imvdbApi.SearchVideosAsync(
-                query,
-                perPage: Math.Max(maxResults, 10),
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (searchResponse?.Results == null || searchResponse.Results.Count == 0)
-            {
-                return results;
-            }
-
-            // Get top N results
-            var topResults = searchResponse.Results
-                .Take(maxResults)
-                .ToList();
-
-            foreach (var summary in topResults)
-            {
-                try
-                {
-                    var confidence = ImvdbMapper.ComputeMatchConfidence(trimmedArtist, trimmedTitle, summary);
-                    var videoResponse = await _imvdbApi.GetVideoAsync(
-                        summary.Id.ToString(CultureInfo.InvariantCulture),
-                        include: "artists,directors,sources",
-                        cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                    if (videoResponse != null)
-                    {
-                        var metadata = ImvdbMapper.MapToMetadata(videoResponse, summary, confidence);
-                        results.Add(metadata);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to fetch details for IMVDb video {Id}", summary.Id);
-                }
-            }
-
-            return results;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching top matches from IMVDb for {Artist} - {Title}", trimmedArtist, trimmedTitle);
-            return results;
-        }
-    }
-
-    public async Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            video.ImvdbId = metadata.ImvdbId?.ToString();
-            video.Director = metadata.Director;
-            video.ProductionCompany = metadata.ProductionCompany;
-            video.Publisher = metadata.RecordLabel;
-            video.Description = metadata.Description;
-            video.Year = metadata.Year;
-
-            // Clear and add genres
-            video.Genres.Clear();
-            foreach (var genreName in metadata.Genres)
-            {
-                var existingGenre = await _unitOfWork.Genres
-                    .FirstOrDefaultAsync(g => g.Name == genreName);
-
-                if (existingGenre != null)
-                {
-                    video.Genres.Add(existingGenre);
-                }
-                else
-                {
-                    video.Genres.Add(new Genre { Name = genreName });
-                }
-            }
-
-            // Clear and add featured artists
-            video.FeaturedArtists.Clear();
-            if (!string.IsNullOrEmpty(metadata.FeaturedArtists))
-            {
-                foreach (var artistName in metadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
-                }
-            }
-
-            video.UpdatedAt = DateTime.UtcNow;
-            await _unitOfWork.Videos.UpdateAsync(video);
-            await _unitOfWork.SaveChangesAsync();
-
-            _logger.LogInformation("Applied IMVDb metadata to video {VideoId} from IMVDb ID {ImvdbId}", video.Id, metadata.ImvdbId);
-            return video;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error applying IMVDb metadata to video {VideoId}", video.Id);
-            throw;
-        }
-    }
-
-    public async Task<MusicBrainzMetadata?> GetMusicBrainzMetadataAsync(string artist, string title, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // MusicBrainz API endpoint
-            var query = Uri.EscapeDataString($"artist:\"{artist}\" AND recording:\"{title}\"");
-            var url = $"https://musicbrainz.org/ws/2/recording?query={query}&fmt=json&limit=1";
-            
-            // Add User-Agent header (required by MusicBrainz)
-            _httpClient.DefaultRequestHeaders.UserAgent.Clear();
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Fuzzbin/1.0 (https://github.com/videoJockey)");
-            
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var data = JsonDocument.Parse(json);
-                
-                if (data.RootElement.TryGetProperty("recordings", out var recordings))
-                {
-                    var recordingsArray = recordings.EnumerateArray().ToList();
-                    if (recordingsArray.Any())
-                    {
-                        var recording = recordingsArray.First();
-                        var metadata = new MusicBrainzMetadata();
-                        
-                        if (recording.TryGetProperty("id", out var id))
-                            metadata.RecordingId = id.GetString();
-                            
-                        if (recording.TryGetProperty("title", out var recTitle))
-                            metadata.Title = recTitle.GetString();
-                            
-                        if (recording.TryGetProperty("length", out var length))
-                            metadata.Duration = length.GetInt32();
-                            
-                        // Parse artist credits
-                        if (recording.TryGetProperty("artist-credit", out var artistCredit))
-                        {
-                            var artists = artistCredit.EnumerateArray().ToList();
-                            if (artists.Any())
-                            {
-                                var firstArtist = artists.First();
-                                if (firstArtist.TryGetProperty("artist", out var artistInfo))
-                                {
-                                    if (artistInfo.TryGetProperty("id", out var artistId))
-                                        metadata.ArtistId = artistId.GetString();
-                                        
-                                    if (artistInfo.TryGetProperty("name", out var artistName))
-                                        metadata.Artist = artistName.GetString();
-                                        
-                                    if (artistInfo.TryGetProperty("sort-name", out var sortName))
-                                        metadata.ArtistSort = sortName.GetString();
-                                }
-                            }
-                        }
-                        
-                        // Parse releases
-                        if (recording.TryGetProperty("releases", out var releases))
-                        {
-                            var releasesArray = releases.EnumerateArray().ToList();
-                            if (releasesArray.Any())
-                            {
-                                var release = releasesArray.First();
-                                
-                                if (release.TryGetProperty("id", out var releaseId))
-                                    metadata.ReleaseId = releaseId.GetString();
-                                    
-                                if (release.TryGetProperty("title", out var albumTitle))
-                                    metadata.Album = albumTitle.GetString();
-                                    
-                                if (release.TryGetProperty("date", out var date))
-                                {
-                                    if (DateTime.TryParse(date.GetString(), out var releaseDate))
-                                        metadata.ReleaseDate = releaseDate;
-                                }
-                            }
-                        }
-                        
-                        return metadata;
-                    }
-                }
-            }
-            
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching MusicBrainz metadata for {Artist} - {Title}", artist, title);
-            return null;
-        }
     }
 
     public async Task<string> GenerateNfoAsync(Video video, string outputPath, CancellationToken cancellationToken = default)
@@ -780,91 +458,51 @@ public class MetadataService : IMetadataService
             // Fetch online metadata if enabled
             if (fetchOnlineMetadata && !string.IsNullOrWhiteSpace(video.Artist) && !string.IsNullOrWhiteSpace(video.Title))
             {
-                // Use cache service if available, otherwise fall back to direct calls
-                if (_metadataCacheService != null)
+                var cacheResult = await _metadataCacheService.SearchAsync(
+                    video.Artist,
+                    video.Title,
+                    video.Duration,
+                    cancellationToken);
+                
+                if (cacheResult.Found && cacheResult.BestMatch != null)
                 {
-                    var cacheResult = await _metadataCacheService.SearchAsync(
-                        video.Artist,
-                        video.Title,
-                        video.Duration,
-                        cancellationToken);
+                    result.MatchConfidence = cacheResult.BestMatch.OverallConfidence;
                     
-                    if (cacheResult.Found && cacheResult.BestMatch != null)
+                    // Populate ImvdbMetadata from the best match
+                    if (cacheResult.BestMatch.ImvdbVideoId.HasValue)
                     {
-                        result.MatchConfidence = cacheResult.BestMatch.OverallConfidence;
+                        result.ImvdbMetadata = new ImvdbMetadata
+                        {
+                            Title = cacheResult.BestMatch.Title,
+                            Artist = cacheResult.BestMatch.Artist,
+                            Confidence = cacheResult.BestMatch.OverallConfidence,
+                            Year = cacheResult.BestMatch.Year
+                        };
+                    }
+                    
+                    if (cacheResult.RequiresManualSelection)
+                    {
+                        result.RequiresManualReview = true;
+                        _logger.LogInformation(
+                            "Video {VideoId} requires manual metadata selection (confidence: {Confidence:P0})",
+                            video.Id,
+                            cacheResult.BestMatch.OverallConfidence);
+                    }
+                    else
+                    {
+                        // Auto-apply high-confidence match
+                        video = await _metadataCacheService.ApplyMetadataAsync(
+                            video,
+                            cacheResult.BestMatch,
+                            cancellationToken);
+                        result.MetadataApplied = true;
+                        result.Video = video;
                         
-                        if (cacheResult.RequiresManualSelection)
-                        {
-                            result.RequiresManualReview = true;
-                            _logger.LogInformation(
-                                "Video {VideoId} requires manual metadata selection (confidence: {Confidence:P0})",
-                                video.Id,
-                                cacheResult.BestMatch.OverallConfidence);
-                        }
-                        else
-                        {
-                            // Auto-apply high-confidence match
-                            video = await _metadataCacheService.ApplyMetadataAsync(
-                                video,
-                                cacheResult.BestMatch,
-                                cancellationToken);
-                            result.MetadataApplied = true;
-                            result.Video = video;
-                            
-                            _logger.LogInformation(
-                                "Applied metadata from cache to video {VideoId} (source: {Source}, confidence: {Confidence:P0})",
-                                video.Id,
-                                cacheResult.BestMatch.PrimarySource,
-                                cacheResult.BestMatch.OverallConfidence);
-                        }
-                    }
-                }
-                else
-                {
-                    // Fallback to legacy direct calls if cache service not available
-                    // Try to get IMVDb metadata
-                    var imvdbMetadata = await GetImvdbMetadataAsync(video.Artist, video.Title, cancellationToken);
-                    if (imvdbMetadata != null)
-                    {
-                        result.ImvdbMetadata = imvdbMetadata;
-                        result.MatchConfidence = imvdbMetadata.Confidence;
-
-                        if (imvdbMetadata.Confidence >= 0.9)
-                        {
-                            video.ImvdbId = imvdbMetadata.ImvdbId?.ToString();
-                            video.Director ??= imvdbMetadata.Director;
-                            video.ProductionCompany ??= imvdbMetadata.ProductionCompany;
-                            video.Publisher ??= imvdbMetadata.RecordLabel;
-                            video.Description ??= imvdbMetadata.Description;
-                            video.Year ??= imvdbMetadata.Year;
-                            
-                            // Convert featured artists string to entities
-                            if (!string.IsNullOrEmpty(imvdbMetadata.FeaturedArtists) && !video.FeaturedArtists.Any())
-                            {
-                                foreach (var artistName in imvdbMetadata.FeaturedArtists.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                                {
-                                    video.FeaturedArtists.Add(new FeaturedArtist { Name = artistName.Trim() });
-                                }
-                            }
-                            result.MetadataApplied = true;
-                        }
-                        else
-                        {
-                            result.RequiresManualReview = true;
-                            _logger.LogInformation(
-                                "Skipping automatic IMVDb metadata apply for video {VideoId} due to low confidence {Confidence:P0}",
-                                video.Id,
-                                imvdbMetadata.Confidence);
-                        }
-                    }
-                    
-                    // Try to get MusicBrainz metadata
-                    var mbMetadata = await GetMusicBrainzMetadataAsync(video.Artist, video.Title, cancellationToken);
-                    if (mbMetadata != null)
-                    {
-                        video.MusicBrainzRecordingId ??= mbMetadata.RecordingId;
-                        video.Album ??= mbMetadata.Album;
-                        video.Publisher ??= mbMetadata.RecordLabel;
+                        _logger.LogInformation(
+                            "Applied metadata from cache to video {VideoId} (source: {Source}, confidence: {Confidence:P0})",
+                            video.Id,
+                            cacheResult.BestMatch.PrimarySource,
+                            cacheResult.BestMatch.OverallConfidence);
                     }
                 }
             }

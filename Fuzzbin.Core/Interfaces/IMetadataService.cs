@@ -10,21 +10,6 @@ public interface IMetadataService
     Task<VideoMetadata> ExtractMetadataAsync(string filePath, CancellationToken cancellationToken = default);
     
     /// <summary>
-    /// Fetches metadata from IMVDb for a music video
-    /// </summary>
-    Task<ImvdbMetadata?> GetImvdbMetadataAsync(string artist, string title, CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Fetches top N metadata matches from IMVDb for manual selection
-    /// </summary>
-    Task<List<ImvdbMetadata>> GetTopMatchesAsync(string artist, string title, int maxResults = 5, CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Fetches metadata from MusicBrainz for audio information
-    /// </summary>
-    Task<MusicBrainzMetadata?> GetMusicBrainzMetadataAsync(string artist, string title, CancellationToken cancellationToken = default);
-    
-    /// <summary>
     /// Generates an NFO file for a video
     /// </summary>
     Task<string> GenerateNfoAsync(Video video, string outputPath, CancellationToken cancellationToken = default);
@@ -43,11 +28,6 @@ public interface IMetadataService
     /// Updates video entity with metadata from various sources and returns enrichment result
     /// </summary>
     Task<MetadataEnrichmentResult> EnrichVideoMetadataWithResultAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Applies selected IMVDb metadata to a video
-    /// </summary>
-    Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Downloads thumbnail for a video

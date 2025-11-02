@@ -51,26 +51,16 @@ public class MetadataServiceTests : IAsyncLifetime
         var context = new ApplicationDbContext(options);
         var unitOfWork = new UnitOfWork(context);
 
-        var cache = new MemoryCache(new MemoryCacheOptions());
-        var imvdbApi = new FakeImvdbApi { MockConfidence = mockConfidence };
-        var imvdbOptions = new FakeOptionsMonitor(new ImvdbOptions
-        {
-            ApiKey = "test-key",
-            CacheDuration = TimeSpan.FromHours(1)
-        });
-        var apiKeyProvider = new FakeApiKeyProvider();
         var thumbnailService = new FakeThumbnailService();
         var httpClientFactory = new FakeHttpClientFactory();
+        var metadataCacheService = new FakeMetadataCacheService { MockConfidence = mockConfidence };
 
         var service = new MetadataService(
             NullLogger<MetadataService>.Instance,
             unitOfWork,
             httpClientFactory,
-            cache,
-            imvdbApi,
-            imvdbOptions,
-            apiKeyProvider,
-            thumbnailService);
+            thumbnailService,
+            metadataCacheService);
 
         _context = context;
         _unitOfWork = unitOfWork;
@@ -260,6 +250,57 @@ public class MetadataServiceTests : IAsyncLifetime
     }
 
     // Fake implementations for testing
+
+    private sealed class FakeMetadataCacheService : IMetadataCacheService
+    {
+        public double? MockConfidence { get; set; }
+
+        public Task<MetadataCacheResult> SearchAsync(string artist, string title, int? knownDurationSeconds = null, CancellationToken cancellationToken = default)
+        {
+            var confidence = MockConfidence ?? 0.95;
+            var candidate = new AggregatedCandidate
+            {
+                Title = title,
+                Artist = artist,
+                OverallConfidence = confidence,
+                PrimarySource = "imvdb",
+                ImvdbVideoId = Guid.NewGuid()
+            };
+
+            return Task.FromResult(new MetadataCacheResult
+            {
+                Found = true,
+                BestMatch = candidate,
+                RequiresManualSelection = confidence < 0.9
+            });
+        }
+
+        public Task<List<AggregatedCandidate>> GetCandidatesAsync(string artist, string title, int maxResults = 10, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new List<AggregatedCandidate>());
+        }
+
+        public Task<Video> ApplyMetadataAsync(Video video, AggregatedCandidate candidate, CancellationToken cancellationToken = default)
+        {
+            video.ImvdbId = candidate.ImvdbVideoId?.ToString();
+            return Task.FromResult(video);
+        }
+
+        public Task<bool> IsCachedAsync(string artist, string title, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task ClearCacheAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new CacheStatistics());
+        }
+    }
 
     private sealed class FakeImvdbApi : IImvdbApi
     {

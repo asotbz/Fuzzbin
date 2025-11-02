@@ -2,8 +2,10 @@
 @using Fuzzbin.Core.Interfaces
 @using Fuzzbin.Services.Interfaces
 @inject IMetadataService MetadataService
+@inject IMetadataCacheService MetadataCacheService
 @inject IVideoService VideoService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudDialog>
     <DialogContent>
@@ -302,9 +304,73 @@
         try
         {
             _loading = true;
-            await MetadataService.EnrichVideoMetadataAsync(_video, fetchOnlineMetadata: true);
-            await LoadVideoDetails();
-            Snackbar.Add("Metadata refreshed successfully", Severity.Success);
+            
+            // Use cache service directly for better control over candidate selection
+            var cacheResult = await MetadataCacheService.SearchAsync(
+                _video.Artist,
+                _video.Title,
+                _video.Duration);
+            
+            if (cacheResult.Found && cacheResult.BestMatch != null)
+            {
+                if (cacheResult.RequiresManualSelection)
+                {
+                    // Show candidate selection dialog
+                    var allCandidates = new List<AggregatedCandidate> { cacheResult.BestMatch };
+                    allCandidates.AddRange(cacheResult.AlternativeCandidates);
+                    
+                    var parameters = new DialogParameters<CandidateSelectionDialog>
+                    {
+                        { x => x.Candidates, allCandidates },
+                        { x => x.QueryTitle, _video.Title },
+                        { x => x.QueryArtist, _video.Artist },
+                        { x => x.MaxResults, 5 }
+                    };
+                    
+                    var options = new DialogOptions
+                    {
+                        MaxWidth = MaxWidth.Medium,
+                        FullWidth = true,
+                        CloseButton = true
+                    };
+                    
+                    var dialog = await DialogService.ShowAsync<CandidateSelectionDialog>(
+                        "Select Metadata Match",
+                        parameters,
+                        options);
+                    
+                    var result = await dialog.Result;
+                    
+                    if (!result.Canceled && result.Data is AggregatedCandidate selectedCandidate)
+                    {
+                        // Apply selected candidate
+                        _video = await MetadataCacheService.ApplyMetadataAsync(
+                            _video,
+                            selectedCandidate);
+                        
+                        await LoadVideoDetails();
+                        Snackbar.Add($"Applied metadata from {selectedCandidate.PrimarySource} ({selectedCandidate.OverallConfidence:P0} confidence)", Severity.Success);
+                    }
+                    else
+                    {
+                        Snackbar.Add("Metadata refresh canceled", Severity.Info);
+                    }
+                }
+                else
+                {
+                    // Auto-apply high-confidence match
+                    _video = await MetadataCacheService.ApplyMetadataAsync(
+                        _video,
+                        cacheResult.BestMatch);
+                    
+                    await LoadVideoDetails();
+                    Snackbar.Add($"Metadata refreshed from {cacheResult.BestMatch.PrimarySource} ({cacheResult.BestMatch.OverallConfidence:P0} confidence)", Severity.Success);
+                }
+            }
+            else
+            {
+                Snackbar.Add("No metadata matches found", Severity.Warning);
+            }
         }
         catch (Exception ex)
         {

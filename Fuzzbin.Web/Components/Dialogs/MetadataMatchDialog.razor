@@ -1,6 +1,7 @@
 @using Fuzzbin.Core.Entities
 @using Fuzzbin.Core.Interfaces
-@inject IMetadataService MetadataService
+@using static Fuzzbin.Core.Interfaces.IMetadataCacheService
+@inject IMetadataCacheService MetadataCacheService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -10,7 +11,7 @@
             <MudProgressLinear Indeterminate="true" />
             <MudText Class="mt-2">Searching for matches...</MudText>
         }
-        else if (_matches.Count > 0)
+        else if (_candidates.Count > 0)
         {
             <MudText Typo="Typo.h6" Class="mb-3">
                 Select Best Match for "@Video.Title" by @Video.Artist
@@ -21,74 +22,68 @@
             </MudAlert>
 
             <MudStack Spacing="2">
-                @foreach (var (match, index) in _matches.Select((m, i) => (m, i)))
+                @foreach (var (candidate, index) in _candidates.Select((c, i) => (c, i)))
                 {
-                    var isSelected = _selectedMatch == match;
+                    var isSelected = _selectedCandidate == candidate;
                     <MudPaper Elevation="@(isSelected ? 4 : 1)" 
                               Class="@($"pa-3 {(isSelected ? "mud-theme-primary" : "")}")"
                               Style="@(isSelected ? "border: 2px solid var(--mud-palette-primary);" : "cursor: pointer;")"
-                              @onclick="@(() => SelectMatch(match))">
+                              @onclick="@(() => SelectMatch(candidate))">
                         <MudGrid>
                             <MudItem xs="12">
                                 <div class="d-flex align-center justify-space-between">
                                     <div class="flex-grow-1">
                                         <MudText Typo="Typo.subtitle1">
-                                            <strong>@match.Title</strong>
+                                            <strong>@candidate.Title</strong>
                                         </MudText>
                                         <MudText Typo="Typo.body2">
-                                            by @match.Artist
+                                            by @candidate.Artist
                                         </MudText>
                                     </div>
-                                    <MudChip T="string" Size="Size.Small" Color="@GetConfidenceColor(match.Confidence)">
-                                        @((match.Confidence * 100).ToString("F0"))% Match
+                                    <MudChip T="string" Size="Size.Small" Color="@GetConfidenceColor(candidate.OverallConfidence)">
+                                        @((candidate.OverallConfidence * 100).ToString("F0"))% Match
                                     </MudChip>
                                 </div>
                             </MudItem>
                             
-                            @if (!string.IsNullOrEmpty(match.Description))
+                            @if (!string.IsNullOrEmpty(candidate.FeaturedArtists))
                             {
                                 <MudItem xs="12">
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @match.Description
+                                        feat. @candidate.FeaturedArtists
                                     </MudText>
                                 </MudItem>
                             }
                             
                             <MudItem xs="12">
                                 <MudStack Row="true" Spacing="1">
-                                    @if (match.Year.HasValue)
+                                    @if (candidate.Year.HasValue)
                                     {
                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
-                                            @match.Year
+                                            @candidate.Year
                                         </MudChip>
                                     }
-                                    @if (!string.IsNullOrEmpty(match.Director))
+                                    @if (!string.IsNullOrEmpty(candidate.Director))
                                     {
                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
-                                            Dir: @match.Director
+                                            Dir: @candidate.Director
                                         </MudChip>
                                     }
-                                    @if (match.Genres.Any())
+                                    @if (candidate.Genres.Any())
                                     {
-                                        foreach (var genre in match.Genres.Take(3))
+                                        foreach (var genre in candidate.Genres.Take(3))
                                         {
                                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
                                                 @genre
                                             </MudChip>
                                         }
                                     }
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Info">
+                                        @candidate.PrimarySource
+                                    </MudChip>
                                 </MudStack>
                             </MudItem>
                             
-                            @if (!string.IsNullOrEmpty(match.ImageUrl))
-                            {
-                                <MudItem xs="12" sm="4">
-                                    <MudImage Src="@match.ImageUrl" Alt="@match.Title" 
-                                             ObjectFit="ObjectFit.Cover" 
-                                             Height="120" 
-                                             Class="rounded" />
-                                </MudItem>
-                            }
                         </MudGrid>
                     </MudPaper>
                 }
@@ -105,7 +100,7 @@
         <MudButton OnClick="Skip">Skip</MudButton>
         <MudButton Color="Color.Primary" 
                    Variant="Variant.Filled" 
-                   Disabled="@(_selectedMatch == null)"
+                   Disabled="@(_selectedCandidate == null)"
                    OnClick="ApplySelected">
             Apply Selected
         </MudButton>
@@ -117,8 +112,8 @@
     [Parameter] public Video Video { get; set; } = null!;
     [Parameter] public int MaxResults { get; set; } = 5;
 
-    private List<ImvdbMetadata> _matches = new();
-    private ImvdbMetadata? _selectedMatch;
+    private List<AggregatedCandidate> _candidates = new();
+    private AggregatedCandidate? _selectedCandidate;
     private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
@@ -131,17 +126,20 @@
         _loading = true;
         try
         {
-            _matches = await MetadataService.GetTopMatchesAsync(Video.Artist, Video.Title, MaxResults);
+            _candidates = await MetadataCacheService.GetCandidatesAsync(
+                Video.Artist ?? string.Empty,
+                Video.Title ?? string.Empty,
+                MaxResults);
             
-            // Auto-select the first match if available
-            if (_matches.Count > 0)
+            // Auto-select the first candidate if available
+            if (_candidates.Count > 0)
             {
-                _selectedMatch = _matches[0];
+                _selectedCandidate = _candidates[0];
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load matches: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Failed to load candidates: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -149,18 +147,18 @@
         }
     }
 
-    private void SelectMatch(ImvdbMetadata match)
+    private void SelectMatch(AggregatedCandidate candidate)
     {
-        _selectedMatch = match;
+        _selectedCandidate = candidate;
     }
 
     private async Task ApplySelected()
     {
-        if (_selectedMatch == null) return;
+        if (_selectedCandidate == null) return;
 
         try
         {
-            var updatedVideo = await MetadataService.UpdateVideoFromImvdbMetadataAsync(Video, _selectedMatch);
+            var updatedVideo = await MetadataCacheService.ApplyMetadataAsync(Video, _selectedCandidate);
             MudDialog.Close(DialogResult.Ok(updatedVideo));
         }
         catch (Exception ex)

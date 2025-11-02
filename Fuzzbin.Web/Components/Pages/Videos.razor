@@ -24,6 +24,7 @@
 @inject IPlaylistService PlaylistService
 @inject IThumbnailService ThumbnailService
 @inject IMetadataService MetadataService
+@inject IMetadataCacheService MetadataCacheService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
@@ -937,26 +938,33 @@
                 // For single video with low confidence, show manual selection dialog
                 if (isSingleVideo && result.RequiresManualReview)
                 {
-                    // Get top 5 matches for manual selection
-                    var topMatches = await MetadataService.GetTopMatchesAsync(video.Artist ?? "", video.Title ?? "", maxResults: 5);
+                    // Get top 5 candidates for manual selection
+                    var candidates = await MetadataCacheService.GetCandidatesAsync(
+                        video.Artist ?? "",
+                        video.Title ?? "",
+                        maxResults: 5);
                     
-                    var matchParameters = new DialogParameters
+                    if (candidates.Count > 0)
                     {
-                        { "Video", result.Video },
-                        { "MatchConfidence", result.MatchConfidence },
-                        { "Matches", topMatches }
-                    };
+                        var matchParameters = new DialogParameters
+                        {
+                            { "Video", result.Video },
+                            { "MaxResults", 5 }
+                        };
 
-                    var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
-                    var matchDialog = await DialogService.ShowAsync<ManualMatchSelectionDialog>("Manual Match Selection Required", matchParameters, options);
-                    var matchResult = await matchDialog.Result;
+                        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true };
+                        var matchDialog = await DialogService.ShowAsync<MetadataMatchDialog>("Manual Match Selection Required", matchParameters, options);
+                        var matchResult = await matchDialog.Result;
 
-                    if (matchResult is { Canceled: false, Data: ImvdbMetadata selectedMatch })
-                    {
-                        // Apply selected match to video
-                        await MetadataService.UpdateVideoFromImvdbMetadataAsync(result.Video, selectedMatch);
-                        _videoCache[result.Video.Id] = result.Video;
-                        refreshed++;
+                        if (matchResult is { Canceled: false, Data: Video updatedVideo })
+                        {
+                            _videoCache[updatedVideo.Id] = updatedVideo;
+                            refreshed++;
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
                     }
                     else
                     {

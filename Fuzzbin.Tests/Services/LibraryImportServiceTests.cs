@@ -97,6 +97,7 @@ public class LibraryImportServiceTests : IAsyncLifetime
         var itemRepository = new Repository<LibraryImportItem>(context);
         var videoRepository = new Repository<Video>(context);
         var metadataService = new TestMetadataService();
+        var metadataCacheService = new TestMetadataCacheService();
         var configPathService = new TestConfigurationPathService(_tempRoot);
         var pathManager = new LibraryPathManager(unitOfWork, configPathService, NullLogger<LibraryPathManager>.Instance);
 
@@ -107,7 +108,8 @@ public class LibraryImportServiceTests : IAsyncLifetime
             videoRepository,
             unitOfWork,
             metadataService,
-            pathManager);
+            pathManager,
+            metadataCacheService);
 
         return (service, unitOfWork);
     }
@@ -136,6 +138,62 @@ public class LibraryImportServiceTests : IAsyncLifetime
         catch
         {
             // Ignore cleanup errors in tests
+        }
+    }
+
+    private sealed class TestMetadataCacheService : IMetadataCacheService
+    {
+        public Task<MetadataCacheResult> SearchAsync(string artist, string title, int? knownDurationSeconds = null, CancellationToken cancellationToken = default)
+        {
+            var candidate = new AggregatedCandidate
+            {
+                Title = title,
+                Artist = artist,
+                OverallConfidence = 0.95,
+                PrimarySource = "test"
+            };
+
+            return Task.FromResult(new MetadataCacheResult
+            {
+                Found = true,
+                BestMatch = candidate,
+                RequiresManualSelection = false
+            });
+        }
+
+        public Task<List<AggregatedCandidate>> GetCandidatesAsync(string artist, string title, int maxResults = 10, CancellationToken cancellationToken = default)
+        {
+            var candidates = new List<AggregatedCandidate>
+            {
+                new AggregatedCandidate
+                {
+                    Title = title,
+                    Artist = artist,
+                    OverallConfidence = 0.95,
+                    PrimarySource = "test"
+                }
+            };
+            return Task.FromResult(candidates);
+        }
+
+        public Task<Video> ApplyMetadataAsync(Video video, AggregatedCandidate candidate, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(video);
+        }
+
+        public Task<bool> IsCachedAsync(string artist, string title, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
+
+        public Task ClearCacheAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new CacheStatistics());
         }
     }
 
