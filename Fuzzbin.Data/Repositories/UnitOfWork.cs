@@ -26,6 +26,22 @@ namespace Fuzzbin.Data.Repositories
         private IRepository<BackgroundJob>? _backgroundJobs;
         private IRepository<VideoSourceVerification>? _videoSourceVerifications;
 
+        // Metadata cache repository instances
+        private IRepository<Query>? _queries;
+        private IRepository<QuerySourceCache>? _querySourceCaches;
+        private IRepository<QueryResolution>? _queryResolutions;
+        private IRepository<MbArtist>? _mbArtists;
+        private IRepository<MbRecording>? _mbRecordings;
+        private IRepository<MbRelease>? _mbReleases;
+        private IRepository<MbReleaseGroup>? _mbReleaseGroups;
+        private IRepository<MbRecordingCandidate>? _mbRecordingCandidates;
+        private IRepository<ImvdbArtist>? _imvdbArtists;
+        private IRepository<ImvdbVideo>? _imvdbVideos;
+        private IRepository<ImvdbVideoCandidate>? _imvdbVideoCandidates;
+        private IRepository<YtVideo>? _ytVideos;
+        private IRepository<YtVideoCandidate>? _ytVideoCandidates;
+        private IRepository<MvLink>? _mvLinks;
+
         public UnitOfWork(ApplicationDbContext context)
         {
             _context = context;
@@ -42,6 +58,22 @@ namespace Fuzzbin.Data.Repositories
         public IRepository<UserPreference> UserPreferences => _userPreferences ??= new Repository<UserPreference>(_context);
         public IRepository<BackgroundJob> BackgroundJobs => _backgroundJobs ??= new Repository<BackgroundJob>(_context);
         public IRepository<VideoSourceVerification> VideoSourceVerifications => _videoSourceVerifications ??= new Repository<VideoSourceVerification>(_context);
+
+        // Metadata cache repositories
+        public IRepository<Query> Queries => _queries ??= new Repository<Query>(_context);
+        public IRepository<QuerySourceCache> QuerySourceCaches => _querySourceCaches ??= new Repository<QuerySourceCache>(_context);
+        public IRepository<QueryResolution> QueryResolutions => _queryResolutions ??= new Repository<QueryResolution>(_context);
+        public IRepository<MbArtist> MbArtists => _mbArtists ??= new Repository<MbArtist>(_context);
+        public IRepository<MbRecording> MbRecordings => _mbRecordings ??= new Repository<MbRecording>(_context);
+        public IRepository<MbRelease> MbReleases => _mbReleases ??= new Repository<MbRelease>(_context);
+        public IRepository<MbReleaseGroup> MbReleaseGroups => _mbReleaseGroups ??= new Repository<MbReleaseGroup>(_context);
+        public IRepository<MbRecordingCandidate> MbRecordingCandidates => _mbRecordingCandidates ??= new Repository<MbRecordingCandidate>(_context);
+        public IRepository<ImvdbArtist> ImvdbArtists => _imvdbArtists ??= new Repository<ImvdbArtist>(_context);
+        public IRepository<ImvdbVideo> ImvdbVideos => _imvdbVideos ??= new Repository<ImvdbVideo>(_context);
+        public IRepository<ImvdbVideoCandidate> ImvdbVideoCandidates => _imvdbVideoCandidates ??= new Repository<ImvdbVideoCandidate>(_context);
+        public IRepository<YtVideo> YtVideos => _ytVideos ??= new Repository<YtVideo>(_context);
+        public IRepository<YtVideoCandidate> YtVideoCandidates => _ytVideoCandidates ??= new Repository<YtVideoCandidate>(_context);
+        public IRepository<MvLink> MvLinks => _mvLinks ??= new Repository<MvLink>(_context);
 
         public async Task<int> SaveChangesAsync()
         {

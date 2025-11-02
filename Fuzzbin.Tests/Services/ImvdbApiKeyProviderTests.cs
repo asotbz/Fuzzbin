@@ -97,6 +97,22 @@ public class ImvdbApiKeyProviderTests
         public IRepository<BackgroundJob> BackgroundJobs => throw new NotSupportedException();
         public IRepository<VideoSourceVerification> VideoSourceVerifications => throw new NotSupportedException();
 
+        // Metadata cache repositories
+        public IRepository<Query> Queries => throw new NotSupportedException();
+        public IRepository<QuerySourceCache> QuerySourceCaches => throw new NotSupportedException();
+        public IRepository<QueryResolution> QueryResolutions => throw new NotSupportedException();
+        public IRepository<MbArtist> MbArtists => throw new NotSupportedException();
+        public IRepository<MbRecording> MbRecordings => throw new NotSupportedException();
+        public IRepository<MbRelease> MbReleases => throw new NotSupportedException();
+        public IRepository<MbReleaseGroup> MbReleaseGroups => throw new NotSupportedException();
+        public IRepository<MbRecordingCandidate> MbRecordingCandidates => throw new NotSupportedException();
+        public IRepository<ImvdbArtist> ImvdbArtists => throw new NotSupportedException();
+        public IRepository<ImvdbVideo> ImvdbVideos => throw new NotSupportedException();
+        public IRepository<ImvdbVideoCandidate> ImvdbVideoCandidates => throw new NotSupportedException();
+        public IRepository<YtVideo> YtVideos => throw new NotSupportedException();
+        public IRepository<YtVideoCandidate> YtVideoCandidates => throw new NotSupportedException();
+        public IRepository<MvLink> MvLinks => throw new NotSupportedException();
+
         public Task<int> SaveChangesAsync() => Task.FromResult(0);
         public Task BeginTransactionAsync() => Task.CompletedTask;
         public Task CommitTransactionAsync() => Task.CompletedTask;

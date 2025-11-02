@@ -64,6 +64,78 @@ namespace Fuzzbin.Core.Interfaces
         /// </summary>
         IRepository<VideoSourceVerification> VideoSourceVerifications { get; }
 
+        // Metadata Cache repositories
+
+        /// <summary>
+        /// Repository for Query entities
+        /// </summary>
+        IRepository<Query> Queries { get; }
+
+        /// <summary>
+        /// Repository for QuerySourceCache entities
+        /// </summary>
+        IRepository<QuerySourceCache> QuerySourceCaches { get; }
+
+        /// <summary>
+        /// Repository for QueryResolution entities
+        /// </summary>
+        IRepository<QueryResolution> QueryResolutions { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Artist entities
+        /// </summary>
+        IRepository<MbArtist> MbArtists { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Recording entities
+        /// </summary>
+        IRepository<MbRecording> MbRecordings { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Release entities
+        /// </summary>
+        IRepository<MbRelease> MbReleases { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz ReleaseGroup entities
+        /// </summary>
+        IRepository<MbReleaseGroup> MbReleaseGroups { get; }
+
+        /// <summary>
+        /// Repository for MusicBrainz Recording Candidate entities
+        /// </summary>
+        IRepository<MbRecordingCandidate> MbRecordingCandidates { get; }
+
+        /// <summary>
+        /// Repository for IMVDb Artist entities
+        /// </summary>
+        IRepository<ImvdbArtist> ImvdbArtists { get; }
+
+        /// <summary>
+        /// Repository for IMVDb Video entities
+        /// </summary>
+        IRepository<ImvdbVideo> ImvdbVideos { get; }
+
+        /// <summary>
+        /// Repository for IMVDb Video Candidate entities
+        /// </summary>
+        IRepository<ImvdbVideoCandidate> ImvdbVideoCandidates { get; }
+
+        /// <summary>
+        /// Repository for YouTube Video entities
+        /// </summary>
+        IRepository<YtVideo> YtVideos { get; }
+
+        /// <summary>
+        /// Repository for YouTube Video Candidate entities
+        /// </summary>
+        IRepository<YtVideoCandidate> YtVideoCandidates { get; }
+
+        /// <summary>
+        /// Repository for MvLink entities (cross-source linking)
+        /// </summary>
+        IRepository<MvLink> MvLinks { get; }
+
         /// <summary>
         /// Save all changes to the database
         /// </summary>
