@@ -28,6 +28,23 @@ namespace Fuzzbin.Data.Context
         public DbSet<LibraryImportItem> LibraryImportItems { get; set; } = null!;
         public DbSet<VideoSourceVerification> VideoSourceVerifications { get; set; } = null!;
         public DbSet<BackgroundJob> BackgroundJobs { get; set; } = null!;
+        
+        // Metadata Cache DbSets
+        public DbSet<Query> Queries { get; set; } = null!;
+        public DbSet<QuerySourceCache> QuerySourceCaches { get; set; } = null!;
+        public DbSet<MbArtist> MbArtists { get; set; } = null!;
+        public DbSet<MbRecording> MbRecordings { get; set; } = null!;
+        public DbSet<MbRelease> MbReleases { get; set; } = null!;
+        public DbSet<MbReleaseGroup> MbReleaseGroups { get; set; } = null!;
+        public DbSet<MbTag> MbTags { get; set; } = null!;
+        public DbSet<MbRecordingCandidate> MbRecordingCandidates { get; set; } = null!;
+        public DbSet<ImvdbArtist> ImvdbArtists { get; set; } = null!;
+        public DbSet<ImvdbVideo> ImvdbVideos { get; set; } = null!;
+        public DbSet<ImvdbVideoCandidate> ImvdbVideoCandidates { get; set; } = null!;
+        public DbSet<YtVideo> YtVideos { get; set; } = null!;
+        public DbSet<YtVideoCandidate> YtVideoCandidates { get; set; } = null!;
+        public DbSet<MvLink> MvLinks { get; set; } = null!;
+        public DbSet<QueryResolution> QueryResolutions { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -325,6 +342,353 @@ namespace Fuzzbin.Data.Context
                 entity.HasIndex(e => e.CreatedAt);
                 entity.HasIndex(e => e.StartedAt);
                 entity.HasIndex(e => e.CompletedAt);
+            });
+
+            // Configure metadata cache entities
+            
+            // Query entity with unique normalized key
+            modelBuilder.Entity<Query>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.RawTitle).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.RawArtist).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.NormTitle).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.NormArtist).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.NormComboKey).IsRequired().HasMaxLength(1000);
+                
+                entity.HasIndex(e => e.NormComboKey).IsUnique();
+                entity.HasIndex(e => e.NormTitle);
+                entity.HasIndex(e => e.NormArtist);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            // QuerySourceCache entity
+            modelBuilder.Entity<QuerySourceCache>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.ResultEtag).HasMaxLength(200);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+                
+                entity.HasOne(e => e.Query)
+                    .WithMany(q => q.SourceCaches)
+                    .HasForeignKey(e => e.QueryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.QueryId);
+                entity.HasIndex(e => e.Source);
+                entity.HasIndex(e => e.LastCheckedAt);
+            });
+            
+            // MusicBrainz entities
+            modelBuilder.Entity<MbArtist>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Mbid).IsRequired().HasMaxLength(36);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.SortName).HasMaxLength(500);
+                entity.Property(e => e.Disambiguation).HasMaxLength(500);
+                entity.Property(e => e.Country).HasMaxLength(2);
+                
+                entity.HasIndex(e => e.Mbid).IsUnique();
+                entity.HasIndex(e => e.Name);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<MbRecording>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Mbid).IsRequired().HasMaxLength(36);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
+                
+                entity.HasIndex(e => e.Mbid).IsUnique();
+                entity.HasIndex(e => e.Title);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<MbReleaseGroup>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Mbid).IsRequired().HasMaxLength(36);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.PrimaryType).HasMaxLength(50);
+                entity.Property(e => e.FirstReleaseDate).HasMaxLength(10);
+                
+                entity.HasIndex(e => e.Mbid).IsUnique();
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<MbRelease>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Mbid).IsRequired().HasMaxLength(36);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.Date).HasMaxLength(10);
+                entity.Property(e => e.Country).HasMaxLength(2);
+                entity.Property(e => e.Barcode).HasMaxLength(50);
+                entity.Property(e => e.RecordLabel).HasMaxLength(500);
+                
+                entity.HasIndex(e => e.Mbid).IsUnique();
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            // MusicBrainz join tables
+            modelBuilder.Entity<MbRecordingArtist>(entity =>
+            {
+                entity.HasKey(ra => new { ra.RecordingId, ra.ArtistId });
+                
+                entity.HasOne(ra => ra.Recording)
+                    .WithMany(r => r.Artists)
+                    .HasForeignKey(ra => ra.RecordingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(ra => ra.Artist)
+                    .WithMany(a => a.RecordingArtists)
+                    .HasForeignKey(ra => ra.ArtistId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.RecordingId);
+                entity.HasIndex(e => e.ArtistId);
+            });
+            
+            modelBuilder.Entity<MbRecordingRelease>(entity =>
+            {
+                entity.HasKey(rr => new { rr.RecordingId, rr.ReleaseId });
+                
+                entity.HasOne(rr => rr.Recording)
+                    .WithMany(r => r.Releases)
+                    .HasForeignKey(rr => rr.RecordingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(rr => rr.Release)
+                    .WithMany(rel => rel.Recordings)
+                    .HasForeignKey(rr => rr.ReleaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.RecordingId);
+                entity.HasIndex(e => e.ReleaseId);
+            });
+            
+            modelBuilder.Entity<MbReleaseToGroup>(entity =>
+            {
+                entity.HasKey(rtg => new { rtg.ReleaseId, rtg.ReleaseGroupId });
+                
+                entity.HasOne(rtg => rtg.Release)
+                    .WithMany(r => r.ReleaseGroups)
+                    .HasForeignKey(rtg => rtg.ReleaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(rtg => rtg.ReleaseGroup)
+                    .WithMany(rg => rg.Releases)
+                    .HasForeignKey(rtg => rtg.ReleaseGroupId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.ReleaseId);
+                entity.HasIndex(e => e.ReleaseGroupId);
+            });
+            
+            modelBuilder.Entity<MbTag>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.EntityType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Tag).IsRequired().HasMaxLength(200);
+                
+                entity.HasIndex(e => new { e.EntityType, e.EntityId });
+                entity.HasIndex(e => e.Tag);
+            });
+            
+            modelBuilder.Entity<MbRecordingCandidate>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TitleNorm).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.ArtistNorm).IsRequired().HasMaxLength(500);
+                
+                entity.HasOne(e => e.Query)
+                    .WithMany()
+                    .HasForeignKey(e => e.QueryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(e => e.Recording)
+                    .WithMany(r => r.Candidates)
+                    .HasForeignKey(e => e.RecordingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.QueryId);
+                entity.HasIndex(e => e.RecordingId);
+                entity.HasIndex(e => new { e.QueryId, e.Rank });
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            // IMVDb entities
+            modelBuilder.Entity<ImvdbArtist>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(500);
+                
+                entity.HasIndex(e => e.ImvdbId).IsUnique();
+                entity.HasIndex(e => e.Name);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<ImvdbVideo>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.SongTitle).HasMaxLength(500);
+                entity.Property(e => e.VideoTitle).HasMaxLength(500);
+                entity.Property(e => e.ReleaseDate).HasMaxLength(10);
+                entity.Property(e => e.DirectorCredit).HasMaxLength(500);
+                
+                entity.HasIndex(e => e.ImvdbId).IsUnique();
+                entity.HasIndex(e => e.SongTitle);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<ImvdbVideoArtist>(entity =>
+            {
+                entity.HasKey(va => new { va.VideoId, va.ArtistId });
+                entity.Property(e => e.Role).IsRequired().HasMaxLength(50);
+                
+                entity.HasOne(va => va.Video)
+                    .WithMany(v => v.Artists)
+                    .HasForeignKey(va => va.VideoId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(va => va.Artist)
+                    .WithMany(a => a.VideoArtists)
+                    .HasForeignKey(va => va.ArtistId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.VideoId);
+                entity.HasIndex(e => e.ArtistId);
+            });
+            
+            modelBuilder.Entity<ImvdbVideoSource>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.ExternalId).IsRequired().HasMaxLength(200);
+                
+                entity.HasOne(e => e.Video)
+                    .WithMany(v => v.Sources)
+                    .HasForeignKey(e => e.VideoId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.VideoId);
+                entity.HasIndex(e => new { e.Source, e.ExternalId });
+            });
+            
+            modelBuilder.Entity<ImvdbVideoCandidate>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TitleNorm).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.ArtistNorm).IsRequired().HasMaxLength(500);
+                
+                entity.HasOne(e => e.Query)
+                    .WithMany()
+                    .HasForeignKey(e => e.QueryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(e => e.Video)
+                    .WithMany(v => v.Candidates)
+                    .HasForeignKey(e => e.VideoId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.QueryId);
+                entity.HasIndex(e => e.VideoId);
+                entity.HasIndex(e => new { e.QueryId, e.Rank });
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            // YouTube entities
+            modelBuilder.Entity<YtVideo>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.VideoId).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.ChannelId).HasMaxLength(100);
+                entity.Property(e => e.ChannelName).HasMaxLength(500);
+                entity.Property(e => e.PublishedAt).HasMaxLength(30);
+                entity.Property(e => e.ThumbnailUrl).HasMaxLength(1000);
+                entity.Property(e => e.ThumbnailPath).HasMaxLength(1000);
+                
+                entity.HasIndex(e => e.VideoId).IsUnique();
+                entity.HasIndex(e => e.ChannelId);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<YtVideoCandidate>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.VideoId).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.TitleNorm).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.ArtistNorm).IsRequired().HasMaxLength(500);
+                
+                entity.HasOne(e => e.Query)
+                    .WithMany()
+                    .HasForeignKey(e => e.QueryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(e => e.Video)
+                    .WithMany(v => v.Candidates)
+                    .HasForeignKey(e => e.VideoId)
+                    .HasPrincipalKey(v => v.VideoId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasIndex(e => e.QueryId);
+                entity.HasIndex(e => e.VideoId);
+                entity.HasIndex(e => new { e.QueryId, e.Rank });
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            // Cross-linking entities
+            modelBuilder.Entity<MvLink>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.YtVideoId).HasMaxLength(50);
+                entity.Property(e => e.LinkType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Notes).HasMaxLength(1000);
+                
+                entity.HasOne(e => e.ImvdbVideo)
+                    .WithMany()
+                    .HasForeignKey(e => e.ImvdbVideoId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasOne(e => e.MbRecording)
+                    .WithMany()
+                    .HasForeignKey(e => e.MbRecordingId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasOne(e => e.YtVideo)
+                    .WithMany()
+                    .HasForeignKey(e => e.YtVideoId)
+                    .HasPrincipalKey(v => v.VideoId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasIndex(e => e.ImvdbVideoId);
+                entity.HasIndex(e => e.MbRecordingId);
+                entity.HasIndex(e => e.YtVideoId);
+                entity.HasIndex(e => e.LinkType);
+                entity.HasIndex(e => e.IsActive);
+            });
+            
+            modelBuilder.Entity<QueryResolution>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.ChosenSource).IsRequired().HasMaxLength(50);
+                
+                entity.HasOne(e => e.Query)
+                    .WithOne(q => q.Resolution)
+                    .HasForeignKey<QueryResolution>(e => e.QueryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(e => e.MvLink)
+                    .WithMany()
+                    .HasForeignKey(e => e.MvLinkId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasIndex(e => e.QueryId).IsUnique();
+                entity.HasIndex(e => e.ChosenSource);
+                entity.HasIndex(e => e.IsActive);
             });
 
             // Seed initial configuration data with static dates

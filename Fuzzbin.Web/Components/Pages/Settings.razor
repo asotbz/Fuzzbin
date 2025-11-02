@@ -1081,7 +1081,7 @@
             await JSRuntime.InvokeVoidAsync("console.debug", "Settings: initiating restore file picker.");
             await InvokeAsync(StateHasChanged);
 
-            var hasElementReference = !string.IsNullOrEmpty(_restoreInputFile.Element.Id);
+            var hasElementReference = !_restoreInputFile.Element.Equals(default(ElementReference));
 
             if (hasElementReference)
             {
