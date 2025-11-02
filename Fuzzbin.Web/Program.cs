@@ -26,6 +26,7 @@ using Fuzzbin.Core.Interfaces;
 using Fuzzbin.Data.Context;
 using Fuzzbin.Data.Repositories;
 using Fuzzbin.Services;
+using Fuzzbin.Services.Http;
 using Fuzzbin.Services.Interfaces;
 using Fuzzbin.Services.Models;
 using HeaderNames = Microsoft.Net.Http.Headers.HeaderNames;
@@ -218,6 +219,7 @@ try
     builder.Services.AddSingleton<IDownloadSettingsProvider, DownloadSettingsProvider>();
     builder.Services.AddSingleton<IGenreMappingDefaultsProvider, GenreMappingDefaultsProvider>();
     builder.Services.AddSingleton<IMetadataSettingsProvider, MetadataSettingsProvider>();
+    builder.Services.AddSingleton<IExternalCacheSettingsProvider, ExternalCacheSettingsProvider>();
 
     // Register Services
     builder.Services.AddScoped<IYtDlpService, YtDlpService>();
@@ -258,11 +260,35 @@ try
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<ApplicationDbContext>("database");
 
-    // Add HttpClient for external API calls
-    builder.Services.AddHttpClient();
-
     // Add memory cache
     builder.Services.AddMemoryCache();
+
+    // Register HTTP infrastructure for external APIs with retry and rate limiting
+    builder.Services.AddSingleton<MusicBrainzRateLimiter>();
+    builder.Services.AddTransient<MusicBrainzHttpMessageHandler>();
+
+    // Configure MusicBrainz HTTP client with rate limiting and retry policy
+    builder.Services.AddHttpClient("MusicBrainz", (sp, client) =>
+    {
+        var settingsProvider = sp.GetRequiredService<IExternalCacheSettingsProvider>();
+        var settings = settingsProvider.GetSettings();
+        client.BaseAddress = new Uri("https://musicbrainz.org/ws/2/");
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(settings.MusicBrainzUserAgent);
+    })
+    .AddHttpMessageHandler<MusicBrainzHttpMessageHandler>()
+    .AddPolicyHandler(RetryPolicyFactory.CreateExternalApiRetryPolicy());
+
+    // Configure IMVDb HTTP client with retry policy (no rate limiting needed)
+    builder.Services.AddHttpClient("ImvdbEnriched")
+        .AddPolicyHandler(RetryPolicyFactory.CreateExternalApiRetryPolicy());
+
+    // Configure YouTube/yt-dlp HTTP client with retry policy
+    builder.Services.AddHttpClient("YouTubeDlp")
+        .AddPolicyHandler(RetryPolicyFactory.CreateExternalApiRetryPolicy());
+
+    // Add generic HttpClient for other external API calls
+    builder.Services.AddHttpClient();
 
     builder.Services.AddOptions<ImvdbOptions>()
         .Bind(builder.Configuration.GetSection("Imvdb"))
