@@ -433,11 +433,12 @@ Temporary Items
 
 # Fuzzbin specific ignores
 *.csv
+!genre_mapping.csv
 enrich_cache.json
 *.db
 *.db-shm
 *.db-wal
-videojockey.db*
+fuzzbin.db*
 /data/
 /media/
 /logs/
@@ -477,8 +478,9 @@ appsettings.Production.json
 *.thumb.jpg
 *.thumb.png
 
-# NFO files (generated)
+# NFO files, except for test fixtures
 *.nfo
+!Fuzzbin.Tests/Fixtures/Nfo/*.nfo
 
 # Backup files
 *.bak

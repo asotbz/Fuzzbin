@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<musicvideo>
+    <title>Untitled Video</title>
+    <artist>Unknown Artist</artist>
+    <!-- Missing year and genres - partial metadata -->
+    <plot>A video with incomplete metadata.</plot>
+</musicvideo>

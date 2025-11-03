@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<musicvideo>
+    <title>Test Video</title>
+    <artist>Test Artist</artist>
+    <year>2020</year>
+    <genre>Test</genre>
+    <sources>
+        <url>not-a-valid-url</url>
+        <url>https://valid-url.com</url>
+        <url></url>
+        <url>   </url>
+    </sources>
+</musicvideo>

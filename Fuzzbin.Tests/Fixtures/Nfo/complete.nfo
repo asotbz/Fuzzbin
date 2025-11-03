@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<musicvideo>
+    <title>Thriller</title>
+    <artist>Michael Jackson</artist>
+    <album>Thriller</album>
+    <year>1983</year>
+    <plot>Michael Jackson's iconic horror-themed music video directed by John Landis.</plot>
+    <genre>Pop</genre>
+    <genre>R&amp;B</genre>
+    <tag>80s</tag>
+    <tag>horror</tag>
+    <tag>dance</tag>
+    <director>John Landis</director>
+    <studio>Epic Records</studio>
+    <sources>
+        <url>https://www.youtube.com/watch?v=sOnqjkJTMaA</url>
+        <url>https://musicbrainz.org/recording/12345</url>
+    </sources>
+    <runtime>13</runtime>
+    <premiered>1983-12-02</premiered>
+</musicvideo>

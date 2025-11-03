@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<musicvideo>
+    <title>Classic Song</title>
+    <artist>Classic Artist</artist>
+    <album>Classic Album</album>
+    <year>1999</year>
+    <genre>Rock</genre>
+    <!-- No sources element -->
+</musicvideo>

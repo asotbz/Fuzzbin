@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<musicvideo>
+    <title>Uptown Funk</title>
+    <artist>Mark Ronson feat. Bruno Mars</artist>
+    <album>Uptown Special</album>
+    <year>2014</year>
+    <genre>Funk</genre>
+    <genre>Pop</genre>
+    <sources>
+        <url>https://www.youtube.com/watch?v=OPf0YbXqDm0</url>
+    </sources>
+</musicvideo>
