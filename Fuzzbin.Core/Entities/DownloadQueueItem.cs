@@ -25,6 +25,32 @@ namespace Fuzzbin.Core.Entities
         public string? FilePath { get; set; }
         public string? OutputPath { get; set; }
         public string? Format { get; set; }
+        
+        // Resume capability properties
+        /// <summary>
+        /// Path to partial download file (for resume support)
+        /// </summary>
+        public string? PartialFilePath { get; set; }
+        
+        /// <summary>
+        /// Number of bytes downloaded so far
+        /// </summary>
+        public long? BytesDownloaded { get; set; }
+        
+        /// <summary>
+        /// Total file size in bytes (if known)
+        /// </summary>
+        public long? TotalBytes { get; set; }
+        
+        /// <summary>
+        /// Whether this download supports resuming
+        /// </summary>
+        public bool SupportsResume { get; set; }
+        
+        /// <summary>
+        /// Last position in the download (for resume)
+        /// </summary>
+        public long? ResumePosition { get; set; }
     }
 
     public enum DownloadStatus

@@ -58,8 +58,17 @@
                                 FullWidth="true" />
                 </MudItem>
                 <MudItem xs="12">
-                    <MudTextField @bind-Value="_namingPattern" 
-                                Label="File Naming Pattern" 
+                    <MudTextField @bind-Value="_recycleBinPath"
+                                Label="Recycle Bin Path"
+                                HelperText="Temporary storage for deleted files before permanent deletion"
+                                Variant="Variant.Outlined"
+                                Adornment="Adornment.End"
+                                AdornmentIcon="@Icons.Material.Filled.Delete"
+                                FullWidth="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_namingPattern"
+                                Label="File Naming Pattern"
                                 HelperText="How files should be organized"
                                 Variant="Variant.Outlined"
                                 Lines="2"
@@ -667,6 +676,7 @@
     // General Settings
     private string _libraryPath = "";
     private string _downloadsPath = "";
+    private string _recycleBinPath = "";
     private string _namingPattern = "";
     private bool _normalizeFileNames = false;
     private string _currentPassword = string.Empty;
@@ -813,6 +823,7 @@
         // Load General Settings
         _libraryPath = GetString("Storage", "LibraryPath", "");
         _downloadsPath = GetString("Storage", "DownloadsPath", "");
+        _recycleBinPath = GetString("Storage", "RecycleBinPath", "");
         _namingPattern = GetString("Organization", "NamingPattern", "{artist}/{title}.{format}");
         _normalizeFileNames = GetBool("Organization", "NormalizeFileNames", false);
 
@@ -920,13 +931,18 @@
         {
             ("LibraryPath", _libraryPath, "Storage"),
             ("DownloadsPath", _downloadsPath, "Storage"),
+            ("RecycleBinPath", _recycleBinPath, "Storage"),
             ("NamingPattern", _namingPattern, "Organization"),
             ("NormalizeFileNames", _normalizeFileNames.ToString(), "Organization")
         });
         
         // Create directories if they don't exist
-        Directory.CreateDirectory(_libraryPath);
-        Directory.CreateDirectory(_downloadsPath);
+        if (!string.IsNullOrWhiteSpace(_libraryPath))
+            Directory.CreateDirectory(_libraryPath);
+        if (!string.IsNullOrWhiteSpace(_downloadsPath))
+            Directory.CreateDirectory(_downloadsPath);
+        if (!string.IsNullOrWhiteSpace(_recycleBinPath))
+            Directory.CreateDirectory(_recycleBinPath);
         
         Snackbar.Add("General settings saved successfully", Severity.Success);
     }

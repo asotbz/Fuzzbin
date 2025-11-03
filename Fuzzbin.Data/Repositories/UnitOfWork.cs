@@ -25,6 +25,7 @@ namespace Fuzzbin.Data.Repositories
         private IRepository<UserPreference>? _userPreferences;
         private IRepository<BackgroundJob>? _backgroundJobs;
         private IRepository<VideoSourceVerification>? _videoSourceVerifications;
+        private IRepository<RecycleBin>? _recycleBins;
 
         // Metadata cache repository instances
         private IRepository<Query>? _queries;
@@ -66,6 +67,7 @@ namespace Fuzzbin.Data.Repositories
         public IRepository<UserPreference> UserPreferences => _userPreferences ??= new Repository<UserPreference>(_context);
         public IRepository<BackgroundJob> BackgroundJobs => _backgroundJobs ??= new Repository<BackgroundJob>(_context);
         public IRepository<VideoSourceVerification> VideoSourceVerifications => _videoSourceVerifications ??= new Repository<VideoSourceVerification>(_context);
+        public IRepository<RecycleBin> RecycleBins => _recycleBins ??= new Repository<RecycleBin>(_context);
 
         // Metadata cache repositories
         public IRepository<Query> Queries => _queries ??= new Repository<Query>(_context);

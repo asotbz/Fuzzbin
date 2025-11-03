@@ -19,7 +19,7 @@ namespace Fuzzbin.Services.Interfaces
         Task UpdateFilePathAsync(Guid itemId, string? filePath, string? outputPath = null);
         
         // Bulk operations
-        Task<int> ClearQueueByStatusAsync(Fuzzbin.Core.Entities.DownloadStatus status);
+        Task<int> ClearQueueByStatusAsync(Fuzzbin.Core.Entities.DownloadStatus status, int batchSize = 100);
         Task<int> RetryAllFailedAsync();
         Task<bool> RemoveFromQueueAsync(Guid queueId);
         

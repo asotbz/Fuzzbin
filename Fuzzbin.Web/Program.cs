@@ -250,6 +250,15 @@ try
     builder.Services.AddScoped<IGenreService, GenreService>();
     builder.Services.AddScoped<ITagService, TagService>();
     
+    // Real-time download queue notifications
+    builder.Services.AddScoped<IDownloadQueueUpdateNotifier, Fuzzbin.Web.Services.SignalRDownloadQueueNotifier>();
+    
+    // Recycle bin service for deleted files
+    builder.Services.AddScoped<IRecycleBinService, RecycleBinService>();
+    
+    // URL normalization for duplicate detection
+    builder.Services.AddSingleton<UrlNormalizationService>();
+    
     // Add HttpContextAccessor for ActivityLogService
     builder.Services.AddHttpContextAccessor();
     
@@ -599,6 +608,7 @@ try
 
     app.MapHub<VideoUpdatesHub>("/hubs/updates");
     app.MapHub<JobProgressHub>("/hubs/jobprogress").AllowAnonymous();
+    app.MapHub<DownloadQueueHub>("/hubs/downloadqueue");
 
     app.MapGet("/api/system/build-info", () =>
     {

@@ -64,6 +64,11 @@ namespace Fuzzbin.Core.Interfaces
         /// </summary>
         IRepository<VideoSourceVerification> VideoSourceVerifications { get; }
 
+        /// <summary>
+        /// Repository for RecycleBin entities
+        /// </summary>
+        IRepository<RecycleBin> RecycleBins { get; }
+
         // Metadata Cache repositories
 
         /// <summary>

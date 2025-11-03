@@ -21,19 +21,27 @@ namespace Fuzzbin.Services
         private readonly IDownloadTaskQueue _taskQueue;
         private readonly IDownloadSettingsProvider _settingsProvider;
         private readonly IActivityLogService _activityLogService;
+        private readonly IRecycleBinService? _recycleBinService;
+        private readonly IDownloadQueueUpdateNotifier? _updateNotifier;
+        private readonly UrlNormalizationService _urlNormalizer;
         
         public DownloadQueueService(
             IUnitOfWork unitOfWork,
             ILogger<DownloadQueueService> logger,
             IDownloadTaskQueue taskQueue,
             IDownloadSettingsProvider settingsProvider,
-            IActivityLogService activityLogService)
+            IActivityLogService activityLogService,
+            IRecycleBinService? recycleBinService = null,
+            IDownloadQueueUpdateNotifier? updateNotifier = null)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _taskQueue = taskQueue;
             _settingsProvider = settingsProvider;
             _activityLogService = activityLogService;
+            _recycleBinService = recycleBinService;
+            _updateNotifier = updateNotifier;
+            _urlNormalizer = new UrlNormalizationService();
         }
         
         public async Task<DownloadQueueItem> AddToQueueAsync(
@@ -87,6 +95,12 @@ namespace Fuzzbin.Services
                 await _taskQueue.QueueAsync(queueItem.Id);
 
                 _logger.LogInformation("Added URL to download queue: {Url}", url);
+
+                // Notify via SignalR
+                if (_updateNotifier != null)
+                {
+                    await _updateNotifier.DownloadAddedAsync(queueItem);
+                }
 
                 await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
                     ActivityCategories.Download,
@@ -199,6 +213,12 @@ namespace Fuzzbin.Services
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
                     _logger.LogInformation("Updated queue item {Id} status to {Status}", queueId, status);
+                    
+                    // Notify via SignalR
+                    if (_updateNotifier != null)
+                    {
+                        await _updateNotifier.DownloadStatusChangedAsync(queueId, status, errorMessage);
+                    }
 
                     if (status == DownloadStatusEnum.Downloading)
                     {
@@ -256,6 +276,12 @@ namespace Fuzzbin.Services
                     item.UpdatedAt = DateTime.UtcNow;
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
+                    
+                    // Notify via SignalR
+                    if (_updateNotifier != null)
+                    {
+                        await _updateNotifier.DownloadProgressUpdatedAsync(queueId, progress, downloadSpeed, eta);
+                    }
                 }
             }
             catch (Exception ex)
@@ -273,12 +299,37 @@ namespace Fuzzbin.Services
                 
                 if (item != null && item.Status != DownloadStatusEnum.Downloading)
                 {
+                    // Move downloaded file to recycle bin if it exists
+                    if (_recycleBinService != null && !string.IsNullOrWhiteSpace(item.FilePath) && File.Exists(item.FilePath))
+                    {
+                        try
+                        {
+                            await _recycleBinService.MoveToRecycleBinAsync(
+                                item.FilePath,
+                                downloadQueueItemId: item.Id,
+                                videoId: item.VideoId,
+                                reason: "Download queue item removed");
+                            _logger.LogInformation("Moved file to recycle bin: {FilePath}", item.FilePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to move file to recycle bin, continuing with removal: {FilePath}", item.FilePath);
+                        }
+                    }
+                    
                     item.IsDeleted = true;
                     item.DeletedDate = DateTime.UtcNow;
                     item.UpdatedAt = DateTime.UtcNow;
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
                     _logger.LogInformation("Removed queue item: {Id}", queueId);
+                    
+                    // Notify via SignalR
+                    if (_updateNotifier != null)
+                    {
+                        await _updateNotifier.DownloadRemovedAsync(queueId);
+                    }
+                    
                     return true;
                 }
                 return false;
@@ -560,6 +611,12 @@ namespace Fuzzbin.Services
                     
                     await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
                     await _unitOfWork.SaveChangesAsync();
+                    
+                    // Notify via SignalR
+                    if (_updateNotifier != null)
+                    {
+                        await _updateNotifier.DownloadCompletedAsync(itemId, videoId);
+                    }
                 }
             }
             else
@@ -589,26 +646,84 @@ namespace Fuzzbin.Services
             return await _unitOfWork.DownloadQueueItems.FirstOrDefaultAsync(specification);
         }
 
-        public async Task<int> ClearQueueByStatusAsync(DownloadStatusEnum status)
+        public async Task<int> ClearQueueByStatusAsync(DownloadStatusEnum status, int batchSize = 100)
         {
             try
             {
+                const int MaxBatchSize = 1000; // Safety limit to prevent memory issues
+                var effectiveBatchSize = Math.Min(batchSize, MaxBatchSize);
+                
                 var specification = new DownloadQueueByStatusSpecification(status, includeVideo: false);
-                var items = await _unitOfWork.DownloadQueueItems.ListAsync(specification);
+                var allItems = await _unitOfWork.DownloadQueueItems.ListAsync(specification);
 
-                var count = 0;
-                foreach (var item in items)
+                var totalCount = 0;
+                var totalFilesMovedToRecycleBin = 0;
+                
+                // Process in batches to avoid memory and transaction timeout issues
+                var batches = allItems
+                    .Select((item, index) => new { item, index })
+                    .GroupBy(x => x.index / effectiveBatchSize)
+                    .Select(g => g.Select(x => x.item).ToList())
+                    .ToList();
+
+                _logger.LogInformation(
+                    "Clearing {TotalItems} items with status {Status} in {BatchCount} batches of up to {BatchSize} items",
+                    allItems.Count, status, batches.Count, effectiveBatchSize);
+
+                foreach (var batch in batches)
                 {
-                    item.IsDeleted = true;
-                    item.DeletedDate = DateTime.UtcNow;
-                    item.UpdatedAt = DateTime.UtcNow;
-                    await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
-                    count++;
+                    var batchCount = 0;
+                    var batchFilesMovedToRecycleBin = 0;
+                    
+                    foreach (var item in batch)
+                    {
+                        // Move downloaded files to recycle bin if they exist
+                        if (_recycleBinService != null && !string.IsNullOrWhiteSpace(item.FilePath) && File.Exists(item.FilePath))
+                        {
+                            try
+                            {
+                                await _recycleBinService.MoveToRecycleBinAsync(
+                                    item.FilePath,
+                                    downloadQueueItemId: item.Id,
+                                    videoId: item.VideoId,
+                                    reason: $"Bulk clear of {status} items");
+                                batchFilesMovedToRecycleBin++;
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to move file to recycle bin: {FilePath}", item.FilePath);
+                            }
+                        }
+                        
+                        item.IsDeleted = true;
+                        item.DeletedDate = DateTime.UtcNow;
+                        item.UpdatedAt = DateTime.UtcNow;
+                        await _unitOfWork.DownloadQueueItems.UpdateAsync(item);
+                        batchCount++;
+                    }
+
+                    // Save changes for this batch
+                    await _unitOfWork.SaveChangesAsync();
+                    
+                    totalCount += batchCount;
+                    totalFilesMovedToRecycleBin += batchFilesMovedToRecycleBin;
+                    
+                    _logger.LogDebug(
+                        "Processed batch: {BatchCount} items cleared, {BatchFilesMovedToRecycleBin} files moved to recycle bin. Total: {TotalCount}/{AllCount}",
+                        batchCount, batchFilesMovedToRecycleBin, totalCount, allItems.Count);
                 }
 
-                await _unitOfWork.SaveChangesAsync();
-                _logger.LogInformation("Cleared {Count} items with status {Status}", count, status);
-                if (count > 0)
+                _logger.LogInformation(
+                    "Cleared {Count} items with status {Status}, moved {FilesCount} files to recycle bin",
+                    totalCount, status, totalFilesMovedToRecycleBin);
+                
+                // Notify via SignalR
+                if (_updateNotifier != null && totalCount > 0)
+                {
+                    await _updateNotifier.DownloadsClearedAsync(status, totalCount);
+                }
+                
+                if (totalCount > 0)
                 {
                     await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
                         ActivityCategories.Download,
@@ -616,9 +731,9 @@ namespace Fuzzbin.Services
                         entityType: nameof(DownloadQueue),
                         entityId: null,
                         entityName: null,
-                        details: $"Cleared {count} downloads with status {status}"));
+                        details: $"Cleared {totalCount} downloads with status {status} in {batches.Count} batches ({totalFilesMovedToRecycleBin} files moved to recycle bin)"));
                 }
-                return count;
+                return totalCount;
             }
             catch (Exception ex)
             {
@@ -661,6 +776,13 @@ namespace Fuzzbin.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 _logger.LogInformation("Queued {Count} failed items for retry", count);
+                
+                // Notify via SignalR
+                if (_updateNotifier != null && count > 0)
+                {
+                    await _updateNotifier.AllFailedDownloadsRetriedAsync(count);
+                }
+                
                 if (count > 0)
                 {
                     await LogActivityAsync(() => _activityLogService.LogSuccessAsync(
@@ -697,16 +819,52 @@ namespace Fuzzbin.Services
                     return false;
                 }
 
-                var normalizedUrl = url.Trim().ToLowerInvariant();
+                // Use advanced URL normalization
+                var normalizedUrl = _urlNormalizer.NormalizeUrl(url);
+                var urlVariations = _urlNormalizer.GetUrlVariations(url).ToList();
                 
                 var allItems = await _unitOfWork.DownloadQueueItems
                     .GetAllAsync(includeDeleted: false);
 
-                return allItems.Any(item =>
-                    !string.IsNullOrWhiteSpace(item.Url) &&
-                    item.Url.Trim().ToLowerInvariant() == normalizedUrl &&
-                    (item.Status == DownloadStatusEnum.Queued ||
-                     item.Status == DownloadStatusEnum.Downloading));
+                // Check against all URL variations for maximum duplicate detection
+                foreach (var item in allItems)
+                {
+                    if (string.IsNullOrWhiteSpace(item.Url))
+                    {
+                        continue;
+                    }
+
+                    // Only check queued and downloading items
+                    if (item.Status != DownloadStatusEnum.Queued &&
+                        item.Status != DownloadStatusEnum.Downloading)
+                    {
+                        continue;
+                    }
+
+                    var itemNormalizedUrl = _urlNormalizer.NormalizeUrl(item.Url);
+                    
+                    // Check if normalized URLs match
+                    if (itemNormalizedUrl.Equals(normalizedUrl, StringComparison.Ordinal))
+                    {
+                        _logger.LogDebug("Duplicate detected: {Url} matches existing {ExistingUrl} (normalized)",
+                            url, item.Url);
+                        return true;
+                    }
+
+                    // Also check if any variation of the input URL matches the normalized existing URL
+                    foreach (var variation in urlVariations)
+                    {
+                        var normalizedVariation = _urlNormalizer.NormalizeUrl(variation);
+                        if (normalizedVariation.Equals(itemNormalizedUrl, StringComparison.Ordinal))
+                        {
+                            _logger.LogDebug("Duplicate detected: {Url} variation {Variation} matches existing {ExistingUrl}",
+                                url, variation, item.Url);
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
             }
             catch (Exception ex)
             {

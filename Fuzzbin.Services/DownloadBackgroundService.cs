@@ -180,22 +180,37 @@ namespace Fuzzbin.Services
                 var errorMessage = downloadResult.ErrorMessage ?? "Download failed";
                 await queueService.UpdateStatusAsync(queueId, DownloadStatusEnum.Failed, errorMessage);
 
-                var maxRetries = Math.Max(0, options.MaxRetryCount);
-                if (queueItem.RetryCount < maxRetries)
+                // Classify the error and get appropriate retry strategy
+                var errorType = Models.RetryStrategyFactory.ClassifyError(errorMessage);
+                var retryStrategy = Models.RetryStrategyFactory.GetStrategy(errorType);
+
+                _logger.LogInformation(
+                    "Queue item {QueueId} failed with error type {ErrorType}. Error: {Error}",
+                    queueId,
+                    errorType,
+                    errorMessage);
+
+                // Check if we should retry based on error type and retry count
+                if (retryStrategy.ShouldRetry && queueItem.RetryCount < retryStrategy.MaxRetries)
                 {
+                    var delay = retryStrategy.CalculateDelay(queueItem.RetryCount);
+                    
                     _logger.LogWarning(
-                        "Queue item {QueueId} failed (attempt {Attempt}/{Max}). Retrying in {DelaySeconds}s. Error: {Error}",
+                        "Queue item {QueueId} will be retried (attempt {Attempt}/{Max}, error type: {ErrorType}, backoff strategy: {BackoffStrategy}). " +
+                        "Retrying in {DelaySeconds:F1}s. Error: {Error}",
                         queueId,
                         queueItem.RetryCount + 1,
-                        maxRetries,
-                        options.RetryBackoffSeconds,
+                        retryStrategy.MaxRetries,
+                        errorType,
+                        retryStrategy.UseExponentialBackoff ? "exponential" : "fixed",
+                        delay.TotalSeconds,
                         errorMessage);
 
-                    if (options.RetryBackoffSeconds > 0)
+                    if (delay > TimeSpan.Zero)
                     {
                         try
                         {
-                            await Task.Delay(TimeSpan.FromSeconds(options.RetryBackoffSeconds), stoppingToken);
+                            await Task.Delay(delay, stoppingToken);
                         }
                         catch (OperationCanceledException)
                         {
@@ -207,9 +222,15 @@ namespace Fuzzbin.Services
                     return;
                 }
 
+                // Log why we're not retrying
+                var reason = !retryStrategy.ShouldRetry
+                    ? $"error type '{errorType}' is not retryable"
+                    : $"exceeded retry budget ({queueItem.RetryCount}/{retryStrategy.MaxRetries} attempts)";
+
                 _logger.LogError(
-                    "Queue item {QueueId} exceeded retry budget. Marking as permanently failed. Error: {Error}",
+                    "Queue item {QueueId} marked as permanently failed: {Reason}. Error: {Error}",
                     queueId,
+                    reason,
                     errorMessage);
             }
             finally
