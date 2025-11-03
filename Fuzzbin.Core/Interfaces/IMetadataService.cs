@@ -186,7 +186,11 @@ public class NfoData
     public string? FanArt { get; set; }
     public VideoStreamInfo? VideoStream { get; set; }
     public AudioStreamInfo? AudioStream { get; set; }
-    public Dictionary<string, string> CustomFields { get; set; } = new();
+    
+    /// <summary>
+    /// List of source URLs from <sources><url> elements
+    /// </summary>
+    public List<string> SourceUrls { get; set; } = new();
 }
 
 public class VideoStreamInfo

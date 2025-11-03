@@ -354,6 +354,16 @@ public class MetadataService : IMetadataService
             // Parse tags
             nfoData.Tags = root.Elements("tag").Select(e => e.Value).ToList();
             
+            // Parse source URLs from <sources> element (Fuzzbin extension)
+            var sourcesElement = root.Element("sources");
+            if (sourcesElement != null)
+            {
+                nfoData.SourceUrls = sourcesElement.Elements("url")
+                    .Select(e => e.Value)
+                    .Where(url => !string.IsNullOrWhiteSpace(url) && Uri.TryCreate(url, UriKind.Absolute, out _))
+                    .ToList();
+            }
+            
             // Parse stream details
             var streamDetails = root.Element("streamdetails");
             if (streamDetails != null)
@@ -384,11 +394,6 @@ public class MetadataService : IMetadataService
                     };
                 }
             }
-            
-            // Parse custom fields
-            nfoData.CustomFields["customfield1"] = root.Element("customfield1")?.Value ?? "";
-            nfoData.CustomFields["customfield2"] = root.Element("customfield2")?.Value ?? "";
-            nfoData.CustomFields["customfield3"] = root.Element("customfield3")?.Value ?? "";
             
             return nfoData;
         }

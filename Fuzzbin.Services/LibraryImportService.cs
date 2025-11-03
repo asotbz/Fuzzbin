@@ -386,6 +386,14 @@ namespace Fuzzbin.Services
                 Status = LibraryImportItemStatus.PendingReview
             };
 
+            // Check for NFO file and apply metadata BEFORE filename parsing
+            var nfoFilePath = await FindNfoFileAsync(filePath, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(nfoFilePath))
+            {
+                await ApplyNfoMetadataAsync(item, nfoFilePath, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Applied NFO metadata from {NfoFilePath} to {FilePath}", nfoFilePath, filePath);
+            }
+
             if (request.ComputeHashes && fileInfo.Exists)
             {
                 item.FileHash = await ComputeHashAsync(filePath, cancellationToken).ConfigureAwait(false);
@@ -752,6 +760,225 @@ namespace Fuzzbin.Services
             }
 
             return normalized.TrimStart('.');
+        }
+
+        /// <summary>
+        /// Searches for an NFO file associated with a video file.
+        /// Checks: same basename, Kodi patterns, and directory-level NFO.
+        /// </summary>
+        private async Task<string?> FindNfoFileAsync(string videoFilePath, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(videoFilePath);
+                if (string.IsNullOrEmpty(directory))
+                {
+                    return null;
+                }
+
+                var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(videoFilePath);
+                
+                // Priority 1: Same basename (e.g., video.mp4 -> video.nfo)
+                var sameBasename = Path.Combine(directory, $"{fileNameWithoutExtension}.nfo");
+                if (File.Exists(sameBasename))
+                {
+                    return sameBasename;
+                }
+
+                // Priority 2: Kodi pattern (e.g., video.mp4 -> video-nfo.nfo or video-nfo.xml)
+                var kodiNfoPattern = Path.Combine(directory, $"{fileNameWithoutExtension}-nfo.nfo");
+                if (File.Exists(kodiNfoPattern))
+                {
+                    return kodiNfoPattern;
+                }
+
+                var kodiXmlPattern = Path.Combine(directory, $"{fileNameWithoutExtension}-nfo.xml");
+                if (File.Exists(kodiXmlPattern))
+                {
+                    return kodiXmlPattern;
+                }
+
+                // Priority 3: Directory-level NFO (movie.nfo or tvshow.nfo)
+                var movieNfo = Path.Combine(directory, "movie.nfo");
+                if (File.Exists(movieNfo))
+                {
+                    return movieNfo;
+                }
+
+                var tvshowNfo = Path.Combine(directory, "tvshow.nfo");
+                if (File.Exists(tvshowNfo))
+                {
+                    return tvshowNfo;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error searching for NFO file for {VideoFilePath}", videoFilePath);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Applies NFO metadata to a LibraryImportItem.
+        /// Extracts featured artists from artist and title fields.
+        /// </summary>
+        private async Task ApplyNfoMetadataAsync(LibraryImportItem item, string nfoFilePath, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var nfoData = await _metadataService.ReadNfoAsync(nfoFilePath, cancellationToken).ConfigureAwait(false);
+                
+                if (nfoData == null)
+                {
+                    return;
+                }
+
+                // Store NFO data as JSON
+                item.NfoMetadataJson = JsonSerializer.Serialize(nfoData);
+
+                // Set metadata source
+                item.MetadataSource = IsMetadataComplete(nfoData) ? "nfo_complete" : "nfo_partial";
+
+                // Extract featured artists from both artist and title fields
+                var featuredArtists = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                
+                if (!string.IsNullOrWhiteSpace(nfoData.Artist))
+                {
+                    var fromArtist = ExtractFeaturedArtists(nfoData.Artist);
+                    foreach (var artist in fromArtist)
+                    {
+                        featuredArtists.Add(artist);
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(nfoData.Title))
+                {
+                    var fromTitle = ExtractFeaturedFromTitle(nfoData.Title);
+                    foreach (var artist in fromTitle)
+                    {
+                        featuredArtists.Add(artist);
+                    }
+                }
+
+                if (featuredArtists.Count > 0)
+                {
+                    item.FeaturedArtistsJson = JsonSerializer.Serialize(featuredArtists.ToList());
+                }
+
+                // Apply metadata to item (NFO takes priority)
+                item.Artist = nfoData.Artist ?? item.Artist;
+                item.Title = nfoData.Title ?? item.Title;
+                item.Year = nfoData.Year ?? item.Year;
+                item.Album = nfoData.Album ?? item.Album;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error applying NFO metadata from {NfoFilePath}", nfoFilePath);
+            }
+        }
+
+        /// <summary>
+        /// Extracts featured artists from artist field using patterns like "feat.", "ft.", "featuring", "with", "x".
+        /// Example: "Main Artist feat. Featured Artist" -> ["Featured Artist"]
+        /// </summary>
+        private static List<string> ExtractFeaturedArtists(string artistField)
+        {
+            var featured = new List<string>();
+            
+            if (string.IsNullOrWhiteSpace(artistField))
+            {
+                return featured;
+            }
+
+            // Patterns: feat., ft., featuring, with, x (as separator)
+            // Regex to find featured artist markers and extract what follows
+            // For "x", stop at other feature keywords
+            var patterns = new[]
+            {
+                @"\bfeat\.\s+([^,;&]+)",
+                @"\bft\.\s+([^,;&]+)",
+                @"\bfeaturing\s+([^,;&]+)",
+                @"\bwith\s+([^,;&]+)",
+                @"\bx\s+([^,;&\(]+?)(?:\s+(?:feat\.|ft\.|featuring|with|x)\s+|\s*$)"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var matches = Regex.Matches(artistField, pattern, RegexOptions.IgnoreCase);
+                foreach (Match match in matches)
+                {
+                    if (match.Groups.Count > 1)
+                    {
+                        var artist = match.Groups[1].Value.Trim();
+                        if (!string.IsNullOrWhiteSpace(artist))
+                        {
+                            // Clean up any trailing punctuation
+                            artist = Regex.Replace(artist, @"[)\]]+$", "").Trim();
+                            featured.Add(artist);
+                        }
+                    }
+                }
+            }
+
+            return featured;
+        }
+
+        /// <summary>
+        /// Extracts featured artists from title field using patterns like "(feat. Artist)".
+        /// Example: "Song Title (feat. Featured Artist)" -> ["Featured Artist"]
+        /// </summary>
+        private static List<string> ExtractFeaturedFromTitle(string titleField)
+        {
+            var featured = new List<string>();
+            
+            if (string.IsNullOrWhiteSpace(titleField))
+            {
+                return featured;
+            }
+
+            // Patterns for parenthetical featured artists in titles
+            var patterns = new[]
+            {
+                @"\(feat\.\s+([^)]+)\)",
+                @"\(ft\.\s+([^)]+)\)",
+                @"\(featuring\s+([^)]+)\)",
+                @"\[feat\.\s+([^\]]+)\]",
+                @"\[ft\.\s+([^\]]+)\]",
+                @"\[featuring\s+([^\]]+)\]"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var matches = Regex.Matches(titleField, pattern, RegexOptions.IgnoreCase);
+                foreach (Match match in matches)
+                {
+                    if (match.Groups.Count > 1)
+                    {
+                        var artist = match.Groups[1].Value.Trim();
+                        if (!string.IsNullOrWhiteSpace(artist))
+                        {
+                            featured.Add(artist);
+                        }
+                    }
+                }
+            }
+
+            return featured;
+        }
+
+        /// <summary>
+        /// Checks if NFO data contains all required fields for complete metadata.
+        /// Required: Artist, Title, Year, and at least one genre.
+        /// </summary>
+        private static bool IsMetadataComplete(NfoData nfoData)
+        {
+            return !string.IsNullOrWhiteSpace(nfoData.Artist)
+                && !string.IsNullOrWhiteSpace(nfoData.Title)
+                && nfoData.Year.HasValue
+                && nfoData.Genres != null
+                && nfoData.Genres.Count > 0;
         }
     }
 }

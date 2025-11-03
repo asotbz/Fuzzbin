@@ -147,6 +147,26 @@ namespace Fuzzbin.Core.Entities
         /// Timestamp for when the item review was last updated.
         /// </summary>
         public DateTime? ReviewedAt { get; set; }
+
+        /// <summary>
+        /// Source of metadata (e.g., "NFO", "Auto (IMVDb)", "Filename")
+        /// </summary>
+        public string? MetadataSource { get; set; }
+
+        /// <summary>
+        /// JSON storage for metadata extracted from NFO file
+        /// </summary>
+        public string? NfoMetadataJson { get; set; }
+
+        /// <summary>
+        /// JSON storage for metadata cache search results
+        /// </summary>
+        public string? CacheMetadataJson { get; set; }
+
+        /// <summary>
+        /// JSON array of featured artist names
+        /// </summary>
+        public string? FeaturedArtistsJson { get; set; }
     }
 
     /// <summary>

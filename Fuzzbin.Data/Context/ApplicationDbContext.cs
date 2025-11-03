@@ -299,12 +299,19 @@ namespace Fuzzbin.Data.Context
                 entity.Property(e => e.DuplicateStatus).HasConversion<string>().HasMaxLength(50);
                 entity.Property(e => e.CandidateMatchesJson).HasColumnType("TEXT");
                 entity.Property(e => e.Notes).HasMaxLength(1000);
+                
+                // NFO and metadata cache fields
+                entity.Property(e => e.MetadataSource).HasMaxLength(50);
+                entity.Property(e => e.NfoMetadataJson).HasColumnType("TEXT");
+                entity.Property(e => e.CacheMetadataJson).HasColumnType("TEXT");
+                entity.Property(e => e.FeaturedArtistsJson).HasColumnType("TEXT");
 
                 entity.HasIndex(e => e.SessionId);
                 entity.HasIndex(e => e.FileHash);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.DuplicateStatus);
                 entity.HasIndex(e => e.IsCommitted);
+                entity.HasIndex(e => e.MetadataSource);
             });
 
             // Configure VideoSourceVerification entity
