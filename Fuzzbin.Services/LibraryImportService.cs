@@ -436,10 +436,16 @@ namespace Fuzzbin.Services
 
             if (string.IsNullOrWhiteSpace(item.Title) || string.IsNullOrWhiteSpace(item.Artist))
             {
-                var inferred = InferFromFilename(fileInfo.Name);
+                var inferred = InferFromFilenameEnhanced(fileInfo.Name);
                 item.Artist ??= inferred.Artist;
                 item.Title ??= inferred.Title;
                 item.Year ??= inferred.Year;
+
+                // Store featured artists if extracted from filename
+                if (inferred.FeaturedArtists.Any())
+                {
+                    item.FeaturedArtistsJson = JsonSerializer.Serialize(inferred.FeaturedArtists);
+                }
             }
 
             var searchKey = BuildSearchKey(item.Artist, item.Title);
@@ -606,6 +612,124 @@ namespace Fuzzbin.Services
             }
 
             return (null, normalized, year);
+        }
+
+        /// <summary>
+        /// Enhanced filename parser with support for multiple patterns, featured artists, and common suffixes.
+        /// </summary>
+        private static (string? Artist, string? Title, int? Year, List<string> FeaturedArtists) InferFromFilenameEnhanced(string fileName)
+        {
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            var normalized = nameWithoutExt
+                .Replace('_', ' ')
+                .Replace("  ", " ")
+                .Trim();
+
+            // Remove common suffixes
+            var suffixesToRemove = new[]
+            {
+                "(Official Video)", "(Official Music Video)",
+                "(Official Audio)", "[Official Video]",
+                "[HD]", "[4K]", "(HD)", "(4K)",
+                "(Explicit)", "[Explicit]"
+            };
+            foreach (var suffix in suffixesToRemove)
+            {
+                var idx = normalized.LastIndexOf(suffix, StringComparison.OrdinalIgnoreCase);
+                if (idx > 0)
+                {
+                    normalized = normalized.Substring(0, idx).Trim();
+                }
+            }
+
+            // Extract year
+            int? year = null;
+            var yearMatch = FilenameYearRegex.Match(normalized);
+            if (yearMatch.Success && int.TryParse(yearMatch.Value, out var parsedYear))
+            {
+                year = parsedYear;
+                normalized = normalized.Replace(yearMatch.Value, "").Trim();
+
+                // Remove surrounding brackets/parens
+                normalized = Regex.Replace(normalized, @"\s*[\[\(\{\s]*\s*[\]\)\}\s]*\s*$", "").Trim();
+            }
+
+            // Try different separator patterns
+            var separators = new[] { " - ", " – ", " — ", " | " };
+            foreach (var separator in separators)
+            {
+                var parts = normalized.Split(separator, StringSplitOptions.TrimEntries);
+                if (parts.Length >= 2)
+                {
+                    var artistPart = parts[0];
+                    var titlePart = string.Join(" - ", parts.Skip(1));
+
+                    // Extract featured artists from artist field and title field
+                    var artistFeatured = ExtractFeaturedArtists(artistPart);
+                    var titleFeatured = ExtractFeaturedFromTitle(titlePart);
+
+                    // Combine all featured artists
+                    var allFeatured = new List<string>();
+                    allFeatured.AddRange(artistFeatured);
+                    allFeatured.AddRange(titleFeatured);
+
+                    // Remove featured artists from artist and title strings
+                    var primaryArtist = RemoveFeaturedArtistsFromString(artistPart);
+                    var cleanTitle = RemoveFeaturedArtistsFromString(titlePart);
+
+                    return (primaryArtist, cleanTitle, year, allFeatured.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+                }
+            }
+
+            return (null, normalized, year, new List<string>());
+        }
+
+        /// <summary>
+        /// Removes featured artist patterns from a string (artist or title field).
+        /// Example: "Taylor Swift feat. Ed Sheeran" -> "Taylor Swift"
+        /// Example: "End Game (feat. Ed Sheeran)" -> "End Game"
+        /// </summary>
+        private static string RemoveFeaturedArtistsFromString(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return input;
+            }
+
+            var cleaned = input;
+
+            // Remove parenthetical featured artists from titles: (feat. ...), [feat. ...], etc.
+            var parentheticalPatterns = new[]
+            {
+                @"\s*\(feat\.\s+[^)]+\)",
+                @"\s*\(ft\.\s+[^)]+\)",
+                @"\s*\(featuring\s+[^)]+\)",
+                @"\s*\[feat\.\s+[^\]]+\]",
+                @"\s*\[ft\.\s+[^\]]+\]",
+                @"\s*\[featuring\s+[^\]]+\]"
+            };
+
+            foreach (var pattern in parentheticalPatterns)
+            {
+                cleaned = Regex.Replace(cleaned, pattern, "", RegexOptions.IgnoreCase);
+            }
+
+            // Remove non-parenthetical featured artists: "feat. ...", "ft. ...", etc.
+            var featPatterns = new[]
+            {
+                @"\s+feat\.\s+.+$",
+                @"\s+ft\.\s+.+$",
+                @"\s+featuring\s+.+$",
+                @"\s+with\s+.+$",
+                @"\s+x\s+.+$"
+            };
+
+            foreach (var pattern in featPatterns)
+            {
+                cleaned = Regex.Replace(cleaned, pattern, "", RegexOptions.IgnoreCase);
+            }
+
+            return cleaned.Trim();
         }
 
         private IReadOnlyList<LibraryImportMatchCandidate> BuildMatchCandidates(
@@ -893,15 +1017,14 @@ namespace Fuzzbin.Services
             }
 
             // Patterns: feat., ft., featuring, with, x (as separator)
-            // Regex to find featured artist markers and extract what follows
-            // For "x", stop at other feature keywords
+            // Regex to find featured artist markers and extract everything after them
             var patterns = new[]
             {
-                @"\bfeat\.\s+([^,;&]+)",
-                @"\bft\.\s+([^,;&]+)",
-                @"\bfeaturing\s+([^,;&]+)",
-                @"\bwith\s+([^,;&]+)",
-                @"\bx\s+([^,;&\(]+?)(?:\s+(?:feat\.|ft\.|featuring|with|x)\s+|\s*$)"
+                @"\bfeat\.\s+(.+)$",
+                @"\bft\.\s+(.+)$",
+                @"\bfeaturing\s+(.+)$",
+                @"\bwith\s+(.+)$",
+                @"\bx\s+(.+)$"
             };
 
             foreach (var pattern in patterns)
@@ -911,12 +1034,17 @@ namespace Fuzzbin.Services
                 {
                     if (match.Groups.Count > 1)
                     {
-                        var artist = match.Groups[1].Value.Trim();
-                        if (!string.IsNullOrWhiteSpace(artist))
+                        var artistsPart = match.Groups[1].Value.Trim();
+                        if (!string.IsNullOrWhiteSpace(artistsPart))
                         {
-                            // Clean up any trailing punctuation
-                            artist = Regex.Replace(artist, @"[)\]]+$", "").Trim();
-                            featured.Add(artist);
+                            // Split by common separators: &, and, +, ,
+                            var artists = Regex.Split(artistsPart, @"\s*(?:&|\band\b|\+|,)\s*", RegexOptions.IgnoreCase)
+                                .Select(a => a.Trim())
+                                .Where(a => !string.IsNullOrWhiteSpace(a))
+                                .Select(a => Regex.Replace(a, @"[)\]]+$", "").Trim()) // Clean up trailing punctuation
+                                .Where(a => !string.IsNullOrWhiteSpace(a))
+                                .ToList();
+                            featured.AddRange(artists);
                         }
                     }
                 }
@@ -956,10 +1084,15 @@ namespace Fuzzbin.Services
                 {
                     if (match.Groups.Count > 1)
                     {
-                        var artist = match.Groups[1].Value.Trim();
-                        if (!string.IsNullOrWhiteSpace(artist))
+                        var artistsPart = match.Groups[1].Value.Trim();
+                        if (!string.IsNullOrWhiteSpace(artistsPart))
                         {
-                            featured.Add(artist);
+                            // Split by common separators: &, and, +, ,
+                            var artists = Regex.Split(artistsPart, @"\s*(?:&|\band\b|\+|,)\s*", RegexOptions.IgnoreCase)
+                                .Select(a => a.Trim())
+                                .Where(a => !string.IsNullOrWhiteSpace(a))
+                                .ToList();
+                            featured.AddRange(artists);
                         }
                     }
                 }

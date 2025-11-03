@@ -251,3 +251,395 @@ public class LibraryImportServiceTests : IAsyncLifetime
         public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
     }
 }
+
+/// <summary>
+/// Tests for enhanced filename parsing with featured artist extraction
+/// </summary>
+public class LibraryImportServiceEnhancedFilenameParsingTests
+{
+    [Theory]
+    [InlineData("Taylor Swift feat. Ed Sheeran - End Game (2017).mp4", "Taylor Swift", "End Game", 2017, "Ed Sheeran")]
+    [InlineData("Taylor Swift ft. Ed Sheeran - End Game.mp4", "Taylor Swift", "End Game", null, "Ed Sheeran")]
+    [InlineData("Taylor Swift featuring Ed Sheeran - End Game.mp4", "Taylor Swift", "End Game", null, "Ed Sheeran")]
+    [InlineData("Taylor Swift with Ed Sheeran - End Game.mp4", "Taylor Swift", "End Game", null, "Ed Sheeran")]
+    [InlineData("Taylor Swift x Ed Sheeran - End Game.mp4", "Taylor Swift", "End Game", null, "Ed Sheeran")]
+    public async Task EnhancedParser_ShouldExtractFeaturedArtistFromArtistField(
+        string filename, string expectedArtist, string expectedTitle, int? expectedYear, string expectedFeatured)
+    {
+        // Arrange
+        var options = CreateOptions();
+        await using var context = new ApplicationDbContext(options);
+        var (service, unitOfWork) = CreateService(context);
+        var rootPath = Path.Combine(Path.GetTempPath(), $"fz-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var filePath = Path.Combine(rootPath, filename);
+            await File.WriteAllTextAsync(filePath, "test-content");
+
+            var request = new LibraryImportRequest
+            {
+                RootPath = rootPath,
+                ComputeHashes = false,
+                RefreshMetadata = false
+            };
+
+            // Act
+            var session = await service.StartImportAsync(request);
+
+            // Assert
+            var item = Assert.Single(session.Items);
+            Assert.Equal(expectedArtist, item.Artist);
+            Assert.Equal(expectedTitle, item.Title);
+            Assert.Equal(expectedYear, item.Year);
+            Assert.NotNull(item.FeaturedArtistsJson);
+            
+            var featured = JsonSerializer.Deserialize<List<string>>(item.FeaturedArtistsJson);
+            Assert.NotNull(featured);
+            Assert.Contains(expectedFeatured, featured);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, true); } catch { }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("Taylor Swift - End Game (feat. Ed Sheeran).mp4", "Taylor Swift", "End Game", "Ed Sheeran")]
+    [InlineData("Taylor Swift - End Game [feat. Ed Sheeran].mp4", "Taylor Swift", "End Game", "Ed Sheeran")]
+    [InlineData("Taylor Swift - End Game (ft. Ed Sheeran).mp4", "Taylor Swift", "End Game", "Ed Sheeran")]
+    [InlineData("Taylor Swift - End Game (featuring Ed Sheeran).mp4", "Taylor Swift", "End Game", "Ed Sheeran")]
+    public async Task EnhancedParser_ShouldExtractFeaturedArtistFromTitleField(
+        string filename, string expectedArtist, string expectedTitle, string expectedFeatured)
+    {
+        // Arrange
+        var options = CreateOptions();
+        await using var context = new ApplicationDbContext(options);
+        var (service, unitOfWork) = CreateService(context);
+        var rootPath = Path.Combine(Path.GetTempPath(), $"fz-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var filePath = Path.Combine(rootPath, filename);
+            await File.WriteAllTextAsync(filePath, "test-content");
+
+            var request = new LibraryImportRequest
+            {
+                RootPath = rootPath,
+                ComputeHashes = false,
+                RefreshMetadata = false
+            };
+
+            // Act
+            var session = await service.StartImportAsync(request);
+
+            // Assert
+            var item = Assert.Single(session.Items);
+            Assert.Equal(expectedArtist, item.Artist);
+            Assert.Equal(expectedTitle, item.Title);
+            Assert.NotNull(item.FeaturedArtistsJson);
+            
+            var featured = JsonSerializer.Deserialize<List<string>>(item.FeaturedArtistsJson);
+            Assert.NotNull(featured);
+            Assert.Contains(expectedFeatured, featured);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, true); } catch { }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("Artist - Title (Official Video).mp4", "Artist", "Title")]
+    [InlineData("Artist - Title (Official Music Video).mp4", "Artist", "Title")]
+    [InlineData("Artist - Title [Official Video].mp4", "Artist", "Title")]
+    [InlineData("Artist - Title [HD].mp4", "Artist", "Title")]
+    [InlineData("Artist - Title [4K].mp4", "Artist", "Title")]
+    [InlineData("Artist - Title (Explicit).mp4", "Artist", "Title")]
+    public async Task EnhancedParser_ShouldRemoveCommonSuffixes(
+        string filename, string expectedArtist, string expectedTitle)
+    {
+        // Arrange
+        var options = CreateOptions();
+        await using var context = new ApplicationDbContext(options);
+        var (service, unitOfWork) = CreateService(context);
+        var rootPath = Path.Combine(Path.GetTempPath(), $"fz-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var filePath = Path.Combine(rootPath, filename);
+            await File.WriteAllTextAsync(filePath, "test-content");
+
+            var request = new LibraryImportRequest
+            {
+                RootPath = rootPath,
+                ComputeHashes = false,
+                RefreshMetadata = false
+            };
+
+            // Act
+            var session = await service.StartImportAsync(request);
+
+            // Assert
+            var item = Assert.Single(session.Items);
+            Assert.Equal(expectedArtist, item.Artist);
+            Assert.Equal(expectedTitle, item.Title);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, true); } catch { }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("Artist - Title (2020).mp4", "Artist", "Title", 2020)]
+    [InlineData("Artist - Title [2020].mp4", "Artist", "Title", 2020)]
+    [InlineData("Artist - Title 2020.mp4", "Artist", "Title", 2020)]
+    public async Task EnhancedParser_ShouldExtractYearFromVariousFormats(
+        string filename, string expectedArtist, string expectedTitle, int expectedYear)
+    {
+        // Arrange
+        var options = CreateOptions();
+        await using var context = new ApplicationDbContext(options);
+        var (service, unitOfWork) = CreateService(context);
+        var rootPath = Path.Combine(Path.GetTempPath(), $"fz-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var filePath = Path.Combine(rootPath, filename);
+            await File.WriteAllTextAsync(filePath, "test-content");
+
+            var request = new LibraryImportRequest
+            {
+                RootPath = rootPath,
+                ComputeHashes = false,
+                RefreshMetadata = false
+            };
+
+            // Act
+            var session = await service.StartImportAsync(request);
+
+            // Assert
+            var item = Assert.Single(session.Items);
+            Assert.Equal(expectedArtist, item.Artist);
+            Assert.Equal(expectedTitle, item.Title);
+            Assert.Equal(expectedYear, item.Year);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, true); } catch { }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("Artist feat. Ed Sheeran & Taylor Swift - Title.mp4", "Ed Sheeran", "Taylor Swift")]
+    [InlineData("Artist feat. Ed Sheeran and Taylor Swift - Title.mp4", "Ed Sheeran", "Taylor Swift")]
+    [InlineData("Artist feat. Ed Sheeran + Taylor Swift - Title.mp4", "Ed Sheeran", "Taylor Swift")]
+    [InlineData("Artist feat. Ed Sheeran, Taylor Swift - Title.mp4", "Ed Sheeran", "Taylor Swift")]
+    public async Task EnhancedParser_ShouldHandleMultipleFeaturedArtists(
+        string filename, string expectedFeatured1, string expectedFeatured2)
+    {
+        // Arrange
+        var options = CreateOptions();
+        await using var context = new ApplicationDbContext(options);
+        var (service, unitOfWork) = CreateService(context);
+        var rootPath = Path.Combine(Path.GetTempPath(), $"fz-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var filePath = Path.Combine(rootPath, filename);
+            await File.WriteAllTextAsync(filePath, "test-content");
+
+            var request = new LibraryImportRequest
+            {
+                RootPath = rootPath,
+                ComputeHashes = false,
+                RefreshMetadata = false
+            };
+
+            // Act
+            var session = await service.StartImportAsync(request);
+
+            // Assert
+            var item = Assert.Single(session.Items);
+            Assert.NotNull(item.FeaturedArtistsJson);
+            
+            var featured = JsonSerializer.Deserialize<List<string>>(item.FeaturedArtistsJson);
+            Assert.NotNull(featured);
+            Assert.Contains(expectedFeatured1, featured);
+            Assert.Contains(expectedFeatured2, featured);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, true); } catch { }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("Artist_-_Title.mp4", "Artist", "Title")]
+    [InlineData("Artist - Title.mp4", "Artist", "Title")]
+    [InlineData("Artist – Title.mp4", "Artist", "Title")]
+    [InlineData("Artist — Title.mp4", "Artist", "Title")]
+    [InlineData("Artist | Title.mp4", "Artist", "Title")]
+    public async Task EnhancedParser_ShouldHandleVariousSeparators(
+        string filename, string expectedArtist, string expectedTitle)
+    {
+        // Arrange
+        var options = CreateOptions();
+        await using var context = new ApplicationDbContext(options);
+        var (service, unitOfWork) = CreateService(context);
+        var rootPath = Path.Combine(Path.GetTempPath(), $"fz-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var filePath = Path.Combine(rootPath, filename);
+            await File.WriteAllTextAsync(filePath, "test-content");
+
+            var request = new LibraryImportRequest
+            {
+                RootPath = rootPath,
+                ComputeHashes = false,
+                RefreshMetadata = false
+            };
+
+            // Act
+            var session = await service.StartImportAsync(request);
+
+            // Assert
+            var item = Assert.Single(session.Items);
+            Assert.Equal(expectedArtist, item.Artist);
+            Assert.Equal(expectedTitle, item.Title);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, true); } catch { }
+            }
+        }
+    }
+
+    private DbContextOptions<ApplicationDbContext> CreateOptions(string? databaseName = null)
+    {
+        var builder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        builder.UseInMemoryDatabase(databaseName ?? Guid.NewGuid().ToString());
+        return builder.Options;
+    }
+
+    private (LibraryImportService Service, IUnitOfWork UnitOfWork) CreateService(ApplicationDbContext context)
+    {
+        var unitOfWork = new UnitOfWork(context);
+        var sessionRepository = new Repository<LibraryImportSession>(context);
+        var itemRepository = new Repository<LibraryImportItem>(context);
+        var videoRepository = new Repository<Video>(context);
+        var metadataService = new TestMetadataService();
+        var metadataCacheService = new TestMetadataCacheService();
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"fz-tests-{Guid.NewGuid():N}");
+        var configPathService = new TestConfigurationPathService(tempRoot);
+        var pathManager = new LibraryPathManager(unitOfWork, configPathService, NullLogger<LibraryPathManager>.Instance);
+
+        var service = new LibraryImportService(
+            NullLogger<LibraryImportService>.Instance,
+            sessionRepository,
+            itemRepository,
+            videoRepository,
+            unitOfWork,
+            metadataService,
+            pathManager,
+            metadataCacheService);
+
+        return (service, unitOfWork);
+    }
+
+    private sealed class TestMetadataCacheService : IMetadataCacheService
+    {
+        public Task<MetadataCacheResult> SearchAsync(string artist, string title, int? knownDurationSeconds = null, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new MetadataCacheResult { Found = false });
+        }
+
+        public Task<List<AggregatedCandidate>> GetCandidatesAsync(string artist, string title, int maxResults = 10, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new List<AggregatedCandidate>());
+        }
+
+        public Task<Video> ApplyMetadataAsync(Video video, AggregatedCandidate candidate, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(video);
+        }
+
+        public Task<bool> IsCachedAsync(string artist, string title, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
+
+        public Task ClearCacheAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new CacheStatistics());
+        }
+    }
+
+    private sealed class TestMetadataService : IMetadataService
+    {
+        public Task<VideoMetadata> ExtractMetadataAsync(string filePath, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<VideoMetadata>(null!);
+        }
+
+        public Task<ImvdbMetadata?> GetImvdbMetadataAsync(string artist, string title, CancellationToken cancellationToken = default) => Task.FromResult<ImvdbMetadata?>(null);
+        public Task<MusicBrainzMetadata?> GetMusicBrainzMetadataAsync(string artist, string title, CancellationToken cancellationToken = default) => Task.FromResult<MusicBrainzMetadata?>(null);
+        public Task<string> GenerateNfoAsync(Video video, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<NfoData?> ReadNfoAsync(string nfoPath, CancellationToken cancellationToken = default) => Task.FromResult<NfoData?>(null);
+        public Task<Video> EnrichVideoMetadataAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default) => Task.FromResult(video);
+        public Task<string?> DownloadThumbnailAsync(string thumbnailUrl, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task<List<ImvdbMetadata>> GetTopMatchesAsync(string artist, string title, int maxResults = 5, CancellationToken cancellationToken = default) => Task.FromResult(new List<ImvdbMetadata>());
+        public Task<MetadataEnrichmentResult> EnrichVideoMetadataWithResultAsync(Video video, bool fetchOnlineMetadata = true, CancellationToken cancellationToken = default) => Task.FromResult(new MetadataEnrichmentResult { Video = video, MatchConfidence = 1.0 });
+        public Task<Video> UpdateVideoFromImvdbMetadataAsync(Video video, ImvdbMetadata metadata, CancellationToken cancellationToken = default) => Task.FromResult(video);
+        public Task<string?> EnsureThumbnailAsync(Video video, string? videoFilePath = null, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+    }
+
+    private sealed class TestConfigurationPathService : IConfigurationPathService
+    {
+        private readonly string _workspace;
+
+        public TestConfigurationPathService(string workspace)
+        {
+            _workspace = workspace;
+        }
+
+        public string GetConfigDirectory() => _workspace;
+        public string GetDataDirectory() => Path.Combine(_workspace, "data");
+        public string GetBackupDirectory() => Path.Combine(_workspace, "backups");
+        public string GetLogsDirectory() => Path.Combine(_workspace, "logs");
+        public string GetDatabasePath() => Path.Combine(_workspace, "data", "fuzzbin.db");
+        public string GetDefaultLibraryPath() => Path.Combine(_workspace, "Library");
+        public string GetDefaultDownloadsPath() => Path.Combine(_workspace, "Downloads");
+        public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
+    }
+}
