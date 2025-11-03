@@ -48,6 +48,17 @@ public class IntegrationTestFactory : WebApplicationFactory<Program>
                 services.Remove(descriptor);
             }
 
+            // Remove background services that shouldn't run during tests
+            var hostedServicesToRemove = services
+                .Where(d => d.ServiceType == typeof(IHostedService) && 
+                           d.ImplementationType?.Name == "MaintenanceSchedulerService")
+                .ToList();
+            
+            foreach (var descriptor in hostedServicesToRemove)
+            {
+                services.Remove(descriptor);
+            }
+
             // Add ApplicationDbContext using a SHARED in-memory database for all tests
             services.AddDbContext<ApplicationDbContext>(options =>
             {

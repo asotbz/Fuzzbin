@@ -28,6 +28,8 @@ namespace Fuzzbin.Data.Context
         public DbSet<LibraryImportItem> LibraryImportItems { get; set; } = null!;
         public DbSet<VideoSourceVerification> VideoSourceVerifications { get; set; } = null!;
         public DbSet<BackgroundJob> BackgroundJobs { get; set; } = null!;
+        public DbSet<MaintenanceExecution> MaintenanceExecutions { get; set; } = null!;
+        public DbSet<CacheStatSnapshot> CacheStatSnapshots { get; set; } = null!;
         
         // Metadata Cache DbSets
         public DbSet<Query> Queries { get; set; } = null!;
@@ -79,6 +81,8 @@ namespace Fuzzbin.Data.Context
                 entity.HasIndex(e => e.Rating);
                 entity.HasIndex(e => e.Duration);
                 entity.HasIndex(e => e.Year);
+                entity.HasIndex(e => e.IsMissing);
+                entity.HasIndex(e => e.MissingDetectedAt);
 
                 // Configure many-to-many relationships
                 entity.HasMany(e => e.Genres)
@@ -349,6 +353,30 @@ namespace Fuzzbin.Data.Context
                 entity.HasIndex(e => e.CreatedAt);
                 entity.HasIndex(e => e.StartedAt);
                 entity.HasIndex(e => e.CompletedAt);
+            });
+
+            // Configure MaintenanceExecution entity
+            modelBuilder.Entity<MaintenanceExecution>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TaskName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Summary).IsRequired().HasMaxLength(2000);
+                entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+                entity.Property(e => e.MetricsJson).HasColumnType("TEXT");
+
+                entity.HasIndex(e => e.TaskName);
+                entity.HasIndex(e => e.StartedAt);
+                entity.HasIndex(e => e.Success);
+                entity.HasIndex(e => e.IsActive);
+            });
+
+            // Configure CacheStatSnapshot entity
+            modelBuilder.Entity<CacheStatSnapshot>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.HasIndex(e => e.SnapshotAt);
+                entity.HasIndex(e => e.IsActive);
             });
 
             // Configure metadata cache entities

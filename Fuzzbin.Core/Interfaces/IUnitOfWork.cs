@@ -69,6 +69,16 @@ namespace Fuzzbin.Core.Interfaces
         /// </summary>
         IRepository<RecycleBin> RecycleBins { get; }
 
+        /// <summary>
+        /// Repository for MaintenanceExecution entities
+        /// </summary>
+        IRepository<MaintenanceExecution> MaintenanceExecutions { get; }
+
+        /// <summary>
+        /// Repository for CacheStatSnapshot entities
+        /// </summary>
+        IRepository<CacheStatSnapshot> CacheStatSnapshots { get; }
+
         // Metadata Cache repositories
 
         /// <summary>

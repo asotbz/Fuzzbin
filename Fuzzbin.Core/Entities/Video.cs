@@ -144,6 +144,16 @@ namespace Fuzzbin.Core.Entities
         public int? Rating { get; set; }
 
         /// <summary>
+        /// Whether the video file is missing from disk
+        /// </summary>
+        public bool IsMissing { get; set; } = false;
+
+        /// <summary>
+        /// When the video was first detected as missing
+        /// </summary>
+        public DateTime? MissingDetectedAt { get; set; }
+
+        /// <summary>
         /// Collection of genres
         /// </summary>
         public virtual ICollection<Genre> Genres { get; set; } = new List<Genre>();

@@ -97,6 +97,8 @@ public class ImvdbApiKeyProviderTests
         public IRepository<BackgroundJob> BackgroundJobs => throw new NotSupportedException();
         public IRepository<VideoSourceVerification> VideoSourceVerifications => throw new NotSupportedException();
         public IRepository<RecycleBin> RecycleBins => throw new NotSupportedException();
+        public IRepository<MaintenanceExecution> MaintenanceExecutions => throw new NotSupportedException();
+        public IRepository<CacheStatSnapshot> CacheStatSnapshots => throw new NotSupportedException();
 
         // Metadata cache repositories
         public IRepository<Query> Queries => throw new NotSupportedException();
