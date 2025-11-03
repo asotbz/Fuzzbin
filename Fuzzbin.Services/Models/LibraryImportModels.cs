@@ -137,4 +137,59 @@ namespace Fuzzbin.Services.Models
         public double? SourceFrameRate { get; set; }
         public double? LocalFrameRate { get; set; }
     }
+
+    /// <summary>
+    /// DTO for storing NFO metadata in JSON format
+    /// </summary>
+    public class NfoMetadataDto
+    {
+        public List<string> Genres { get; set; } = new();
+        public List<string> Tags { get; set; } = new();
+        public string? Director { get; set; }
+        public string? Studio { get; set; }
+        public string? RecordLabel { get; set; }
+        public string? Description { get; set; }
+        public string? ImvdbId { get; set; }
+        public string? MusicBrainzId { get; set; }
+        public List<string> SourceUrls { get; set; } = new();
+        public bool HasCompleteMetadata { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for storing metadata cache search results in JSON format
+    /// </summary>
+    public class CacheMetadataDto
+    {
+        public string? Title { get; set; }
+        public string? Artist { get; set; }
+        public string? FeaturedArtists { get; set; }
+        public int? Year { get; set; }
+        public List<string> Genres { get; set; } = new();
+        public string? RecordLabel { get; set; }
+        public string? Director { get; set; }
+        public double Confidence { get; set; }
+        public string PrimarySource { get; set; } = string.Empty;
+        public bool RequiresManualSelection { get; set; }
+        public List<CacheMetadataCandidateDto> AlternativeCandidates { get; set; } = new();
+        
+        // IDs for applying metadata
+        public Guid? QueryId { get; set; }
+        public Guid? ImvdbVideoId { get; set; }
+        public Guid? MbRecordingId { get; set; }
+        public string? YtVideoId { get; set; }
+        public Guid? MvLinkId { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for storing alternative metadata candidates
+    /// </summary>
+    public class CacheMetadataCandidateDto
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string? FeaturedArtists { get; set; }
+        public int? Year { get; set; }
+        public double Confidence { get; set; }
+        public string PrimarySource { get; set; } = string.Empty;
+    }
 }

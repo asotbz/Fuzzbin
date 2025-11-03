@@ -247,47 +247,9 @@ namespace Fuzzbin.Services
                         createdVideoIds.Add(video.Id);
                     }
 
-                    ApplyImportMetadata(video, session, item);
+                    // Apply enhanced metadata (includes NFO, cache, and featured artists)
+                    await ApplyImportMetadataEnhancedAsync(video, session, item, cancellationToken).ConfigureAwait(false);
                     await _videoRepository.UpdateAsync(video).ConfigureAwait(false);
-
-                    // Enrich with cached metadata
-                    if (!string.IsNullOrWhiteSpace(video.Artist) &&
-                        !string.IsNullOrWhiteSpace(video.Title))
-                    {
-                        try
-                        {
-                            var cacheResult = await _metadataCacheService.SearchAsync(
-                                video.Artist,
-                                video.Title,
-                                video.Duration,
-                                cancellationToken).ConfigureAwait(false);
-                            
-                            if (cacheResult.Found &&
-                                cacheResult.BestMatch != null &&
-                                !cacheResult.RequiresManualSelection &&
-                                cacheResult.BestMatch.OverallConfidence >= 0.9)
-                            {
-                                video = await _metadataCacheService.ApplyMetadataAsync(
-                                    video,
-                                    cacheResult.BestMatch,
-                                    cancellationToken).ConfigureAwait(false);
-                                
-                                _logger.LogInformation(
-                                    "Applied cached metadata to imported video {VideoId} (source: {Source}, confidence: {Confidence:P0})",
-                                    video.Id,
-                                    cacheResult.BestMatch.PrimarySource,
-                                    cacheResult.BestMatch.OverallConfidence);
-                            }
-                            else if (cacheResult.RequiresManualSelection)
-                            {
-                                item.Notes = AppendNote(item.Notes, "Metadata enrichment requires manual review");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to enrich imported video {VideoId} with cached metadata", video.Id);
-                        }
-                    }
 
                     item.IsCommitted = true;
                     item.ReviewedAt = DateTime.UtcNow;
@@ -468,6 +430,94 @@ namespace Fuzzbin.Services
                 }
             }
 
+            // Query metadata cache if NFO is incomplete OR missing
+            bool shouldQueryCache = false;
+            bool nfoIsIncomplete = false;
+
+            if (!string.IsNullOrWhiteSpace(item.NfoMetadataJson))
+            {
+                var nfoMeta = JsonSerializer.Deserialize<NfoMetadataDto>(item.NfoMetadataJson);
+                nfoIsIncomplete = nfoMeta?.HasCompleteMetadata == false;
+                shouldQueryCache = nfoIsIncomplete;
+            }
+            else
+            {
+                // No NFO at all - always query cache if we have artist + title
+                shouldQueryCache = !string.IsNullOrWhiteSpace(item.Artist) && !string.IsNullOrWhiteSpace(item.Title);
+            }
+
+            if (shouldQueryCache)
+            {
+                try
+                {
+                    var cacheResult = await _metadataCacheService.SearchAsync(
+                        item.Artist ?? string.Empty,
+                        item.Title ?? string.Empty,
+                        item.DurationSeconds.HasValue ? (int?)Math.Round(item.DurationSeconds.Value) : null,
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (cacheResult.Found && cacheResult.BestMatch != null)
+                    {
+                        var cacheDto = new CacheMetadataDto
+                        {
+                            Title = cacheResult.BestMatch.Title,
+                            Artist = cacheResult.BestMatch.Artist,
+                            FeaturedArtists = cacheResult.BestMatch.FeaturedArtists,
+                            Year = cacheResult.BestMatch.Year,
+                            Genres = cacheResult.BestMatch.Genres,
+                            RecordLabel = cacheResult.BestMatch.RecordLabel,
+                            Director = cacheResult.BestMatch.Director,
+                            Confidence = cacheResult.BestMatch.OverallConfidence,
+                            PrimarySource = cacheResult.BestMatch.PrimarySource,
+                            RequiresManualSelection = cacheResult.RequiresManualSelection,
+                            QueryId = cacheResult.BestMatch.QueryId,
+                            ImvdbVideoId = cacheResult.BestMatch.ImvdbVideoId,
+                            MbRecordingId = cacheResult.BestMatch.MbRecordingId,
+                            YtVideoId = cacheResult.BestMatch.YtVideoId,
+                            MvLinkId = cacheResult.BestMatch.MvLinkId,
+                            AlternativeCandidates = cacheResult.AlternativeCandidates.Select(c => new CacheMetadataCandidateDto
+                            {
+                                Title = c.Title,
+                                Artist = c.Artist,
+                                FeaturedArtists = c.FeaturedArtists,
+                                Year = c.Year,
+                                Confidence = c.OverallConfidence,
+                                PrimarySource = c.PrimarySource
+                            }).ToList()
+                        };
+
+                        item.CacheMetadataJson = JsonSerializer.Serialize(cacheDto);
+
+                        // Update metadata source if not already set from NFO
+                        if (string.IsNullOrWhiteSpace(item.MetadataSource))
+                        {
+                            if (cacheDto.Confidence >= 0.95)
+                            {
+                                item.MetadataSource = $"Auto ({cacheDto.PrimarySource})";
+                            }
+                            else if (cacheDto.Confidence >= 0.80)
+                            {
+                                item.MetadataSource = $"Suggested ({cacheDto.PrimarySource})";
+                            }
+                            else
+                            {
+                                item.MetadataSource = $"Possible ({cacheDto.PrimarySource})";
+                            }
+                        }
+
+                        if (nfoIsIncomplete)
+                        {
+                            item.Notes = AppendNote(item.Notes, "NFO incomplete - cache enrichment available");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to query metadata cache for {Artist} - {Title}",
+                        item.Artist, item.Title);
+                }
+            }
+
             return item;
         }
 
@@ -510,6 +560,236 @@ namespace Fuzzbin.Services
             video.FrameRate = item.FrameRate ?? video.FrameRate;
             video.Resolution = item.Resolution ?? video.Resolution;
             video.ImportedAt ??= DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Enhanced metadata application that includes NFO, cache metadata, and featured artists
+        /// </summary>
+        private async Task ApplyImportMetadataEnhancedAsync(
+            Video video,
+            LibraryImportSession session,
+            LibraryImportItem item,
+            CancellationToken cancellationToken)
+        {
+            // Apply base metadata (existing logic)
+            ApplyImportMetadata(video, session, item);
+
+            // Apply NFO metadata if available
+            if (!string.IsNullOrWhiteSpace(item.NfoMetadataJson))
+            {
+                try
+                {
+                    var nfoMetadata = JsonSerializer.Deserialize<NfoMetadataDto>(item.NfoMetadataJson);
+                    if (nfoMetadata != null)
+                    {
+                        await ApplyNfoMetadataToVideoAsync(video, nfoMetadata, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to apply NFO metadata to video {VideoId}", video.Id);
+                }
+            }
+
+            // Apply cache metadata if available and confidence is high
+            if (!string.IsNullOrWhiteSpace(item.CacheMetadataJson))
+            {
+                try
+                {
+                    var cacheMetadata = JsonSerializer.Deserialize<CacheMetadataDto>(item.CacheMetadataJson);
+                    if (cacheMetadata != null && cacheMetadata.Confidence >= 0.90)
+                    {
+                        await ApplyCacheMetadataToVideoAsync(video, cacheMetadata, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to apply cache metadata to video {VideoId}", video.Id);
+                }
+            }
+
+            // Apply featured artists
+            if (!string.IsNullOrWhiteSpace(item.FeaturedArtistsJson))
+            {
+                try
+                {
+                    var featuredNames = JsonSerializer.Deserialize<List<string>>(item.FeaturedArtistsJson);
+                    if (featuredNames?.Any() == true)
+                    {
+                        await ApplyFeaturedArtistsAsync(video, featuredNames, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to apply featured artists to video {VideoId}", video.Id);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies NFO metadata (genres, tags, director, etc.) to a video entity
+        /// </summary>
+        private async Task ApplyNfoMetadataToVideoAsync(
+            Video video,
+            NfoMetadataDto nfoMetadata,
+            CancellationToken cancellationToken)
+        {
+            // Apply genres
+            if (nfoMetadata.Genres?.Any() == true)
+            {
+                var existingGenres = (await _unitOfWork.Genres.GetAllAsync().ConfigureAwait(false)).ToList();
+                
+                foreach (var genreName in nfoMetadata.Genres)
+                {
+                    var genre = existingGenres.FirstOrDefault(g => 
+                        g.Name.Equals(genreName, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (genre == null)
+                    {
+                        genre = new Genre { Name = genreName };
+                        await _unitOfWork.Genres.AddAsync(genre).ConfigureAwait(false);
+                        existingGenres.Add(genre);
+                    }
+                    
+                    if (!video.Genres.Any(g => g.Id == genre.Id))
+                    {
+                        video.Genres.Add(genre);
+                    }
+                }
+            }
+
+            // Apply tags
+            if (nfoMetadata.Tags?.Any() == true)
+            {
+                var existingTags = (await _unitOfWork.Tags.GetAllAsync().ConfigureAwait(false)).ToList();
+                
+                foreach (var tagName in nfoMetadata.Tags)
+                {
+                    var tag = existingTags.FirstOrDefault(t => 
+                        t.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (tag == null)
+                    {
+                        tag = new Tag { Name = tagName };
+                        await _unitOfWork.Tags.AddAsync(tag).ConfigureAwait(false);
+                        existingTags.Add(tag);
+                    }
+                    
+                    if (!video.Tags.Any(t => t.Id == tag.Id))
+                    {
+                        video.Tags.Add(tag);
+                    }
+                }
+            }
+
+            // Apply other fields (only if not already set)
+            video.Director ??= nfoMetadata.Director;
+            video.ProductionCompany ??= nfoMetadata.Studio;
+            video.Publisher ??= nfoMetadata.RecordLabel;
+            video.Description ??= nfoMetadata.Description;
+            video.ImvdbId ??= nfoMetadata.ImvdbId;
+            video.MusicBrainzRecordingId ??= nfoMetadata.MusicBrainzId;
+
+            // Store source URLs for verification
+            if (nfoMetadata.SourceUrls?.Any() == true)
+            {
+                var existingVerifications = (await _unitOfWork.VideoSourceVerifications
+                    .GetAllAsync()
+                    .ConfigureAwait(false)).ToList();
+                
+                foreach (var url in nfoMetadata.SourceUrls)
+                {
+                    var exists = existingVerifications.Any(v => 
+                        v.VideoId == video.Id && 
+                        v.SourceUrl != null &&
+                        v.SourceUrl.Equals(url, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (!exists)
+                    {
+                        var verification = new VideoSourceVerification
+                        {
+                            VideoId = video.Id,
+                            SourceUrl = url,
+                            Status = VideoSourceVerificationStatus.Pending,
+                            Notes = "Imported from NFO file"
+                        };
+                        await _unitOfWork.VideoSourceVerifications.AddAsync(verification).ConfigureAwait(false);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies cache metadata to a video entity for high-confidence matches
+        /// </summary>
+        private async Task ApplyCacheMetadataToVideoAsync(
+            Video video,
+            CacheMetadataDto cacheMetadata,
+            CancellationToken cancellationToken)
+        {
+            // Only apply if not already set from NFO
+            video.Year ??= cacheMetadata.Year;
+            video.Director ??= cacheMetadata.Director;
+            video.Publisher ??= cacheMetadata.RecordLabel;
+
+            // Apply genres from cache if video doesn't already have them
+            if (cacheMetadata.Genres?.Any() == true && !video.Genres.Any())
+            {
+                var existingGenres = (await _unitOfWork.Genres.GetAllAsync().ConfigureAwait(false)).ToList();
+                
+                foreach (var genreName in cacheMetadata.Genres)
+                {
+                    var genre = existingGenres.FirstOrDefault(g => 
+                        g.Name.Equals(genreName, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (genre == null)
+                    {
+                        genre = new Genre { Name = genreName };
+                        await _unitOfWork.Genres.AddAsync(genre).ConfigureAwait(false);
+                        existingGenres.Add(genre);
+                    }
+                    
+                    if (!video.Genres.Any(g => g.Id == genre.Id))
+                    {
+                        video.Genres.Add(genre);
+                    }
+                }
+            }
+
+            _logger.LogInformation(
+                "Applied cached metadata to video {VideoId} (source: {Source}, confidence: {Confidence:P0})",
+                video.Id,
+                cacheMetadata.PrimarySource,
+                cacheMetadata.Confidence);
+        }
+
+        /// <summary>
+        /// Applies featured artists from JSON to a video entity
+        /// </summary>
+        private async Task ApplyFeaturedArtistsAsync(
+            Video video,
+            List<string> featuredNames,
+            CancellationToken cancellationToken)
+        {
+            var existingArtists = (await _unitOfWork.FeaturedArtists.GetAllAsync().ConfigureAwait(false)).ToList();
+            
+            foreach (var name in featuredNames)
+            {
+                var artist = existingArtists.FirstOrDefault(a => 
+                    a.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                
+                if (artist == null)
+                {
+                    artist = new FeaturedArtist { Name = name };
+                    await _unitOfWork.FeaturedArtists.AddAsync(artist).ConfigureAwait(false);
+                    existingArtists.Add(artist);
+                }
+                
+                if (!video.FeaturedArtists.Any(a => a.Id == artist.Id))
+                {
+                    video.FeaturedArtists.Add(artist);
+                }
+            }
         }
 
         private static string NormalizePath(string path)
@@ -1017,40 +1297,30 @@ namespace Fuzzbin.Services
             }
 
             // Patterns: feat., ft., featuring, with, x (as separator)
-            // Regex to find featured artist markers and extract everything after them
-            var patterns = new[]
+            // Split by all patterns to get all featured artists
+            var allPatterns = @"\b(?:feat\.|ft\.|featuring|with|x)\s+";
+            
+            // Split by the patterns, keeping track of what we find
+            var parts = Regex.Split(artistField, allPatterns, RegexOptions.IgnoreCase);
+            
+            // First part is the primary artist, rest are featured
+            for (int i = 1; i < parts.Length; i++)
             {
-                @"\bfeat\.\s+(.+)$",
-                @"\bft\.\s+(.+)$",
-                @"\bfeaturing\s+(.+)$",
-                @"\bwith\s+(.+)$",
-                @"\bx\s+(.+)$"
-            };
-
-            foreach (var pattern in patterns)
-            {
-                var matches = Regex.Matches(artistField, pattern, RegexOptions.IgnoreCase);
-                foreach (Match match in matches)
+                var artistsPart = parts[i].Trim();
+                if (!string.IsNullOrWhiteSpace(artistsPart))
                 {
-                    if (match.Groups.Count > 1)
-                    {
-                        var artistsPart = match.Groups[1].Value.Trim();
-                        if (!string.IsNullOrWhiteSpace(artistsPart))
-                        {
-                            // Split by common separators: &, and, +, ,
-                            var artists = Regex.Split(artistsPart, @"\s*(?:&|\band\b|\+|,)\s*", RegexOptions.IgnoreCase)
-                                .Select(a => a.Trim())
-                                .Where(a => !string.IsNullOrWhiteSpace(a))
-                                .Select(a => Regex.Replace(a, @"[)\]]+$", "").Trim()) // Clean up trailing punctuation
-                                .Where(a => !string.IsNullOrWhiteSpace(a))
-                                .ToList();
-                            featured.AddRange(artists);
-                        }
-                    }
+                    // Split by common separators: &, and, +, ,
+                    var artists = Regex.Split(artistsPart, @"\s*(?:&|\band\b|\+|,)\s*", RegexOptions.IgnoreCase)
+                        .Select(a => a.Trim())
+                        .Where(a => !string.IsNullOrWhiteSpace(a))
+                        .Select(a => Regex.Replace(a, @"[)\]]+$", "").Trim()) // Clean up trailing punctuation
+                        .Where(a => !string.IsNullOrWhiteSpace(a))
+                        .ToList();
+                    featured.AddRange(artists);
                 }
             }
 
-            return featured;
+            return featured.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         /// <summary>
