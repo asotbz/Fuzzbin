@@ -118,10 +118,45 @@
                 </MudItem>
 
                 <MudItem xs="12">
+                    <MudPaper Class="pa-3 mb-3">
+                        <MudGrid>
+                            <MudItem xs="3">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                                    <MudText Typo="Typo.h6">@_stats.CompleteCount</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Complete</MudText>
+                                </MudStack>
+                            </MudItem>
+                            <MudItem xs="3">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Large" />
+                                    <MudText Typo="Typo.h6">@_stats.NeedsReviewCount</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Needs Review</MudText>
+                                </MudStack>
+                            </MudItem>
+                            <MudItem xs="3">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" Size="Size.Large" />
+                                    <MudText Typo="Typo.h6">@_stats.PartialCount</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Partial</MudText>
+                                </MudStack>
+                            </MudItem>
+                            <MudItem xs="3">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@Icons.Material.Filled.VideoLibrary" Color="Color.Default" Size="Size.Large" />
+                                    <MudText Typo="Typo.h6">@_items.Count</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total</MudText>
+                                </MudStack>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12">
                     <MudPaper Style="overflow-x:auto;">
-                        <MudTable T="ImportItemViewModel" Items="FilteredItems" Hover="true" Dense="true" FixedHeader="true" Height="560px" Loading="_isScanning">
+                        <MudTable T="ImportItemViewModel" Items="FilteredItems" Hover="true" Dense="true" FixedHeader="true" Height="calc(100vh - 450px)" Loading="_isScanning" @bind-SelectedItem="_selectedItem" RowsPerPage="50">
                             <ToolBarContent>
-                                <MudText Typo="Typo.subtitle2">@_items.Count items</MudText>
+                                <MudText Typo="Typo.subtitle2">@FilteredItems.Count() of @_items.Count items</MudText>
                                 <MudSpacer />
                                 <MudTextField @bind-Value="SearchTerm" Placeholder="Filter" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Size="Size.Small" Class="mr-2" />
                                 <MudSelect @bind-Value="StatusFilter" Size="Size.Small" Variant="Variant.Outlined">
@@ -133,70 +168,76 @@
                                 </MudSelect>
                             </ToolBarContent>
                             <HeaderContent>
-                                <MudTh>File</MudTh>
+                                <MudTh>Status</MudTh>
                                 <MudTh>Artist</MudTh>
                                 <MudTh>Title</MudTh>
-                                <MudTh>Duration</MudTh>
-                                <MudTh>Confidence</MudTh>
-                                <MudTh>Duplicate</MudTh>
-                                <MudTh>Matches</MudTh>
-                                <MudTh>Status</MudTh>
+                                <MudTh>Year</MudTh>
+                                <MudTh>Album</MudTh>
+                                <MudTh>Source</MudTh>
                                 <MudTh>Actions</MudTh>
                             </HeaderContent>
                             <RowTemplate>
-                                <MudTd>
-                                    <MudText Typo="Typo.body2">@context.Item.FileName</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@(context.Item.RelativePath ?? "—")</MudText>
+                                <MudTd DataLabel="Status">
+                                    @GetStatusIcon(context.Item)
                                 </MudTd>
-                                <MudTd>@context.Item.Artist</MudTd>
-                                <MudTd>@context.Item.Title</MudTd>
-                                <MudTd>
-                                    @if (context.Item.DurationSeconds.HasValue)
+                                <MudTd DataLabel="Artist">
+                                    <MudText Typo="Typo.body2">@context.Item.Artist</MudText>
+                                    @if (!string.IsNullOrEmpty(context.Item.FeaturedArtistsJson))
                                     {
-                                        var duration = TimeSpan.FromSeconds(context.Item.DurationSeconds.Value);
-                                        var format = duration.TotalHours >= 1 ? "hh\\:mm\\:ss" : "mm\\:ss";
-                                        <MudText>@duration.ToString(format)</MudText>
-                                    }
-                                </MudTd>
-                                <MudTd>
-                                    @if (context.Item.Confidence.HasValue)
-                                    {
-                                        <MudProgressLinear Class="mb-1" Value="@(context.Item.Confidence.Value * 100)" Color="Color.Primary"></MudProgressLinear>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@((context.Item.Confidence.Value * 100).ToString("0"))%</MudText>
-                                    }
-                                </MudTd>
-                                <MudTd>
-                                    @switch (context.Item.DuplicateStatus)
-                                    {
-                                        case LibraryImportDuplicateStatus.None:
-                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">Unique</MudChip>
-                                            break;
-                                        case LibraryImportDuplicateStatus.PotentialDuplicate:
-                                            <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small">Review</MudChip>
-                                            break;
-                                        case LibraryImportDuplicateStatus.ConfirmedDuplicate:
-                                            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">Duplicate</MudChip>
-                                            break;
-                                    }
-                                </MudTd>
-                                <MudTd>
-                                    <MudSelect T="Guid?" @bind-Value="context.ManualVideoId" Variant="Variant.Outlined" Dense="true" DisableUnderLine="true" Style="min-width:200px">
-                                        <MudSelectItem T="Guid?" Value="@((Guid?)null)">Auto suggestion</MudSelectItem>
-                                        @foreach (var candidate in context.Candidates)
+                                        var featured = ParseFeaturedArtists(context.Item.FeaturedArtistsJson);
+                                        if (featured.Any())
                                         {
-                                            <MudSelectItem T="Guid?" Value="@candidate.VideoId">@candidate.DisplayName (@(candidate.Confidence.ToString("0.00")))</MudSelectItem>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                feat. @string.Join(", ", featured)
+                                            </MudText>
                                         }
-                                    </MudSelect>
+                                    }
                                 </MudTd>
-                                <MudTd>
-                                    <MudChip T="string" Color="@GetStatusColor(context.Item.Status)" Variant="Variant.Outlined" Size="Size.Small">@context.Item.Status</MudChip>
+                                <MudTd DataLabel="Title">
+                                    <MudText Typo="Typo.body2">@context.Item.Title</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Item.FileName</MudText>
                                 </MudTd>
-                                <MudTd>
-                                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Disabled="context.Item.Status == LibraryImportItemStatus.Approved" OnClick="@(() => ApproveAsync(context))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.HighlightOff" Color="Color.Error" Size="Size.Small" Disabled="context.Item.Status == LibraryImportItemStatus.Rejected" OnClick="@(() => RejectAsync(context))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Flag" Color="Color.Warning" Size="Size.Small" Disabled="context.Item.Status == LibraryImportItemStatus.NeedsAttention" OnClick="@(() => NeedsAttentionAsync(context))" />
+                                <MudTd DataLabel="Year">@context.Item.Year</MudTd>
+                                <MudTd DataLabel="Album">@context.Item.Album</MudTd>
+                                <MudTd DataLabel="Source">
+                                    @if (!string.IsNullOrEmpty(context.Item.MetadataSource))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="@GetMetadataSourceColor(context.Item.MetadataSource)">
+                                            @context.Item.MetadataSource
+                                        </MudChip>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="Actions">
+                                    @if (RequiresReview(context.Item))
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Search" 
+                                                       Size="Size.Small"
+                                                       Color="Color.Warning"
+                                                       OnClick="@(() => OpenCandidateSelector(context))"
+                                                       Title="Select metadata candidate" />
+                                    }
+                                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" 
+                                                   Color="Color.Success" 
+                                                   Size="Size.Small" 
+                                                   Disabled="context.Item.Status == LibraryImportItemStatus.Approved" 
+                                                   OnClick="@(() => ApproveAsync(context))"
+                                                   Title="Approve" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.HighlightOff" 
+                                                   Color="Color.Error" 
+                                                   Size="Size.Small" 
+                                                   Disabled="context.Item.Status == LibraryImportItemStatus.Rejected" 
+                                                   OnClick="@(() => RejectAsync(context))"
+                                                   Title="Reject" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => RemoveFromImport(context))"
+                                                   Title="Remove from import" />
                                 </MudTd>
                             </RowTemplate>
+                            <PagerContent>
+                                <MudTablePager PageSizeOptions="new int[] { 25, 50, 100 }" />
+                            </PagerContent>
                             <NoRecordsContent>
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">No items match the current filters.</MudText>
                             </NoRecordsContent>
@@ -208,6 +249,59 @@
     </MudItem>
 </MudGrid>
 
+<MudDialog @bind-IsVisible="_candidateSelectorOpen">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Select Metadata Match</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedCandidateContext != null)
+        {
+            <MudText Typo="Typo.body2" Class="mb-4">
+                Searching for: <strong>@_selectedCandidateContext.Item.Artist - @_selectedCandidateContext.Item.Title</strong>
+            </MudText>
+
+            @if (_selectedCandidateContext.Item.CacheMetadataJson != null)
+            {
+                var cacheMetadata = ParseCacheMetadata(_selectedCandidateContext.Item.CacheMetadataJson);
+                if (cacheMetadata != null && cacheMetadata.AlternativeCandidates.Any())
+                {
+                    <MudList T="string" Clickable="true" Dense="true">
+                        @foreach (var candidate in cacheMetadata.AlternativeCandidates)
+                        {
+                            <MudListItem T="string" OnClick="@(() => SelectCandidate(candidate))">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <div>
+                                        <MudText Typo="Typo.body1">@candidate.Artist - @candidate.Title</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @(candidate.Year.HasValue ? $"{candidate.Year} • " : "")@candidate.PrimarySource
+                                        </MudText>
+                                    </div>
+                                    <MudChip T="string" Color="@GetConfidenceColor(candidate.Confidence)" Size="Size.Small">
+                                        @(candidate.Confidence.ToString("P0"))
+                                    </MudChip>
+                                </MudStack>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">No alternative candidates found. Video will import with current metadata.</MudAlert>
+                }
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info">No metadata cache results available.</MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _candidateSelectorOpen = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@SearchManually">Manual Search</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private MudForm? _form;
     private readonly LibraryImportRequest _request = new();
@@ -215,9 +309,13 @@
     private readonly List<LibraryImportSession> _recentSessions = new();
     private LibraryImportSession? _currentSession;
     private LibraryImportSummary _summary = new();
+    private ImportStats _stats = new();
     private bool _isScanning;
     private string _search = string.Empty;
     private string _statusFilter = string.Empty;
+    private bool _candidateSelectorOpen = false;
+    private ImportItemViewModel? _selectedItem;
+    private ImportItemViewModel? _selectedCandidateContext;
     private string SearchTerm
     {
         get => _search;
@@ -342,6 +440,7 @@
         }
 
         _summary = LibraryImportSummary.FromItems(materialized);
+        CalculateStats();
         ApplyFilterInternal();
     }
 
@@ -491,6 +590,199 @@
         _ => Color.Info
     };
 
+    private RenderFragment GetStatusIcon(LibraryImportItem item)
+    {
+        var (color, icon, tooltip) = GetStatusIndicator(item);
+        return @<MudTooltip Text="@tooltip">
+            <MudIcon Icon="@icon" Color="@color" Size="Size.Small" />
+        </MudTooltip>;
+    }
+
+    private (Color Color, string Icon, string Tooltip) GetStatusIndicator(LibraryImportItem item)
+    {
+        // Complete metadata (green check)
+        if (!string.IsNullOrEmpty(item.NfoMetadataJson))
+        {
+            var nfoMeta = ParseNfoMetadata(item.NfoMetadataJson);
+            if (nfoMeta?.HasCompleteMetadata == true)
+            {
+                return (Color.Success, Icons.Material.Filled.CheckCircle, "Complete metadata from NFO");
+            }
+        }
+
+        // High confidence auto-match (blue check)
+        if (!string.IsNullOrEmpty(item.CacheMetadataJson))
+        {
+            var cache = ParseCacheMetadata(item.CacheMetadataJson);
+            if (cache?.Confidence >= 0.90)
+            {
+                return (Color.Info, Icons.Material.Filled.CheckCircle, $"Auto-matched ({cache.Confidence:P0})");
+            }
+        }
+
+        // Needs review (yellow warning)
+        if (!string.IsNullOrEmpty(item.CacheMetadataJson))
+        {
+            var cache = ParseCacheMetadata(item.CacheMetadataJson);
+            if (cache?.RequiresManualSelection == true)
+            {
+                return (Color.Warning, Icons.Material.Filled.Warning, "Multiple matches - select one");
+            }
+        }
+
+        // Incomplete/needs attention (orange alert)
+        if (string.IsNullOrWhiteSpace(item.Artist) || string.IsNullOrWhiteSpace(item.Title))
+        {
+            return (Color.Error, Icons.Material.Filled.Error, "Missing required fields");
+        }
+
+        // Partial metadata (gray info)
+        return (Color.Default, Icons.Material.Filled.Info, "Partial metadata - may need enrichment");
+    }
+
+    private bool RequiresReview(LibraryImportItem item)
+    {
+        if (!string.IsNullOrEmpty(item.CacheMetadataJson))
+        {
+            var cache = ParseCacheMetadata(item.CacheMetadataJson);
+            return cache?.RequiresManualSelection == true || cache?.Confidence < 0.90;
+        }
+        return false;
+    }
+
+    private Color GetMetadataSourceColor(string source) => source switch
+    {
+        "NFO" => Color.Success,
+        "Auto (IMVDb)" => Color.Info,
+        "Auto (MusicBrainz)" => Color.Info,
+        "Filename" => Color.Default,
+        _ => Color.Default
+    };
+
+    private Color GetConfidenceColor(double confidence)
+    {
+        if (confidence >= 0.90) return Color.Success;
+        if (confidence >= 0.75) return Color.Info;
+        if (confidence >= 0.60) return Color.Warning;
+        return Color.Error;
+    }
+
+    private List<string> ParseFeaturedArtists(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private NfoMetadataDto? ParseNfoMetadata(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<NfoMetadataDto>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private CacheMetadataDto? ParseCacheMetadata(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<CacheMetadataDto>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void OpenCandidateSelector(ImportItemViewModel context)
+    {
+        _selectedCandidateContext = context;
+        _candidateSelectorOpen = true;
+    }
+
+    private void SelectCandidate(CacheMetadataCandidateDto candidate)
+    {
+        if (_selectedCandidateContext != null)
+        {
+            // TODO: Apply selected candidate metadata
+            Snackbar.Add($"Selected: {candidate.Artist} - {candidate.Title}", Severity.Info);
+        }
+        _candidateSelectorOpen = false;
+    }
+
+    private void SearchManually()
+    {
+        // TODO: Open manual search dialog
+        Snackbar.Add("Manual search not yet implemented", Severity.Info);
+        _candidateSelectorOpen = false;
+    }
+
+    private async Task RemoveFromImport(ImportItemViewModel context)
+    {
+        if (_currentSession == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var decision = new LibraryImportDecision
+            {
+                ItemId = context.Item.Id,
+                DecisionType = LibraryImportDecisionType.Reject,
+                ManualVideoId = null
+            };
+
+            await LibraryImportService.UpdateItemDecisionAsync(_currentSession.Id, context.Item.Id, decision);
+            
+            // Remove from local list
+            _items.Remove(context);
+            ApplyFilterInternal();
+            CalculateStats();
+            
+            Snackbar.Add("Item removed from import", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to remove item: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CalculateStats()
+    {
+        _stats = new ImportStats
+        {
+            CompleteCount = _items.Count(i => {
+                if (!string.IsNullOrEmpty(i.Item.NfoMetadataJson))
+                {
+                    var nfo = ParseNfoMetadata(i.Item.NfoMetadataJson!);
+                    return nfo?.HasCompleteMetadata == true;
+                }
+                return false;
+            }),
+            NeedsReviewCount = _items.Count(i => RequiresReview(i.Item)),
+            PartialCount = _items.Count(i => {
+                var hasNfo = !string.IsNullOrEmpty(i.Item.NfoMetadataJson);
+                var hasCache = !string.IsNullOrEmpty(i.Item.CacheMetadataJson);
+                if (hasNfo && i.Item.NfoMetadataJson != null)
+                {
+                    var nfo = ParseNfoMetadata(i.Item.NfoMetadataJson);
+                    return nfo?.HasCompleteMetadata == false;
+                }
+                return hasCache || (!string.IsNullOrWhiteSpace(i.Item.Artist) && !string.IsNullOrWhiteSpace(i.Item.Title));
+            })
+        };
+    }
+
     private sealed class ImportItemViewModel
     {
         public ImportItemViewModel(LibraryImportItem item, IReadOnlyList<LibraryImportMatchCandidate> candidates)
@@ -506,5 +798,12 @@
         public List<LibraryImportMatchCandidate> Candidates { get; }
         public Guid? ManualVideoId { get; set; }
         public bool Visible { get; set; } = true;
+    }
+
+    private sealed class ImportStats
+    {
+        public int CompleteCount { get; set; }
+        public int NeedsReviewCount { get; set; }
+        public int PartialCount { get; set; }
     }
 }
