@@ -1170,14 +1170,14 @@ namespace Fuzzbin.Services
         /// Searches for an NFO file associated with a video file.
         /// Checks: same basename, Kodi patterns, and directory-level NFO.
         /// </summary>
-        private async Task<string?> FindNfoFileAsync(string videoFilePath, CancellationToken cancellationToken)
+        private Task<string?> FindNfoFileAsync(string videoFilePath, CancellationToken cancellationToken)
         {
             try
             {
                 var directory = Path.GetDirectoryName(videoFilePath);
                 if (string.IsNullOrEmpty(directory))
                 {
-                    return null;
+                    return Task.FromResult<string?>(null);
                 }
 
                 var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(videoFilePath);
@@ -1186,41 +1186,41 @@ namespace Fuzzbin.Services
                 var sameBasename = Path.Combine(directory, $"{fileNameWithoutExtension}.nfo");
                 if (File.Exists(sameBasename))
                 {
-                    return sameBasename;
+                    return Task.FromResult<string?>(sameBasename);
                 }
 
                 // Priority 2: Kodi pattern (e.g., video.mp4 -> video-nfo.nfo or video-nfo.xml)
                 var kodiNfoPattern = Path.Combine(directory, $"{fileNameWithoutExtension}-nfo.nfo");
                 if (File.Exists(kodiNfoPattern))
                 {
-                    return kodiNfoPattern;
+                    return Task.FromResult<string?>(kodiNfoPattern);
                 }
 
                 var kodiXmlPattern = Path.Combine(directory, $"{fileNameWithoutExtension}-nfo.xml");
                 if (File.Exists(kodiXmlPattern))
                 {
-                    return kodiXmlPattern;
+                    return Task.FromResult<string?>(kodiXmlPattern);
                 }
 
                 // Priority 3: Directory-level NFO (movie.nfo or tvshow.nfo)
                 var movieNfo = Path.Combine(directory, "movie.nfo");
                 if (File.Exists(movieNfo))
                 {
-                    return movieNfo;
+                    return Task.FromResult<string?>(movieNfo);
                 }
 
                 var tvshowNfo = Path.Combine(directory, "tvshow.nfo");
                 if (File.Exists(tvshowNfo))
                 {
-                    return tvshowNfo;
+                    return Task.FromResult<string?>(tvshowNfo);
                 }
 
-                return null;
+                return Task.FromResult<string?>(null);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error searching for NFO file for {VideoFilePath}", videoFilePath);
-                return null;
+                return Task.FromResult<string?>(null);
             }
         }
 

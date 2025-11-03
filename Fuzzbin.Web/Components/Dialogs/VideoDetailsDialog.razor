@@ -339,21 +339,24 @@
                         parameters,
                         options);
                     
-                    var result = await dialog.Result;
+                    if (dialog != null)
+                    {
+                        var result = await dialog.Result;
                     
-                    if (!result.Canceled && result.Data is AggregatedCandidate selectedCandidate)
-                    {
-                        // Apply selected candidate
-                        _video = await MetadataCacheService.ApplyMetadataAsync(
-                            _video,
-                            selectedCandidate);
+                        if (result != null && !result.Canceled && result.Data is AggregatedCandidate selectedCandidate)
+                        {
+                            // Apply selected candidate
+                            _video = await MetadataCacheService.ApplyMetadataAsync(
+                                _video,
+                                selectedCandidate);
                         
-                        await LoadVideoDetails();
-                        Snackbar.Add($"Applied metadata from {selectedCandidate.PrimarySource} ({selectedCandidate.OverallConfidence:P0} confidence)", Severity.Success);
-                    }
-                    else
-                    {
-                        Snackbar.Add("Metadata refresh canceled", Severity.Info);
+                            await LoadVideoDetails();
+                            Snackbar.Add($"Applied metadata from {selectedCandidate.PrimarySource ?? "unknown source"} ({selectedCandidate.OverallConfidence:P0} confidence)", Severity.Success);
+                        }
+                        else
+                        {
+                            Snackbar.Add("Metadata refresh canceled", Severity.Info);
+                        }
                     }
                 }
                 else

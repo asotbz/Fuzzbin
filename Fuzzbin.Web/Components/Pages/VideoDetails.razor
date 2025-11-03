@@ -787,13 +787,16 @@
                     parameters,
                     new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
 
-                var result = await dialog.Result;
-
-                if (!result.Canceled && result.Data is AggregatedCandidate selectedCandidate)
+                if (dialog != null)
                 {
-                    _video = await MetadataCacheService.ApplyMetadataAsync(_video, selectedCandidate);
-                    await LoadMetadataStatusAsync();
-                    Snackbar.Add("Metadata updated successfully", Severity.Success);
+                    var result = await dialog.Result;
+
+                    if (result != null && !result.Canceled && result.Data is AggregatedCandidate selectedCandidate)
+                    {
+                        _video = await MetadataCacheService.ApplyMetadataAsync(_video, selectedCandidate);
+                        await LoadMetadataStatusAsync();
+                        Snackbar.Add("Metadata updated successfully", Severity.Success);
+                    }
                 }
             }
             else if (cacheResult.BestMatch != null)
@@ -801,7 +804,7 @@
                 // Auto-apply high-confidence match
                 _video = await MetadataCacheService.ApplyMetadataAsync(_video, cacheResult.BestMatch);
                 await LoadMetadataStatusAsync();
-                Snackbar.Add($"Metadata refreshed from {cacheResult.BestMatch.PrimarySource}", Severity.Success);
+                Snackbar.Add($"Metadata refreshed from {cacheResult.BestMatch.PrimarySource ?? "unknown source"}", Severity.Success);
             }
         }
         catch (Exception ex)
