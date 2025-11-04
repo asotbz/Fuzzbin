@@ -869,6 +869,307 @@ try
     .WithName("BulkDeleteTags")
     .RequireAuthorization();
 
+    // Maintenance API Endpoints
+    
+    // POST /api/maintenance/run - Manually trigger all maintenance tasks
+    app.MapPost("/api/maintenance/run", (
+        MaintenanceSchedulerService maintenanceScheduler,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            // Run maintenance tasks in the background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await maintenanceScheduler.RunMaintenanceAsync(ct);
+                }
+                catch (Exception)
+                {
+                    // Errors are logged by the scheduler
+                }
+            }, ct);
+
+            return Results.Accepted("/api/maintenance/history", new 
+            { 
+                message = "Maintenance run started. Check execution history for results." 
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: $"Failed to start maintenance run: {ex.Message}",
+                statusCode: 500,
+                title: "Maintenance Start Error");
+        }
+    })
+    .WithName("RunMaintenance")
+    .RequireAuthorization();
+
+    // POST /api/maintenance/run-task/{taskName} - Manually trigger a specific maintenance task
+    app.MapPost("/api/maintenance/run-task/{taskName}", (
+        string taskName,
+        IServiceScopeFactory scopeFactory,
+        ILogger<Program> logger,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var tasks = scope.ServiceProvider.GetServices<IMaintenanceTask>().ToList();
+            var task = tasks.FirstOrDefault(t => t.TaskName.Equals(taskName, StringComparison.OrdinalIgnoreCase));
+
+            if (task == null)
+            {
+                return Results.NotFound(new 
+                { 
+                    message = $"Maintenance task '{taskName}' not found",
+                    availableTasks = tasks.Select(t => t.TaskName).ToList()
+                });
+            }
+
+            if (!task.IsEnabled)
+            {
+                return Results.BadRequest(new 
+                { 
+                    message = $"Maintenance task '{taskName}' is currently disabled" 
+                });
+            }
+
+            var taskStarted = DateTime.UtcNow;
+
+            // Run the task in the background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    var result = await task.ExecuteAsync(ct);
+                    stopwatch.Stop();
+                    result.Duration = stopwatch.Elapsed;
+
+                    // Record execution
+                    using var bgScope = scopeFactory.CreateScope();
+                    var bgUnitOfWork = bgScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                    
+                    var execution = new MaintenanceExecution
+                    {
+                        TaskName = task.TaskName,
+                        StartedAt = taskStarted,
+                        CompletedAt = DateTime.UtcNow,
+                        Success = result.Success,
+                        Summary = result.Summary,
+                        ItemsProcessed = result.ItemsProcessed,
+                        ErrorMessage = result.ErrorMessage,
+                        DurationMs = (int)result.Duration.TotalMilliseconds,
+                        MetricsJson = result.Metrics != null 
+                            ? System.Text.Json.JsonSerializer.Serialize(result.Metrics) 
+                            : null
+                    };
+
+                    await bgUnitOfWork.MaintenanceExecutions.AddAsync(execution);
+                    await bgUnitOfWork.SaveChangesAsync();
+
+                    logger.LogInformation(
+                        "Manual maintenance task completed: {TaskName} - {Summary}",
+                        task.TaskName, result.Summary);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error executing manual maintenance task: {TaskName}", taskName);
+                }
+            }, ct);
+
+            return Results.Accepted("/api/maintenance/history", new 
+            { 
+                message = $"Maintenance task '{taskName}' started. Check execution history for results.",
+                taskName = task.TaskName
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error starting maintenance task: {TaskName}", taskName);
+            return Results.Problem(
+                detail: $"Failed to start maintenance task: {ex.Message}",
+                statusCode: 500,
+                title: "Task Start Error");
+        }
+    })
+    .WithName("RunMaintenanceTask")
+    .RequireAuthorization();
+
+    // GET /api/maintenance/history - Get maintenance execution history
+    app.MapGet("/api/maintenance/history", async (
+        IUnitOfWork unitOfWork,
+        string? taskName = null,
+        bool? success = null,
+        int days = 30,
+        int limit = 100,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            var cutoffDate = DateTime.UtcNow.AddDays(-days);
+            var query = unitOfWork.MaintenanceExecutions.GetQueryable();
+
+            // Apply filters
+            query = query.Where(e => e.StartedAt >= cutoffDate);
+
+            if (!string.IsNullOrWhiteSpace(taskName))
+            {
+                query = query.Where(e => e.TaskName.Equals(taskName));
+            }
+
+            if (success.HasValue)
+            {
+                query = query.Where(e => e.Success == success.Value);
+            }
+
+            // Get most recent executions
+            var executions = await query
+                .OrderByDescending(e => e.StartedAt)
+                .Take(limit)
+                .ToListAsync(ct);
+
+            var results = executions.Select(e => new
+            {
+                e.Id,
+                e.TaskName,
+                e.StartedAt,
+                e.CompletedAt,
+                e.Success,
+                e.Summary,
+                e.ItemsProcessed,
+                e.ErrorMessage,
+                DurationSeconds = e.DurationMs / 1000.0,
+                Metrics = !string.IsNullOrWhiteSpace(e.MetricsJson)
+                    ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(e.MetricsJson)
+                    : null
+            }).ToList();
+
+            return Results.Ok(new
+            {
+                count = results.Count,
+                filters = new { taskName = taskName, success = success, days = days, limit = limit },
+                executions = results
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: $"Failed to retrieve maintenance history: {ex.Message}",
+                statusCode: 500,
+                title: "History Retrieval Error");
+        }
+    })
+    .WithName("GetMaintenanceHistory")
+    .RequireAuthorization();
+
+    // GET /api/maintenance/tasks - List all registered maintenance tasks
+    app.MapGet("/api/maintenance/tasks", async (
+        IServiceScopeFactory scopeFactory,
+        IUnitOfWork unitOfWork,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var tasks = scope.ServiceProvider.GetServices<IMaintenanceTask>().ToList();
+
+            var taskInfos = new List<object>();
+
+            foreach (var task in tasks)
+            {
+                // Get the most recent execution for this task
+                var lastExecution = await unitOfWork.MaintenanceExecutions
+                    .GetQueryable()
+                    .Where(e => e.TaskName == task.TaskName)
+                    .OrderByDescending(e => e.StartedAt)
+                    .FirstOrDefaultAsync(ct);
+
+                taskInfos.Add(new
+                {
+                    taskName = task.TaskName,
+                    description = task.Description,
+                    isEnabled = task.IsEnabled,
+                    lastExecution = lastExecution != null ? new
+                    {
+                        startedAt = lastExecution.StartedAt,
+                        success = lastExecution.Success,
+                        summary = lastExecution.Summary,
+                        durationSeconds = lastExecution.DurationMs / 1000.0
+                    } : null
+                });
+            }
+
+            return Results.Ok(new
+            {
+                count = taskInfos.Count,
+                tasks = taskInfos
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: $"Failed to list maintenance tasks: {ex.Message}",
+                statusCode: 500,
+                title: "Task List Error");
+        }
+    })
+    .WithName("GetMaintenanceTasks")
+    .RequireAuthorization();
+
+    // GET /api/cache/stats/history - Get cache statistics history
+    app.MapGet("/api/cache/stats/history", async (
+        IUnitOfWork unitOfWork,
+        int days = 14,
+        CancellationToken ct = default) =>
+    {
+        try
+        {
+            var cutoffDate = DateTime.UtcNow.AddDays(-days);
+            
+            var snapshots = await unitOfWork.CacheStatSnapshots
+                .GetQueryable()
+                .Where(s => s.SnapshotAt >= cutoffDate)
+                .OrderBy(s => s.SnapshotAt)
+                .ToListAsync(ct);
+
+            var results = snapshots.Select(s => new
+            {
+                s.Id,
+                s.SnapshotAt,
+                s.TotalQueries,
+                s.MbSourceCaches,
+                s.ImvdbSourceCaches,
+                s.YtSourceCaches,
+                s.TotalResolutions,
+                s.MbCandidates,
+                s.ImvdbCandidates,
+                s.YtCandidates,
+                s.HitRatePercent,
+                s.AvgCandidatesPerQuery
+            }).ToList();
+
+            return Results.Ok(new
+            {
+                count = results.Count,
+                days = days,
+                snapshots = results
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: $"Failed to retrieve cache statistics: {ex.Message}",
+                statusCode: 500,
+                title: "Cache Stats Error");
+        }
+    })
+    .WithName("GetCacheStatsHistory")
+    .RequireAuthorization();
+
     app.MapGet("/api/videos/stream", async (
         string? path,
         ILibraryPathManager libraryPathManager,
