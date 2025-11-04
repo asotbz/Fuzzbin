@@ -262,10 +262,19 @@ try
     // Add HttpContextAccessor for ActivityLogService
     builder.Services.AddHttpContextAccessor();
     
+    // Register Maintenance Tasks
+    builder.Services.AddScoped<IMaintenanceTask, Fuzzbin.Services.Maintenance.LibraryScanMaintenanceTask>();
+    builder.Services.AddScoped<IMaintenanceTask, Fuzzbin.Services.Maintenance.ThumbnailCleanupMaintenanceTask>();
+    builder.Services.AddScoped<IMaintenanceTask, Fuzzbin.Services.Maintenance.CachePurgeMaintenanceTask>();
+    builder.Services.AddScoped<IMaintenanceTask, Fuzzbin.Services.Maintenance.CacheStatsMaintenanceTask>();
+    builder.Services.AddScoped<IMaintenanceTask, Fuzzbin.Services.Maintenance.RecycleBinPurgeMaintenanceTask>();
+    builder.Services.AddScoped<IMaintenanceTask, Fuzzbin.Services.Maintenance.AutoBackupMaintenanceTask>();
+    
     // Register Background Services
     builder.Services.AddHostedService<DownloadBackgroundService>();
     builder.Services.AddHostedService<ThumbnailBackgroundService>();
     builder.Services.AddHostedService<BackgroundJobProcessorService>();
+    builder.Services.AddHostedService<MaintenanceSchedulerService>();
 
     // Add health checks
     builder.Services.AddHealthChecks()
