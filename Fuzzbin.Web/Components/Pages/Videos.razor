@@ -96,10 +96,12 @@
                                         SelectedYears="@_selectedYears"
                                         Formats="@(_facets?.Formats ?? new())"
                                         SelectedFormats="@_selectedFormats"
+                                        ShowOnlyMissing="@_showOnlyMissing"
                                         OnGenreToggled="ToggleGenre"
                                         OnArtistToggled="ToggleArtist"
                                         OnYearToggled="ToggleYear"
                                         OnFormatToggled="ToggleFormat"
+                                        OnMissingToggled="ToggleMissingFilter"
                                         OnClearFilters="ClearFilters" />
                 </MudItem>
                 <MudItem xs="12" md="9">
@@ -320,6 +322,7 @@
     private readonly HashSet<string> _selectedArtists = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedYears = new();
     private readonly HashSet<string> _selectedFormats = new(StringComparer.OrdinalIgnoreCase);
+    private bool _showOnlyMissing;
 
     private List<Video> _videos = new();
     private SearchFacets? _facets;
@@ -344,7 +347,8 @@
                                       _selectedGenres.Count > 0 ||
                                       _selectedArtists.Count > 0 ||
                                       _selectedYears.Count > 0 ||
-                                      _selectedFormats.Count > 0;
+                                      _selectedFormats.Count > 0 ||
+                                      _showOnlyMissing;
 
     protected override async Task OnInitializedAsync()
     {
@@ -540,6 +544,11 @@
             }
         }
 
+        if (_showOnlyMissing)
+        {
+            query.IsMissing = true;
+        }
+
         return query;
     }
 
@@ -604,6 +613,12 @@
     private Task ToggleArtist(string artist) => ToggleFilter(_selectedArtists, artist);
     private Task ToggleYear(string year) => ToggleFilter(_selectedYears, year);
     private Task ToggleFormat(string format) => ToggleFilter(_selectedFormats, format);
+    
+    private Task ToggleMissingFilter(bool value)
+    {
+        _showOnlyMissing = value;
+        return LoadVideosAsync(clearSelection: true);
+    }
 
     private async Task ToggleFilter(HashSet<string> set, string value)
     {
@@ -631,6 +646,7 @@
         _selectedArtists.Clear();
         _selectedYears.Clear();
         _selectedFormats.Clear();
+        _showOnlyMissing = false;
         return LoadVideosAsync(clearSelection: true);
     }
 

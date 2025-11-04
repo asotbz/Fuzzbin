@@ -35,8 +35,12 @@
             <div class="d-flex align-center"
                  @oncontextmenu="@(e => HandleContextMenu(e, video))"
                  @oncontextmenu:preventDefault="true">
-                <MudAvatar Size="Size.Small" Image="@ThumbnailUrlSelector?.Invoke(video)" />
+                <MudAvatar Size="Size.Small" Image="@ThumbnailUrlSelector?.Invoke(video)" Class="@(video.IsMissing ? "fz-video-list__avatar--missing" : "")" />
                 <MudText Class="ml-2">@video.Title</MudText>
+                @if (video.IsMissing)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.ErrorOutline" Class="ml-2">Missing</MudChip>
+                }
             </div>
         </MudTd>
         <MudTd>@video.Artist</MudTd>
@@ -195,3 +199,9 @@
         return names.Count == 0 ? "—" : string.Join(", ", names);
     }
 }
+
+<style>
+    .fz-video-list__avatar--missing {
+        opacity: 0.5;
+    }
+</style>

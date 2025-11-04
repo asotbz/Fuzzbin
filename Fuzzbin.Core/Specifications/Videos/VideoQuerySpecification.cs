@@ -142,6 +142,11 @@ public sealed class VideoQuerySpecification : BaseSpecification<Video>
             }
         }
 
+        if (query.IsMissing.HasValue)
+        {
+            ApplyCriteria(v => v.IsMissing == query.IsMissing.Value);
+        }
+
         if (query.MissingMetadata.HasValue && query.MissingMetadata.Value)
         {
             ApplyCriteria(v =>

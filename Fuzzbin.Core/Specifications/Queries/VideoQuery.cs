@@ -31,6 +31,7 @@ public class VideoQuery
     public int? DurationTo { get; set; }
     public int? MinRating { get; set; }
     public bool? HasFile { get; set; }
+    public bool? IsMissing { get; set; }
     public bool? MissingMetadata { get; set; }
     public bool? HasCollections { get; set; }
     public bool? HasYouTubeId { get; set; }

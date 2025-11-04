@@ -36,7 +36,13 @@ else
                                 </MudCardHeader>
                                 <MudCardMedia Height="180" Image="@ThumbnailUrlSelector?.Invoke(video)" Alt="@video.Title" />
                                 <MudCardContent Class="pa-3">
-                                    <MudText Typo="Typo.h6" Class="text-truncate" Title="@video.Title">@video.Title</MudText>
+                                    <div class="d-flex justify-space-between align-center mb-1">
+                                        <MudText Typo="Typo.h6" Class="text-truncate flex-grow-1" Title="@video.Title">@video.Title</MudText>
+                                        @if (video.IsMissing)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.ErrorOutline" Class="ml-1">Missing</MudChip>
+                                        }
+                                    </div>
                                     <MudText Typo="Typo.body2" Class="text-truncate" Color="Color.Primary" Title="@video.Artist">
                                         @video.Artist
                                     </MudText>
@@ -207,9 +213,19 @@ else
 
     private string BuildCardClass(Video video)
     {
-        return SelectedVideoIds.Contains(video.Id)
-            ? "fz-video-grid__card-inner fz-video-grid__card-inner--selected"
-            : "fz-video-grid__card-inner";
+        var classes = new List<string> { "fz-video-grid__card-inner" };
+        
+        if (SelectedVideoIds.Contains(video.Id))
+        {
+            classes.Add("fz-video-grid__card-inner--selected");
+        }
+        
+        if (video.IsMissing)
+        {
+            classes.Add("fz-video-grid__card-inner--missing");
+        }
+        
+        return string.Join(" ", classes);
     }
 
     private static string FormatAlbumYear(Video video)
@@ -306,6 +322,15 @@ else
 
     .fz-video-grid__card-inner--selected {
         border: 2px solid var(--mud-palette-primary);
+    }
+
+    .fz-video-grid__card-inner--missing {
+        opacity: 0.6;
+        border: 1px dashed var(--mud-palette-warning);
+    }
+
+    .fz-video-grid__card-inner--missing:hover {
+        opacity: 0.8;
     }
 
     .fz-video-grid__empty {

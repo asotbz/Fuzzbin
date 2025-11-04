@@ -552,8 +552,296 @@
             </MudGrid>
         </MudTabPanel>
         
+        <!-- Maintenance Settings -->
+        <MudTabPanel Text="Maintenance" Icon="@Icons.Material.Filled.Build">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Class="mb-2">Maintenance System</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4">
+                        Configure automated maintenance tasks that keep your library clean and organized.
+                    </MudText>
+                </MudItem>
+                
+                <!-- Global Maintenance Settings -->
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                        The maintenance system runs automatically in the background to scan for new videos,
+                        clean up orphaned files, purge expired cache, and maintain backups.
+                    </MudAlert>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_maintenanceEnabled"
+                                 Label="Enable Automatic Maintenance"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Run maintenance tasks automatically on a schedule
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_maintenanceIntervalHours"
+                                     Label="Maintenance Interval (hours)"
+                                     Min="1"
+                                     Max="168"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_maintenanceEnabled)"
+                                     HelperText="How often to run all maintenance tasks (default: 8 hours)" />
+                </MudItem>
+                
+                <!-- Last Run Status -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">Last Maintenance Run</MudText>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudSimpleTable Dense="true" Hover="true" Bordered="true">
+                        <thead>
+                            <tr>
+                                <th>Task</th>
+                                <th>Last Run</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Items Processed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_maintenanceHistory.Any())
+                            {
+                                @foreach (var task in _maintenanceHistory)
+                                {
+                                    <tr>
+                                        <td><strong>@task.TaskName</strong></td>
+                                        <td>@FormatRelativeTime(task.StartedAt)</td>
+                                        <td>
+                                            @if (task.Success)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">Success</MudChip>
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">Failed</MudChip>
+                                            }
+                                        </td>
+                                        <td>@FormatDuration(task.DurationMs)</td>
+                                        <td>@task.ItemsProcessed</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5" class="text-center">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">No maintenance history available</MudText>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudItem>
+                
+                <!-- Library Scan Settings -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Library Scan</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Automatically discovers new videos in your library and detects missing files.
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_libraryScanEnabled"
+                                 Label="Enable Library Scan"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Scan for new videos and detect missing files
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_libraryScanAutoImport"
+                                 Label="Auto-import New Videos"
+                                 Color="Color.Primary"
+                                 Disabled="@(!_libraryScanEnabled)" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Automatically add newly discovered videos to the library
+                    </MudText>
+                </MudItem>
+                
+                <!-- Thumbnail Cleanup Settings -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Thumbnail Cleanup</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Remove orphaned thumbnail files to free up disk space.
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_thumbnailCleanupEnabled"
+                                 Label="Enable Thumbnail Cleanup"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Delete thumbnails for deleted or missing videos
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_thumbnailCleanupGraceDays"
+                                     Label="Grace Period (days)"
+                                     Min="0"
+                                     Max="30"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_thumbnailCleanupEnabled)"
+                                     HelperText="Wait before deleting orphaned thumbnails (default: 7 days)" />
+                </MudItem>
+                
+                <!-- Cache Statistics Settings -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Cache Statistics</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Collect and store cache performance metrics for analysis.
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_cacheStatsEnabled"
+                                 Label="Enable Cache Statistics"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Track cache performance metrics over time
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_cacheStatsRetentionDays"
+                                     Label="Statistics Retention (days)"
+                                     Min="1"
+                                     Max="90"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_cacheStatsEnabled)"
+                                     HelperText="How long to keep historical statistics (default: 14 days)" />
+                </MudItem>
+                
+                <!-- Recycle Bin Purge Settings -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Recycle Bin Purge</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Permanently delete files from the recycle bin after a retention period.
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCheckBox @bind-Value="_recycleBinPurgeEnabled"
+                                 Label="Enable Recycle Bin Purge"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Automatically delete old files from recycle bin
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="_recycleBinRetentionDays"
+                                     Label="Retention Period (days)"
+                                     Min="1"
+                                     Max="90"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_recycleBinPurgeEnabled)"
+                                     HelperText="Keep deleted files for this many days (default: 7 days)" />
+                </MudItem>
+                
+                <!-- Auto Backup Settings -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Auto Backup</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Automatically create database backups on a schedule.
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudCheckBox @bind-Value="_autoBackupEnabled"
+                                 Label="Enable Auto Backup"
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Create automatic database backups
+                    </MudText>
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_autoBackupIntervalHours"
+                                     Label="Backup Interval (hours)"
+                                     Min="1"
+                                     Max="168"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_autoBackupEnabled)"
+                                     HelperText="Minimum time between backups (default: 24 hours)" />
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <MudNumericField @bind-Value="_autoBackupMaxCount"
+                                     Label="Max Backups to Keep"
+                                     Min="1"
+                                     Max="100"
+                                     Variant="Variant.Outlined"
+                                     Disabled="@(!_autoBackupEnabled)"
+                                     HelperText="Number of backup files to retain (default: 7)" />
+                </MudItem>
+                
+                <!-- Manual Trigger -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">Manual Maintenance</MudText>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.CleaningServices"
+                                   OnClick="TriggerMaintenance"
+                                   Disabled="_isMaintenanceInProgress">
+                            @if (_isMaintenanceInProgress)
+                            {
+                                <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                                <span>Running Maintenance...</span>
+                            }
+                            else
+                            {
+                                <span>Run All Maintenance Tasks Now</span>
+                            }
+                        </MudButton>
+                        
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Info"
+                                   StartIcon="@Icons.Material.Filled.History"
+                                   OnClick="@(() => Navigation.NavigateTo("/maintenance-history"))">
+                            View Full History
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+                
+                <!-- Save Button -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled"
+                             Color="Color.Primary"
+                             OnClick="SaveMaintenanceSettings"
+                             StartIcon="@Icons.Material.Filled.Save">
+                        Save Maintenance Settings
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+        
         <!-- Advanced Settings -->
-        <MudTabPanel Text="Advanced" Icon="@Icons.Material.Filled.Build">
+        <MudTabPanel Text="Advanced" Icon="@Icons.Material.Filled.Settings">
             <MudGrid>
                 <MudItem xs="12">
                     <MudText Typo="Typo.h6" Class="mb-4">Advanced Settings</MudText>
@@ -737,6 +1025,31 @@
     private bool _isMaintenanceInProgress;
     private bool _isCacheClearInProgress;
     
+    // Maintenance Settings
+    private bool _maintenanceEnabled = true;
+    private List<MaintenanceExecutionDto> _maintenanceHistory = new();
+    
+    // Library Scan Settings
+    private bool _libraryScanEnabled = true;
+    private bool _libraryScanAutoImport = true;
+    
+    // Thumbnail Cleanup Settings
+    private bool _thumbnailCleanupEnabled = true;
+    private int _thumbnailCleanupGraceDays = 7;
+    
+    // Cache Statistics Settings
+    private bool _cacheStatsEnabled = true;
+    private int _cacheStatsRetentionDays = 14;
+    
+    // Recycle Bin Purge Settings
+    private bool _recycleBinPurgeEnabled = true;
+    private int _recycleBinRetentionDays = 7;
+    
+    // Auto Backup Settings
+    private bool _autoBackupEnabled = true;
+    private int _autoBackupIntervalHours = 24;
+    private int _autoBackupMaxCount = 7;
+    
     // Advanced Settings
     private int _databaseBackupDays = 30;
     private int _logRetentionDays = 30;
@@ -893,6 +1206,21 @@
         _enableAutomaticPurge = GetBool("ExternalCache", "EnableAutomaticPurge", true);
         _maintenanceIntervalHours = GetInt("ExternalCache", "MaintenanceIntervalHours", 8);
         await UpdateCacheStatsAsync();
+        
+        // Load Maintenance Settings
+        _maintenanceEnabled = GetBool("Maintenance", "Enabled", true);
+        _libraryScanEnabled = GetBool("Maintenance", "LibraryScan.Enabled", true);
+        _libraryScanAutoImport = GetBool("Maintenance", "LibraryScan.AutoImport", true);
+        _thumbnailCleanupEnabled = GetBool("Maintenance", "ThumbnailCleanup.Enabled", true);
+        _thumbnailCleanupGraceDays = GetInt("Maintenance", "ThumbnailCleanup.GraceDays", 7);
+        _cacheStatsEnabled = GetBool("Maintenance", "CacheStats.Enabled", true);
+        _cacheStatsRetentionDays = GetInt("Maintenance", "CacheStats.RetentionDays", 14);
+        _recycleBinPurgeEnabled = GetBool("Maintenance", "RecycleBinPurge.Enabled", true);
+        _recycleBinRetentionDays = GetInt("Maintenance", "RecycleBinPurge.RetentionDays", 7);
+        _autoBackupEnabled = GetBool("Maintenance", "AutoBackup.Enabled", true);
+        _autoBackupIntervalHours = GetInt("Maintenance", "AutoBackup.IntervalHours", 24);
+        _autoBackupMaxCount = GetInt("Maintenance", "AutoBackup.MaxCount", 7);
+        await LoadMaintenanceHistoryAsync();
         
         // Load Advanced Settings
         _databaseBackupDays = GetInt("System", "DatabaseBackupDays", 30);
@@ -1449,6 +1777,7 @@
             {
                 Snackbar.Add("Maintenance tasks completed successfully", Severity.Success);
                 await UpdateCacheStatsAsync();
+                await LoadMaintenanceHistoryAsync();
             }
             else
             {
@@ -1507,6 +1836,103 @@
             _isCacheClearInProgress = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+    
+    private async Task LoadMaintenanceHistoryAsync()
+    {
+        try
+        {
+            using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            var response = await httpClient.GetAsync("/api/maintenance/history?pageSize=6");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var result = System.Text.Json.JsonSerializer.Deserialize<MaintenanceHistoryResponse>(json,
+                    new System.Text.Json.JsonSerializerOptions 
+                    { 
+                        PropertyNameCaseInsensitive = true 
+                    });
+                _maintenanceHistory = result?.Items ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load maintenance history");
+        }
+    }
+    
+    private async Task SaveMaintenanceSettings()
+    {
+        await SaveSettings(new[]
+        {
+            ("Enabled", _maintenanceEnabled.ToString(), "Maintenance"),
+            ("MaintenanceIntervalHours", _maintenanceIntervalHours.ToString(), "Maintenance"),
+            ("LibraryScan.Enabled", _libraryScanEnabled.ToString(), "Maintenance"),
+            ("LibraryScan.AutoImport", _libraryScanAutoImport.ToString(), "Maintenance"),
+            ("ThumbnailCleanup.Enabled", _thumbnailCleanupEnabled.ToString(), "Maintenance"),
+            ("ThumbnailCleanup.GraceDays", _thumbnailCleanupGraceDays.ToString(), "Maintenance"),
+            ("CacheStats.Enabled", _cacheStatsEnabled.ToString(), "Maintenance"),
+            ("CacheStats.RetentionDays", _cacheStatsRetentionDays.ToString(), "Maintenance"),
+            ("RecycleBinPurge.Enabled", _recycleBinPurgeEnabled.ToString(), "Maintenance"),
+            ("RecycleBinPurge.RetentionDays", _recycleBinRetentionDays.ToString(), "Maintenance"),
+            ("AutoBackup.Enabled", _autoBackupEnabled.ToString(), "Maintenance"),
+            ("AutoBackup.IntervalHours", _autoBackupIntervalHours.ToString(), "Maintenance"),
+            ("AutoBackup.MaxCount", _autoBackupMaxCount.ToString(), "Maintenance")
+        });
+        
+        Snackbar.Add("Maintenance settings saved successfully", Severity.Success);
+        await LoadMaintenanceHistoryAsync();
+    }
+    
+    private string FormatRelativeTime(DateTime dateTime)
+    {
+        var span = DateTime.UtcNow - dateTime;
+        
+        if (span.TotalMinutes < 1)
+            return "Just now";
+        if (span.TotalMinutes < 60)
+            return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24)
+            return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7)
+            return $"{(int)span.TotalDays}d ago";
+        
+        return dateTime.ToLocalTime().ToString("MMM d, yyyy");
+    }
+    
+    private string FormatDuration(int durationMs)
+    {
+        if (durationMs < 1000)
+            return $"{durationMs}ms";
+        if (durationMs < 60000)
+            return $"{durationMs / 1000}s";
+        
+        var minutes = durationMs / 60000;
+        var seconds = (durationMs % 60000) / 1000;
+        return $"{minutes}m {seconds}s";
+    }
+    
+    // DTO classes for maintenance API
+    private class MaintenanceExecutionDto
+    {
+        public int Id { get; set; }
+        public string TaskName { get; set; } = string.Empty;
+        public DateTime StartedAt { get; set; }
+        public DateTime CompletedAt { get; set; }
+        public bool Success { get; set; }
+        public string Summary { get; set; } = string.Empty;
+        public int ItemsProcessed { get; set; }
+        public string? ErrorMessage { get; set; }
+        public int DurationMs { get; set; }
+    }
+    
+    private class MaintenanceHistoryResponse
+    {
+        public List<MaintenanceExecutionDto> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int PageSize { get; set; }
+        public int PageNumber { get; set; }
     }
     
 }
