@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
@@ -118,21 +116,14 @@ public class MetadataExportServiceTests : IAsyncLifetime
         var metadataSettingsProvider = new TestMetadataSettingsProvider();
         var nfoService = new NfoExportService(metadataSettingsProvider);
 
-        var webRoot = Path.Combine(_tempRoot, "wwwroot");
-        Directory.CreateDirectory(Path.Combine(webRoot, "thumbnails"));
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["WebRootPath"] = webRoot
-            })
-            .Build();
+        var thumbnailDirectory = configPathService.GetThumbnailDirectory();
+        Directory.CreateDirectory(thumbnailDirectory);
 
         var metadataService = new MetadataExportService(
             unitOfWork,
             pathManager,
             nfoService,
-            configuration,
+            configPathService,
             NullLogger<MetadataExportService>.Instance);
 
         var sourceDirectory = Path.Combine(_tempRoot, "source");
@@ -156,7 +147,7 @@ public class MetadataExportServiceTests : IAsyncLifetime
         await unitOfWork.Videos.AddAsync(video);
         await unitOfWork.SaveChangesAsync();
 
-        var thumbnailPath = Path.Combine(webRoot, "thumbnails", $"{video.Id}.jpg");
+        var thumbnailPath = Path.Combine(thumbnailDirectory, $"{video.Id}.jpg");
         await File.WriteAllTextAsync(thumbnailPath, "thumbnail");
 
         var exportRoot = Path.Combine(_tempRoot, "exports");
@@ -208,6 +199,7 @@ public class MetadataExportServiceTests : IAsyncLifetime
         public string GetDatabasePath() => Path.Combine(_workspace, "data", "fuzzbin.db");
         public string GetDefaultLibraryPath() => Path.Combine(_workspace, "Library");
         public string GetDefaultDownloadsPath() => Path.Combine(_workspace, "Downloads");
+        public string GetThumbnailDirectory() => Path.Combine(_workspace, "thumbnails");
         public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
     }
 }

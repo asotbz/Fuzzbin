@@ -49,6 +49,12 @@ namespace Fuzzbin.Core.Interfaces
         string GetDefaultDownloadsPath();
 
         /// <summary>
+        /// Gets the thumbnail storage directory
+        /// Path: FUZZBIN_CONFIG_DIR/thumbnails
+        /// </summary>
+        string GetThumbnailDirectory();
+
+        /// <summary>
         /// Ensures a directory exists, creating it if necessary
         /// </summary>
         void EnsureDirectoryExists(string path);

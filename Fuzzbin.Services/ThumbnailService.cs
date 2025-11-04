@@ -15,31 +15,26 @@ public class ThumbnailService : IThumbnailService
     private readonly IConfiguration _configuration;
     private readonly IDownloadSettingsProvider _settingsProvider;
     private readonly IImageOptimizationService _imageOptimizationService;
+    private readonly IConfigurationPathService _configPathService;
     private readonly string _thumbnailDirectory;
-    private readonly string _webRootPath;
 
     public ThumbnailService(
         IUnitOfWork unitOfWork,
         ILogger<ThumbnailService> logger,
         IConfiguration configuration,
         IDownloadSettingsProvider settingsProvider,
-        IImageOptimizationService imageOptimizationService)
+        IImageOptimizationService imageOptimizationService,
+        IConfigurationPathService configPathService)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
         _configuration = configuration;
         _settingsProvider = settingsProvider;
         _imageOptimizationService = imageOptimizationService;
+        _configPathService = configPathService;
         
-        _webRootPath = configuration["WebRootPath"] ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-        _thumbnailDirectory = Path.Combine(_webRootPath, "thumbnails");
-        
-        // Ensure thumbnail directory exists
-        if (!Directory.Exists(_thumbnailDirectory))
-        {
-            Directory.CreateDirectory(_thumbnailDirectory);
-            _logger.LogInformation("Created thumbnail directory: {ThumbnailDirectory}", _thumbnailDirectory);
-        }
+        _thumbnailDirectory = _configPathService.GetThumbnailDirectory();
+        _logger.LogInformation("Thumbnail directory: {ThumbnailDirectory}", _thumbnailDirectory);
     }
 
     public async Task<bool> GenerateThumbnailAsync(string videoPath, string outputPath, double? timePosition = null, CancellationToken cancellationToken = default)
@@ -158,8 +153,8 @@ public class ThumbnailService : IThumbnailService
             {
                 generated++;
                 
-                // Update video entity with thumbnail path
-                video.ThumbnailPath = Path.GetRelativePath(_webRootPath, thumbnailPath);
+                // Update video entity with thumbnail path (relative to thumbnail directory)
+                video.ThumbnailPath = Path.GetRelativePath(_thumbnailDirectory, thumbnailPath);
                 await _unitOfWork.Videos.UpdateAsync(video);
             }
         }
@@ -180,7 +175,7 @@ public class ThumbnailService : IThumbnailService
     {
         if (!string.IsNullOrEmpty(video.ThumbnailPath))
         {
-            var fullPath = Path.Combine(_webRootPath, video.ThumbnailPath);
+            var fullPath = Path.Combine(_thumbnailDirectory, video.ThumbnailPath);
             return File.Exists(fullPath);
         }
 

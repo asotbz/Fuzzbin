@@ -4,7 +4,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Fuzzbin.Core.Entities;
 using Fuzzbin.Core.Interfaces;
@@ -19,20 +18,22 @@ public class MetadataExportService : IMetadataExportService
     private readonly ILibraryPathManager _pathManager;
     private readonly INfoExportService _nfoExportService;
     private readonly ILogger<MetadataExportService> _logger;
-    private readonly string _webRootPath;
+    private readonly IConfigurationPathService _configPathService;
+    private readonly string _thumbnailDirectory;
 
     public MetadataExportService(
         IUnitOfWork unitOfWork,
         ILibraryPathManager pathManager,
         INfoExportService nfoExportService,
-        IConfiguration configuration,
+        IConfigurationPathService configPathService,
         ILogger<MetadataExportService> logger)
     {
         _unitOfWork = unitOfWork;
         _pathManager = pathManager;
         _nfoExportService = nfoExportService;
+        _configPathService = configPathService;
         _logger = logger;
-        _webRootPath = configuration["WebRootPath"] ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
+        _thumbnailDirectory = _configPathService.GetThumbnailDirectory();
     }
 
     public async Task<MetadataExportResult> ExportVideoAsync(
@@ -337,7 +338,7 @@ public class MetadataExportService : IMetadataExportService
             var candidates = new[]
             {
                 video.ThumbnailPath,
-                Path.Combine(_webRootPath, video.ThumbnailPath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                Path.Combine(_thumbnailDirectory, video.ThumbnailPath.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
                 Path.GetFullPath(video.ThumbnailPath)
             };
 
@@ -365,7 +366,7 @@ public class MetadataExportService : IMetadataExportService
             }
         }
 
-        var defaultThumbnail = Path.Combine(_webRootPath, "thumbnails", $"{video.Id}.jpg");
+        var defaultThumbnail = Path.Combine(_thumbnailDirectory, $"{video.Id}.jpg");
         return File.Exists(defaultThumbnail) ? defaultThumbnail : null;
     }
 
@@ -382,8 +383,8 @@ public class MetadataExportService : IMetadataExportService
             return relativeCandidate;
         }
 
-        var webRootCandidate = Path.Combine(_webRootPath, path.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        return File.Exists(webRootCandidate) ? webRootCandidate : null;
+        var thumbnailCandidate = Path.Combine(_thumbnailDirectory, path.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return File.Exists(thumbnailCandidate) ? thumbnailCandidate : null;
     }
 
     private async Task<string?> CreateArchiveAsync(

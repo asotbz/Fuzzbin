@@ -222,13 +222,7 @@
             
             if (success)
             {
-                // Update video entity with thumbnail path
-                video.ThumbnailPath = Path.GetRelativePath(
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
-                    thumbnailPath
-                );
-                await VideoService.UpdateVideoAsync(video);
-                
+                // The ThumbnailService already updates the video entity with the correct thumbnail path
                 Snackbar.Add($"Thumbnail generated for '{video.Title}'", Severity.Success);
                 await LoadStatistics();
             }

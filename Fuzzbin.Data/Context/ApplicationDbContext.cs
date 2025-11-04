@@ -28,6 +28,7 @@ namespace Fuzzbin.Data.Context
         public DbSet<LibraryImportItem> LibraryImportItems { get; set; } = null!;
         public DbSet<VideoSourceVerification> VideoSourceVerifications { get; set; } = null!;
         public DbSet<BackgroundJob> BackgroundJobs { get; set; } = null!;
+        public DbSet<RecycleBin> RecycleBins { get; set; } = null!;
         public DbSet<MaintenanceExecution> MaintenanceExecutions { get; set; } = null!;
         public DbSet<CacheStatSnapshot> CacheStatSnapshots { get; set; } = null!;
         
@@ -355,6 +356,32 @@ namespace Fuzzbin.Data.Context
                 entity.HasIndex(e => e.CompletedAt);
             });
 
+            // Configure RecycleBin entity
+            modelBuilder.Entity<RecycleBin>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.OriginalFilePath).IsRequired().HasMaxLength(2000);
+                entity.Property(e => e.RecycleBinPath).IsRequired().HasMaxLength(2000);
+                entity.Property(e => e.DeletionReason).HasMaxLength(1000);
+                entity.Property(e => e.Notes).HasMaxLength(2000);
+                
+                entity.HasOne(e => e.DownloadQueueItem)
+                    .WithMany()
+                    .HasForeignKey(e => e.DownloadQueueItemId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasOne(e => e.Video)
+                    .WithMany()
+                    .HasForeignKey(e => e.VideoId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                entity.HasIndex(e => e.DeletedAt);
+                entity.HasIndex(e => e.ExpiresAt);
+                entity.HasIndex(e => e.DownloadQueueItemId);
+                entity.HasIndex(e => e.VideoId);
+                entity.HasIndex(e => e.IsActive);
+            });
+
             // Configure MaintenanceExecution entity
             modelBuilder.Entity<MaintenanceExecution>(entity =>
             {
@@ -539,7 +566,7 @@ namespace Fuzzbin.Data.Context
                 entity.Property(e => e.ArtistNorm).IsRequired().HasMaxLength(500);
                 
                 entity.HasOne(e => e.Query)
-                    .WithMany()
+                    .WithMany(q => q.MbRecordingCandidates)
                     .HasForeignKey(e => e.QueryId)
                     .OnDelete(DeleteBehavior.Cascade);
                 
@@ -619,7 +646,7 @@ namespace Fuzzbin.Data.Context
                 entity.Property(e => e.ArtistNorm).IsRequired().HasMaxLength(500);
                 
                 entity.HasOne(e => e.Query)
-                    .WithMany()
+                    .WithMany(q => q.ImvdbVideoCandidates)
                     .HasForeignKey(e => e.QueryId)
                     .OnDelete(DeleteBehavior.Cascade);
                 
@@ -659,7 +686,7 @@ namespace Fuzzbin.Data.Context
                 entity.Property(e => e.ArtistNorm).IsRequired().HasMaxLength(500);
                 
                 entity.HasOne(e => e.Query)
-                    .WithMany()
+                    .WithMany(q => q.YtVideoCandidates)
                     .HasForeignKey(e => e.QueryId)
                     .OnDelete(DeleteBehavior.Cascade);
                 

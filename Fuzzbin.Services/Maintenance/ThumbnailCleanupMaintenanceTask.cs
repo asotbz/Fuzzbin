@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Fuzzbin.Core.Interfaces;
 
@@ -18,7 +17,7 @@ namespace Fuzzbin.Services.Maintenance;
 public class ThumbnailCleanupMaintenanceTask : IMaintenanceTask
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IConfiguration _configuration;
+    private readonly IConfigurationPathService _configPathService;
     private readonly ILogger<ThumbnailCleanupMaintenanceTask> _logger;
     private readonly string _thumbnailDirectory;
     
@@ -39,16 +38,14 @@ public class ThumbnailCleanupMaintenanceTask : IMaintenanceTask
     
     public ThumbnailCleanupMaintenanceTask(
         IUnitOfWork unitOfWork,
-        IConfiguration configuration,
+        IConfigurationPathService configPathService,
         ILogger<ThumbnailCleanupMaintenanceTask> logger)
     {
         _unitOfWork = unitOfWork;
-        _configuration = configuration;
+        _configPathService = configPathService;
         _logger = logger;
         
-        var webRootPath = configuration["WebRootPath"] 
-            ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-        _thumbnailDirectory = Path.Combine(webRootPath, "thumbnails");
+        _thumbnailDirectory = _configPathService.GetThumbnailDirectory();
     }
     
     public async Task<MaintenanceTaskResult> ExecuteAsync(CancellationToken cancellationToken)

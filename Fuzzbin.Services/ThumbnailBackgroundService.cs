@@ -84,11 +84,10 @@ public class ThumbnailBackgroundService : BackgroundService
                 
                 if (success)
                 {
-                    // Update video entity with thumbnail path
-                    video.ThumbnailPath = System.IO.Path.GetRelativePath(
-                        System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
-                        thumbnailPath
-                    );
+                    // Update video entity with thumbnail path (relative to thumbnail directory)
+                    var configPathService = scope.ServiceProvider.GetRequiredService<IConfigurationPathService>();
+                    var thumbnailDirectory = configPathService.GetThumbnailDirectory();
+                    video.ThumbnailPath = System.IO.Path.GetRelativePath(thumbnailDirectory, thumbnailPath);
                     await unitOfWork.Videos.UpdateAsync(video);
                     await unitOfWork.SaveChangesAsync();
                     

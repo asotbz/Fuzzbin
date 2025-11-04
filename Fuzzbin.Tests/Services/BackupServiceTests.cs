@@ -140,6 +140,7 @@ public sealed class BackupServiceTests : IDisposable
         public string GetDatabasePath() => Path.Combine(_workspace, "data", "fuzzbin.db");
         public string GetDefaultLibraryPath() => Path.Combine(_workspace, "Library");
         public string GetDefaultDownloadsPath() => Path.Combine(_workspace, "Downloads");
+        public string GetThumbnailDirectory() => Path.Combine(_workspace, "thumbnails");
         public void EnsureDirectoryExists(string path) => Directory.CreateDirectory(path);
     }
 }

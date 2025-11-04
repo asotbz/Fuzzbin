@@ -22,6 +22,7 @@ public sealed class ConfigurationPathService : IConfigurationPathService
     private readonly Lazy<string> _databasePath;
     private readonly Lazy<string> _defaultLibraryPath;
     private readonly Lazy<string> _defaultDownloadsPath;
+    private readonly Lazy<string> _thumbnailDirectory;
 
     public ConfigurationPathService(ILogger<ConfigurationPathService> logger)
     {
@@ -35,6 +36,7 @@ public sealed class ConfigurationPathService : IConfigurationPathService
         _databasePath = new Lazy<string>(() => Path.Combine(_dataDirectory.Value, DatabaseFileName));
         _defaultLibraryPath = new Lazy<string>(() => Path.Combine(_configDirectory.Value, "Library"));
         _defaultDownloadsPath = new Lazy<string>(() => Path.Combine(_configDirectory.Value, "Downloads"));
+        _thumbnailDirectory = new Lazy<string>(() => Path.Combine(_configDirectory.Value, "thumbnails"));
     }
 
     public string GetConfigDirectory()
@@ -75,6 +77,12 @@ public sealed class ConfigurationPathService : IConfigurationPathService
     public string GetDefaultDownloadsPath()
     {
         return _defaultDownloadsPath.Value;
+    }
+
+    public string GetThumbnailDirectory()
+    {
+        EnsureDirectoryExists(_thumbnailDirectory.Value);
+        return _thumbnailDirectory.Value;
     }
 
     public void EnsureDirectoryExists(string path)
