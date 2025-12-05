@@ -624,7 +624,7 @@
                                                 <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">Failed</MudChip>
                                             }
                                         </td>
-                                        <td>@FormatDuration(task.DurationMs)</td>
+                                        <td>@FormatDurationSeconds(task.DurationSeconds)</td>
                                         <td>@task.ItemsProcessed</td>
                                     </tr>
                                 }
@@ -1843,17 +1843,23 @@
         try
         {
             using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
-            var response = await httpClient.GetAsync("/api/maintenance/history?pageSize=6");
+            var response = await httpClient.GetAsync("/api/maintenance/history?limit=6");
             
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                var result = System.Text.Json.JsonSerializer.Deserialize<MaintenanceHistoryResponse>(json,
+                var result = System.Text.Json.JsonSerializer.Deserialize<MaintenanceHistoryApiResponse>(json,
                     new System.Text.Json.JsonSerializerOptions 
                     { 
                         PropertyNameCaseInsensitive = true 
                     });
-                _maintenanceHistory = result?.Items ?? new();
+                _maintenanceHistory = result?.Executions ?? new();
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogError("Failed to load maintenance history. Status: {StatusCode}, Content: {Content}", 
+                    response.StatusCode, errorContent);
             }
         }
         catch (Exception ex)
@@ -1901,15 +1907,15 @@
         return dateTime.ToLocalTime().ToString("MMM d, yyyy");
     }
     
-    private string FormatDuration(int durationMs)
+    private string FormatDurationSeconds(double durationSeconds)
     {
-        if (durationMs < 1000)
-            return $"{durationMs}ms";
-        if (durationMs < 60000)
-            return $"{durationMs / 1000}s";
+        if (durationSeconds < 1)
+            return $"{(int)(durationSeconds * 1000)}ms";
+        if (durationSeconds < 60)
+            return $"{durationSeconds:F1}s";
         
-        var minutes = durationMs / 60000;
-        var seconds = (durationMs % 60000) / 1000;
+        var minutes = (int)(durationSeconds / 60);
+        var seconds = (int)(durationSeconds % 60);
         return $"{minutes}m {seconds}s";
     }
     
@@ -1919,20 +1925,19 @@
         public int Id { get; set; }
         public string TaskName { get; set; } = string.Empty;
         public DateTime StartedAt { get; set; }
-        public DateTime CompletedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
         public bool Success { get; set; }
         public string Summary { get; set; } = string.Empty;
         public int ItemsProcessed { get; set; }
         public string? ErrorMessage { get; set; }
-        public int DurationMs { get; set; }
+        public double DurationSeconds { get; set; }
+        public Dictionary<string, object>? Metrics { get; set; }
     }
     
-    private class MaintenanceHistoryResponse
+    private class MaintenanceHistoryApiResponse
     {
-        public List<MaintenanceExecutionDto> Items { get; set; } = new();
-        public int TotalCount { get; set; }
-        public int PageSize { get; set; }
-        public int PageNumber { get; set; }
+        public int Count { get; set; }
+        public List<MaintenanceExecutionDto> Executions { get; set; } = new();
     }
     
 }

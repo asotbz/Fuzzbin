@@ -107,7 +107,7 @@
                         <MudTd DataLabel="Started At">
                             @execution.StartedAt.ToLocalTime().ToString("MMM d, yyyy h:mm:ss tt")
                         </MudTd>
-                        <MudTd DataLabel="Duration">@FormatDuration(execution.DurationMs)</MudTd>
+                        <MudTd DataLabel="Duration">@FormatDurationSeconds(execution.DurationSeconds)</MudTd>
                         <MudTd DataLabel="Status">
                             @if (execution.Success)
                             {
@@ -189,8 +189,7 @@
         {
             var queryParams = new Dictionary<string, string?>
             {
-                ["pageNumber"] = _currentPage.ToString(),
-                ["pageSize"] = _pageSize.ToString()
+                ["limit"] = _pageSize.ToString()
             };
             
             if (!string.IsNullOrEmpty(_selectedTaskFilter))
@@ -209,7 +208,7 @@
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                var result = System.Text.Json.JsonSerializer.Deserialize<MaintenanceHistoryResponse>(json,
+                var result = System.Text.Json.JsonSerializer.Deserialize<MaintenanceHistoryApiResponse>(json,
                     new System.Text.Json.JsonSerializerOptions 
                     { 
                         PropertyNameCaseInsensitive = true 
@@ -217,12 +216,15 @@
                 
                 if (result != null)
                 {
-                    _history = result.Items;
-                    _totalCount = result.TotalCount;
+                    _history = result.Executions;
+                    _totalCount = result.Count;
                 }
             }
             else
             {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogError("Failed to load maintenance history. Status: {StatusCode}, Content: {Content}", 
+                    response.StatusCode, errorContent);
                 Snackbar.Add("Failed to load maintenance history", Severity.Error);
             }
         }
@@ -251,15 +253,15 @@
         await LoadHistoryAsync();
     }
     
-    private string FormatDuration(int durationMs)
+    private string FormatDurationSeconds(double durationSeconds)
     {
-        if (durationMs < 1000)
-            return $"{durationMs}ms";
-        if (durationMs < 60000)
-            return $"{durationMs / 1000}s";
+        if (durationSeconds < 1)
+            return $"{(int)(durationSeconds * 1000)}ms";
+        if (durationSeconds < 60)
+            return $"{durationSeconds:F1}s";
         
-        var minutes = durationMs / 60000;
-        var seconds = (durationMs % 60000) / 1000;
+        var minutes = (int)(durationSeconds / 60);
+        var seconds = (int)(durationSeconds % 60);
         return $"{minutes}m {seconds}s";
     }
     
@@ -269,20 +271,18 @@
         public int Id { get; set; }
         public string TaskName { get; set; } = string.Empty;
         public DateTime StartedAt { get; set; }
-        public DateTime CompletedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
         public bool Success { get; set; }
         public string Summary { get; set; } = string.Empty;
         public int ItemsProcessed { get; set; }
         public string? ErrorMessage { get; set; }
-        public int DurationMs { get; set; }
-        public string? MetricsJson { get; set; }
+        public double DurationSeconds { get; set; }
+        public Dictionary<string, object>? Metrics { get; set; }
     }
     
-    private class MaintenanceHistoryResponse
+    private class MaintenanceHistoryApiResponse
     {
-        public List<MaintenanceExecutionDto> Items { get; set; } = new();
-        public int TotalCount { get; set; }
-        public int PageSize { get; set; }
-        public int PageNumber { get; set; }
+        public int Count { get; set; }
+        public List<MaintenanceExecutionDto> Executions { get; set; } = new();
     }
 }
