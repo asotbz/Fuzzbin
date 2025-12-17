@@ -159,3 +159,36 @@ apis:
     # Environment variable takes precedence
     custom:
       app_key: YOUR_IMVDB_APP_KEY
+  
+  # Discogs API
+  discogs:
+    name: discogs
+    base_url: https://api.discogs.com
+    
+    # HTTP configuration with custom retry settings
+    # Don't retry 401/403/404 errors, only retry server errors
+    http:
+      timeout: 30
+      retry:
+        max_attempts: 3
+        backoff_multiplier: 1.0
+        min_wait: 1.0
+        max_wait: 10.0
+        status_codes: [500, 502, 503]  # Don't retry 401, 403, 404
+    
+    # Rate limiting - Discogs allows 60 requests per minute (authenticated)
+    # This can be dynamically adjusted based on X-Discogs-Ratelimit headers
+    rate_limit:
+      enabled: true
+      requests_per_minute: 60
+      burst_size: 10  # Allow bursts up to 10 requests
+    
+    # Concurrency control
+    concurrency:
+      max_concurrent_requests: 5
+    
+    # API credentials (can be overridden by DISCOGS_API_KEY and DISCOGS_API_SECRET env variables)
+    # Environment variables take precedence
+    custom:
+      api_key: YOUR_DISCOGS_API_KEY
+      api_secret: YOUR_DISCOGS_API_SECRET
