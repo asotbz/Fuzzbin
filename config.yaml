@@ -1,0 +1,130 @@
+# Fuzzbin Configuration
+# This file contains the default configuration for the Fuzzbin HTTP client
+
+http:
+  # Connection timeout in seconds (default: 30)
+  timeout: 30
+  
+  # Maximum number of redirects to follow (default: 5)
+  max_redirects: 5
+  
+  # Whether to verify SSL certificates (default: true)
+  verify_ssl: true
+  
+  # Maximum connections in the pool (default: 100)
+  max_connections: 100
+  
+  # Maximum keep-alive connections (default: 20)
+  max_keepalive_connections: 20
+  
+  # Retry configuration
+  retry:
+    # Maximum number of retry attempts (default: 3)
+    max_attempts: 3
+    
+    # Exponential backoff multiplier in seconds (default: 1.0)
+    backoff_multiplier: 1.0
+    
+    # Minimum wait time between retries in seconds (default: 1.0)
+    min_wait: 1.0
+    
+    # Maximum wait time between retries in seconds (default: 10.0)
+    max_wait: 10.0
+    
+    # HTTP status codes that should trigger a retry
+    # 408: Request Timeout
+    # 429: Too Many Requests
+    # 500: Internal Server Error
+    # 502: Bad Gateway
+    # 503: Service Unavailable
+    # 504: Gateway Timeout
+    status_codes: [408, 429, 500, 502, 503, 504]
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)
+  level: INFO
+  
+  # Log format: json or text (default: json)
+  # Use "text" for development, "json" for production
+  format: json
+  
+  # Enabled log handlers: console, file (default: [console])
+  handlers:
+    - console
+  
+  # File logging configuration (optional)
+  # Uncomment to enable file logging
+  # file:
+  #   path: logs/fuzzbin.log
+  #   max_bytes: 10485760  # 10MB
+  #   backup_count: 5
+  
+  # Log levels for third-party libraries
+  third_party:
+    httpx: WARNING
+    httpcore: WARNING
+    tenacity: INFO
+
+# API client configurations for rate-limited integrations
+# Each API can have its own rate limits, concurrency controls, and auth settings
+apis:
+  # Example: GitHub API
+  github:
+    name: github
+    base_url: https://api.github.com
+    
+    # HTTP configuration (optional, uses global http config if not specified)
+    http:
+      timeout: 30
+    
+    # Rate limiting
+    rate_limit:
+      enabled: true
+      requests_per_hour: 5000  # GitHub's authenticated rate limit
+      burst_size: 10  # Allow short bursts
+    
+    # Concurrency control
+    concurrency:
+      max_concurrent_requests: 10
+    
+    # Authentication headers
+    auth:
+      Authorization: "token YOUR_GITHUB_TOKEN"
+      Accept: "application/vnd.github.v3+json"
+  
+  # Example: Stripe API
+  stripe:
+    name: stripe
+    base_url: https://api.stripe.com
+    
+    rate_limit:
+      enabled: true
+      requests_per_second: 25  # Stripe's rate limit
+      burst_size: 5
+    
+    concurrency:
+      max_concurrent_requests: 5
+    
+    auth:
+      Authorization: "Bearer YOUR_STRIPE_SECRET_KEY"
+  
+  # Example: OpenAI API
+  openai:
+    name: openai
+    base_url: https://api.openai.com/v1
+    
+    rate_limit:
+      enabled: true
+      requests_per_minute: 3500  # Depends on your tier
+      burst_size: 10
+    
+    concurrency:
+      max_concurrent_requests: 50
+    
+    auth:
+      Authorization: "Bearer YOUR_OPENAI_API_KEY"
+    
+    # Custom API-specific configuration
+    custom:
+      model: gpt-4
+      temperature: 0.7
