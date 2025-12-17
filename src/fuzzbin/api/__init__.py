@@ -5,5 +5,6 @@ concurrency control for integrations with external services.
 """
 
 from .base_client import RateLimitedAPIClient
+from .imvdb_client import IMVDbClient
 
-__all__ = ["RateLimitedAPIClient"]
+__all__ = ["RateLimitedAPIClient", "IMVDbClient"]

@@ -128,3 +128,34 @@ apis:
     custom:
       model: gpt-4
       temperature: 0.7
+  
+  # IMVDb (Internet Music Video Database) API
+  imvdb:
+    name: imvdb
+    base_url: https://imvdb.com/api/v1
+    
+    # HTTP configuration with custom retry settings
+    # Don't retry 403/404 errors, only retry server errors
+    http:
+      timeout: 30
+      retry:
+        max_attempts: 3
+        backoff_multiplier: 1.0
+        min_wait: 1.0
+        max_wait: 10.0
+        status_codes: [500, 502, 503]  # Don't retry 403, 404
+    
+    # Rate limiting - IMVDb allows 1000 requests per minute
+    rate_limit:
+      enabled: true
+      requests_per_minute: 1000
+      burst_size: 50  # Allow bursts up to 50 requests
+    
+    # Concurrency control
+    concurrency:
+      max_concurrent_requests: 10
+    
+    # API key (can be overridden by IMVDB_APP_KEY environment variable)
+    # Environment variable takes precedence
+    custom:
+      app_key: YOUR_IMVDB_APP_KEY

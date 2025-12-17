@@ -11,11 +11,13 @@ from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
 from .common.concurrency_limiter import ConcurrencyLimiter
 from .api.base_client import RateLimitedAPIClient
+from .api.imvdb_client import IMVDbClient
 
 __version__ = "0.1.0"
 __all__ = [
     "AsyncHTTPClient",
     "RateLimitedAPIClient",
+    "IMVDbClient",
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
