@@ -13,6 +13,11 @@ from .logging_config import setup_logging
 from .http_client import AsyncHTTPClient
 from .rate_limiter import RateLimiter
 from .concurrency_limiter import ConcurrencyLimiter
+from .string_utils import (
+    normalize_string,
+    remove_featured_artists,
+    normalize_for_matching,
+)
 
 __all__ = [
     "Config",
@@ -26,4 +31,7 @@ __all__ = [
     "AsyncHTTPClient",
     "RateLimiter",
     "ConcurrencyLimiter",
+    "normalize_string",
+    "remove_featured_artists",
+    "normalize_for_matching",
 ]

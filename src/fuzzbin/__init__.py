@@ -10,9 +10,25 @@ from .common.logging_config import setup_logging
 from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
 from .common.concurrency_limiter import ConcurrencyLimiter
+from .common.string_utils import (
+    normalize_string,
+    remove_featured_artists,
+    normalize_for_matching,
+)
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
-from .parsers import ArtistNFO, MusicVideoNFO, ArtistNFOParser, MusicVideoNFOParser
+from .parsers import (
+    ArtistNFO,
+    MusicVideoNFO,
+    ArtistNFOParser,
+    MusicVideoNFOParser,
+    IMVDbVideo,
+    IMVDbEntity,
+    IMVDbVideoSearchResult,
+    IMVDbParser,
+    VideoNotFoundError,
+    EmptySearchResultsError,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -28,6 +44,15 @@ __all__ = [
     "MusicVideoNFO",
     "ArtistNFOParser",
     "MusicVideoNFOParser",
+    "IMVDbVideo",
+    "IMVDbEntity",
+    "IMVDbVideoSearchResult",
+    "IMVDbParser",
+    "VideoNotFoundError",
+    "EmptySearchResultsError",
+    "normalize_string",
+    "remove_featured_artists",
+    "normalize_for_matching",
 ]
 
 # Module-level logger (not configured yet)

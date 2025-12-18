@@ -8,6 +8,9 @@ import structlog
 
 from .base_client import RateLimitedAPIClient
 from ..common.config import APIClientConfig
+from ..common.string_utils import normalize_for_matching
+from ..parsers.imvdb_models import IMVDbEntity, IMVDbVideo, IMVDbVideoSearchResult
+from ..parsers.imvdb_parser import IMVDbParser
 
 logger = structlog.get_logger(__name__)
 
@@ -151,7 +154,7 @@ class IMVDbClient(RateLimitedAPIClient):
         track_title: str,
         page: int = 1,
         per_page: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> IMVDbVideoSearchResult:
         """
         Search for music videos by artist and track title.
 
@@ -162,21 +165,18 @@ class IMVDbClient(RateLimitedAPIClient):
             per_page: Results per page (default: 25)
 
         Returns:
-            Dict containing search results with pagination metadata:
-            - total_results: Total number of matching videos
-            - current_page: Current page number
-            - per_page: Results per page
-            - total_pages: Total number of pages
-            - results: List of video objects
+            IMVDbVideoSearchResult containing:
+            - pagination: Pagination metadata
+            - results: List of IMVDbEntityVideo objects
 
         Raises:
             httpx.HTTPStatusError: If the API returns an error status
 
         Example:
             >>> results = await client.search_videos("Robin Thicke", "Blurred Lines")
-            >>> print(f"Found {results['total_results']} videos")
-            >>> for video in results['results']:
-            ...     print(f"{video['song_title']} ({video['year']})")
+            >>> print(f"Found {results.pagination.total_results} videos")
+            >>> for video in results.results:
+            ...     print(f"{video.song_title} ({video.year})")
         """
         # Build search query
         query = f"{artist} {track_title}"
@@ -197,7 +197,7 @@ class IMVDbClient(RateLimitedAPIClient):
 
         response = await self.get("/search/videos", params=params)
         response.raise_for_status()
-        return response.json()
+        return IMVDbParser.parse_search_results(response.json())
 
     async def search_entities(
         self,
@@ -246,7 +246,7 @@ class IMVDbClient(RateLimitedAPIClient):
         response.raise_for_status()
         return response.json()
 
-    async def get_video(self, video_id: int) -> Dict[str, Any]:
+    async def get_video(self, video_id: int) -> IMVDbVideo:
         """
         Get detailed information about a specific video.
 
@@ -256,7 +256,7 @@ class IMVDbClient(RateLimitedAPIClient):
             video_id: IMVDb video ID
 
         Returns:
-            Dict containing video details:
+            IMVDbVideo containing:
             - id: Video ID
             - song_title: Track title
             - year: Release year
@@ -272,10 +272,10 @@ class IMVDbClient(RateLimitedAPIClient):
 
         Example:
             >>> video = await client.get_video(121779770452)
-            >>> print(f"{video['song_title']} by {video['artists'][0]['name']}")
-            >>> print(f"Director: {video['directors'][0]['entity_name']}")
-            >>> for source in video['sources']:
-            ...     print(f"{source['source']}: {source['source_data']}")
+            >>> print(f"{video.song_title} by {video.artists[0].name}")
+            >>> print(f"Director: {video.directors[0].entity_name}")
+            >>> for source in video.sources:
+            ...     print(f"{source.source}: {source.source_data}")
         """
         # Include credits, featured artists, and sources
         params = {"include": "credits,featured,sources"}
@@ -284,9 +284,9 @@ class IMVDbClient(RateLimitedAPIClient):
 
         response = await self.get(f"/video/{video_id}", params=params)
         response.raise_for_status()
-        return response.json()
+        return IMVDbParser.parse_video(response.json())
 
-    async def get_entity(self, entity_id: int) -> Dict[str, Any]:
+    async def get_entity(self, entity_id: int) -> IMVDbEntity:
         """
         Get detailed information about a specific entity (artist, director, etc.).
 
@@ -296,23 +296,25 @@ class IMVDbClient(RateLimitedAPIClient):
             entity_id: IMVDb entity ID
 
         Returns:
-            Dict containing entity details:
+            IMVDbEntity containing:
             - id: Entity ID
             - name: Entity name
             - slug: URL-friendly slug
             - artist_video_count: Number of videos as primary artist
             - featured_video_count: Number of videos as featured artist
-            - artist_videos: Object with total_videos count and videos list
-            - featured_artist_videos: Object with total_videos count and videos list
+            - artist_videos: List of videos as primary artist
+            - featured_artist_videos: List of videos as featured artist
+            - artist_videos_total: Total artist videos (for pagination)
+            - featured_videos_total: Total featured videos (for pagination)
 
         Raises:
             httpx.HTTPStatusError: If the API returns an error status
 
         Example:
             >>> entity = await client.get_entity(838673)
-            >>> print(f"{entity['slug']}: {entity['artist_video_count']} videos")
-            >>> for video in entity['artist_videos']['videos']:
-            ...     print(f"  - {video['song_title']} ({video['year']})")
+            >>> print(f"{entity.slug}: {entity.artist_video_count} videos")
+            >>> for video in entity.artist_videos:
+            ...     print(f"  - {video.song_title} ({video.year})")
         """
         # Include artist videos and featured videos
         params = {"include": "artist_videos,featured_videos"}
@@ -321,4 +323,65 @@ class IMVDbClient(RateLimitedAPIClient):
 
         response = await self.get(f"/entity/{entity_id}", params=params)
         response.raise_for_status()
-        return response.json()
+        return IMVDbParser.parse_entity(response.json())
+
+    async def search_video_by_artist_title(
+        self,
+        artist: str,
+        title: str,
+        threshold: float = 0.8,
+    ) -> IMVDbVideo:
+        """
+        Search for a specific video by artist and title with automatic matching.
+
+        This convenience method combines search and matching logic. It automatically
+        strips featured artists from both artist and title parameters before searching,
+        then uses exact or fuzzy matching to find the best result.
+
+        Args:
+            artist: Artist name (featured artists will be stripped, e.g., "Artist ft. Other" → "Artist")
+            title: Song title (featured artists will be stripped)
+            threshold: Minimum similarity score for fuzzy matching (0.0-1.0, default: 0.8)
+
+        Returns:
+            IMVDbVideo with best match, includes is_exact_match field indicating match quality
+
+        Raises:
+            EmptySearchResultsError: If search returns no results
+            VideoNotFoundError: If no match found above threshold
+            httpx.HTTPStatusError: If the API returns an error status
+
+        Example:
+            >>> # Exact match
+            >>> video = await client.search_video_by_artist_title("Robin Thicke", "Blurred Lines")
+            >>> print(video.is_exact_match)  # True
+            >>> 
+            >>> # Works with featured artists in query
+            >>> video = await client.search_video_by_artist_title("Robin Thicke ft. T.I.", "Blurred Lines")
+            >>> 
+            >>> # Fuzzy match with warning
+            >>> video = await client.search_video_by_artist_title("Robin Thick", "Blured Lines")
+            >>> print(video.is_exact_match)  # False (warning logged)
+        """
+        # Normalize artist and title by removing featured artists
+        normalized_artist = normalize_for_matching(artist, remove_featured=True)
+        normalized_title = normalize_for_matching(title, remove_featured=True)
+
+        self.logger.info(
+            "imvdb_search_video_by_artist_title",
+            artist=artist,
+            title=title,
+            normalized_artist=normalized_artist,
+            normalized_title=normalized_title,
+        )
+
+        # Search for videos
+        search_results = await self.search_videos(normalized_artist, normalized_title)
+
+        # Find best match using parser logic
+        return IMVDbParser.find_best_video_match(
+            results=search_results.results,
+            artist=normalized_artist,
+            title=normalized_title,
+            threshold=threshold,
+        )
