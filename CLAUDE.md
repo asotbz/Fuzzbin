@@ -241,6 +241,7 @@ paths.video_path.parent.mkdir(parents=True, exist_ok=True)
 - `{genre}` - Music genre
 - `{director}` - Video director
 - `{studio}` - Studio/label name
+- `{featured_artists}` - Comma-separated list of featured artists (not stored in NFO, for path construction only)
 
 **Normalization (when `normalize=True`):**
 1. Convert to lowercase
