@@ -12,6 +12,7 @@ from .common.rate_limiter import RateLimiter
 from .common.concurrency_limiter import ConcurrencyLimiter
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
+from .parsers import ArtistNFO, MusicVideoNFO, ArtistNFOParser, MusicVideoNFOParser
 
 __version__ = "0.1.0"
 __all__ = [
@@ -23,6 +24,10 @@ __all__ = [
     "Config",
     "configure",
     "get_config",
+    "ArtistNFO",
+    "MusicVideoNFO",
+    "ArtistNFOParser",
+    "MusicVideoNFOParser",
 ]
 
 # Module-level logger (not configured yet)
