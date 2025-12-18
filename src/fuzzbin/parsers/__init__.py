@@ -1,7 +1,7 @@
 """NFO file parsers for music video metadata."""
 
 from .artist_parser import ArtistNFOParser
-from .models import ArtistNFO, MusicVideoNFO
+from .models import ArtistNFO, MusicVideoNFO, FeaturedArtistConfig
 from .musicvideo_parser import MusicVideoNFOParser
 from .imvdb_models import (
     IMVDbArtist,
@@ -41,6 +41,7 @@ from .discogs_parser import DiscogsParser
 __all__ = [
     "ArtistNFO",
     "MusicVideoNFO",
+    "FeaturedArtistConfig",
     "ArtistNFOParser",
     "MusicVideoNFOParser",
     "IMVDbArtist",

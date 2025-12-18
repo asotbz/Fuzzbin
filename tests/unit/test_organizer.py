@@ -361,3 +361,73 @@ class TestPatternEdgeCases:
 
         expected = root_path / "Genre" / "Artist" / "Album" / "2020" / "Director" / "Title.mp4"
         assert paths.video_path == expected
+
+    def test_featured_artists_comma_separated(self, root_path):
+        """Test featured_artists field is joined with comma-space."""
+        nfo = MusicVideoNFO(
+            artist="Robin Thicke",
+            title="Blurred Lines",
+            featured_artists=["Pharrell Williams", "T.I."],
+        )
+
+        paths = build_media_paths(
+            root_path=root_path,
+            pattern="{artist} ft. {featured_artists}/{title}",
+            nfo_data=nfo,
+        )
+
+        expected_path = root_path / "Robin Thicke ft. Pharrell Williams, T.I." / "Blurred Lines.mp4"
+        assert paths.video_path == expected_path
+
+    def test_featured_artists_single(self, root_path):
+        """Test featured_artists with single artist."""
+        nfo = MusicVideoNFO(
+            artist="Artist",
+            title="Title",
+            featured_artists=["Featured"],
+        )
+
+        paths = build_media_paths(
+            root_path=root_path,
+            pattern="{artist}_ft_{featured_artists}",
+            nfo_data=nfo,
+        )
+
+        assert paths.video_path == root_path / "Artist_ft_Featured.mp4"
+
+    def test_featured_artists_empty_list(self, root_path):
+        """Test error when featured_artists is required but empty."""
+        nfo = MusicVideoNFO(
+            artist="Artist",
+            title="Title",
+            featured_artists=[],  # Empty list
+        )
+
+        with pytest.raises(MissingFieldError) as exc_info:
+            build_media_paths(
+                root_path=root_path,
+                pattern="{artist}_ft_{featured_artists}",
+                nfo_data=nfo,
+            )
+
+        assert "featured_artists" in str(exc_info.value)
+        assert exc_info.value.field == "featured_artists"
+
+    def test_featured_artists_with_normalization(self, root_path):
+        """Test featured_artists with filename normalization."""
+        nfo = MusicVideoNFO(
+            artist="Beyoncé",
+            title="Mi Gente",
+            featured_artists=["J Balvin", "Willy William"],
+        )
+
+        paths = build_media_paths(
+            root_path=root_path,
+            pattern="{artist}_ft_{featured_artists}/{title}",
+            nfo_data=nfo,
+            normalize=True,
+        )
+
+        # Only field values are normalized, not literal text in pattern
+        expected_path = root_path / "beyonce_ft_j_balvin_willy_william" / "mi_gente.mp4"
+        assert paths.video_path == expected_path

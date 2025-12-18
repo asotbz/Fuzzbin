@@ -1,18 +1,25 @@
 """Parser for musicvideo.nfo files."""
 
 import xml.etree.ElementTree as ET
-from typing import List
+from typing import List, Optional
 
-from .models import MusicVideoNFO
+from .models import FeaturedArtistConfig, MusicVideoNFO
 from .nfo_parser import NFOParser
 
 
 class MusicVideoNFOParser(NFOParser[MusicVideoNFO]):
     """Parser for musicvideo.nfo files with tag management."""
 
-    def __init__(self):
-        """Initialize music video NFO parser."""
+    def __init__(self, featured_config: Optional[FeaturedArtistConfig] = None):
+        """
+        Initialize music video NFO parser.
+
+        Args:
+            featured_config: Configuration for featured artist handling.
+                If None, featured artists are not appended (default behavior).
+        """
         super().__init__(model_class=MusicVideoNFO, root_element="musicvideo")
+        self.featured_config = featured_config or FeaturedArtistConfig()
 
     def _xml_to_dict(self, element: ET.Element) -> dict:
         """Convert musicvideo XML to dictionary."""
@@ -58,17 +65,41 @@ class MusicVideoNFOParser(NFOParser[MusicVideoNFO]):
 
     def _dict_to_xml(self, parent: ET.Element, data: dict) -> None:
         """Convert musicvideo dictionary to XML elements."""
+        from fuzzbin.common.string_utils import format_featured_artists
+
+        # Create a working copy of data to avoid modifying the original
+        data_copy = data.copy()
+
+        # Handle featured artist appending if enabled
+        if self.featured_config.enabled and "featured_artists" in data:
+            featured_artists = data["featured_artists"]
+
+            if featured_artists:  # Only process if list is not empty
+                formatted_featured = format_featured_artists(featured_artists)
+                target_field = self.featured_config.append_to_field
+
+                # Get current value of target field
+                if target_field in data_copy and data_copy[target_field]:
+                    # Append to existing value with space separator
+                    data_copy[target_field] = f"{data_copy[target_field]} {formatted_featured}"
+                else:
+                    # If target field is empty/None, just use featured artists
+                    data_copy[target_field] = formatted_featured
+
+            # Remove featured_artists from data_copy so it's not written to XML
+            del data_copy["featured_artists"]
+
         # Element order (matching typical NFO structure)
         field_order = ["title", "album", "studio", "year", "director", "genre", "artist"]
 
         for field in field_order:
-            if field in data:
+            if field in data_copy:
                 elem = ET.SubElement(parent, field)
-                elem.text = str(data[field])
+                elem.text = str(data_copy[field])
 
         # Add tag elements (multiple)
-        if "tags" in data:
-            for tag in data["tags"]:
+        if "tags" in data_copy:
+            for tag in data_copy["tags"]:
                 elem = ET.SubElement(parent, "tag")
                 elem.text = tag
 

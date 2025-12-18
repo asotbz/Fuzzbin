@@ -22,6 +22,7 @@ from .api.discogs_client import DiscogsClient
 from .parsers import (
     ArtistNFO,
     MusicVideoNFO,
+    FeaturedArtistConfig,
     ArtistNFOParser,
     MusicVideoNFOParser,
     IMVDbVideo,
@@ -62,6 +63,7 @@ __all__ = [
     "get_config",
     "ArtistNFO",
     "MusicVideoNFO",
+    "FeaturedArtistConfig",
     "ArtistNFOParser",
     "MusicVideoNFOParser",
     "IMVDbVideo",

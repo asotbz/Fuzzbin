@@ -86,13 +86,23 @@ def _get_field_values(nfo_data: MusicVideoNFO, pattern_fields: Set[str]) -> Dict
     for field in pattern_fields:
         value = getattr(nfo_data, field)
 
-        # Special case: tags (list)
+        # Special case: tags (list) - not allowed
         if field == "tags":
             raise InvalidPatternError(
                 "Field 'tags' is a list and cannot be used directly in path pattern. "
                 "Use scalar fields like 'artist', 'title', etc.",
                 pattern=None,
             )
+
+        # Special case: featured_artists (list) - join with comma-space
+        if field == "featured_artists":
+            if not value:  # Empty list
+                raise MissingFieldError(
+                    f"Field '{field}' is required by pattern but is empty in NFO data",
+                    field=field,
+                )
+            field_values[field] = ", ".join(value)
+            continue
 
         # Check for None or empty string
         if value is None or (isinstance(value, str) and not value.strip()):
@@ -161,7 +171,7 @@ def build_media_paths(
     # 3. Get field values from NFO data
     field_values = _get_field_values(nfo_data, pattern_fields)
 
-    # 4. Apply normalization if requested
+    # 4. Apply normalization to field values if requested
     if normalize:
         field_values = {k: normalize_filename(v) for k, v in field_values.items()}
         logger.debug("normalized_field_values", values=field_values)

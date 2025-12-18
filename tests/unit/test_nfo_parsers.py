@@ -9,6 +9,7 @@ from fuzzbin.parsers import (
     MusicVideoNFO,
     ArtistNFOParser,
     MusicVideoNFOParser,
+    FeaturedArtistConfig,
 )
 
 
@@ -367,3 +368,256 @@ class TestMusicVideoNFOParser:
         nfo = parser.parse_string(xml)
 
         assert nfo.tags == ["rock", "rock", "alternative"]
+
+
+class TestFeaturedArtistConfig:
+    """Tests for FeaturedArtistConfig model."""
+
+    def test_default_values(self):
+        """Test default configuration values."""
+        config = FeaturedArtistConfig()
+        assert config.enabled is False
+        assert config.append_to_field == "artist"
+
+    def test_valid_append_to_artist(self):
+        """Test valid configuration for artist field."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        assert config.enabled is True
+        assert config.append_to_field == "artist"
+
+    def test_valid_append_to_title(self):
+        """Test valid configuration for title field."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="title")
+        assert config.enabled is True
+        assert config.append_to_field == "title"
+
+    def test_case_insensitive_field_name(self):
+        """Test that field names are case-insensitive."""
+        config = FeaturedArtistConfig(append_to_field="ARTIST")
+        assert config.append_to_field == "artist"
+
+        config = FeaturedArtistConfig(append_to_field="Title")
+        assert config.append_to_field == "title"
+
+    def test_invalid_field_raises_error(self):
+        """Test that invalid field name raises validation error."""
+        with pytest.raises(ValidationError):
+            FeaturedArtistConfig(append_to_field="invalid_field")
+
+        with pytest.raises(ValidationError):
+            FeaturedArtistConfig(append_to_field="year")
+
+
+class TestMusicVideoNFOParserFeaturedArtists:
+    """Tests for featured artist appending in MusicVideoNFOParser."""
+
+    def test_default_behavior_no_appending(self):
+        """Test that default parser doesn't append featured artists."""
+        parser = MusicVideoNFOParser()
+
+        nfo = MusicVideoNFO(
+            title="Blurred Lines",
+            artist="Robin Thicke",
+            featured_artists=["T.I.", "Pharrell Williams"],
+            year=2013,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        # Should have original artist
+        assert "<artist>Robin Thicke</artist>" in xml
+        # Should NOT have featured artists appended
+        assert "ft." not in xml
+        assert "T.I." not in xml
+        # Should NOT have featured_artists element
+        assert "<featured_artists>" not in xml
+
+    def test_append_to_artist_enabled(self):
+        """Test appending featured artists to artist field."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Blurred Lines",
+            artist="Robin Thicke",
+            featured_artists=["T.I.", "Pharrell Williams"],
+            year=2013,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        # Should have artist with featured artists appended
+        assert "<artist>Robin Thicke ft. T.I., Pharrell Williams</artist>" in xml
+        # Title should be unchanged
+        assert "<title>Blurred Lines</title>" in xml
+        # Should NOT have featured_artists element
+        assert "<featured_artists>" not in xml
+
+    def test_append_to_title_enabled(self):
+        """Test appending featured artists to title field."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="title")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Blurred Lines",
+            artist="Robin Thicke",
+            featured_artists=["T.I.", "Pharrell Williams"],
+            year=2013,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        # Should have title with featured artists appended
+        assert "<title>Blurred Lines ft. T.I., Pharrell Williams</title>" in xml
+        # Artist should be unchanged
+        assert "<artist>Robin Thicke</artist>" in xml
+        # Should NOT have featured_artists element
+        assert "<featured_artists>" not in xml
+
+    def test_single_featured_artist(self):
+        """Test with single featured artist."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Test Song", artist="Main Artist", featured_artists=["Featured Artist"], year=2020
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        assert "<artist>Main Artist ft. Featured Artist</artist>" in xml
+
+    def test_empty_featured_artists_list(self):
+        """Test with empty featured artists list."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Test Song",
+            artist="Main Artist",
+            featured_artists=[],  # Empty list
+            year=2020,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        # Should have original artist, no appending
+        assert "<artist>Main Artist</artist>" in xml
+        assert "ft." not in xml
+
+    def test_no_featured_artists_field(self):
+        """Test when featured_artists field is not present."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Test Song",
+            artist="Main Artist",
+            year=2020
+            # No featured_artists specified (defaults to empty list)
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        # Should have original artist
+        assert "<artist>Main Artist</artist>" in xml
+        assert "ft." not in xml
+
+    def test_original_model_unchanged(self):
+        """Test that original model is not modified."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Blurred Lines",
+            artist="Robin Thicke",
+            featured_artists=["T.I.", "Pharrell Williams"],
+            year=2013,
+        )
+
+        # Generate XML
+        xml = parser.to_xml_string(nfo)
+
+        # Original model should be unchanged
+        assert nfo.artist == "Robin Thicke"
+        assert nfo.title == "Blurred Lines"
+        assert nfo.featured_artists == ["T.I.", "Pharrell Williams"]
+
+    def test_write_and_read_roundtrip(self, tmp_path):
+        """Test that write with appending can be read back (data is in XML)."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Blurred Lines",
+            artist="Robin Thicke",
+            featured_artists=["T.I.", "Pharrell Williams"],
+            year=2013,
+        )
+
+        # Write with featured artists appended
+        nfo_file = tmp_path / "musicvideo.nfo"
+        parser.write_file(nfo, nfo_file)
+
+        # Read back (using default parser that doesn't strip featured artists)
+        read_parser = MusicVideoNFOParser()
+        nfo_read = read_parser.parse_file(nfo_file)
+
+        # Artist field should contain the appended featured artists
+        assert nfo_read.artist == "Robin Thicke ft. T.I., Pharrell Williams"
+        # Title should be original
+        assert nfo_read.title == "Blurred Lines"
+        # featured_artists field should be empty (not written to XML)
+        assert nfo_read.featured_artists == []
+
+    def test_none_artist_field_handled(self):
+        """Test handling when artist field is None."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Test Song",
+            artist=None,  # None artist
+            featured_artists=["Featured Artist"],
+            year=2020,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        # Should gracefully handle None - featured artists become the artist value
+        assert "ft. Featured Artist" in xml
+
+    def test_multiple_featured_artists(self):
+        """Test with three or more featured artists."""
+        config = FeaturedArtistConfig(enabled=True, append_to_field="title")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Big Collaboration",
+            artist="Main Artist",
+            featured_artists=["Artist A", "Artist B", "Artist C"],
+            year=2020,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        assert (
+            "<title>Big Collaboration ft. Artist A, Artist B, Artist C</title>" in xml
+        )
+
+    def test_disabled_config_no_appending(self):
+        """Test that explicitly disabled config doesn't append."""
+        config = FeaturedArtistConfig(enabled=False, append_to_field="artist")
+        parser = MusicVideoNFOParser(featured_config=config)
+
+        nfo = MusicVideoNFO(
+            title="Test Song",
+            artist="Main Artist",
+            featured_artists=["Featured Artist"],
+            year=2020,
+        )
+
+        xml = parser.to_xml_string(nfo)
+
+        assert "<artist>Main Artist</artist>" in xml
+        assert "ft." not in xml

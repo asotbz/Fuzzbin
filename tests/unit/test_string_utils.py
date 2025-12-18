@@ -7,6 +7,7 @@ from fuzzbin.common.string_utils import (
     remove_featured_artists,
     normalize_for_matching,
     normalize_filename,
+    format_featured_artists,
 )
 
 
@@ -237,3 +238,53 @@ class TestNormalizeFilename:
         """Test mixed case with special characters."""
         assert normalize_filename("Test-File_Name (v2)") == "testfilename_v2"
         assert normalize_filename("My Song! (2020)") == "my_song_2020"
+
+
+class TestFormatFeaturedArtists:
+    """Tests for format_featured_artists function."""
+
+    def test_single_artist(self):
+        """Test formatting with single featured artist."""
+        result = format_featured_artists(["Drake"])
+        assert result == "ft. Drake"
+
+    def test_two_artists(self):
+        """Test formatting with two featured artists."""
+        result = format_featured_artists(["T.I.", "Pharrell Williams"])
+        assert result == "ft. T.I., Pharrell Williams"
+
+    def test_multiple_artists(self):
+        """Test formatting with multiple featured artists."""
+        result = format_featured_artists(["Artist 1", "Artist 2", "Artist 3"])
+        assert result == "ft. Artist 1, Artist 2, Artist 3"
+
+    def test_empty_list(self):
+        """Test that empty list returns empty string."""
+        result = format_featured_artists([])
+        assert result == ""
+
+    def test_artist_with_periods(self):
+        """Test artist names with periods are preserved."""
+        result = format_featured_artists(["T.I.", "Dr. Dre"])
+        assert result == "ft. T.I., Dr. Dre"
+
+    def test_artist_with_special_chars(self):
+        """Test artist names with special characters."""
+        result = format_featured_artists(["Jay-Z", "Beyoncé"])
+        assert result == "ft. Jay-Z, Beyoncé"
+
+    def test_no_trailing_space(self):
+        """Test that result has no trailing space."""
+        result = format_featured_artists(["Artist"])
+        assert not result.endswith(" ")
+        assert result == "ft. Artist"
+
+    def test_no_leading_space(self):
+        """Test that result has correct leading format."""
+        result = format_featured_artists(["Artist"])
+        assert result.startswith("ft. ")
+
+    def test_four_artists(self):
+        """Test formatting with four featured artists."""
+        result = format_featured_artists(["A", "B", "C", "D"])
+        assert result == "ft. A, B, C, D"

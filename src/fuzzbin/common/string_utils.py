@@ -2,7 +2,7 @@
 
 import re
 import unicodedata
-from typing import Optional
+from typing import List, Optional
 
 
 def normalize_string(text: str) -> str:
@@ -139,3 +139,33 @@ def normalize_filename(text: str) -> str:
     normalized = normalized.strip('_')
 
     return normalized
+
+
+def format_featured_artists(featured_artists: List[str]) -> str:
+    """
+    Format a list of featured artists for appending to a field.
+
+    Produces format: "ft. Artist1, Artist2, Artist3"
+
+    Args:
+        featured_artists: List of featured artist names
+
+    Returns:
+        Formatted string with "ft. " prefix and comma-separated artists,
+        or empty string if list is empty
+
+    Example:
+        >>> format_featured_artists(["T.I.", "Pharrell Williams"])
+        'ft. T.I., Pharrell Williams'
+        >>> format_featured_artists(["Drake"])
+        'ft. Drake'
+        >>> format_featured_artists([])
+        ''
+    """
+    if not featured_artists:
+        return ""
+
+    # Join with comma and space
+    artists_str = ", ".join(featured_artists)
+
+    return f"ft. {artists_str}"
