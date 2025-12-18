@@ -1,6 +1,7 @@
 """String normalization utilities for matching and comparison."""
 
 import re
+import unicodedata
 from typing import Optional
 
 
@@ -80,3 +81,61 @@ def normalize_for_matching(text: str, remove_featured: bool = True) -> str:
     if remove_featured:
         result = remove_featured_artists(result)
     return normalize_string(result)
+
+
+def normalize_filename(text: str) -> str:
+    """
+    Normalize text for use in filenames and directory names.
+
+    Applies the following transformations in order:
+    1. Normalize unicode (NFKD decomposition)
+    2. Remove combining characters (accents/diacritics)
+    3. Convert to lowercase
+    4. Remove hyphens
+    5. Remove special characters (keep only alphanumeric and spaces)
+    6. Replace spaces with underscores
+    7. Condense multiple underscores to single
+    8. Strip leading/trailing underscores
+
+    Args:
+        text: String to normalize
+
+    Returns:
+        Normalized string suitable for filesystem use
+
+    Example:
+        >>> normalize_filename("Björk - Humúríús")
+        'bjork_humurius'
+        >>> normalize_filename("Tëst  Multiple   Spaces")
+        'test_multiple_spaces'
+        >>> normalize_filename("AC/DC")
+        'acdc'
+        >>> normalize_filename("Artist (Remix)")
+        'artist_remix'
+    """
+    # Normalize unicode (NFKD decomposition)
+    normalized = unicodedata.normalize('NFKD', text)
+
+    # Remove combining characters (accents)
+    # Category 'Mn' = Nonspacing_Mark (combining diacriticals)
+    normalized = ''.join(char for char in normalized if unicodedata.category(char) != 'Mn')
+
+    # Convert to lowercase
+    normalized = normalized.lower()
+
+    # Remove hyphens
+    normalized = normalized.replace('-', '')
+
+    # Remove special characters (keep alphanumeric and spaces)
+    normalized = re.sub(r'[^a-z0-9\s]', '', normalized)
+
+    # Replace spaces with underscores
+    normalized = normalized.replace(' ', '_')
+
+    # Condense multiple underscores to single
+    normalized = re.sub(r'_+', '_', normalized)
+
+    # Strip leading/trailing underscores
+    normalized = normalized.strip('_')
+
+    return normalized

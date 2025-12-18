@@ -14,6 +14,7 @@ from .common.string_utils import (
     normalize_string,
     remove_featured_artists,
     normalize_for_matching,
+    normalize_filename,
 )
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
@@ -28,6 +29,14 @@ from .parsers import (
     IMVDbParser,
     VideoNotFoundError,
     EmptySearchResultsError,
+)
+from .core import (
+    build_media_paths,
+    MediaPaths,
+    OrganizerError,
+    InvalidPatternError,
+    MissingFieldError,
+    InvalidPathError,
 )
 
 __version__ = "0.1.0"
@@ -53,6 +62,13 @@ __all__ = [
     "normalize_string",
     "remove_featured_artists",
     "normalize_for_matching",
+    "normalize_filename",
+    "build_media_paths",
+    "MediaPaths",
+    "OrganizerError",
+    "InvalidPatternError",
+    "MissingFieldError",
+    "InvalidPathError",
 ]
 
 # Module-level logger (not configured yet)
