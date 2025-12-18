@@ -193,6 +193,26 @@ class IMVDbPagination(BaseModel):
     }
 
 
+class IMVDbEntitySearchResult(BaseModel):
+    """Model for individual entity in search results."""
+
+    id: int = Field(description="IMVDb entity ID")
+    name: Optional[str] = Field(default=None, description="Entity name")
+    slug: Optional[str] = Field(default=None, description="Entity URL slug")
+    url: Optional[str] = Field(default=None, description="Entity IMVDb profile URL")
+    discogs_id: Optional[int] = Field(default=None, description="Discogs ID")
+    byline: Optional[str] = Field(default=None, description="Entity byline")
+    bio: Optional[str] = Field(default=None, description="Entity biography")
+    image: Optional[str] = Field(default=None, description="Entity image URL")
+    artist_video_count: Optional[int] = Field(default=None, description="Number of videos as primary artist")
+    featured_video_count: Optional[int] = Field(default=None, description="Number of videos as featured artist")
+
+    model_config = {
+        "extra": "ignore",
+        "validate_assignment": True,
+    }
+
+
 class IMVDbEntity(BaseModel):
     """Model for IMVDb entity (artist/director/etc.) details."""
 
@@ -222,6 +242,18 @@ class IMVDbVideoSearchResult(BaseModel):
 
     pagination: IMVDbPagination = Field(description="Pagination metadata")
     results: List[IMVDbEntityVideo] = Field(default_factory=list, description="Search result videos")
+
+    model_config = {
+        "extra": "ignore",
+        "validate_assignment": True,
+    }
+
+
+class IMVDbEntitySearchResponse(BaseModel):
+    """Model for IMVDb entity search results."""
+
+    pagination: IMVDbPagination = Field(description="Pagination metadata")
+    results: List[IMVDbEntitySearchResult] = Field(default_factory=list, description="Search result entities")
 
     model_config = {
         "extra": "ignore",

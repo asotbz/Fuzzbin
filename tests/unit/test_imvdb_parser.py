@@ -197,6 +197,33 @@ class TestIMVDbParser:
         assert isinstance(results, IMVDbVideoSearchResult)
         assert results.pagination.total_results == 196
 
+    def test_parse_entity_search_results(self, search_entities_response):
+        """Test parse_entity_search_results method."""
+        from fuzzbin.parsers.imvdb_models import IMVDbEntitySearchResponse, IMVDbEntitySearchResult
+        
+        results = IMVDbParser.parse_entity_search_results(search_entities_response)
+        
+        assert isinstance(results, IMVDbEntitySearchResponse)
+        assert results.pagination.total_results == 386
+        assert results.pagination.current_page == 1
+        assert results.pagination.per_page == 25
+        assert results.pagination.total_pages == 16
+        assert len(results.results) == 25
+        
+        # Check first result
+        first_result = results.results[0]
+        assert isinstance(first_result, IMVDbEntitySearchResult)
+        assert first_result.id == 677510
+        assert first_result.slug == "mike-cruz"
+        assert first_result.discogs_id == 61556
+        
+        # Check Robin Thicke result (second in list)
+        robin_thicke = results.results[1]
+        assert robin_thicke.id == 838673
+        assert robin_thicke.slug == "robin-thicke"
+        assert robin_thicke.discogs_id == 292681
+        assert robin_thicke.artist_video_count == 4
+
 
 class TestFindBestVideoMatch:
     """Tests for find_best_video_match method."""

@@ -9,6 +9,8 @@ from ..common.string_utils import normalize_for_matching
 from .imvdb_models import (
     EmptySearchResultsError,
     IMVDbEntity,
+    IMVDbEntitySearchResponse,
+    IMVDbEntitySearchResult,
     IMVDbEntityVideo,
     IMVDbPagination,
     IMVDbVideo,
@@ -107,6 +109,40 @@ class IMVDbParser:
         )
 
         return IMVDbVideoSearchResult(
+            pagination=pagination,
+            results=data.get("results", []),
+        )
+
+    @staticmethod
+    def parse_entity_search_results(data: Dict[str, Any]):
+        """
+        Parse IMVDb entity search results response into validated model.
+
+        Args:
+            data: Raw entity search results response from IMVDb API
+
+        Returns:
+            Validated IMVDbEntitySearchResponse model with pagination metadata
+
+        Raises:
+            ValidationError: If response data is invalid
+
+        Example:
+            >>> response = await client.get("/search/entities", params={"q": "robin thicke"})
+            >>> results = IMVDbParser.parse_entity_search_results(response.json())
+            >>> print(f"Found {results.pagination.total_results} entities")
+            'Found 386 entities'
+            >>> print(results.results[0].discogs_id)
+            61556
+        """
+        pagination = IMVDbPagination(
+            total_results=data.get("total_results", 0),
+            current_page=data.get("current_page", 1),
+            per_page=data.get("per_page", 25),
+            total_pages=data.get("total_pages", 0),
+        )
+
+        return IMVDbEntitySearchResponse(
             pagination=pagination,
             results=data.get("results", []),
         )

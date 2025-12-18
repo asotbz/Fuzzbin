@@ -160,17 +160,18 @@ class TestIMVDbClient:
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             result = await client.search_entities("Robin Thicke")
 
-            # Verify response structure (search_entities still returns dict for now)
-            assert result["total_results"] == 386
-            assert result["current_page"] == 1
-            assert len(result["results"]) > 0
+            # Verify response structure
+            assert result.pagination.total_results == 386
+            assert result.pagination.current_page == 1
+            assert len(result.results) > 0
             
-            # Find Robin Thicke in results
+            # Find Robin Thicke in results and verify discogs_id is included
             robin_thicke = next(
-                (e for e in result["results"] if e["slug"] == "robin-thicke"), None
+                (e for e in result.results if e.slug == "robin-thicke"), None
             )
             assert robin_thicke is not None
-            assert robin_thicke["id"] == 838673
+            assert robin_thicke.id == 838673
+            assert robin_thicke.discogs_id == 292681
 
             # Verify request
             assert route.calls.last.request.headers["IMVDB-APP-KEY"] == "test-api-key-123"

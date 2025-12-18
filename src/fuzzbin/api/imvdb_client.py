@@ -9,7 +9,12 @@ import structlog
 from .base_client import RateLimitedAPIClient
 from ..common.config import APIClientConfig
 from ..common.string_utils import normalize_for_matching
-from ..parsers.imvdb_models import IMVDbEntity, IMVDbVideo, IMVDbVideoSearchResult
+from ..parsers.imvdb_models import (
+    IMVDbEntity,
+    IMVDbEntitySearchResponse,
+    IMVDbVideo,
+    IMVDbVideoSearchResult,
+)
 from ..parsers.imvdb_parser import IMVDbParser
 
 logger = structlog.get_logger(__name__)
@@ -204,7 +209,7 @@ class IMVDbClient(RateLimitedAPIClient):
         artist_name: str,
         page: int = 1,
         per_page: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> IMVDbEntitySearchResponse:
         """
         Search for entities (artists, directors, etc.) by name.
 
@@ -214,20 +219,17 @@ class IMVDbClient(RateLimitedAPIClient):
             per_page: Results per page (default: 25)
 
         Returns:
-            Dict containing search results with pagination metadata:
-            - total_results: Total number of matching entities
-            - current_page: Current page number
-            - per_page: Results per page
-            - total_pages: Total number of pages
-            - results: List of entity objects with id, name, slug, etc.
+            IMVDbEntitySearchResponse containing:
+            - pagination: Pagination metadata (total_results, current_page, per_page, total_pages)
+            - results: List of IMVDbEntitySearchResult objects with id, name, slug, discogs_id, etc.
 
         Raises:
             httpx.HTTPStatusError: If the API returns an error status
 
         Example:
             >>> results = await client.search_entities("Robin Thicke")
-            >>> for entity in results['results']:
-            ...     print(f"{entity['slug']} (ID: {entity['id']})")
+            >>> for entity in results.results:
+            ...     print(f"{entity.slug} (ID: {entity.id}, Discogs: {entity.discogs_id})")
         """
         params = {
             "q": artist_name,
@@ -244,7 +246,7 @@ class IMVDbClient(RateLimitedAPIClient):
 
         response = await self.get("/search/entities", params=params)
         response.raise_for_status()
-        return response.json()
+        return IMVDbParser.parse_entity_search_results(response.json())
 
     async def get_video(self, video_id: int) -> IMVDbVideo:
         """
