@@ -18,6 +18,7 @@ from .common.string_utils import (
 )
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
+from .api.discogs_client import DiscogsClient
 from .parsers import (
     ArtistNFO,
     MusicVideoNFO,
@@ -29,6 +30,13 @@ from .parsers import (
     IMVDbParser,
     VideoNotFoundError,
     EmptySearchResultsError,
+    DiscogsMaster,
+    DiscogsRelease,
+    DiscogsSearchResult,
+    DiscogsArtistReleasesResult,
+    DiscogsParser,
+    MasterNotFoundError,
+    ReleaseNotFoundError,
 )
 from .core import (
     build_media_paths,
@@ -44,6 +52,7 @@ __all__ = [
     "AsyncHTTPClient",
     "RateLimitedAPIClient",
     "IMVDbClient",
+    "DiscogsClient",
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
@@ -59,6 +68,13 @@ __all__ = [
     "IMVDbParser",
     "VideoNotFoundError",
     "EmptySearchResultsError",
+    "DiscogsMaster",
+    "DiscogsRelease",
+    "DiscogsSearchResult",
+    "DiscogsArtistReleasesResult",
+    "DiscogsParser",
+    "MasterNotFoundError",
+    "ReleaseNotFoundError",
     "normalize_string",
     "remove_featured_artists",
     "normalize_for_matching",

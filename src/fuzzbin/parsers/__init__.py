@@ -18,6 +18,23 @@ from .imvdb_models import (
     EmptySearchResultsError,
 )
 from .imvdb_parser import IMVDbParser
+from .discogs_models import (
+    DiscogsArtist,
+    DiscogsTrack,
+    DiscogsImage,
+    DiscogsVideo,
+    DiscogsLabel,
+    DiscogsMaster,
+    DiscogsRelease,
+    DiscogsSearchResultItem,
+    DiscogsSearchResult,
+    DiscogsArtistRelease,
+    DiscogsArtistReleasesResult,
+    DiscogsPagination,
+    MasterNotFoundError,
+    ReleaseNotFoundError,
+)
+from .discogs_parser import DiscogsParser
 
 __all__ = [
     "ArtistNFO",
@@ -37,4 +54,19 @@ __all__ = [
     "IMVDbParser",
     "VideoNotFoundError",
     "EmptySearchResultsError",
+    "DiscogsArtist",
+    "DiscogsTrack",
+    "DiscogsImage",
+    "DiscogsVideo",
+    "DiscogsLabel",
+    "DiscogsMaster",
+    "DiscogsRelease",
+    "DiscogsSearchResultItem",
+    "DiscogsSearchResult",
+    "DiscogsArtistRelease",
+    "DiscogsArtistReleasesResult",
+    "DiscogsPagination",
+    "DiscogsParser",
+    "MasterNotFoundError",
+    "ReleaseNotFoundError",
 ]
