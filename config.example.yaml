@@ -1,0 +1,183 @@
+# Fuzzbin Configuration
+# This file contains the default configuration for the Fuzzbin HTTP client
+
+http:
+  # Connection timeout in seconds (default: 30)
+  timeout: 30
+  
+  # Maximum number of redirects to follow (default: 5)
+  max_redirects: 5
+  
+  # Whether to verify SSL certificates (default: true)
+  verify_ssl: true
+  
+  # Maximum connections in the pool (default: 100)
+  max_connections: 100
+  
+  # Maximum keep-alive connections (default: 20)
+  max_keepalive_connections: 20
+  
+  # Retry configuration
+  retry:
+    # Maximum number of retry attempts (default: 3)
+    max_attempts: 3
+    
+    # Exponential backoff multiplier in seconds (default: 1.0)
+    backoff_multiplier: 1.0
+    
+    # Minimum wait time between retries in seconds (default: 1.0)
+    min_wait: 1.0
+    
+    # Maximum wait time between retries in seconds (default: 10.0)
+    max_wait: 10.0
+    
+    # HTTP status codes that should trigger a retry
+    # 408: Request Timeout
+    # 429: Too Many Requests
+    # 500: Internal Server Error
+    # 502: Bad Gateway
+    # 503: Service Unavailable
+    # 504: Gateway Timeout
+    status_codes: [408, 429, 500, 502, 503, 504]
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)
+  level: INFO
+  
+  # Log format: json or text (default: json)
+  # Use "text" for development, "json" for production
+  format: json
+  
+  # Enabled log handlers: console, file (default: [console])
+  handlers:
+    - console
+  
+  # File logging configuration (optional)
+  # Uncomment to enable file logging
+  # file:
+  #   path: logs/fuzzbin.log
+  #   max_bytes: 10485760  # 10MB
+  #   backup_count: 5
+  
+  # Log levels for third-party libraries
+  third_party:
+    httpx: WARNING
+    httpcore: WARNING
+    tenacity: INFO
+
+# Response caching configuration using Hishel
+# Caching can significantly improve performance for repeated API requests
+# Each API client instance uses its own cache database for isolation
+cache:
+  # Whether caching is enabled globally (default: false)
+  enabled: true
+  
+  # Path to SQLite cache database (default: .cache/default.db)
+  # Each API can override this to use its own cache database
+  storage_path: .cache/default.db
+  
+  # Default time-to-live for cached responses in seconds (default: 3600 = 1 hour)
+  ttl: 3600
+  
+  # Stale-while-revalidate: time in seconds to serve stale responses while
+  # revalidating in background (default: 60 seconds)
+  stale_while_revalidate: 60
+  
+  # HTTP methods that can be cached (default: GET, HEAD)
+  cacheable_methods:
+    - GET
+    - HEAD
+  
+  # HTTP status codes that can be cached (default: 2xx, 3xx)
+  cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
+
+# API client configurations for rate-limited integrations
+# Each API can have its own rate limits, concurrency controls, and auth settings
+apis:
+  # IMVDb (Internet Music Video Database) API
+  imvdb:
+    name: imvdb
+    base_url: https://imvdb.com/api/v1
+    
+    # HTTP configuration with custom retry settings
+    # Don't retry 403/404 errors, only retry server errors
+    http:
+      timeout: 30
+      retry:
+        max_attempts: 3
+        backoff_multiplier: 1.0
+        min_wait: 1.0
+        max_wait: 10.0
+        status_codes: [500, 502, 503]  # Don't retry 403, 404
+    
+    # Rate limiting - IMVDb allows 1000 requests per minute
+    rate_limit:
+      enabled: true
+      requests_per_minute: 1000
+      burst_size: 50  # Allow bursts up to 50 requests
+    
+    # Concurrency control
+    concurrency:
+      max_concurrent_requests: 10
+    
+    # Response caching - IMVDb data changes moderately
+    # Cache for 30 minutes with 2 minute stale-while-revalidate
+    cache:
+      enabled: true
+      storage_path: .cache/imvdb.db
+      ttl: 1800  # 30 minutes
+      stale_while_revalidate: 120  # 2 minutes
+      cacheable_methods:
+        - GET
+        - HEAD
+      cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
+    
+    # API key (can be overridden by IMVDB_APP_KEY environment variable)
+    # Environment variable takes precedence
+    custom:
+      app_key: YOUR_IMVDB_APP_KEY
+  
+  # Discogs API
+  discogs:
+    name: discogs
+    base_url: https://api.discogs.com
+    
+    # HTTP configuration with custom retry settings
+    # Don't retry 401/403/404 errors, only retry server errors
+    http:
+      timeout: 30
+      retry:
+        max_attempts: 3
+        backoff_multiplier: 1.0
+        min_wait: 1.0
+        max_wait: 10.0
+        status_codes: [500, 502, 503]  # Don't retry 401, 403, 404
+    
+    # Rate limiting - Discogs allows 60 requests per minute (authenticated)
+    # This can be dynamically adjusted based on X-Discogs-Ratelimit headers
+    rate_limit:
+      enabled: true
+      requests_per_minute: 60
+      burst_size: 10  # Allow bursts up to 10 requests
+    
+    # Concurrency control
+    concurrency:
+      max_concurrent_requests: 5
+    
+    # Response caching - Discogs catalog data is relatively stable
+    # Cache for 2 hours with 5 minute stale-while-revalidate
+    cache:
+      enabled: true
+      storage_path: .cache/discogs.db
+      ttl: 7200  # 2 hours
+      stale_while_revalidate: 300  # 5 minutes
+      cacheable_methods:
+        - GET
+        - HEAD
+      cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
+    
+    # API credentials (can be overridden by DISCOGS_API_KEY and DISCOGS_API_SECRET env variables)
+    # Environment variables take precedence
+    custom:
+      api_key: YOUR_DISCOGS_API_KEY
+      api_secret: YOUR_DISCOGS_API_SECRET
