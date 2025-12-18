@@ -65,6 +65,32 @@ logging:
     httpcore: WARNING
     tenacity: INFO
 
+# Response caching configuration using Hishel
+# Caching can significantly improve performance for repeated API requests
+# Each API client instance uses its own cache database for isolation
+cache:
+  # Whether caching is enabled globally (default: false)
+  enabled: true
+  
+  # Path to SQLite cache database (default: .cache/default.db)
+  # Each API can override this to use its own cache database
+  storage_path: .cache/default.db
+  
+  # Default time-to-live for cached responses in seconds (default: 3600 = 1 hour)
+  ttl: 3600
+  
+  # Stale-while-revalidate: time in seconds to serve stale responses while
+  # revalidating in background (default: 60 seconds)
+  stale_while_revalidate: 60
+  
+  # HTTP methods that can be cached (default: GET, HEAD)
+  cacheable_methods:
+    - GET
+    - HEAD
+  
+  # HTTP status codes that can be cached (default: 2xx, 3xx)
+  cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
+
 # API client configurations for rate-limited integrations
 # Each API can have its own rate limits, concurrency controls, and auth settings
 apis:
@@ -155,6 +181,18 @@ apis:
     concurrency:
       max_concurrent_requests: 10
     
+    # Response caching - IMVDb data changes moderately
+    # Cache for 30 minutes with 2 minute stale-while-revalidate
+    cache:
+      enabled: true
+      storage_path: .cache/imvdb.db
+      ttl: 1800  # 30 minutes
+      stale_while_revalidate: 120  # 2 minutes
+      cacheable_methods:
+        - GET
+        - HEAD
+      cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
+    
     # API key (can be overridden by IMVDB_APP_KEY environment variable)
     # Environment variable takes precedence
     custom:
@@ -186,6 +224,18 @@ apis:
     # Concurrency control
     concurrency:
       max_concurrent_requests: 5
+    
+    # Response caching - Discogs catalog data is relatively stable
+    # Cache for 2 hours with 5 minute stale-while-revalidate
+    cache:
+      enabled: true
+      storage_path: .cache/discogs.db
+      ttl: 7200  # 2 hours
+      stale_while_revalidate: 300  # 5 minutes
+      cacheable_methods:
+        - GET
+        - HEAD
+      cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
     
     # API credentials (can be overridden by DISCOGS_API_KEY and DISCOGS_API_SECRET env variables)
     # Environment variables take precedence

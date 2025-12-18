@@ -1,6 +1,7 @@
 """Async HTTP client with automatic retry logic using httpx and tenacity."""
 
-from typing import Any, Optional, Dict, Callable
+from pathlib import Path
+from typing import Any, Optional, Dict, Callable, Union
 
 import httpx
 import structlog
@@ -13,9 +14,47 @@ from tenacity import (
     RetryCallState,
 )
 
-from .config import HTTPConfig
+try:
+    from hishel.httpx import AsyncCacheClient
+    from hishel import AsyncSqliteStorage, BaseFilter, FilterPolicy, Request, Response
+    HISHEL_AVAILABLE = True
+except ImportError:
+    HISHEL_AVAILABLE = False
+    BaseFilter = None
+    FilterPolicy = None
+    Request = None
+    Response = None
+
+from .config import HTTPConfig, CacheConfig
 
 logger = structlog.get_logger(__name__)
+
+
+class MethodFilter(BaseFilter):
+    """Filter requests by HTTP method."""
+    
+    def __init__(self, allowed_methods: list[str]):
+        self.allowed_methods = [m.upper() for m in allowed_methods]
+    
+    def needs_body(self) -> bool:
+        return False
+    
+    def apply(self, item: Request, body: bytes | None) -> bool:
+        return item.method.upper() in self.allowed_methods
+
+
+class StatusCodeFilter(BaseFilter):
+    """Filter responses by HTTP status code."""
+    
+    def __init__(self, allowed_codes: list[int]):
+        self.allowed_codes = allowed_codes
+    
+    def needs_body(self) -> bool:
+        return False
+    
+    def apply(self, item: Response, body: bytes | None) -> bool:
+        return item.status_code in self.allowed_codes
+
 
 
 class AsyncHTTPClient:
@@ -50,6 +89,7 @@ class AsyncHTTPClient:
         self,
         config: HTTPConfig,
         base_url: str = "",
+        cache_config: Optional[CacheConfig] = None,
     ):
         """
         Initialize the async HTTP client.
@@ -57,10 +97,13 @@ class AsyncHTTPClient:
         Args:
             config: HTTPConfig object with client settings
             base_url: Base URL for all requests (optional)
+            cache_config: CacheConfig object for response caching (optional)
         """
         self.config = config
         self.base_url = base_url
-        self._client: Optional[httpx.AsyncClient] = None
+        self.cache_config = cache_config
+        self._client: Optional[Union[httpx.AsyncClient, Any]] = None
+        self._storage: Optional[Any] = None  # Hishel storage for cache management
         self.logger = logger.bind(component="http_client")
 
     async def __aenter__(self) -> "AsyncHTTPClient":
@@ -70,20 +113,69 @@ class AsyncHTTPClient:
             max_keepalive_connections=self.config.max_keepalive_connections,
         )
 
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=httpx.Timeout(float(self.config.timeout)),
-            limits=limits,
-            follow_redirects=True,
-            max_redirects=self.config.max_redirects,
-            verify=self.config.verify_ssl,
-        )
+        # Setup cache if enabled
+        if self.cache_config and self.cache_config.enabled and HISHEL_AVAILABLE:
+            # Create cache storage directory if it doesn't exist
+            storage_path = Path(self.cache_config.storage_path)
+            storage_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Create SQLite storage backend with TTL configuration
+            self._storage = AsyncSqliteStorage(
+                database_path=str(storage_path),
+                default_ttl=float(self.cache_config.ttl) if self.cache_config.ttl else None,
+            )
+
+            # Create filter policy based on configuration
+            policy = FilterPolicy(
+                request_filters=[
+                    MethodFilter(self.cache_config.cacheable_methods),
+                ],
+                response_filters=[
+                    StatusCodeFilter(self.cache_config.cacheable_status_codes),
+                ]
+            )
+
+            # Create cached client with custom policy
+            self._client = AsyncCacheClient(
+                base_url=self.base_url,
+                timeout=httpx.Timeout(float(self.config.timeout)),
+                limits=limits,
+                follow_redirects=True,
+                max_redirects=self.config.max_redirects,
+                verify=self.config.verify_ssl,
+                storage=self._storage,
+                policy=policy,
+            )
+
+            self.logger.info(
+                "cache_enabled",
+                storage_path=str(storage_path),
+                ttl=self.cache_config.ttl,
+                stale_while_revalidate=self.cache_config.stale_while_revalidate,
+            )
+        else:
+            if self.cache_config and self.cache_config.enabled and not HISHEL_AVAILABLE:
+                self.logger.warning(
+                    "cache_unavailable",
+                    message="Hishel package not installed. Caching disabled.",
+                )
+
+            # Create regular httpx client
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=httpx.Timeout(float(self.config.timeout)),
+                limits=limits,
+                follow_redirects=True,
+                max_redirects=self.config.max_redirects,
+                verify=self.config.verify_ssl,
+            )
 
         self.logger.info(
             "http_client_initialized",
             base_url=self.base_url,
             timeout=self.config.timeout,
             max_connections=self.config.max_connections,
+            cache_enabled=self.cache_config.enabled if self.cache_config else False,
         )
         return self
 
@@ -92,6 +184,123 @@ class AsyncHTTPClient:
         if self._client:
             await self._client.aclose()
             self.logger.info("http_client_closed")
+
+    def _is_cached_response(self, response: httpx.Response) -> bool:
+        """
+        Check if a response came from cache.
+
+        Args:
+            response: httpx Response object
+
+        Returns:
+            True if response was served from cache, False otherwise
+        """
+        # Hishel adds extensions to indicate cache status
+        extensions = getattr(response, "extensions", {})
+        return extensions.get("from_cache", False) or extensions.get("hishel_from_cache", False)
+
+    def _log_cache_status(self, response: httpx.Response, method: str, url: str) -> None:
+        """
+        Log cache hit/miss status.
+
+        Args:
+            response: httpx Response object
+            method: HTTP method
+            url: Request URL
+        """
+        if not self.cache_config or not self.cache_config.enabled:
+            return
+
+        extensions = getattr(response, "extensions", {})
+        from_cache = extensions.get("from_cache", False) or extensions.get("hishel_from_cache", False)
+        cache_metadata = extensions.get("cache_metadata", {})
+
+        if from_cache:
+            self.logger.info(
+                "cache_hit",
+                method=method,
+                url=str(url),
+                cache_metadata=cache_metadata,
+            )
+        else:
+            self.logger.debug(
+                "cache_miss",
+                method=method,
+                url=str(url),
+            )
+
+    async def clear_cache(self) -> None:
+        """
+        Clear all cached responses.
+
+        This method removes all entries from the cache storage.
+        Only available when caching is enabled.
+
+        Example:
+            >>> async with AsyncHTTPClient(config, cache_config=cache_cfg) as client:
+            ...     await client.clear_cache()
+        """
+        if not self.cache_config or not self.cache_config.enabled:
+            self.logger.warning(
+                "cache_clear_failed",
+                message="Cache not enabled",
+            )
+            return
+
+        if not HISHEL_AVAILABLE or not self._storage:
+            return
+
+        from pathlib import Path
+        storage_path = Path(self.cache_config.storage_path)
+        
+        # Close the current client to release the storage connection
+        if self._client:
+            await self._client.aclose()
+        
+        # Close the storage connection
+        await self._storage.close()
+        
+        # Delete the database file if it exists
+        if storage_path.exists():
+            storage_path.unlink()
+            self.logger.info(
+                "cache_cleared",
+                storage_path=str(storage_path),
+            )
+        
+        # Reinitialize the storage
+        self._storage = AsyncSqliteStorage(
+            database_path=str(self.cache_config.storage_path),
+            default_ttl=self.cache_config.ttl,
+        )
+        
+        # Recreate the client with the new storage
+        limits = httpx.Limits(
+            max_connections=self.config.max_connections,
+            max_keepalive_connections=self.config.max_keepalive_connections,
+        )
+        
+        # Create filter policy based on configuration
+        policy = FilterPolicy(
+            request_filters=[
+                MethodFilter(self.cache_config.cacheable_methods),
+            ],
+            response_filters=[
+                StatusCodeFilter(self.cache_config.cacheable_status_codes),
+            ]
+        )
+        
+        # Create cached client with custom policy
+        self._client = AsyncCacheClient(
+            base_url=self.base_url,
+            timeout=httpx.Timeout(float(self.config.timeout)),
+            limits=limits,
+            follow_redirects=True,
+            max_redirects=self.config.max_redirects,
+            verify=self.config.verify_ssl,
+            storage=self._storage,
+            policy=policy,
+        )
 
     def _should_retry_status(self, response: httpx.Response) -> bool:
         """
@@ -177,6 +386,9 @@ class AsyncHTTPClient:
         )
         async def _request() -> httpx.Response:
             response = await self._client.request(method, url, **kwargs)
+
+            # Log cache status
+            self._log_cache_status(response, method, url)
 
             # Check if status code should trigger retry
             if self._should_retry_status(response):

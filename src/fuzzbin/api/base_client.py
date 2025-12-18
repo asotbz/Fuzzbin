@@ -8,7 +8,7 @@ import structlog
 from ..common.http_client import AsyncHTTPClient
 from ..common.rate_limiter import RateLimiter
 from ..common.concurrency_limiter import ConcurrencyLimiter
-from ..common.config import APIClientConfig, HTTPConfig
+from ..common.config import APIClientConfig, HTTPConfig, CacheConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -45,6 +45,7 @@ class RateLimitedAPIClient(AsyncHTTPClient):
         rate_limiter: Optional[RateLimiter] = None,
         concurrency_limiter: Optional[ConcurrencyLimiter] = None,
         auth_headers: Optional[Dict[str, str]] = None,
+        cache_config: Optional[CacheConfig] = None,
     ):
         """
         Initialize the rate-limited API client.
@@ -55,8 +56,9 @@ class RateLimitedAPIClient(AsyncHTTPClient):
             rate_limiter: Optional rate limiter instance
             concurrency_limiter: Optional concurrency limiter instance
             auth_headers: Optional authentication headers to include in all requests
+            cache_config: Optional cache configuration
         """
-        super().__init__(http_config, base_url)
+        super().__init__(http_config, base_url, cache_config)
         self.rate_limiter = rate_limiter
         self.concurrency_limiter = concurrency_limiter
         self.auth_headers = auth_headers or {}
@@ -66,6 +68,7 @@ class RateLimitedAPIClient(AsyncHTTPClient):
             base_url=base_url,
             has_rate_limiter=rate_limiter is not None,
             has_concurrency_limiter=concurrency_limiter is not None,
+            has_cache=cache_config is not None and cache_config.enabled,
         )
 
     @classmethod
@@ -108,6 +111,7 @@ class RateLimitedAPIClient(AsyncHTTPClient):
             rate_limiter=rate_limiter,
             concurrency_limiter=concurrency_limiter,
             auth_headers=config.auth,
+            cache_config=config.cache,
         )
 
     async def _apply_limiters_and_auth(
@@ -115,6 +119,9 @@ class RateLimitedAPIClient(AsyncHTTPClient):
     ) -> httpx.Response:
         """
         Apply rate limiting, concurrency control, and auth before making request.
+
+        Cache hits bypass rate limiters to avoid consuming rate limit quota
+        for responses served from cache.
 
         Args:
             method: HTTP method
@@ -130,16 +137,35 @@ class RateLimitedAPIClient(AsyncHTTPClient):
             headers.update(self.auth_headers)
             kwargs["headers"] = headers
 
-        # Wait for rate limit if configured
-        if self.rate_limiter:
-            await self.rate_limiter.acquire()
+        # For cached responses, we bypass rate limiting by making the request
+        # and checking if it came from cache
+        if self.cache_config and self.cache_config.enabled:
+            # Apply concurrency limit if configured
+            if self.concurrency_limiter:
+                async with self.concurrency_limiter:
+                    response = await self._make_request_with_retry(method, url, **kwargs)
+            else:
+                response = await self._make_request_with_retry(method, url, **kwargs)
 
-        # Apply concurrency limit if configured
-        if self.concurrency_limiter:
-            async with self.concurrency_limiter:
-                return await self._make_request_with_retry(method, url, **kwargs)
+            # Check if response came from cache
+            if not self._is_cached_response(response):
+                # Only apply rate limiting for non-cached responses
+                if self.rate_limiter:
+                    await self.rate_limiter.acquire()
+            
+            return response
+        else:
+            # Original behavior when cache is not enabled
+            # Wait for rate limit if configured
+            if self.rate_limiter:
+                await self.rate_limiter.acquire()
 
-        return await self._make_request_with_retry(method, url, **kwargs)
+            # Apply concurrency limit if configured
+            if self.concurrency_limiter:
+                async with self.concurrency_limiter:
+                    return await self._make_request_with_retry(method, url, **kwargs)
+
+            return await self._make_request_with_retry(method, url, **kwargs)
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         """
@@ -260,3 +286,24 @@ class RateLimitedAPIClient(AsyncHTTPClient):
         """
         self.logger.debug("api_request", method=method.upper(), url=str(url))
         return await self._apply_limiters_and_auth(method.upper(), url, **kwargs)
+
+    async def clear_cache(self) -> None:
+        """
+        Clear all cached responses for this API client.
+
+        This method delegates to the underlying HTTP client's cache clearing
+        functionality. Only available when caching is enabled.
+
+        Example:
+            >>> config = APIClientConfig(
+            ...     name="myapi",
+            ...     base_url="https://api.example.com",
+            ...     cache=CacheConfig(enabled=True)
+            ... )
+            >>> async with RateLimitedAPIClient.from_config(config) as client:
+            ...     # Make some requests
+            ...     await client.get("/data")
+            ...     # Clear the cache
+            ...     await client.clear_cache()
+        """
+        await super().clear_cache()

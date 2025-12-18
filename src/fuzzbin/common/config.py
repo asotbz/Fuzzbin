@@ -220,6 +220,58 @@ class ConcurrencyConfig(BaseModel):
     )
 
 
+class CacheConfig(BaseModel):
+    """Configuration for HTTP response caching using Hishel."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether response caching is enabled",
+    )
+    storage_path: str = Field(
+        default=".cache/fuzzbin.db",
+        description="Path to SQLite cache database file (per API client instance)",
+    )
+    ttl: Optional[int] = Field(
+        default=3600,
+        ge=1,
+        description="Default time-to-live for cached responses in seconds",
+    )
+    stale_while_revalidate: Optional[int] = Field(
+        default=60,
+        ge=0,
+        description="Time in seconds to serve stale responses while revalidating in background",
+    )
+    cacheable_methods: List[str] = Field(
+        default_factory=lambda: ["GET", "HEAD"],
+        description="HTTP methods that can be cached",
+    )
+    cacheable_status_codes: List[int] = Field(
+        default_factory=lambda: [200, 203, 204, 206, 300, 301, 308],
+        description="HTTP status codes that can be cached",
+    )
+
+    @field_validator("cacheable_methods")
+    @classmethod
+    def validate_methods(cls, v: List[str]) -> List[str]:
+        """Validate HTTP methods."""
+        valid_methods = ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+        for method in v:
+            if method.upper() not in valid_methods:
+                raise ValueError(
+                    f"Invalid HTTP method: {method}. Must be one of {valid_methods}"
+                )
+        return [m.upper() for m in v]
+
+    @field_validator("cacheable_status_codes")
+    @classmethod
+    def validate_status_codes(cls, v: List[int]) -> List[int]:
+        """Validate that status codes are in valid range."""
+        for code in v:
+            if not 100 <= code <= 599:
+                raise ValueError(f"Invalid HTTP status code: {code}")
+        return v
+
+
 class APIClientConfig(BaseModel):
     """Configuration for a specific API client."""
 
@@ -240,6 +292,10 @@ class APIClientConfig(BaseModel):
     concurrency: Optional[ConcurrencyConfig] = Field(
         default=None,
         description="Concurrency control configuration",
+    )
+    cache: Optional[CacheConfig] = Field(
+        default=None,
+        description="Response caching configuration",
     )
     auth: Optional[Dict[str, str]] = Field(
         default=None,
