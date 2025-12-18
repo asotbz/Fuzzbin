@@ -1,0 +1,464 @@
+{
+    "pagination": {
+        "page": 1,
+        "pages": 1,
+        "per_page": 50,
+        "items": 10,
+        "urls": {}
+    },
+    "results": [
+        {
+            "country": "US",
+            "year": "1996",
+            "format": [
+                "CD",
+                "Album"
+            ],
+            "label": [
+                "DGC",
+                "Geffen Records, Inc.",
+                "Geffen Records, Inc.",
+                "Uni Distribution Corp.",
+                "Uni Distribution Corp.",
+                "DADC",
+                "The Reading Festival"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Grunge"
+            ],
+            "id": 42473,
+            "barcode": [
+                "7 20642 51052 0",
+                "DIDX-043065 1 A04",
+                "IFPI L330",
+                "IFPI 506E",
+                "DIDX 043065"
+            ],
+            "master_id": 42473,
+            "master_url": "https://api.discogs.com/masters/42473",
+            "uri": "/master/42473-Nirvana-From-The-Muddy-Banks-Of-The-Wishkah",
+            "catno": "DGCD-25105",
+            "title": "Nirvana - From The Muddy Banks Of The Wishkah",
+            "thumb": "https://i.discogs.com/6T_VluxSP-eFZrXI2e-2HUjuzOerPA4VBLrEhRfc6CA/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTM2NzI3/My0xNDU5MzE5Mzgy/LTEwMDMuanBlZw.jpeg",
+            "cover_image": "https://i.discogs.com/PAf-SAu23yEcxttqPozbdcEtZkUwnVlv7yQexKgqDtg/rs:fit/g:sm/q:90/h:612/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTM2NzI3/My0xNDU5MzE5Mzgy/LTEwMDMuanBlZw.jpeg",
+            "resource_url": "https://api.discogs.com/masters/42473",
+            "community": {
+                "want": 16014,
+                "have": 31641
+            }
+        },
+        {
+            "country": "Colombia",
+            "year": "1992",
+            "format": [
+                "Vinyl",
+                "LP",
+                "Album",
+                "Misprint"
+            ],
+            "label": [
+                "DGC",
+                "BMG Ariola De Colombia S.A.",
+                "Virgin Songs, Inc.",
+                "The End Of Music"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Grunge"
+            ],
+            "id": 13814,
+            "barcode": [
+                "NIRVANA 11.-2-92 6358",
+                "NIRVANA 11.-2.92 6358"
+            ],
+            "master_id": 13814,
+            "master_url": "https://api.discogs.com/masters/13814",
+            "uri": "/master/13814-Nirvana-Nevermind",
+            "catno": "11613707014",
+            "title": "Nirvana - Nevermind",
+            "thumb": "https://i.discogs.com/kkmDuyA5_MP6wKx7gRWEPoiMeMbNJgguT4grwB7OyJE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/UUnChYsluThIYmuGbpqRN4Uq0hV2nAHFcuUG9UOCkE0/rs:fit/g:sm/q:90/h:583/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/13814",
+            "community": {
+                "want": 519634,
+                "have": 383067
+            }
+        },
+        {
+            "country": "US",
+            "year": "2017",
+            "format": [
+                "Vinyl",
+                "LP",
+                "Album",
+                "Compilation",
+                "Limited Edition",
+                "Unofficial Release"
+            ],
+            "label": [
+                "Travis Henderson Music",
+                "Reciprocal Recording"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Grunge"
+            ],
+            "id": 3550858,
+            "barcode": [],
+            "master_id": 3550858,
+            "master_url": "https://api.discogs.com/masters/3550858",
+            "uri": "/master/3550858-Nirvana-The-White-Album",
+            "catno": "OUT04",
+            "title": "Nirvana - The White Album",
+            "thumb": "https://i.discogs.com/c8Ll_M4AK3k3JRuBHr2omjZnM3-u6UBdb-TLtaxeV7U/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEyMDg2/OTg2LTE1NDAzNjQ5/NjItNzUyNi5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/8xm9LZR-cRO_UmoYov5tTzzMpLjP6NLMfthp1aVeVOA/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEyMDg2/OTg2LTE1NDAzNjQ5/NjItNzUyNi5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/3550858",
+            "community": {
+                "want": 65,
+                "have": 154
+            }
+        },
+        {
+            "country": "US",
+            "year": "1994",
+            "format": [
+                "Cassette",
+                "Advance",
+                "Album",
+                "Numbered",
+                "Promo"
+            ],
+            "label": [
+                "DGC",
+                "Geffen Records, Inc.",
+                "Geffen Records, Inc.",
+                "Paramount Theatre, Seattle",
+                "Pat O'Brien Pavilion",
+                "Pier 48",
+                "Seattle Center Arena",
+                "London Astoria",
+                "San Diego Sports Arena"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Alternative Rock",
+                "Grunge",
+                "Punk"
+            ],
+            "id": 3712215,
+            "barcode": [],
+            "master_id": 3712215,
+            "master_url": "https://api.discogs.com/masters/3712215",
+            "uri": "/master/3712215-Nirvana-Verse-Chorus-Verse",
+            "catno": "none",
+            "title": "Nirvana - Verse Chorus Verse",
+            "thumb": "https://i.discogs.com/zDzLDXfyT54vnl-IPnefYYIdm_DXF2ASGzjJX-98nME/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTY2NTI5/MzktMTQyMzkyOTE2/MC02OTUzLmpwZWc.jpeg",
+            "cover_image": "https://i.discogs.com/1lg-m-YbUILlEIVtzTnQ_PQN_lNGWDHSivNaBORKlro/rs:fit/g:sm/q:90/h:586/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTY2NTI5/MzktMTQyMzkyOTE2/MC02OTUzLmpwZWc.jpeg",
+            "resource_url": "https://api.discogs.com/masters/3712215",
+            "community": {
+                "want": 416,
+                "have": 44
+            }
+        },
+        {
+            "country": "Unknown",
+            "year": "2023",
+            "format": [
+                "Cassette",
+                "Album",
+                "Numbered",
+                "Unofficial Release"
+            ],
+            "label": [
+                "Rewind",
+                "Rewind"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Alternative Rock",
+                "Grunge"
+            ],
+            "id": 3451304,
+            "barcode": [
+                "4 752619 900221"
+            ],
+            "master_id": 3451304,
+            "master_url": "https://api.discogs.com/masters/3451304",
+            "uri": "/master/3451304-Nirvana-Live-In-Melbourne-Australia-1992",
+            "catno": "RW-T-002",
+            "title": "Nirvana - Live In Melbourne, Australia  1992",
+            "thumb": "https://i.discogs.com/128B8U2jzXthH_j83PYlkN7C9SuoTWkKg7ACLImox8Y/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI4Njgx/OTE1LTE3MDI3Njk5/NjctMTk2Ny5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/_CY3qIT6dOudW17m16zGUjOGaPjO8eRBpZhK9cTHPJk/rs:fit/g:sm/q:90/h:600/w:370/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI4Njgx/OTE1LTE3MDI3Njk5/NjctMTk2Ny5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/3451304",
+            "community": {
+                "want": 15,
+                "have": 54
+            }
+        },
+        {
+            "country": "UK, Europe & US",
+            "year": "2009",
+            "format": [
+                "Vinyl",
+                "LP",
+                "Album"
+            ],
+            "label": [
+                "DGC",
+                "UMe",
+                "Geffen Records",
+                "Geffen Records",
+                "Universal Music Distribution",
+                "Gateway Mastering",
+                "EMI Virgin Songs, Inc.",
+                "The End Of Music",
+                "Primary Wave Tunes",
+                "M.J. Twelve Music",
+                "Universal Music Publishing",
+                "Murky Slough Music",
+                "Udderly Good Music",
+                "Part Music",
+                "Irving Music",
+                "Record Technology Incorporated",
+                "The Reading Festival",
+                "Bernie Grundman Mastering"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Alternative Rock",
+                "Grunge"
+            ],
+            "id": 201031,
+            "barcode": [
+                "6 02527 21217 3",
+                "602527212173",
+                "BMI",
+                "B0013538-01-A CB 18628.1(3)...",
+                "B0013538-01-B 18628.2(3)...",
+                "B0013538-01-C 18628.3(3)...",
+                "B0013538-01-D 18628.4(3)...",
+                "B0013538-01-A CB 18628.1(3)...",
+                "B0013538-01-B 18628.2(3)...",
+                "B0013538-01-C 18628.3(5)...",
+                "B0013538-01-D 18628.4(3)..."
+            ],
+            "master_id": 201031,
+            "master_url": "https://api.discogs.com/masters/201031",
+            "uri": "/master/201031-Nirvana-Live-At-Reading",
+            "catno": "B0013538-01",
+            "title": "Nirvana - Live At Reading",
+            "thumb": "https://i.discogs.com/fkU5agn6UvpOH-Edln19UZo6pr3eGXMTZ7tYjDCow3I/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIwNzA1/NDgtMTc1NDM0MDIz/My03NDMyLmpwZWc.jpeg",
+            "cover_image": "https://i.discogs.com/2aY_gcBfoaUvvoD0du1wvcooCXdWMzMqO9bPdOFAjJ0/rs:fit/g:sm/q:90/h:579/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIwNzA1/NDgtMTc1NDM0MDIz/My03NDMyLmpwZWc.jpeg",
+            "resource_url": "https://api.discogs.com/masters/201031",
+            "community": {
+                "want": 6846,
+                "have": 20866
+            }
+        },
+        {
+            "country": "Ukraine",
+            "year": "1998",
+            "format": [
+                "Cassette",
+                "Album",
+                "Unofficial Release",
+                "Stereo"
+            ],
+            "label": [
+                "Ukrainian Records"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Grunge",
+                "Garage Rock",
+                "Alternative Rock"
+            ],
+            "id": 3910879,
+            "barcode": [
+                "4730080850008"
+            ],
+            "master_id": 3910879,
+            "master_url": "https://api.discogs.com/masters/3910879",
+            "uri": "/master/3910879-Nirvana-Nevermind-Demos",
+            "catno": "4730080850008",
+            "title": "Nirvana - Nevermind Demos",
+            "thumb": "https://i.discogs.com/PcGh1K5IJmj4zeGImEMFQMCNwX_95frkRESMNCdgFpI/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIwMDc2/NjQzLTE2MzA1MTI2/NTctNDQyMS5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/FWdCSEaOJQZkbYhwdzSH6UVuC8loPPu1t2rO-6MOCJI/rs:fit/g:sm/q:90/h:968/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIwMDc2/NjQzLTE2MzA1MTI2/NTctNDQyMS5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/3910879",
+            "community": {
+                "want": 29,
+                "have": 3
+            }
+        },
+        {
+            "country": "Europe",
+            "genre": [
+                "Rock"
+            ],
+            "format": [
+                "CD",
+                "Album",
+                "Compilation",
+                "Unofficial Release"
+            ],
+            "style": [
+                "Grunge"
+            ],
+            "id": 1483519,
+            "label": [
+                "Not On Label (Nirvana)"
+            ],
+            "type": "master",
+            "barcode": [
+                "3 809655 342513 67",
+                "VEM DK-3 3000",
+                "ADD"
+            ],
+            "master_id": 1483519,
+            "master_url": "https://api.discogs.com/masters/1483519",
+            "uri": "/master/1483519-Nirvana-Nevermind-Smells-Like-In-Utero",
+            "catno": "none",
+            "title": "Nirvana - Nevermind Smells Like In Utero",
+            "thumb": "https://i.discogs.com/rxVB7fZeUAdBgJ-nP0xuEwF647--bQoGln-pRLh5MJE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEwMTI1/NjU5LTE1MjkyNjcy/OTItOTgzMC5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/Gid8eLxPnpyRTa8UCi2l5b3Uuf8C7IMp7WVt1n_HFAs/rs:fit/g:sm/q:90/h:602/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEwMTI1/NjU5LTE1MjkyNjcy/OTItOTgzMC5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/1483519",
+            "community": {
+                "want": 6,
+                "have": 14
+            }
+        },
+        {
+            "country": "Europe",
+            "year": "1999",
+            "format": [
+                "CD",
+                "Album",
+                "Reissue",
+                "CD",
+                "Album",
+                "Reissue",
+                "Box Set",
+                "Compilation"
+            ],
+            "label": [
+                "Universal",
+                "2CD Original",
+                "Universal Music International Ltd."
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Grunge"
+            ],
+            "id": 2608694,
+            "barcode": [
+                "6 06949 05352 9",
+                "AAD",
+                "LC 07266",
+                "424 536-2",
+                "GED 24536",
+                "424 425-2",
+                "GED 24425",
+                "DGCD 24425"
+            ],
+            "master_id": 2608694,
+            "master_url": "https://api.discogs.com/masters/2608694",
+            "uri": "/master/2608694-Nirvana-In-Utero-Nevermind",
+            "catno": "490 535-2",
+            "title": "Nirvana - In Utero / Nevermind",
+            "thumb": "https://i.discogs.com/L-CR9bUuAFURsST7BrQrKcCGGrz-2kGY3B_5r29ejA4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEwODY2/NTU1LTE2MjYwNzkx/NTItMjA0My5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/b3g5I4y0mFTH5JsFKfHs0xBCnuUKp4CgKq-8n2zknwE/rs:fit/g:sm/q:90/h:455/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEwODY2/NTU1LTE2MjYwNzkx/NTItMjA0My5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/2608694",
+            "community": {
+                "want": 96,
+                "have": 20
+            }
+        },
+        {
+            "country": "Chile",
+            "year": "2023",
+            "format": [
+                "CD",
+                "Album",
+                "Reissue",
+                "CD",
+                "Album",
+                "Reissue",
+                "CD",
+                "Compilation",
+                "Reissue",
+                "CD",
+                "Album",
+                "Reissue",
+                "CD",
+                "Album",
+                "Reissue",
+                "CD",
+                "Compilation",
+                "Reissue",
+                "Box Set",
+                "Compilation"
+            ],
+            "label": [
+                "Ronald Morris Producciones",
+                "Geffen Records",
+                "Geffen Records",
+                "Universal",
+                "DGC",
+                "DGC",
+                "Sub Pop Ltd.",
+                "The David Geffen Company",
+                "Laser Disc Chile",
+                "Laser Disc Chile",
+                "Nirvana"
+            ],
+            "type": "master",
+            "genre": [
+                "Rock"
+            ],
+            "style": [
+                "Alternative Rock",
+                "Grunge",
+                "Acoustic"
+            ],
+            "id": 3695496,
+            "barcode": [],
+            "master_id": 3695496,
+            "master_url": "https://api.discogs.com/masters/3695496",
+            "uri": "/master/3695496-Nirvana-Discografia-",
+            "catno": "RMPCD03",
+            "title": "Nirvana - Discografia ",
+            "thumb": "https://i.discogs.com/pHV8wZndTVcYKI-fpep7MqLZrYt2GkqlxPcS5ue9X98/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMyNjIz/NDUyLTE3NDYwMTcw/MzEtNTgyNC5qcGVn.jpeg",
+            "cover_image": "https://i.discogs.com/1b8HSflYKvQuulJ1Spqu1p94cGj0XbwCQUbpkSuN9Gw/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMyNjIz/NDUyLTE3NDYwMTcw/MzEtNTgyNC5qcGVn.jpeg",
+            "resource_url": "https://api.discogs.com/masters/3695496",
+            "community": {
+                "want": 26,
+                "have": 5
+            }
+        }
+    ]
+}

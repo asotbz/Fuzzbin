@@ -1,0 +1,483 @@
+{
+    "id": 25823602,
+    "status": "Accepted",
+    "year": 1992,
+    "resource_url": "https://api.discogs.com/releases/25823602",
+    "uri": "https://www.discogs.com/release/25823602-Nirvana-Nevermind",
+    "artists": [
+        {
+            "name": "Nirvana",
+            "anv": "",
+            "join": "",
+            "role": "",
+            "tracks": "",
+            "id": 125246,
+            "resource_url": "https://api.discogs.com/artists/125246",
+            "thumbnail_url": "https://i.discogs.com/OpnVfYmSBkHggQtUt8tZ0X4Q1B84EltALtW-5H9U7XU/rs:fit/g:sm/q:90/h:600/w:591/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTEyNTI0/Ni0xNTAxMjg1MjAw/LTMwNTguanBlZw.jpeg"
+        }
+    ],
+    "artists_sort": "Nirvana",
+    "labels": [
+        {
+            "name": "DGC",
+            "catno": "11613707014",
+            "entity_type": "1",
+            "entity_type_name": "Label",
+            "id": 86487,
+            "resource_url": "https://api.discogs.com/labels/86487",
+            "thumbnail_url": "https://i.discogs.com/b2FEIfUKgZ7oaEBtJYP7_T58r20iJ6h4JRPo8EUxzps/rs:fit/g:sm/q:90/h:155/w:274/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTg2NDg3/LTEzODg2NTMwNzMt/NjcwNS5qcGVn.jpeg"
+        }
+    ],
+    "series": [],
+    "companies": [
+        {
+            "name": "BMG Ariola De Colombia S.A.",
+            "catno": "",
+            "entity_type": "13",
+            "entity_type_name": "Phonographic Copyright (p)",
+            "id": 179220,
+            "resource_url": "https://api.discogs.com/labels/179220",
+            "thumbnail_url": "https://i.discogs.com/z_Zwlwl0nzRpyxqYYGwGZunt4zAZxuDhOhEHB-xbwlM/rs:fit/g:sm/q:90/h:289/w:500/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE3OTIy/MC0xMzcxNjk1NzA1/LTc1MTMuanBlZw.jpeg"
+        },
+        {
+            "name": "Virgin Songs, Inc.",
+            "catno": "",
+            "entity_type": "21",
+            "entity_type_name": "Published By",
+            "id": 276218,
+            "resource_url": "https://api.discogs.com/labels/276218",
+            "thumbnail_url": "https://i.discogs.com/95jJEd1mMYz6LnSqUivSQPeqXc5mn_njn4ZP7WcT2w0/rs:fit/g:sm/q:90/h:99/w:361/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3NjIx/OC0xNTQ1MTM1MjE2/LTY2NjIuanBlZw.jpeg"
+        },
+        {
+            "name": "The End Of Music",
+            "catno": "",
+            "entity_type": "21",
+            "entity_type_name": "Published By",
+            "id": 281547,
+            "resource_url": "https://api.discogs.com/labels/281547"
+        }
+    ],
+    "formats": [
+        {
+            "name": "Vinyl",
+            "qty": "1",
+            "descriptions": [
+                "LP",
+                "Album",
+                "Misprint"
+            ]
+        }
+    ],
+    "data_quality": "Needs Vote",
+    "community": {
+        "have": 14,
+        "want": 337,
+        "rating": {
+            "count": 0,
+            "average": 0.0
+        },
+        "submitter": {
+            "username": "A_dude",
+            "resource_url": "https://api.discogs.com/users/A_dude"
+        },
+        "contributors": [
+            {
+                "username": "A_dude",
+                "resource_url": "https://api.discogs.com/users/A_dude"
+            },
+            {
+                "username": "anssisal",
+                "resource_url": "https://api.discogs.com/users/anssisal"
+            },
+            {
+                "username": "Green_Doggo_Wisdom",
+                "resource_url": "https://api.discogs.com/users/Green_Doggo_Wisdom"
+            }
+        ],
+        "data_quality": "Needs Vote",
+        "status": "Accepted"
+    },
+    "format_quantity": 1,
+    "date_added": "2023-01-19T23:49:56-08:00",
+    "date_changed": "2025-07-24T09:49:00-07:00",
+    "num_for_sale": 2,
+    "lowest_price": 44.0,
+    "master_id": 13814,
+    "master_url": "https://api.discogs.com/masters/13814",
+    "title": "Nevermind",
+    "country": "Colombia",
+    "released": "1992",
+    "notes": "Misprint that has Polly on side B. Inner sleeve is printed in blue and the flipside is upside down.\n",
+    "released_formatted": "1992",
+    "identifiers": [
+        {
+            "type": "Matrix / Runout",
+            "value": "NIRVANA 11.-2-92 6358",
+            "description": "Side A (Hand Etched)"
+        },
+        {
+            "type": "Matrix / Runout",
+            "value": "NIRVANA 11.-2.92 6358",
+            "description": "Side B (Hand Etched)"
+        }
+    ],
+    "videos": [
+        {
+            "uri": "https://www.youtube.com/watch?v=hTWKbfoikeg",
+            "title": "Nirvana - Smells Like Teen Spirit (Official Music Video)",
+            "description": "Official Music Video for Smells Like Teen Spirit performed by Nirvana.\n\nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\nFind Nirvana in any corner of the world: https://nirvana.lnk.to/Nevermind30thMapID \n\nComm",
+            "duration": 279,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=PbgKEjNBHqM",
+            "title": "Nirvana - In Bloom (Official Music Video)",
+            "description": "Official Music Video for In Bloom performed by Nirvana.\n\nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\nFind Nirvana in any corner of the world: https://nirvana.lnk.to/Nevermind30thMapID \n\nCommemorate 30 year",
+            "duration": 298,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=vabnZ9-ex7o",
+            "title": "Nirvana - Come As You Are (Official Music Video)",
+            "description": "REMASTERED IN HD!!\nOfficial Music Video for Come As You Are performed by Nirvana.\n \n‘Nevermind (30th Anniversary Edition)’ is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, ‘Ne",
+            "duration": 225,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=pkcJEvMcnEg",
+            "title": "Nirvana - Lithium (Official Music Video)",
+            "description": "REMASTERED IN HD!!\nOfficial Music Video for Lithium performed by Nirvana.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, Nevermind is ",
+            "duration": 256,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=J6EDW5WFb2M",
+            "title": "Nirvana - Breed (Audio)",
+            "description": "Official Audio for “Breed” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, Ne",
+            "duration": 184,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=DrlaVYKWeLU",
+            "title": "Nirvana - Polly (Audio)",
+            "description": "Official Audio for “Polly” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, Ne",
+            "duration": 175,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=9yNPgx0swCM",
+            "title": "Nirvana - Territorial Pissings (Audio)",
+            "description": "Official Audio for “Territorial Pissings” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1",
+            "duration": 144,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=AJUpHxlJUNQ",
+            "title": "Nirvana - Drain You (Audio)",
+            "description": "Official Audio for “Drain You” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release",
+            "duration": 224,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=dZqpol8Yrq8",
+            "title": "Nirvana - Lounge Act (Audio)",
+            "description": "Official Audio for “Lounge Act” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 releas",
+            "duration": 157,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=vnHm-u4IYuo",
+            "title": "Nirvana - Stay Away (Audio)",
+            "description": "Official Audio for “Stay Away” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release",
+            "duration": 212,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=c023U4oQGr4",
+            "title": "Nirvana - On A Plain (Audio)",
+            "description": "Official Audio for “On A Plain” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 releas",
+            "duration": 195,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=4VxdufqB9zg",
+            "title": "Nirvana - Something In The Way (Audio)",
+            "description": "Official Audio for “Something In The Way” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1",
+            "duration": 231,
+            "embed": true
+        }
+    ],
+    "genres": [
+        "Rock"
+    ],
+    "styles": [
+        "Grunge"
+    ],
+    "tracklist": [
+        {
+            "position": "A1",
+            "type_": "track",
+            "title": "Smells Like Teen Spirit",
+            "duration": "5:00"
+        },
+        {
+            "position": "A2",
+            "type_": "track",
+            "title": "In Bloom",
+            "duration": "4:13"
+        },
+        {
+            "position": "A3",
+            "type_": "track",
+            "title": "Come As You Are",
+            "duration": "3:38"
+        },
+        {
+            "position": "A4",
+            "type_": "track",
+            "title": "Breed",
+            "duration": "3:03"
+        },
+        {
+            "position": "A5",
+            "type_": "track",
+            "title": "Lithium",
+            "duration": "4:16"
+        },
+        {
+            "position": "B1",
+            "type_": "track",
+            "title": "Polly",
+            "duration": "2:56"
+        },
+        {
+            "position": "B2",
+            "type_": "track",
+            "title": "Territorial Pissings",
+            "duration": "2:22"
+        },
+        {
+            "position": "B3",
+            "type_": "track",
+            "title": "Drain You",
+            "duration": "3:43"
+        },
+        {
+            "position": "B4",
+            "type_": "track",
+            "title": "Lounge Act",
+            "duration": "2:35"
+        },
+        {
+            "position": "B5",
+            "type_": "track",
+            "title": "Stay Away",
+            "duration": "3:30"
+        },
+        {
+            "position": "B6",
+            "type_": "track",
+            "title": "On A Plain",
+            "duration": "3:12"
+        },
+        {
+            "position": "B7",
+            "type_": "track",
+            "title": "Something In The Way",
+            "extraartists": [
+                {
+                    "name": "Kirk Canning",
+                    "anv": "",
+                    "join": "",
+                    "role": "Cello",
+                    "tracks": "",
+                    "id": 261726,
+                    "resource_url": "https://api.discogs.com/artists/261726"
+                }
+            ],
+            "duration": "3:43"
+        }
+    ],
+    "extraartists": [
+        {
+            "name": "Robert Fisher (4)",
+            "anv": "",
+            "join": "",
+            "role": "Art Direction, Design",
+            "tracks": "",
+            "id": 1571129,
+            "resource_url": "https://api.discogs.com/artists/1571129"
+        },
+        {
+            "name": "Krist Novoselic",
+            "anv": "Chris Novoselic",
+            "join": "",
+            "role": "Bass, Backing Vocals",
+            "tracks": "",
+            "id": 281754,
+            "resource_url": "https://api.discogs.com/artists/281754"
+        },
+        {
+            "name": "Dave Grohl",
+            "anv": "David Grohl",
+            "join": "",
+            "role": "Drums",
+            "tracks": "",
+            "id": 203017,
+            "resource_url": "https://api.discogs.com/artists/203017"
+        },
+        {
+            "name": "Craig Doubet",
+            "anv": "",
+            "join": "",
+            "role": "Engineer [Assistant At Scream]",
+            "tracks": "",
+            "id": 325317,
+            "resource_url": "https://api.discogs.com/artists/325317"
+        },
+        {
+            "name": "Jeff Sheehan",
+            "anv": "",
+            "join": "",
+            "role": "Engineer [Assistant At Sound City]",
+            "tracks": "",
+            "id": 325318,
+            "resource_url": "https://api.discogs.com/artists/325318"
+        },
+        {
+            "name": "Kurt Cobain",
+            "anv": "",
+            "join": "",
+            "role": "Guitar, Vocals, Lyrics By",
+            "tracks": "",
+            "id": 275118,
+            "resource_url": "https://api.discogs.com/artists/275118"
+        },
+        {
+            "name": "Howie Weinberg",
+            "anv": "",
+            "join": "",
+            "role": "Mastered By",
+            "tracks": "",
+            "id": 254262,
+            "resource_url": "https://api.discogs.com/artists/254262"
+        },
+        {
+            "name": "Andy Wallace",
+            "anv": "",
+            "join": "",
+            "role": "Mixed By",
+            "tracks": "",
+            "id": 59472,
+            "resource_url": "https://api.discogs.com/artists/59472"
+        },
+        {
+            "name": "Nirvana",
+            "anv": "",
+            "join": "",
+            "role": "Music By",
+            "tracks": "",
+            "id": 125246,
+            "resource_url": "https://api.discogs.com/artists/125246"
+        },
+        {
+            "name": "Michael Lavine",
+            "anv": "",
+            "join": "",
+            "role": "Photography By",
+            "tracks": "",
+            "id": 470965,
+            "resource_url": "https://api.discogs.com/artists/470965"
+        },
+        {
+            "name": "Kirk Weddle",
+            "anv": "",
+            "join": "",
+            "role": "Photography By [Cover Photo]",
+            "tracks": "",
+            "id": 470967,
+            "resource_url": "https://api.discogs.com/artists/470967"
+        },
+        {
+            "name": "Kurt Cobain",
+            "anv": "Kurdt Kobain",
+            "join": "",
+            "role": "Photography By [Monkey Photo]",
+            "tracks": "",
+            "id": 275118,
+            "resource_url": "https://api.discogs.com/artists/275118"
+        },
+        {
+            "name": "Butch Vig",
+            "anv": "",
+            "join": "",
+            "role": "Producer, Engineer",
+            "tracks": "",
+            "id": 42640,
+            "resource_url": "https://api.discogs.com/artists/42640"
+        },
+        {
+            "name": "Nirvana",
+            "anv": "",
+            "join": "",
+            "role": "Producer, Engineer",
+            "tracks": "",
+            "id": 125246,
+            "resource_url": "https://api.discogs.com/artists/125246"
+        }
+    ],
+    "images": [
+        {
+            "type": "primary",
+            "uri": "https://i.discogs.com/UUnChYsluThIYmuGbpqRN4Uq0hV2nAHFcuUG9UOCkE0/rs:fit/g:sm/q:90/h:583/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/UUnChYsluThIYmuGbpqRN4Uq0hV2nAHFcuUG9UOCkE0/rs:fit/g:sm/q:90/h:583/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/kkmDuyA5_MP6wKx7gRWEPoiMeMbNJgguT4grwB7OyJE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "width": 600,
+            "height": 583
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/PZT-HyOs8TEY6J_ZZVmOhKcUsGOXrjaUEB9GpIhrTbQ/rs:fit/g:sm/q:90/h:600/w:598/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NzYtNDUzOC5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/PZT-HyOs8TEY6J_ZZVmOhKcUsGOXrjaUEB9GpIhrTbQ/rs:fit/g:sm/q:90/h:600/w:598/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NzYtNDUzOC5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/xNRDp9YygoOyeTI7mVR2TYolN1bePC9iBYod0bUgVz0/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NzYtNDUzOC5qcGVn.jpeg",
+            "width": 598,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/dr1wBF1EKlmryX-C43lBNbSZMHYPY-nNn9iT8zcbvPg/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTItMTU0NS5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/dr1wBF1EKlmryX-C43lBNbSZMHYPY-nNn9iT8zcbvPg/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTItMTU0NS5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/tn2eRU7K72UIWGQ85h7uPwMjROi7MXK-_5tgPVTv5l8/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTItMTU0NS5qcGVn.jpeg",
+            "width": 600,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/c7UpGC-TsFxPVHuQgdsaQmoNEc9ynlROMCvY1UdTEyw/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTAtNzQ2MC5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/c7UpGC-TsFxPVHuQgdsaQmoNEc9ynlROMCvY1UdTEyw/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTAtNzQ2MC5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/DPps-PPeuTx6MTEgbVg3Jd7c_hMdWR3ZT4WlYDnsudg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTAtNzQ2MC5qcGVn.jpeg",
+            "width": 600,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/XwgXqdw3-pZzA6FmZWmAdGkMljtHtgPB6W3u5aoa21g/rs:fit/g:sm/q:90/h:600/w:591/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDktNjIyNS5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/XwgXqdw3-pZzA6FmZWmAdGkMljtHtgPB6W3u5aoa21g/rs:fit/g:sm/q:90/h:600/w:591/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDktNjIyNS5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/0HUsw9VOXkMGFDNFJQl8cMU1UoFPsSSitwddPhSnaHs/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDktNjIyNS5qcGVn.jpeg",
+            "width": 591,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/z1tNx8NrrTL7aZG7BigRRDpMtxMmJLnWSXhDyOUltSk/rs:fit/g:sm/q:90/h:600/w:588/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDEtNDcxMi5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/z1tNx8NrrTL7aZG7BigRRDpMtxMmJLnWSXhDyOUltSk/rs:fit/g:sm/q:90/h:600/w:588/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDEtNDcxMi5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/dwVZaK02ZNgPt4rvS-vMTJgixGqwlQq2lohg0vIlp7U/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDEtNDcxMi5qcGVn.jpeg",
+            "width": 588,
+            "height": 600
+        }
+    ],
+    "thumb": "https://i.discogs.com/kkmDuyA5_MP6wKx7gRWEPoiMeMbNJgguT4grwB7OyJE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+    "estimated_weight": 230,
+    "blocked_from_sale": false,
+    "is_offensive": false
+}

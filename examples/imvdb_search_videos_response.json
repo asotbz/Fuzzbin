@@ -1,0 +1,702 @@
+{
+    "total_results": 196,
+    "current_page": 1,
+    "per_page": 25,
+    "total_pages": 8,
+    "results": [
+        {
+            "id": 121779770452,
+            "production_status": "r",
+            "song_title": "Blurred Lines",
+            "song_slug": "blurred-lines",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/blurred-lines",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2013,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_ov.jpg?v=7",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_lv.jpg?v=7",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_bv.jpg?v=7",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_tv.jpg?v=7",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_sv.jpg?v=7"
+            }
+        },
+        {
+            "id": 968122970313,
+            "production_status": "r",
+            "song_title": "Rollacoasta",
+            "song_slug": "rollacoasta",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/rollacoasta",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2009,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/968122970313-robin-thicke-rollacoasta_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/968122970313-robin-thicke-rollacoasta_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/968122970313-robin-thicke-rollacoasta_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/968122970313-robin-thicke-rollacoasta_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/968122970313-robin-thicke-rollacoasta_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 222092747228,
+            "production_status": "r",
+            "song_title": "Pretty Lil' Heart",
+            "song_slug": "pretty-lil-heart",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/pretty-lil-heart",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2012,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222092747228-robin-thicke-pretty-lil-heart_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222092747228-robin-thicke-pretty-lil-heart_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222092747228-robin-thicke-pretty-lil-heart_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222092747228-robin-thicke-pretty-lil-heart_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222092747228-robin-thicke-pretty-lil-heart_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 244847000641,
+            "production_status": "r",
+            "song_title": "Back Together",
+            "song_slug": "back-together",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/back-together",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2015,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/244847000641-robin-thicke-back-together_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/244847000641-robin-thicke-back-together_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/244847000641-robin-thicke-back-together_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/244847000641-robin-thicke-back-together_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/244847000641-robin-thicke-back-together_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 724709569006,
+            "production_status": "r",
+            "song_title": "Sex Therapy",
+            "song_slug": "sex-therapy",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/sex-therapy",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2009,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/724709569006-robin-thicke-sex-therapy_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/724709569006-robin-thicke-sex-therapy_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/724709569006-robin-thicke-sex-therapy_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/724709569006-robin-thicke-sex-therapy_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/724709569006-robin-thicke-sex-therapy_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 954583608069,
+            "production_status": "r",
+            "song_title": "Feel Good",
+            "song_slug": "feel-good",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/feel-good",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2013,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/954583608069-robin-thicke-feel-good_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/954583608069-robin-thicke-feel-good_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/954583608069-robin-thicke-feel-good_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/954583608069-robin-thicke-feel-good_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/954583608069-robin-thicke-feel-good_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 193533734900,
+            "production_status": "r",
+            "song_title": "Love After War",
+            "song_slug": "love-after-war",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/love-after-war",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2011,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/193533734900-robin-thicke-love-after-war_music_video_ov.jpg",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/193533734900-robin-thicke-love-after-war_music_video_lv.jpg",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/193533734900-robin-thicke-love-after-war_music_video_bv.jpg",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/193533734900-robin-thicke-love-after-war_music_video_tv.jpg",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/193533734900-robin-thicke-love-after-war_music_video_sv.jpg"
+            }
+        },
+        {
+            "id": 228319956555,
+            "production_status": "r",
+            "song_title": "Still Madly Crazy",
+            "song_slug": "still-madly-crazy",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/still-madly-crazy",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2014,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/228319956555-robin-thicke-still-madly-crazy_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/228319956555-robin-thicke-still-madly-crazy_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/228319956555-robin-thicke-still-madly-crazy_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/228319956555-robin-thicke-still-madly-crazy_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/228319956555-robin-thicke-still-madly-crazy_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 222060192829,
+            "production_status": "r",
+            "song_title": "Get Her Back",
+            "song_slug": "get-her-back",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/get-her-back",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2014,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222060192829-robin-thicke-get-her-back_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222060192829-robin-thicke-get-her-back_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222060192829-robin-thicke-get-her-back_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222060192829-robin-thicke-get-her-back_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/222060192829-robin-thicke-get-her-back_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 189023176403,
+            "production_status": "r",
+            "song_title": "Magic",
+            "song_slug": "magic",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/magic",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2008,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/189023176403-robin-thicke-magic_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/189023176403-robin-thicke-magic_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/189023176403-robin-thicke-magic_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/189023176403-robin-thicke-magic_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/189023176403-robin-thicke-magic_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 219051663496,
+            "production_status": "r",
+            "song_title": "Forever Love",
+            "song_slug": "forever-love",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/forever-love",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2014,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/219051663496-robin-thicke-forever-love_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/219051663496-robin-thicke-forever-love_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/219051663496-robin-thicke-forever-love_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/219051663496-robin-thicke-forever-love_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/219051663496-robin-thicke-forever-love_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 109301575774,
+            "production_status": "r",
+            "song_title": "Can U Believe",
+            "song_slug": "can-u-believe",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/can-u-believe",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2007,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/109301575774-robin-thicke-can-u-believe_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/109301575774-robin-thicke-can-u-believe_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/109301575774-robin-thicke-can-u-believe_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/109301575774-robin-thicke-can-u-believe_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/109301575774-robin-thicke-can-u-believe_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 507719255419,
+            "production_status": "r",
+            "song_title": "All Tied Up",
+            "song_slug": "all-tied-up",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/all-tied-up",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2012,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/507719255419-robin-thicke-all-tied-up_music_video_ov.jpg",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/507719255419-robin-thicke-all-tied-up_music_video_lv.jpg",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/507719255419-robin-thicke-all-tied-up_music_video_bv.jpg",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/507719255419-robin-thicke-all-tied-up_music_video_tv.jpg",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/507719255419-robin-thicke-all-tied-up_music_video_sv.jpg"
+            }
+        },
+        {
+            "id": 279101205090,
+            "production_status": "r",
+            "song_title": "It's In The Mornin",
+            "song_slug": "its-in-the-mornin",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/its-in-the-mornin",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2010,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/279101205090-robin-thicke-its-in-the-mornin_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/279101205090-robin-thicke-its-in-the-mornin_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/279101205090-robin-thicke-its-in-the-mornin_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/279101205090-robin-thicke-its-in-the-mornin_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/279101205090-robin-thicke-its-in-the-mornin_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 145258600016,
+            "production_status": "r",
+            "song_title": "Exhale (Shoop Shoop)",
+            "song_slug": "exhale-shoop-shoop",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/exhale-shoop-shoop",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2012,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/145258600016-robin-thicke-exhale-shoop-shoop_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/145258600016-robin-thicke-exhale-shoop-shoop_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/145258600016-robin-thicke-exhale-shoop-shoop_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/145258600016-robin-thicke-exhale-shoop-shoop_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/145258600016-robin-thicke-exhale-shoop-shoop_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 193714341721,
+            "production_status": "n",
+            "song_title": "Wanna Love You Girl",
+            "song_slug": "wanna-love-you-girl",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/wanna-love-you-girl\/2",
+            "multiple_versions": true,
+            "version_name": "Version 2",
+            "version_number": 2,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2005,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": []
+        },
+        {
+            "id": 266493799590,
+            "production_status": "r",
+            "song_title": "When I Get You Alone",
+            "song_slug": "when-i-get-you-alone",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/when-i-get-you-alone",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2002,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/266493799590-robin-thicke-when-i-get-you-alone_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/266493799590-robin-thicke-when-i-get-you-alone_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/266493799590-robin-thicke-when-i-get-you-alone_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/266493799590-robin-thicke-when-i-get-you-alone_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/266493799590-robin-thicke-when-i-get-you-alone_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 540736359422,
+            "production_status": "r",
+            "song_title": "Wanna Love You Girl",
+            "song_slug": "wanna-love-you-girl",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/wanna-love-you-girl",
+            "multiple_versions": true,
+            "version_name": "Version 1",
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2005,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/540736359422-robin-thicke-wanna-love-you-girl_music_video_ov.jpg",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/540736359422-robin-thicke-wanna-love-you-girl_music_video_lv.jpg",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/540736359422-robin-thicke-wanna-love-you-girl_music_video_bv.jpg",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/540736359422-robin-thicke-wanna-love-you-girl_music_video_tv.jpg",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/540736359422-robin-thicke-wanna-love-you-girl_music_video_sv.jpg"
+            }
+        },
+        {
+            "id": 272984365891,
+            "production_status": "r",
+            "song_title": "Give It 2 U",
+            "song_slug": "give-it-2-u",
+            "url": "https:\/\/imvdb.com\/video\/robin-thicke\/give-it-2-u",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2013,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Robin Thicke",
+                    "slug": "robin-thicke",
+                    "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/272984365891-robin-thicke-give-it-2-u_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/272984365891-robin-thicke-give-it-2-u_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/272984365891-robin-thicke-give-it-2-u_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/272984365891-robin-thicke-give-it-2-u_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/272984365891-robin-thicke-give-it-2-u_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 159871179442,
+            "production_status": "r",
+            "song_title": "Blurred Visions",
+            "song_slug": "blurred-visions",
+            "url": "https:\/\/imvdb.com\/video\/chemtrails\/blurred-visions",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2020,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Chemtrails",
+                    "slug": "chemtrails",
+                    "url": "https:\/\/imvdb.com\/n\/chemtrails"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/159871179442-chemtrails-blurred-visions_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/159871179442-chemtrails-blurred-visions_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/159871179442-chemtrails-blurred-visions_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/159871179442-chemtrails-blurred-visions_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/159871179442-chemtrails-blurred-visions_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 165611229841,
+            "production_status": "r",
+            "song_title": "Lines",
+            "song_slug": "lines",
+            "url": "https:\/\/imvdb.com\/video\/nother\/lines",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2021,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "Nother",
+                    "slug": "nother",
+                    "url": "https:\/\/imvdb.com\/n\/nother"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/165611229841-nother-lines_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/165611229841-nother-lines_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/165611229841-nother-lines_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/165611229841-nother-lines_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/165611229841-nother-lines_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 209732287306,
+            "production_status": "r",
+            "song_title": "Blurred Vision",
+            "song_slug": "blurred-vision",
+            "url": "https:\/\/imvdb.com\/video\/i-declare-war\/blurred-vision",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2014,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "I Declare War",
+                    "slug": "i-declare-war",
+                    "url": "https:\/\/imvdb.com\/n\/i-declare-war"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/209732287306-i-declare-war-blurred-vision_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/209732287306-i-declare-war-blurred-vision_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/209732287306-i-declare-war-blurred-vision_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/209732287306-i-declare-war-blurred-vision_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/209732287306-i-declare-war-blurred-vision_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 324183724327,
+            "production_status": "r",
+            "song_title": "You",
+            "song_slug": "you",
+            "url": "https:\/\/imvdb.com\/video\/lines\/you",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2018,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "LINES",
+                    "slug": "lines",
+                    "url": "https:\/\/imvdb.com\/n\/lines"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/324183724327-lines-you_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/324183724327-lines-you_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/324183724327-lines-you_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/324183724327-lines-you_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/324183724327-lines-you_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 247832268769,
+            "production_status": "r",
+            "song_title": "Lines and Lines",
+            "song_slug": "lines-and-lines",
+            "url": "https:\/\/imvdb.com\/video\/the-spinanes\/lines-and-lines",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2014,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "The Spinanes",
+                    "slug": "the-spinanes",
+                    "url": "https:\/\/imvdb.com\/n\/the-spinanes"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/247832268769-the-spinanes-lines-and-lines_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/247832268769-the-spinanes-lines-and-lines_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/247832268769-the-spinanes-lines-and-lines_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/247832268769-the-spinanes-lines-and-lines_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/247832268769-the-spinanes-lines-and-lines_music_video_sv.jpg?v=2"
+            }
+        },
+        {
+            "id": 124012051787,
+            "production_status": "r",
+            "song_title": "Lockdown",
+            "song_slug": "lockdown",
+            "url": "https:\/\/imvdb.com\/video\/lines\/lockdown",
+            "multiple_versions": false,
+            "version_name": null,
+            "version_number": 1,
+            "is_imvdb_pick": false,
+            "aspect_ratio": null,
+            "year": 2018,
+            "verified_credits": false,
+            "artists": [
+                {
+                    "name": "LINES",
+                    "slug": "lines",
+                    "url": "https:\/\/imvdb.com\/n\/lines"
+                }
+            ],
+            "image": {
+                "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/124012051787-lines-lockdown_music_video_ov.jpg?v=2",
+                "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/124012051787-lines-lockdown_music_video_lv.jpg?v=2",
+                "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/124012051787-lines-lockdown_music_video_bv.jpg?v=2",
+                "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/124012051787-lines-lockdown_music_video_tv.jpg?v=2",
+                "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/124012051787-lines-lockdown_music_video_sv.jpg?v=2"
+            }
+        }
+    ]
+}

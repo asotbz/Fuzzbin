@@ -1,0 +1,254 @@
+{
+    "id": 13814,
+    "main_release": 25823602,
+    "most_recent_release": 35917165,
+    "resource_url": "https://api.discogs.com/masters/13814",
+    "uri": "https://www.discogs.com/master/13814-Nirvana-Nevermind",
+    "versions_url": "https://api.discogs.com/masters/13814/versions",
+    "main_release_url": "https://api.discogs.com/releases/25823602",
+    "most_recent_release_url": "https://api.discogs.com/releases/35917165",
+    "num_for_sale": 3592,
+    "lowest_price": 1.18,
+    "images": [
+        {
+            "type": "primary",
+            "uri": "https://i.discogs.com/UUnChYsluThIYmuGbpqRN4Uq0hV2nAHFcuUG9UOCkE0/rs:fit/g:sm/q:90/h:583/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/UUnChYsluThIYmuGbpqRN4Uq0hV2nAHFcuUG9UOCkE0/rs:fit/g:sm/q:90/h:583/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/kkmDuyA5_MP6wKx7gRWEPoiMeMbNJgguT4grwB7OyJE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NjItMTEwNi5qcGVn.jpeg",
+            "width": 600,
+            "height": 583
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/PZT-HyOs8TEY6J_ZZVmOhKcUsGOXrjaUEB9GpIhrTbQ/rs:fit/g:sm/q:90/h:600/w:598/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NzYtNDUzOC5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/PZT-HyOs8TEY6J_ZZVmOhKcUsGOXrjaUEB9GpIhrTbQ/rs:fit/g:sm/q:90/h:600/w:598/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NzYtNDUzOC5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/xNRDp9YygoOyeTI7mVR2TYolN1bePC9iBYod0bUgVz0/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMy/NzYtNDUzOC5qcGVn.jpeg",
+            "width": 598,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/dr1wBF1EKlmryX-C43lBNbSZMHYPY-nNn9iT8zcbvPg/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTItMTU0NS5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/dr1wBF1EKlmryX-C43lBNbSZMHYPY-nNn9iT8zcbvPg/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTItMTU0NS5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/tn2eRU7K72UIWGQ85h7uPwMjROi7MXK-_5tgPVTv5l8/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTItMTU0NS5qcGVn.jpeg",
+            "width": 600,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/c7UpGC-TsFxPVHuQgdsaQmoNEc9ynlROMCvY1UdTEyw/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTAtNzQ2MC5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/c7UpGC-TsFxPVHuQgdsaQmoNEc9ynlROMCvY1UdTEyw/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTAtNzQ2MC5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/DPps-PPeuTx6MTEgbVg3Jd7c_hMdWR3ZT4WlYDnsudg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MTAtNzQ2MC5qcGVn.jpeg",
+            "width": 600,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/XwgXqdw3-pZzA6FmZWmAdGkMljtHtgPB6W3u5aoa21g/rs:fit/g:sm/q:90/h:600/w:591/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDktNjIyNS5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/XwgXqdw3-pZzA6FmZWmAdGkMljtHtgPB6W3u5aoa21g/rs:fit/g:sm/q:90/h:600/w:591/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDktNjIyNS5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/0HUsw9VOXkMGFDNFJQl8cMU1UoFPsSSitwddPhSnaHs/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDktNjIyNS5qcGVn.jpeg",
+            "width": 591,
+            "height": 600
+        },
+        {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/z1tNx8NrrTL7aZG7BigRRDpMtxMmJLnWSXhDyOUltSk/rs:fit/g:sm/q:90/h:600/w:588/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDEtNDcxMi5qcGVn.jpeg",
+            "resource_url": "https://i.discogs.com/z1tNx8NrrTL7aZG7BigRRDpMtxMmJLnWSXhDyOUltSk/rs:fit/g:sm/q:90/h:600/w:588/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDEtNDcxMi5qcGVn.jpeg",
+            "uri150": "https://i.discogs.com/dwVZaK02ZNgPt4rvS-vMTJgixGqwlQq2lohg0vIlp7U/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1ODIz/NjAyLTE2NzQyMDMz/MDEtNDcxMi5qcGVn.jpeg",
+            "width": 588,
+            "height": 600
+        }
+    ],
+    "genres": [
+        "Rock"
+    ],
+    "styles": [
+        "Grunge"
+    ],
+    "year": 1992,
+    "tracklist": [
+        {
+            "position": "A1",
+            "type_": "track",
+            "title": "Smells Like Teen Spirit",
+            "duration": "5:00"
+        },
+        {
+            "position": "A2",
+            "type_": "track",
+            "title": "In Bloom",
+            "duration": "4:13"
+        },
+        {
+            "position": "A3",
+            "type_": "track",
+            "title": "Come As You Are",
+            "duration": "3:38"
+        },
+        {
+            "position": "A4",
+            "type_": "track",
+            "title": "Breed",
+            "duration": "3:03"
+        },
+        {
+            "position": "A5",
+            "type_": "track",
+            "title": "Lithium",
+            "duration": "4:16"
+        },
+        {
+            "position": "B1",
+            "type_": "track",
+            "title": "Polly",
+            "duration": "2:56"
+        },
+        {
+            "position": "B2",
+            "type_": "track",
+            "title": "Territorial Pissings",
+            "duration": "2:22"
+        },
+        {
+            "position": "B3",
+            "type_": "track",
+            "title": "Drain You",
+            "duration": "3:43"
+        },
+        {
+            "position": "B4",
+            "type_": "track",
+            "title": "Lounge Act",
+            "duration": "2:35"
+        },
+        {
+            "position": "B5",
+            "type_": "track",
+            "title": "Stay Away",
+            "duration": "3:30"
+        },
+        {
+            "position": "B6",
+            "type_": "track",
+            "title": "On A Plain",
+            "duration": "3:12"
+        },
+        {
+            "position": "B7",
+            "type_": "track",
+            "title": "Something In The Way",
+            "extraartists": [
+                {
+                    "name": "Kirk Canning",
+                    "anv": "",
+                    "join": "",
+                    "role": "Cello",
+                    "tracks": "",
+                    "id": 261726,
+                    "resource_url": "https://api.discogs.com/artists/261726"
+                }
+            ],
+            "duration": "3:43"
+        }
+    ],
+    "artists": [
+        {
+            "name": "Nirvana",
+            "anv": "",
+            "join": "",
+            "role": "",
+            "tracks": "",
+            "id": 125246,
+            "resource_url": "https://api.discogs.com/artists/125246",
+            "thumbnail_url": "https://i.discogs.com/OpnVfYmSBkHggQtUt8tZ0X4Q1B84EltALtW-5H9U7XU/rs:fit/g:sm/q:90/h:600/w:591/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTEyNTI0/Ni0xNTAxMjg1MjAw/LTMwNTguanBlZw.jpeg"
+        }
+    ],
+    "title": "Nevermind",
+    "data_quality": "Correct",
+    "videos": [
+        {
+            "uri": "https://www.youtube.com/watch?v=hTWKbfoikeg",
+            "title": "Nirvana - Smells Like Teen Spirit (Official Music Video)",
+            "description": "Official Music Video for Smells Like Teen Spirit performed by Nirvana.\n\nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\nFind Nirvana in any corner of the world: https://nirvana.lnk.to/Nevermind30thMapID \n\nComm",
+            "duration": 279,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=PbgKEjNBHqM",
+            "title": "Nirvana - In Bloom (Official Music Video)",
+            "description": "Official Music Video for In Bloom performed by Nirvana.\n\nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\nFind Nirvana in any corner of the world: https://nirvana.lnk.to/Nevermind30thMapID \n\nCommemorate 30 year",
+            "duration": 298,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=vabnZ9-ex7o",
+            "title": "Nirvana - Come As You Are (Official Music Video)",
+            "description": "REMASTERED IN HD!!\nOfficial Music Video for Come As You Are performed by Nirvana.\n \n‘Nevermind (30th Anniversary Edition)’ is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, ‘Ne",
+            "duration": 225,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=pkcJEvMcnEg",
+            "title": "Nirvana - Lithium (Official Music Video)",
+            "description": "REMASTERED IN HD!!\nOfficial Music Video for Lithium performed by Nirvana.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, Nevermind is ",
+            "duration": 256,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=J6EDW5WFb2M",
+            "title": "Nirvana - Breed (Audio)",
+            "description": "Official Audio for “Breed” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, Ne",
+            "duration": 184,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=DrlaVYKWeLU",
+            "title": "Nirvana - Polly (Audio)",
+            "description": "Official Audio for “Polly” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release, Ne",
+            "duration": 175,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=9yNPgx0swCM",
+            "title": "Nirvana - Territorial Pissings (Audio)",
+            "description": "Official Audio for “Territorial Pissings” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1",
+            "duration": 144,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=AJUpHxlJUNQ",
+            "title": "Nirvana - Drain You (Audio)",
+            "description": "Official Audio for “Drain You” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release",
+            "duration": 224,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=dZqpol8Yrq8",
+            "title": "Nirvana - Lounge Act (Audio)",
+            "description": "Official Audio for “Lounge Act” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 releas",
+            "duration": 157,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=vnHm-u4IYuo",
+            "title": "Nirvana - Stay Away (Audio)",
+            "description": "Official Audio for “Stay Away” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 release",
+            "duration": 212,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=c023U4oQGr4",
+            "title": "Nirvana - On A Plain (Audio)",
+            "description": "Official Audio for “On A Plain” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1991 releas",
+            "duration": 195,
+            "embed": true
+        },
+        {
+            "uri": "https://www.youtube.com/watch?v=4VxdufqB9zg",
+            "title": "Nirvana - Something In The Way (Audio)",
+            "description": "Official Audio for “Something In The Way” by Nirvana from the ‘Nevermind’ 30th anniversary release.\n \nNevermind (30th Anniversary Edition) is available now: https://Nirvana.lnk.to/Nevermind30thID\n \nCommemorating the 30th anniversary of Nirvana’s seminal 1",
+            "duration": 231,
+            "embed": true
+        }
+    ]
+}

@@ -1,0 +1,279 @@
+{
+    "id": 121779770452,
+    "production_status": "r",
+    "song_title": "Blurred Lines",
+    "song_slug": "blurred-lines",
+    "url": "https:\/\/imvdb.com\/video\/robin-thicke\/blurred-lines",
+    "multiple_versions": false,
+    "version_name": null,
+    "version_number": 1,
+    "is_imvdb_pick": false,
+    "aspect_ratio": null,
+    "year": 2013,
+    "verified_credits": false,
+    "artists": [
+        {
+            "name": "Robin Thicke",
+            "slug": "robin-thicke",
+            "url": "https:\/\/imvdb.com\/n\/robin-thicke"
+        }
+    ],
+    "image": {
+        "o": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_ov.jpg?v=7",
+        "l": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_lv.jpg?v=7",
+        "b": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_bv.jpg?v=7",
+        "t": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_tv.jpg?v=7",
+        "s": "https:\/\/s3.amazonaws.com\/images.imvdb.com\/video\/121779770452-robin-thicke-blurred-lines_music_video_sv.jpg?v=7"
+    },
+    "sources": [
+        {
+            "source": "youtube",
+            "source_slug": "youtube",
+            "source_data": "zwT6DZCQi9k",
+            "is_primary": true
+        },
+        {
+            "source": "vimeo",
+            "source_slug": "vimeo",
+            "source_data": 64611906,
+            "is_primary": false
+        },
+        {
+            "source": "youtube",
+            "source_slug": "youtube",
+            "source_data": "yyDUC1LUXSU",
+            "is_primary": false
+        }
+    ],
+    "directors": [
+        {
+            "position_name": "Director",
+            "position_code": "dir",
+            "entity_name": "Diane Martel",
+            "entity_slug": "diane-martel",
+            "entity_id": 31567,
+            "position_notes": null,
+            "position_id": 31567,
+            "entity_url": "https:\/\/imvdb.com\/n\/diane-martel"
+        }
+    ],
+    "credits": {
+        "total_credits": 21,
+        "crew": [
+            {
+                "position_name": "Director",
+                "position_code": "dir",
+                "entity_name": "Diane Martel",
+                "entity_slug": "diane-martel",
+                "entity_id": 31567,
+                "position_notes": null,
+                "position_id": 31567,
+                "entity_url": "https:\/\/imvdb.com\/n\/diane-martel"
+            },
+            {
+                "position_name": "Producer",
+                "position_code": "prod",
+                "entity_name": "David Robertson",
+                "entity_slug": "david-robertson",
+                "entity_id": 31568,
+                "position_notes": null,
+                "position_id": 31568,
+                "entity_url": "https:\/\/imvdb.com\/n\/david-robertson"
+            },
+            {
+                "position_name": "Production Company",
+                "position_code": "prod_comp",
+                "entity_name": "Black Dog Films",
+                "entity_slug": "black-dog-films",
+                "entity_id": 31569,
+                "position_notes": null,
+                "position_id": 31569,
+                "entity_url": "https:\/\/imvdb.com\/n\/black-dog-films"
+            },
+            {
+                "position_name": "Director of Photography",
+                "position_code": "cin",
+                "entity_name": "Olivia Malone",
+                "entity_slug": "olivia-malone",
+                "entity_id": 31570,
+                "position_notes": null,
+                "position_id": 31570,
+                "entity_url": "https:\/\/imvdb.com\/n\/olivia-malone"
+            },
+            {
+                "position_name": "Location Services",
+                "position_code": "loc_serv",
+                "entity_name": "Mack Sennett Studios",
+                "entity_slug": "mack-sennett-studios",
+                "entity_id": 31571,
+                "position_notes": null,
+                "position_id": 31571,
+                "entity_url": "https:\/\/imvdb.com\/n\/mack-sennett-studios"
+            },
+            {
+                "position_name": "Key Grip",
+                "position_code": "kgrip",
+                "entity_name": "Dyron Pacheco",
+                "entity_slug": "dyron-pacheco",
+                "entity_id": 46928,
+                "position_notes": "",
+                "position_id": 46928,
+                "entity_url": "https:\/\/imvdb.com\/n\/dyron-pacheco"
+            },
+            {
+                "position_name": "Makeup",
+                "position_code": "makeup",
+                "entity_name": "Angela Maldone",
+                "entity_slug": "angela-maldone",
+                "entity_id": 126686,
+                "position_notes": "",
+                "position_id": 126686,
+                "entity_url": "https:\/\/imvdb.com\/n\/angela-maldone"
+            },
+            {
+                "position_name": "Makeup",
+                "position_code": "makeup",
+                "entity_name": "Jeni Chua",
+                "entity_slug": "jeni-chua",
+                "entity_id": 126687,
+                "position_notes": "",
+                "position_id": 126687,
+                "entity_url": "https:\/\/imvdb.com\/n\/jeni-chua"
+            },
+            {
+                "position_name": "Executive Producer",
+                "position_code": "execp",
+                "entity_name": "Coleen Haynes",
+                "entity_slug": "coleen-haynes",
+                "entity_id": 154532,
+                "position_notes": "",
+                "position_id": 154532,
+                "entity_url": "https:\/\/imvdb.com\/n\/coleen-haynes"
+            },
+            {
+                "position_name": "Executive Producer",
+                "position_code": "execp",
+                "entity_name": "Damian Stevens",
+                "entity_slug": "damian-stevens",
+                "entity_id": 240326,
+                "position_notes": "",
+                "position_id": 240326,
+                "entity_url": "https:\/\/imvdb.com\/n\/damian-stevens"
+            },
+            {
+                "position_name": "Record Label",
+                "position_code": "label",
+                "entity_name": "Interscope ",
+                "entity_slug": "interscope-",
+                "entity_id": 154533,
+                "position_notes": "",
+                "position_id": 154533,
+                "entity_url": "https:\/\/imvdb.com\/n\/interscope-"
+            },
+            {
+                "position_name": "Editorial Company",
+                "position_code": "editorial_company",
+                "entity_name": "Arcade Edit",
+                "entity_slug": "arcade-edit",
+                "entity_id": 240325,
+                "position_notes": "",
+                "position_id": 240325,
+                "entity_url": "https:\/\/imvdb.com\/n\/arcade-edit"
+            },
+            {
+                "position_name": "Edit",
+                "position_code": "edit",
+                "entity_name": "Paul Martinez",
+                "entity_slug": "paul-martinez",
+                "entity_id": 240327,
+                "position_notes": "",
+                "position_id": 240327,
+                "entity_url": "https:\/\/imvdb.com\/n\/paul-martinez"
+            },
+            {
+                "position_name": "Assistant Editor",
+                "position_code": "assi_edit",
+                "entity_name": "Dean Miyahira",
+                "entity_slug": "dean-miyahira",
+                "entity_id": 240328,
+                "position_notes": "",
+                "position_id": 240328,
+                "entity_url": "https:\/\/imvdb.com\/n\/dean-miyahira"
+            },
+            {
+                "position_name": "Post Producer",
+                "position_code": "post_prod",
+                "entity_name": "Kirsten Thon-Webb",
+                "entity_slug": "kirsten-thon-webb",
+                "entity_id": 240329,
+                "position_notes": "",
+                "position_id": 240329,
+                "entity_url": "https:\/\/imvdb.com\/n\/kirsten-thon-webb"
+            }
+        ],
+        "cast": [
+            {
+                "entity_name": "Robin Thicke",
+                "entity_slug": "robin-thicke",
+                "entity_id": 60802,
+                "cast_roles": [],
+                "position_id": 60802
+            },
+            {
+                "entity_name": "Pharrell Williams",
+                "entity_slug": "pharrell-williams",
+                "entity_id": 60803,
+                "cast_roles": [],
+                "position_id": 60803
+            },
+            {
+                "entity_name": "Emily Ratajkowski",
+                "entity_slug": "emily-ratajkowski",
+                "entity_id": 60804,
+                "cast_roles": [
+                    "Model"
+                ],
+                "position_id": 60804
+            },
+            {
+                "entity_name": "Elle Evans",
+                "entity_slug": "elle-evans",
+                "entity_id": 60805,
+                "cast_roles": [
+                    "Model"
+                ],
+                "position_id": 60805
+            },
+            {
+                "entity_name": "Jessi M'Bengue",
+                "entity_slug": "jessi-mbengue",
+                "entity_id": 60806,
+                "cast_roles": [
+                    "Model"
+                ],
+                "position_id": 60806
+            },
+            {
+                "entity_name": "T.I.",
+                "entity_slug": "t.i.",
+                "entity_id": 60807,
+                "cast_roles": [],
+                "position_id": 60807
+            }
+        ]
+    },
+    "release_date_stamp": 1358640000,
+    "release_date_string": "January 20, 2013",
+    "featured_artists": [
+        {
+            "name": "T.I.",
+            "slug": "t.i.",
+            "url": "https:\/\/imvdb.com\/n\/t.i."
+        },
+        {
+            "name": "Pharrell Williams",
+            "slug": "pharrell-williams",
+            "url": "https:\/\/imvdb.com\/n\/pharrell-williams"
+        }
+    ]
+}
