@@ -127,29 +127,6 @@ class TestBuildMediaPaths:
         assert paths.video_path == root_path / "robin_thicke" / "blurred_lines.mp4"
         assert paths.nfo_path == root_path / "robin_thicke" / "blurred_lines.nfo"
 
-    def test_custom_extension(self, root_path, sample_nfo):
-        """Test custom video extension."""
-        paths = build_media_paths(
-            root_path=root_path,
-            pattern="{title}",
-            nfo_data=sample_nfo,
-            video_extension=".mkv",
-        )
-
-        assert paths.video_path.suffix == ".mkv"
-        assert paths.nfo_path.suffix == ".nfo"
-
-    def test_extension_without_dot(self, root_path, sample_nfo):
-        """Test extension automatically gets dot prepended."""
-        paths = build_media_paths(
-            root_path=root_path,
-            pattern="{title}",
-            nfo_data=sample_nfo,
-            video_extension="avi",
-        )
-
-        assert paths.video_path.suffix == ".avi"
-
     def test_invalid_pattern_field(self, root_path, sample_nfo):
         """Test error on invalid pattern field."""
         with pytest.raises(InvalidPatternError) as exc_info:
@@ -431,3 +408,129 @@ class TestPatternEdgeCases:
         # Only field values are normalized, not literal text in pattern
         expected_path = root_path / "beyonce_ft_j_balvin_willy_william" / "mi_gente.mp4"
         assert paths.video_path == expected_path
+
+
+class TestBuildMediaPathsWithConfig:
+    """Tests for build_media_paths with OrganizerConfig."""
+
+    @pytest.fixture
+    def root_path(self, tmp_path):
+        """Create temp root directory."""
+        return tmp_path
+
+    def test_uses_config_defaults(self, root_path):
+        """Test that build_media_paths uses config default values."""
+        from fuzzbin.common.config import OrganizerConfig
+        
+        config = OrganizerConfig(
+            path_pattern="{genre}/{artist}/{title}",
+            normalize_filenames=True
+        )
+        
+        nfo = MusicVideoNFO(
+            artist="AC/DC",
+            title="Back In Black",
+            genre="Rock"
+        )
+        
+        paths = build_media_paths(root_path, nfo, config=config)
+        
+        # Should use config pattern and normalization
+        assert paths.video_path == root_path / "rock" / "acdc" / "back_in_black.mp4"
+        assert paths.nfo_path == root_path / "rock" / "acdc" / "back_in_black.nfo"
+
+    def test_explicit_pattern_overrides_config(self, root_path):
+        """Test that explicit pattern parameter overrides config."""
+        from fuzzbin.common.config import OrganizerConfig
+        
+        config = OrganizerConfig(
+            path_pattern="{genre}/{artist}/{title}",
+            normalize_filenames=True
+        )
+        
+        nfo = MusicVideoNFO(artist="Test", title="Song")
+        
+        paths = build_media_paths(
+            root_path,
+            nfo,
+            pattern="{title}",  # Override config pattern
+            config=config
+        )
+        
+        # Should use explicit pattern but config normalization
+        assert paths.video_path == root_path / "song.mp4"
+
+    def test_explicit_normalize_overrides_config(self, root_path):
+        """Test that explicit normalize parameter overrides config."""
+        from fuzzbin.common.config import OrganizerConfig
+        
+        config = OrganizerConfig(
+            path_pattern="{artist}/{title}",
+            normalize_filenames=True  # Config says normalize
+        )
+        
+        nfo = MusicVideoNFO(artist="Test Artist", title="Test Song")
+        
+        paths = build_media_paths(
+            root_path,
+            nfo,
+            normalize=False,  # Override: don't normalize
+            config=config
+        )
+        
+        # Should not normalize due to explicit False
+        assert paths.video_path == root_path / "Test Artist" / "Test Song.mp4"
+
+    def test_backward_compatibility_no_config(self, root_path):
+        """Test backward compatibility: works without config parameter."""
+        nfo = MusicVideoNFO(artist="Test", title="Song")
+        
+        # Legacy usage: explicit pattern required
+        paths = build_media_paths(
+            root_path,
+            nfo,
+            pattern="{artist}/{title}"
+        )
+        
+        assert paths.video_path == root_path / "Test" / "Song.mp4"
+
+    def test_no_pattern_no_config_raises_error(self, root_path):
+        """Test that missing both pattern and config raises TypeError."""
+        nfo = MusicVideoNFO(artist="Test", title="Song")
+        
+        with pytest.raises(TypeError) as exc_info:
+            build_media_paths(root_path, nfo)
+        
+        assert "pattern is required" in str(exc_info.value)
+
+    def test_config_with_featured_artists_pattern(self, root_path):
+        """Test config pattern with featured_artists field."""
+        from fuzzbin.common.config import OrganizerConfig
+        
+        config = OrganizerConfig(
+            path_pattern="{artist}/{title}",
+            normalize_filenames=False
+        )
+        
+        nfo = MusicVideoNFO(
+            artist="Robin Thicke",
+            title="Blurred Lines",
+            featured_artists=["T.I.", "Pharrell Williams"]
+        )
+        
+        paths = build_media_paths(root_path, nfo, config=config)
+        
+        assert paths.video_path == root_path / "Robin Thicke" / "Blurred Lines.mp4"
+
+    def test_config_validates_on_demand(self):
+        """Test that config validation can be called on-demand."""
+        from fuzzbin.common.config import OrganizerConfig
+        
+        # Config creation succeeds even with invalid pattern
+        config = OrganizerConfig(path_pattern="{artist}/{invalid_field}")
+        
+        # But validation catches it when called
+        with pytest.raises(ValueError) as exc_info:
+            config.validate_pattern()
+        
+        assert "invalid_field" in str(exc_info.value)

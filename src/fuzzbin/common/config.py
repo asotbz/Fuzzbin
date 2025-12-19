@@ -1,7 +1,8 @@
 """Configuration models using Pydantic for validation."""
 
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Set
+import string
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -340,6 +341,74 @@ class YTDLPConfig(BaseModel):
     )
 
 
+class NFOConfig(BaseModel):
+    """Configuration for NFO file handling."""
+
+    featured_artists: Optional["FeaturedArtistConfig"] = Field(  # noqa: F821
+        default=None,
+        description="Featured artist handling configuration",
+    )
+
+    def model_post_init(self, __context):
+        """Initialize featured_artists with default if not provided."""
+        if self.featured_artists is None:
+            from ..parsers.models import FeaturedArtistConfig
+            object.__setattr__(self, "featured_artists", FeaturedArtistConfig())
+
+
+# Import after NFOConfig definition to avoid circular import
+from ..parsers.models import FeaturedArtistConfig  # noqa: E402, F401
+
+# Rebuild model now that FeaturedArtistConfig is available
+NFOConfig.model_rebuild()
+
+
+class OrganizerConfig(BaseModel):
+    """Configuration for media file organizer."""
+
+    path_pattern: str = Field(
+        default="{artist}/{title}",
+        description="Path pattern with {field} placeholders for organizing media files",
+    )
+    normalize_filenames: bool = Field(
+        default=False,
+        description="Apply filename normalization (lowercase, remove special chars, etc.)",
+    )
+
+    def validate_pattern(self) -> None:
+        """
+        Validate that path_pattern uses only valid MusicVideoNFO fields.
+
+        This method can be called on-demand (e.g., in hot-reload scenarios)
+        to validate the pattern without requiring it during config initialization.
+
+        Raises:
+            ValueError: If pattern contains invalid field names
+
+        Example:
+            >>> config = OrganizerConfig(path_pattern="{artist}/{invalid_field}")
+            >>> config.validate_pattern()  # Raises ValueError
+        """
+        from ..parsers.models import MusicVideoNFO
+
+        # Extract field names from pattern
+        formatter = string.Formatter()
+        pattern_fields = set()
+        for _, field_name, _, _ in formatter.parse(self.path_pattern):
+            if field_name:
+                pattern_fields.add(field_name)
+
+        # Validate against MusicVideoNFO fields
+        valid_fields = set(MusicVideoNFO.model_fields.keys())
+        invalid_fields = pattern_fields - valid_fields
+
+        if invalid_fields:
+            raise ValueError(
+                f"Invalid pattern fields: {invalid_fields}. "
+                f"Valid fields: {valid_fields}"
+            )
+
+
 class Config(BaseModel):
     """Main configuration class for Fuzzbin."""
 
@@ -358,6 +427,14 @@ class Config(BaseModel):
     ytdlp: Optional[YTDLPConfig] = Field(
         default=None,
         description="yt-dlp client configuration",
+    )
+    nfo: NFOConfig = Field(
+        default_factory=NFOConfig,
+        description="NFO file handling configuration",
+    )
+    organizer: OrganizerConfig = Field(
+        default_factory=OrganizerConfig,
+        description="Media file organizer configuration",
     )
 
     @classmethod

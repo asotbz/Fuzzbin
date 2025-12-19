@@ -5,7 +5,7 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config
+from .common.config import Config, NFOConfig, OrganizerConfig
 from .common.logging_config import setup_logging
 from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
@@ -75,6 +75,8 @@ __all__ = [
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
+    "NFOConfig",
+    "OrganizerConfig",
     "configure",
     "get_config",
     "ArtistNFO",

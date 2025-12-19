@@ -99,6 +99,58 @@ def musicvideo_example():
     print(f"\nGenerated XML:\n{xml}")
 
 
+def config_based_parser_example():
+    """Example using configuration for featured artist handling."""
+    from pathlib import Path
+    from fuzzbin.common.config import Config
+    from fuzzbin.parsers import MusicVideoNFOParser, MusicVideoNFO
+
+    print("\n=== Config-Based NFO Parser Example ===\n")
+
+    # Load configuration from YAML file
+    try:
+        config = Config.from_yaml(Path("config.yaml"))
+        print(f"✓ Loaded config from config.yaml")
+        print(f"  Featured artists enabled: {config.nfo.featured_artists.enabled}")
+        print(f"  Append to field: {config.nfo.featured_artists.append_to_field}")
+    except Exception as e:
+        print(f"Could not load config.yaml: {e}")
+        print("Using default config...")
+        config = Config()
+    
+    # Create parser with config-based featured artist settings
+    parser = MusicVideoNFOParser(
+        featured_config=config.nfo.featured_artists
+    )
+
+    # Create NFO data with featured artists
+    nfo = MusicVideoNFO(
+        artist="Robin Thicke",
+        title="Blurred Lines",
+        year=2013,
+        genre="R&B",
+        featured_artists=["T.I.", "Pharrell Williams"]
+    )
+
+    # Generate XML - behavior depends on config.nfo.featured_artists settings
+    xml_string = parser.to_xml_string(nfo)
+    
+    print("\nGenerated XML with config-based featured artist handling:")
+    print(xml_string)
+    
+    print("\nBehavior explanation:")
+    if config.nfo.featured_artists.enabled:
+        print(f"  Featured artists are appended to '{config.nfo.featured_artists.append_to_field}' field")
+        print(f"  No separate <featured_artists> tag in XML")
+    else:
+        print(f"  Featured artists are omitted from XML output")
+
+
 if __name__ == "__main__":
     artist_example()
     musicvideo_example()
+    
+    print("\n" + "=" * 60)
+    print("Config-Based NFO Parser Example")
+    print("=" * 60)
+    config_based_parser_example()

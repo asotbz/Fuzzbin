@@ -2,10 +2,13 @@
 
 import string
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, Optional, TYPE_CHECKING
 
 import structlog
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from ..common.config import OrganizerConfig
 
 from ..common.string_utils import normalize_filename
 from ..parsers.models import MusicVideoNFO
@@ -118,42 +121,71 @@ def _get_field_values(nfo_data: MusicVideoNFO, pattern_fields: Set[str]) -> Dict
 
 def build_media_paths(
     root_path: Path,
-    pattern: str,
     nfo_data: MusicVideoNFO,
-    video_extension: str = ".mp4",
-    normalize: bool = False,
+    pattern: Optional[str] = None,
+    normalize: Optional[bool] = None,
+    config: Optional["OrganizerConfig"] = None,
 ) -> MediaPaths:
     """
     Build fully qualified paths for video and NFO files.
 
+    This function supports two usage patterns:
+    1. **Legacy/Explicit**: Pass pattern and normalize explicitly
+    2. **Config-based**: Pass config object providing defaults (can override)
+
     Args:
         root_path: Root directory for media files
-        pattern: Path pattern with {field} placeholders (e.g., "{artist}/{title}")
         nfo_data: MusicVideoNFO model containing metadata
-        video_extension: Video file extension (default: ".mp4")
-        normalize: Apply filename normalization (default: False)
+        pattern: Path pattern with {field} placeholders (required if config not provided)
+        normalize: Apply filename normalization (overrides config if provided)
+        config: OrganizerConfig providing default pattern and normalize settings
 
     Returns:
         MediaPaths object with video_path and nfo_path
 
     Raises:
+        TypeError: If both pattern and config are None
         InvalidPatternError: If pattern contains unknown fields or uses 'tags'
         MissingFieldError: If required pattern field is None/empty in NFO data
         InvalidPathError: If root_path doesn't exist or isn't a directory
 
     Example:
+        >>> # Legacy usage
         >>> nfo = MusicVideoNFO(artist="Robin Thicke", title="Blurred Lines")
         >>> paths = build_media_paths(
         ...     root_path=Path("/var/media/music_videos"),
-        ...     pattern="{artist}/{title}",
         ...     nfo_data=nfo,
+        ...     pattern="{artist}/{title}",
         ...     normalize=True
         ... )
         >>> paths.video_path
         Path('/var/media/music_videos/robin_thicke/blurred_lines.mp4')
-        >>> paths.nfo_path
-        Path('/var/media/music_videos/robin_thicke/blurred_lines.nfo')
+
+        >>> # Config-based usage
+        >>> from fuzzbin.common.config import OrganizerConfig
+        >>> config = OrganizerConfig(
+        ...     path_pattern="{artist}/{title}",
+        ...     normalize_filenames=True
+        ... )
+        >>> paths = build_media_paths(
+        ...     root_path=Path("/var/media/music_videos"),
+        ...     nfo_data=nfo,
+        ...     config=config
+        ... )
     """
+    # Resolve parameters: explicit params override config defaults
+    if config is not None:
+        pattern = pattern or config.path_pattern
+        normalize = normalize if normalize is not None else config.normalize_filenames
+    else:
+        # Legacy behavior: require pattern parameter
+        if pattern is None:
+            raise TypeError(
+                "pattern is required when config is not provided. "
+                "Pass either pattern explicitly or provide config with path_pattern."
+            )
+        normalize = normalize or False
+
     # 1. Validate root_path
     if not root_path.exists():
         raise InvalidPathError(f"Root path does not exist: {root_path}", path=root_path)
@@ -179,9 +211,8 @@ def build_media_paths(
     # 5. Build relative path from pattern
     relative_path = pattern.format(**field_values)
 
-    # 6. Ensure extension has leading dot
-    if not video_extension.startswith("."):
-        video_extension = f".{video_extension}"
+    # 6. Hardcode video extension to .mp4
+    video_extension = ".mp4"
 
     # 7. Build full paths
     video_path = root_path / f"{relative_path}{video_extension}"

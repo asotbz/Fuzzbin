@@ -181,3 +181,33 @@ apis:
     custom:
       api_key: YOUR_DISCOGS_API_KEY
       api_secret: YOUR_DISCOGS_API_SECRET
+
+# NFO file handling configuration
+nfo:
+  # Featured artist handling
+  featured_artists:
+    # Whether to append featured artists to artist or title field
+    enabled: false
+    
+    # Field to append featured artists to: 'artist' or 'title'
+    # When enabled=true and featured_artists list is populated:
+    #   - 'artist': "Robin Thicke" becomes "Robin Thicke ft. T.I., Pharrell Williams"
+    #   - 'title': "Blurred Lines" becomes "Blurred Lines ft. T.I., Pharrell Williams"
+    append_to_field: artist
+
+# Media file organizer configuration
+organizer:
+  # Path pattern for organizing media files
+  # Available fields: {artist}, {title}, {album}, {year}, {genre}, {director}, {studio}, {featured_artists}
+  # Note: {tags} is not allowed (list type)
+  # 
+  # Example patterns:
+  #   - "{artist}/{title}" -> "Robin Thicke/Blurred Lines.mp4"
+  #   - "{genre}/{artist}/{year}/{title}" -> "R&B/Robin Thicke/2013/Blurred Lines.mp4"
+  #   - "{artist}/{album}/{title}" -> "Robin Thicke/Blurred Lines/Blurred Lines.mp4"
+  path_pattern: "{artist}/{title}"
+  
+  # Whether to normalize filenames (lowercase, remove special chars, replace spaces with underscores)
+  # When true: "Björk/Jóga" -> "bjork/joga"
+  # When false: "Björk/Jóga" -> "Björk/Jóga"
+  normalize_filenames: false

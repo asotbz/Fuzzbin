@@ -243,3 +243,87 @@ if __name__ == "__main__":
     print("- Comprehensive error handling")
     print("\nAvailable pattern fields:")
     print("  {artist}, {title}, {album}, {year}, {genre}, {director}, {studio}")
+
+
+def config_based_example():
+    """Example using configuration file for organizer settings."""
+    from pathlib import Path
+    from fuzzbin.common.config import Config, OrganizerConfig
+    from fuzzbin.core import build_media_paths
+    from fuzzbin.parsers.models import MusicVideoNFO
+
+    print("\n=== Config-Based Organizer Example ===\n")
+
+    # Load configuration from YAML file
+    try:
+        config = Config.from_yaml(Path("config.yaml"))
+        print(f"✓ Loaded config from config.yaml")
+        print(f"  Pattern: {config.organizer.path_pattern}")
+        print(f"  Normalize: {config.organizer.normalize_filenames}")
+    except Exception as e:
+        print(f"Could not load config.yaml: {e}")
+        print("Using programmatic config instead...")
+        config = None
+    
+    # Or create OrganizerConfig programmatically
+    organizer_config = OrganizerConfig(
+        path_pattern="{genre}/{artist}/{year}/{title}",
+        normalize_filenames=True
+    )
+    
+    # Validate pattern on-demand (useful for hot-reload scenarios)
+    try:
+        organizer_config.validate_pattern()
+        print("\n✓ Pattern validated successfully")
+    except ValueError as e:
+        print(f"\n✗ Pattern validation failed: {e}")
+        return
+
+    # Create sample NFO data
+    nfo = MusicVideoNFO(
+        artist="Daft Punk",
+        title="Get Lucky",
+        album="Random Access Memories",
+        year=2013,
+        genre="Electronic",
+        featured_artists=["Pharrell Williams", "Nile Rodgers"]
+    )
+
+    # Use config to build paths
+    paths = build_media_paths(
+        root_path=Path("/var/media/music_videos"),
+        nfo_data=nfo,
+        config=organizer_config
+    )
+
+    print(f"\nConfig-based paths (normalized):")
+    print(f"  Video: {paths.video_path}")
+    print(f"  NFO:   {paths.nfo_path}")
+    # Output:
+    #   Video: /var/media/music_videos/electronic/daft_punk/2013/get_lucky.mp4
+    #   NFO:   /var/media/music_videos/electronic/daft_punk/2013/get_lucky.nfo
+
+    # Override config settings with explicit parameters
+    paths_override = build_media_paths(
+        root_path=Path("/var/media/music_videos"),
+        nfo_data=nfo,
+        pattern="{artist}/{title}",  # Override pattern
+        normalize=False,              # Override normalization
+        config=organizer_config       # Config provides fallback defaults
+    )
+
+    print(f"\nOverridden paths (not normalized):")
+    print(f"  Video: {paths_override.video_path}")
+    print(f"  NFO:   {paths_override.nfo_path}")
+    # Output:
+    #   Video: /var/media/music_videos/Daft Punk/Get Lucky.mp4
+    #   NFO:   /var/media/music_videos/Daft Punk/Get Lucky.mp4
+
+
+if __name__ == "__main__":
+    main()
+    
+    print("\n" + "=" * 60)
+    print("Config-Based Organizer Example")
+    print("=" * 60)
+    config_based_example()
