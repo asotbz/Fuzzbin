@@ -93,6 +93,7 @@ from .core.db import (
 )
 from .workflows import (
     ImportResult,
+    NFOImporter,
     SpotifyPlaylistImporter,
 )
 
@@ -179,6 +180,7 @@ __all__ = [
     "MissingFieldError",
     "InvalidPathError",
     "ImportResult",
+    "NFOImporter",
     "SpotifyPlaylistImporter",
 ]
 
