@@ -166,6 +166,138 @@ class VideoQuery:
             self._params.append(audio_codec)
         return self
 
+    def where_collection(self, collection_name: str) -> "VideoQuery":
+        """
+        Filter by collection name.
+
+        Args:
+            collection_name: Collection name (case-insensitive partial match)
+
+        Example:
+            .where_collection("Greatest Hits")
+        """
+        self._where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM video_collections vc
+                JOIN collections c ON vc.collection_id = c.id
+                WHERE vc.video_id = v.id 
+                AND LOWER(c.name) LIKE LOWER(?)
+                AND c.is_deleted = 0
+            )
+        """)
+        self._params.append(f"%{collection_name}%")
+        return self
+
+    def where_collection_id(self, collection_id: int) -> "VideoQuery":
+        """
+        Filter by collection ID.
+
+        Args:
+            collection_id: Collection ID
+
+        Example:
+            .where_collection_id(5)
+        """
+        self._where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM video_collections vc
+                WHERE vc.video_id = v.id AND vc.collection_id = ?
+            )
+        """)
+        self._params.append(collection_id)
+        return self
+
+    def where_tag(self, tag_name: str) -> "VideoQuery":
+        """
+        Filter by tag name.
+
+        Args:
+            tag_name: Tag name (case-insensitive partial match)
+
+        Example:
+            .where_tag("rock")
+        """
+        self._where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM video_tags vt
+                JOIN tags t ON vt.tag_id = t.id
+                WHERE vt.video_id = v.id 
+                AND LOWER(t.name) LIKE LOWER(?)
+            )
+        """)
+        self._params.append(f"%{tag_name}%")
+        return self
+
+    def where_tag_id(self, tag_id: int) -> "VideoQuery":
+        """
+        Filter by tag ID.
+
+        Args:
+            tag_id: Tag ID
+
+        Example:
+            .where_tag_id(3)
+        """
+        self._where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM video_tags vt
+                WHERE vt.video_id = v.id AND vt.tag_id = ?
+            )
+        """)
+        self._params.append(tag_id)
+        return self
+
+    def where_any_tags(self, tag_names: List[str]) -> "VideoQuery":
+        """
+        Filter by videos having ANY of the specified tags (OR condition).
+
+        Args:
+            tag_names: List of tag names (case-insensitive)
+
+        Example:
+            .where_any_tags(["rock", "pop"])  # Videos with rock OR pop
+        """
+        if not tag_names:
+            return self
+
+        placeholders = ",".join("?" * len(tag_names))
+        self._where_clauses.append(f"""
+            EXISTS (
+                SELECT 1 FROM video_tags vt
+                JOIN tags t ON vt.tag_id = t.id
+                WHERE vt.video_id = v.id 
+                AND LOWER(t.name) IN ({placeholders})
+            )
+        """)
+        self._params.extend([name.lower() for name in tag_names])
+        return self
+
+    def where_all_tags(self, tag_names: List[str]) -> "VideoQuery":
+        """
+        Filter by videos having ALL of the specified tags (AND condition).
+
+        Args:
+            tag_names: List of tag names (case-insensitive)
+
+        Example:
+            .where_all_tags(["rock", "90s"])  # Videos with both rock AND 90s
+        """
+        if not tag_names:
+            return self
+
+        # Add separate EXISTS clause for each tag to ensure ALL are present
+        for tag_name in tag_names:
+            self._where_clauses.append("""
+                EXISTS (
+                    SELECT 1 FROM video_tags vt
+                    JOIN tags t ON vt.tag_id = t.id
+                    WHERE vt.video_id = v.id 
+                    AND LOWER(t.name) = LOWER(?)
+                )
+            """)
+            self._params.append(tag_name)
+        return self
+
     def search(self, query: str) -> "VideoQuery":
         """
         Full-text search using FTS5.
@@ -210,6 +342,30 @@ class VideoQuery:
             return self
 
         self._order_by_clause = f"v.{field} {direction}"
+        return self
+
+    def order_by_collection_position(self, collection_id: int) -> "VideoQuery":
+        """
+        Order results by position within a collection.
+
+        Args:
+            collection_id: Collection ID
+
+        Note:
+            This should be used with where_collection_id() filter.
+            Videos not in the collection will be excluded.
+
+        Example:
+            .where_collection_id(5).order_by_collection_position(5)
+        """
+        # This requires a JOIN with video_collections table
+        # The _build_query method will need to handle this specially
+        # For now, we'll store it and handle in query building
+        self._order_by_clause = f"""
+            (SELECT vc.position FROM video_collections vc 
+             WHERE vc.video_id = v.id AND vc.collection_id = {collection_id}),
+            v.title
+        """
         return self
 
     def limit(self, count: int) -> "VideoQuery":

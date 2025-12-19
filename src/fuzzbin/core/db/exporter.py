@@ -73,6 +73,10 @@ class NFOExporter:
         # Build featured artists list
         featured_artist_names = [a["name"] for a in featured_artists]
 
+        # Get video tags from database
+        video_tags = await self.repository.get_video_tags(video_id)
+        tag_names = [tag["name"] for tag in video_tags]
+
         # Create MusicVideoNFO model
         nfo = MusicVideoNFO(
             title=video["title"],
@@ -83,14 +87,14 @@ class NFOExporter:
             genre=video.get("genre"),
             artist=artist_name,
             featured_artists=featured_artist_names,
-            tags=[],  # TODO: Load from tags table if implemented
+            tags=tag_names,
         )
 
         # Ensure parent directory exists
         nfo_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write NFO file
-        self.video_parser.write(nfo, nfo_path)
+        self.video_parser.write_file(nfo, nfo_path)
 
         logger.info(
             "video_nfo_exported",

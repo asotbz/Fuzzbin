@@ -965,6 +965,617 @@ class VideoRepository:
 
         return [dict(row) for row in rows]
 
+    # ==================== Collection CRUD Methods ====================
+
+    async def upsert_collection(
+        self,
+        name: str,
+        description: Optional[str] = None,
+    ) -> int:
+        """
+        Create or update a collection.
+
+        Args:
+            name: Collection name (unique)
+            description: Optional description
+
+        Returns:
+            Collection ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Try to get existing collection
+        cursor = await self._connection.execute(
+            "SELECT id FROM collections WHERE LOWER(name) = LOWER(? ) AND is_deleted = 0",
+            (name,),
+        )
+        row = await cursor.fetchone()
+
+        if row:
+            # Update existing
+            collection_id = row[0]
+            await self._connection.execute(
+                """
+                UPDATE collections 
+                SET description = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (description, now, collection_id),
+            )
+        else:
+            # Insert new
+            cursor = await self._connection.execute(
+                """
+                INSERT INTO collections (name, description, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (name, description, now, now),
+            )
+            collection_id = cursor.lastrowid
+
+        await self._connection.commit()
+        return collection_id
+
+    async def get_collection_by_id(
+        self, collection_id: int, include_deleted: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get collection by ID.
+
+        Args:
+            collection_id: Collection ID
+            include_deleted: Include soft-deleted collections
+
+        Returns:
+            Collection dict
+
+        Raises:
+            QueryError: If collection not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM collections WHERE id = ?"
+        params = [collection_id]
+
+        if not include_deleted:
+            query += " AND is_deleted = 0"
+
+        cursor = await self._connection.execute(query, params)
+        row = await cursor.fetchone()
+
+        if not row:
+            raise QueryError(f"Collection {collection_id} not found")
+
+        return dict(row)
+
+    async def get_collection_by_name(
+        self, name: str, include_deleted: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get collection by name.
+
+        Args:
+            name: Collection name
+            include_deleted: Include soft-deleted collections
+
+        Returns:
+            Collection dict or None if not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM collections WHERE LOWER(name) = LOWER(?)"
+        params = [name]
+
+        if not include_deleted:
+            query += " AND is_deleted = 0"
+
+        cursor = await self._connection.execute(query, params)
+        row = await cursor.fetchone()
+
+        return dict(row) if row else None
+
+    async def list_collections(self, include_deleted: bool = False) -> List[Dict[str, Any]]:
+        """
+        List all collections.
+
+        Args:
+            include_deleted: Include soft-deleted collections
+
+        Returns:
+            List of collection dicts
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM collections"
+        
+        if not include_deleted:
+            query += " WHERE is_deleted = 0"
+        
+        query += " ORDER BY name"
+
+        cursor = await self._connection.execute(query)
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def delete_collection(self, collection_id: int) -> None:
+        """
+        Soft delete a collection.
+
+        Args:
+            collection_id: Collection ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        await self._connection.execute(
+            """
+            UPDATE collections 
+            SET is_deleted = 1, deleted_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (now, now, collection_id),
+        )
+        await self._connection.commit()
+
+    # ==================== Video-Collection Relationship Methods ====================
+
+    async def link_video_collection(
+        self,
+        video_id: int,
+        collection_id: int,
+        position: int = 0,
+    ) -> None:
+        """
+        Link a video to a collection.
+
+        Args:
+            video_id: Video ID
+            collection_id: Collection ID
+            position: Position in collection (for ordering)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        await self._connection.execute(
+            """
+            INSERT OR IGNORE INTO video_collections 
+            (video_id, collection_id, position, added_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (video_id, collection_id, position, now),
+        )
+        await self._connection.commit()
+
+    async def unlink_video_collection(
+        self,
+        video_id: int,
+        collection_id: int,
+    ) -> None:
+        """
+        Unlink a video from a collection.
+
+        Args:
+            video_id: Video ID
+            collection_id: Collection ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        await self._connection.execute(
+            "DELETE FROM video_collections WHERE video_id = ? AND collection_id = ?",
+            (video_id, collection_id),
+        )
+        await self._connection.commit()
+
+    async def get_video_collections(self, video_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all collections for a video.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            List of collection dicts with position
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = """
+            SELECT c.*, vc.position, vc.added_at
+            FROM collections c
+            JOIN video_collections vc ON c.id = vc.collection_id
+            WHERE vc.video_id = ? AND c.is_deleted = 0
+            ORDER BY c.name
+        """
+
+        cursor = await self._connection.execute(query, (video_id,))
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def get_collection_videos(
+        self, collection_id: int, order_by_position: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all videos in a collection.
+
+        Args:
+            collection_id: Collection ID
+            order_by_position: Order by position in collection (default: True)
+
+        Returns:
+            List of video dicts with position
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = """
+            SELECT v.*, vc.position, vc.added_at
+            FROM videos v
+            JOIN video_collections vc ON v.id = vc.video_id
+            WHERE vc.collection_id = ? AND v.is_deleted = 0
+        """
+        
+        if order_by_position:
+            query += " ORDER BY vc.position, v.title"
+        else:
+            query += " ORDER BY v.title"
+
+        cursor = await self._connection.execute(query, (collection_id,))
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    # ==================== Tag CRUD Methods ====================
+
+    async def upsert_tag(
+        self,
+        name: str,
+        normalize: bool = True,
+    ) -> int:
+        """
+        Create or get a tag.
+
+        Args:
+            name: Tag name
+            normalize: Normalize tag name to lowercase (default: True)
+
+        Returns:
+            Tag ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+        normalized_name = name.lower() if normalize else name
+
+        # Try to get existing tag by normalized name
+        cursor = await self._connection.execute(
+            "SELECT id FROM tags WHERE normalized_name = ?",
+            (normalized_name,),
+        )
+        row = await cursor.fetchone()
+
+        if row:
+            return row[0]
+        
+        # Insert new tag
+        cursor = await self._connection.execute(
+            """
+            INSERT INTO tags (name, normalized_name, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (name, normalized_name, now),
+        )
+        tag_id = cursor.lastrowid
+        await self._connection.commit()
+        
+        return tag_id
+
+    async def get_tag_by_id(self, tag_id: int) -> Dict[str, Any]:
+        """
+        Get tag by ID.
+
+        Args:
+            tag_id: Tag ID
+
+        Returns:
+            Tag dict
+
+        Raises:
+            QueryError: If tag not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            "SELECT * FROM tags WHERE id = ?",
+            (tag_id,),
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            raise QueryError(f"Tag {tag_id} not found")
+
+        return dict(row)
+
+    async def get_tag_by_name(
+        self, name: str, normalize: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get tag by name.
+
+        Args:
+            name: Tag name
+            normalize: Normalize tag name to lowercase (default: True)
+
+        Returns:
+            Tag dict or None if not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        normalized_name = name.lower() if normalize else name
+
+        cursor = await self._connection.execute(
+            "SELECT * FROM tags WHERE normalized_name = ?",
+            (normalized_name,),
+        )
+        row = await cursor.fetchone()
+
+        return dict(row) if row else None
+
+    async def list_tags(
+        self, min_usage_count: int = 0, order_by: str = "name"
+    ) -> List[Dict[str, Any]]:
+        """
+        List all tags.
+
+        Args:
+            min_usage_count: Minimum usage count (default: 0)
+            order_by: Sort order - 'name' or 'usage_count' (default: 'name')
+
+        Returns:
+            List of tag dicts
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM tags WHERE usage_count >= ?"
+        
+        if order_by == "usage_count":
+            query += " ORDER BY usage_count DESC, name"
+        else:
+            query += " ORDER BY name"
+
+        cursor = await self._connection.execute(query, (min_usage_count,))
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    # ==================== Video-Tag Relationship Methods ====================
+
+    async def add_video_tag(
+        self,
+        video_id: int,
+        tag_id: int,
+        source: str = "manual",
+    ) -> None:
+        """
+        Add a tag to a video.
+
+        Args:
+            video_id: Video ID
+            tag_id: Tag ID
+            source: Tag source ('manual' or 'auto')
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        await self._connection.execute(
+            """
+            INSERT OR IGNORE INTO video_tags 
+            (video_id, tag_id, added_at, source)
+            VALUES (?, ?, ?, ?)
+            """,
+            (video_id, tag_id, now, source),
+        )
+        await self._connection.commit()
+
+    async def remove_video_tag(
+        self,
+        video_id: int,
+        tag_id: int,
+    ) -> None:
+        """
+        Remove a tag from a video.
+
+        Args:
+            video_id: Video ID
+            tag_id: Tag ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        await self._connection.execute(
+            "DELETE FROM video_tags WHERE video_id = ? AND tag_id = ?",
+            (video_id, tag_id),
+        )
+        await self._connection.commit()
+
+    async def bulk_add_video_tags(
+        self,
+        video_id: int,
+        tag_names: List[str],
+        source: str = "manual",
+        normalize: bool = True,
+    ) -> List[int]:
+        """
+        Add multiple tags to a video (creates tags if needed).
+
+        Args:
+            video_id: Video ID
+            tag_names: List of tag names
+            source: Tag source ('manual' or 'auto')
+            normalize: Normalize tag names to lowercase (default: True)
+
+        Returns:
+            List of tag IDs
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        tag_ids = []
+        
+        async with self.transaction():
+            for tag_name in tag_names:
+                tag_id = await self.upsert_tag(tag_name, normalize=normalize)
+                await self.add_video_tag(video_id, tag_id, source=source)
+                tag_ids.append(tag_id)
+
+        return tag_ids
+
+    async def replace_video_tags(
+        self,
+        video_id: int,
+        tag_names: List[str],
+        source: str = "manual",
+        normalize: bool = True,
+    ) -> List[int]:
+        """
+        Replace all tags for a video.
+
+        Args:
+            video_id: Video ID
+            tag_names: List of tag names
+            source: Tag source ('manual' or 'auto')
+            normalize: Normalize tag names to lowercase (default: True)
+
+        Returns:
+            List of tag IDs
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        async with self.transaction():
+            # Remove all existing tags
+            await self._connection.execute(
+                "DELETE FROM video_tags WHERE video_id = ?",
+                (video_id,),
+            )
+            
+            # Add new tags
+            tag_ids = []
+            for tag_name in tag_names:
+                tag_id = await self.upsert_tag(tag_name, normalize=normalize)
+                await self.add_video_tag(video_id, tag_id, source=source)
+                tag_ids.append(tag_id)
+
+        return tag_ids
+
+    async def get_video_tags(self, video_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all tags for a video.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            List of tag dicts with source and added_at
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = """
+            SELECT t.*, vt.source, vt.added_at
+            FROM tags t
+            JOIN video_tags vt ON t.id = vt.tag_id
+            WHERE vt.video_id = ?
+            ORDER BY t.name
+        """
+
+        cursor = await self._connection.execute(query, (video_id,))
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def get_tag_videos(self, tag_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all videos with a specific tag.
+
+        Args:
+            tag_id: Tag ID
+
+        Returns:
+            List of video dicts
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = """
+            SELECT v.*, vt.source, vt.added_at
+            FROM videos v
+            JOIN video_tags vt ON v.id = vt.video_id
+            WHERE vt.tag_id = ? AND v.is_deleted = 0
+            ORDER BY v.title
+        """
+
+        cursor = await self._connection.execute(query, (tag_id,))
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def auto_add_decade_tag(
+        self,
+        video_id: int,
+        year: int,
+        tag_format: str = "{decade}s",
+    ) -> Optional[int]:
+        """
+        Automatically add a decade tag based on video year.
+
+        Args:
+            video_id: Video ID
+            year: Video release year
+            tag_format: Format string for decade tag (default: "{decade}s")
+
+        Returns:
+            Tag ID if tag was added, None if year is invalid
+
+        Example:
+            >>> await repo.auto_add_decade_tag(video_id=1, year=1991)
+            # Creates and adds "90s" tag
+        """
+        if not year or year < 1900 or year > 2100:
+            return None
+
+        # Calculate decade (e.g., 1991 -> 90, 2005 -> 0, 2010 -> 10)
+        decade = (year // 10) % 10 * 10
+        
+        # For 2000-2009, use "00s" or similar based on format
+        if year >= 2000 and year < 2010:
+            decade = 0
+        
+        tag_name = tag_format.format(decade=str(decade).zfill(2))
+        
+        tag_id = await self.upsert_tag(tag_name, normalize=True)
+        await self.add_video_tag(video_id, tag_id, source="auto")
+        
+        return tag_id
+
     # ==================== Status Management Methods ====================
 
     async def update_status(

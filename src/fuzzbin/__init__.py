@@ -5,7 +5,7 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig
+from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, TagsConfig, AutoDecadeConfig
 from .common.logging_config import setup_logging
 from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
@@ -114,6 +114,8 @@ __all__ = [
     "NFOConfig",
     "OrganizerConfig",
     "FFProbeConfig",
+    "TagsConfig",
+    "AutoDecadeConfig",
     "configure",
     "get_config",
     "get_repository",

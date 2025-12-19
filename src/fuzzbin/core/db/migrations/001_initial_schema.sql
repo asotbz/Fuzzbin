@@ -186,3 +186,70 @@ CREATE TABLE IF NOT EXISTS video_status_history (
     metadata TEXT,
     FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
 );
+
+-- Collections table (internal-only grouping of videos)
+CREATE TABLE IF NOT EXISTS collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    is_deleted INTEGER DEFAULT 0 NOT NULL,
+    CHECK (is_deleted IN (0, 1))
+);
+
+-- Video-Collection junction table (many-to-many with ordering)
+CREATE TABLE IF NOT EXISTS video_collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id INTEGER NOT NULL,
+    collection_id INTEGER NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL,
+    FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE,
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+    UNIQUE(video_id, collection_id)
+);
+
+-- Tags table (user-defined metadata written to NFO files)
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    normalized_name TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    usage_count INTEGER DEFAULT 0 NOT NULL
+);
+
+-- Video-Tag junction table (many-to-many)
+CREATE TABLE IF NOT EXISTS video_tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    added_at TEXT NOT NULL,
+    source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'auto')),
+    FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+    UNIQUE(video_id, tag_id)
+);
+
+-- Indexes for collections and tags
+CREATE INDEX IF NOT EXISTS idx_video_collections_video_id ON video_collections(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_collections_collection_id ON video_collections(collection_id);
+CREATE INDEX IF NOT EXISTS idx_video_tags_video_id ON video_tags(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_tags_tag_id ON video_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_tags_normalized_name ON tags(normalized_name);
+
+-- Triggers to maintain tag usage_count and auto-delete unused tags
+CREATE TRIGGER IF NOT EXISTS tags_usage_increment 
+AFTER INSERT ON video_tags
+BEGIN
+    UPDATE tags SET usage_count = usage_count + 1 WHERE id = NEW.tag_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tags_usage_decrement 
+AFTER DELETE ON video_tags
+BEGIN
+    UPDATE tags SET usage_count = usage_count - 1 WHERE id = OLD.tag_id;
+    -- Auto-delete tag if no longer used
+    DELETE FROM tags WHERE id = OLD.tag_id AND usage_count = 0;
+END;

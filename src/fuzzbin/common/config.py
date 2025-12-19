@@ -459,6 +459,40 @@ class OrganizerConfig(BaseModel):
             )
 
 
+class AutoDecadeConfig(BaseModel):
+    """Configuration for automatic decade tagging based on release year."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic decade tag generation",
+    )
+    format: str = Field(
+        default="{decade}s",
+        description="Format string for decade tags (e.g., '{decade}s' produces '90s')",
+    )
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, v: str) -> str:
+        """Validate that format string contains {decade} placeholder."""
+        if "{decade}" not in v:
+            raise ValueError("Format string must contain {decade} placeholder")
+        return v
+
+
+class TagsConfig(BaseModel):
+    """Configuration for tag management and auto-tagging."""
+
+    normalize: bool = Field(
+        default=True,
+        description="Normalize tag names to lowercase for consistency",
+    )
+    auto_decade: AutoDecadeConfig = Field(
+        default_factory=AutoDecadeConfig,
+        description="Automatic decade tag configuration",
+    )
+
+
 class Config(BaseModel):
     """Main configuration class for Fuzzbin."""
 
@@ -493,6 +527,10 @@ class Config(BaseModel):
     organizer: OrganizerConfig = Field(
         default_factory=OrganizerConfig,
         description="Media file organizer configuration",
+    )
+    tags: TagsConfig = Field(
+        default_factory=TagsConfig,
+        description="Tag management and auto-tagging configuration",
     )
 
     @classmethod

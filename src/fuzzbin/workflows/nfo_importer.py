@@ -283,6 +283,7 @@ class NFOImporter:
             - Maps all available fields from NFO to database schema
             - Sets download_source to "nfo_import"
             - Stores nfo_file_path if provided
+            - Excludes tags and collections (database is source of truth)
         """
         video_data = {
             "title": nfo.title,
@@ -295,6 +296,9 @@ class NFOImporter:
             "status": self.initial_status,
             "download_source": "nfo_import",
         }
+        # Note: tags and collections are intentionally excluded from import
+        # The database is the source of truth for tags/collections,
+        # which are written TO NFO files but not imported FROM them
 
         # Add NFO file path if provided
         if nfo_file_path:
