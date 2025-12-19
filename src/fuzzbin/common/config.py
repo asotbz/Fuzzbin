@@ -1,11 +1,24 @@
 """Configuration models using Pydantic for validation."""
 
+import os
+from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Set
 import string
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+import structlog
+
+logger = structlog.get_logger(__name__)
+
+
+class ConfigSafetyLevel(Enum):
+    """Safety level for runtime configuration changes."""
+
+    SAFE = "safe"  # Can change without side effects
+    REQUIRES_RELOAD = "requires_reload"  # Need to recreate components
+    AFFECTS_STATE = "affects_state"  # Changes persistent files/connections
 
 
 class RetryConfig(BaseModel):
@@ -574,3 +587,177 @@ class Config(BaseModel):
         """
         data = yaml.safe_load(yaml_string)
         return cls.model_validate(data or {})
+
+    def to_yaml(
+        self,
+        path: Path,
+        exclude_defaults: bool = True,
+        exclude_secrets: bool = True,
+    ) -> None:
+        """
+        Save configuration to YAML file with atomic write.
+
+        Args:
+            path: Path to YAML configuration file
+            exclude_defaults: Exclude fields with default values (recommended: True)
+            exclude_secrets: Exclude API secrets from custom fields (recommended: True)
+
+        Raises:
+            OSError: If file cannot be written (disk full, permission denied, etc.)
+            yaml.YAMLError: If serialization fails
+
+        Example:
+            >>> config = Config()
+            >>> config.to_yaml(Path("config.yaml"))
+        """
+        # Convert Pydantic model to dict
+        data = self.model_dump(
+            mode="python",  # Use Python native types
+            exclude_none=True,  # Skip None values
+            exclude_defaults=exclude_defaults,  # Skip default values
+            exclude_unset=False,  # Include explicitly set values
+        )
+
+        # Remove secrets from API configs if requested
+        if exclude_secrets and "apis" in data:
+            for api_name, api_config in data["apis"].items():
+                # Remove custom dict entirely - these often contain secrets from env vars
+                if "custom" in api_config:
+                    del api_config["custom"]
+
+        # Atomic write pattern: temp file + fsync + rename
+        temp_path = path.with_suffix(".tmp")
+        try:
+            # Ensure directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write to temp file
+            with open(temp_path, "w", encoding="utf-8") as f:
+                yaml.safe_dump(
+                    data,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,  # Preserve field order (Python 3.7+)
+                )
+                f.flush()
+                os.fsync(f.fileno())  # Force write to disk
+
+            # Atomic rename
+            temp_path.replace(path)  # POSIX atomic on same filesystem
+
+            logger.info("config_saved", path=str(path))
+
+        except Exception as e:
+            # Cleanup temp file on failure
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass  # Best effort cleanup
+
+            logger.error("config_save_failed", path=str(path), error=str(e))
+            raise
+
+
+# Field-level safety categorization for runtime config changes
+FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
+    # Safe fields - can change without side effects
+    "http.timeout": ConfigSafetyLevel.SAFE,
+    "http.max_redirects": ConfigSafetyLevel.SAFE,
+    "http.verify_ssl": ConfigSafetyLevel.SAFE,
+    "http.retry.max_attempts": ConfigSafetyLevel.SAFE,
+    "http.retry.backoff_multiplier": ConfigSafetyLevel.SAFE,
+    "http.retry.min_wait": ConfigSafetyLevel.SAFE,
+    "http.retry.max_wait": ConfigSafetyLevel.SAFE,
+    "http.retry.status_codes": ConfigSafetyLevel.SAFE,
+    "logging.level": ConfigSafetyLevel.SAFE,
+    "logging.format": ConfigSafetyLevel.SAFE,
+    "logging.handlers": ConfigSafetyLevel.SAFE,
+    "logging.third_party": ConfigSafetyLevel.SAFE,
+    "logging.file.path": ConfigSafetyLevel.SAFE,
+    "logging.file.max_bytes": ConfigSafetyLevel.SAFE,
+    "logging.file.backup_count": ConfigSafetyLevel.SAFE,
+    "ytdlp.binary_path": ConfigSafetyLevel.SAFE,
+    "ytdlp.default_download_path": ConfigSafetyLevel.SAFE,
+    "ytdlp.format": ConfigSafetyLevel.SAFE,
+    "ytdlp.extract_audio": ConfigSafetyLevel.SAFE,
+    "ytdlp.audio_format": ConfigSafetyLevel.SAFE,
+    "ytdlp.additional_args": ConfigSafetyLevel.SAFE,
+    "ffprobe.binary_path": ConfigSafetyLevel.SAFE,
+    "ffprobe.timeout": ConfigSafetyLevel.SAFE,
+    "ffprobe.show_format": ConfigSafetyLevel.SAFE,
+    "ffprobe.show_streams": ConfigSafetyLevel.SAFE,
+    "nfo.*": ConfigSafetyLevel.SAFE,
+    "organizer.*": ConfigSafetyLevel.SAFE,
+    "tags.*": ConfigSafetyLevel.SAFE,
+    # Requires reload - need to recreate components
+    "http.max_connections": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "http.max_keepalive_connections": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.base_url": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.http.*": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.rate_limit.*": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.concurrency.*": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.cache.enabled": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.cache.ttl": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.cache.force_cache": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.cache.cacheable_methods": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.cache.cacheable_status_codes": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.custom.*": ConfigSafetyLevel.REQUIRES_RELOAD,
+    # Affects state - changes persistent files/connections
+    "database.database_path": ConfigSafetyLevel.AFFECTS_STATE,
+    "database.workspace_root": ConfigSafetyLevel.AFFECTS_STATE,
+    "database.enable_wal_mode": ConfigSafetyLevel.AFFECTS_STATE,
+    "database.connection_timeout": ConfigSafetyLevel.AFFECTS_STATE,
+    "database.backup_dir": ConfigSafetyLevel.AFFECTS_STATE,
+    "apis.*.cache.storage_path": ConfigSafetyLevel.AFFECTS_STATE,
+}
+
+
+def get_safety_level(field_path: str) -> ConfigSafetyLevel:
+    """
+    Get safety level for a configuration field.
+
+    Args:
+        field_path: Dot-notation path (e.g., "http.timeout", "apis.discogs.rate_limit.requests_per_minute")
+
+    Returns:
+        ConfigSafetyLevel indicating how safe it is to change this field at runtime
+
+    Example:
+        >>> get_safety_level("http.timeout")
+        ConfigSafetyLevel.SAFE
+        >>> get_safety_level("database.database_path")
+        ConfigSafetyLevel.AFFECTS_STATE
+    """
+    # Exact match
+    if field_path in FIELD_SAFETY_MAP:
+        return FIELD_SAFETY_MAP[field_path]
+
+    # Wildcard match (e.g., "apis.*.rate_limit.requests_per_minute" matches "apis.discogs.rate_limit.requests_per_minute")
+    parts = field_path.split(".")
+    for pattern, level in FIELD_SAFETY_MAP.items():
+        pattern_parts = pattern.split(".")
+
+        # Check if pattern length matches or ends with wildcard
+        if len(pattern_parts) > len(parts):
+            continue
+
+        # Match each part, treating * as wildcard
+        match = True
+        for i, pattern_part in enumerate(pattern_parts):
+            if pattern_part == "*":
+                # Wildcard at end matches rest of path
+                if i == len(pattern_parts) - 1:
+                    return level
+                # Wildcard in middle matches single component
+                continue
+            elif i >= len(parts) or pattern_part != parts[i]:
+                match = False
+                break
+
+        if match and len(pattern_parts) == len(parts):
+            return level
+
+    # Default: assume safe if not explicitly categorized
+    return ConfigSafetyLevel.SAFE

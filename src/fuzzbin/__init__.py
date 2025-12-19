@@ -5,7 +5,19 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, TagsConfig, AutoDecadeConfig
+from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, TagsConfig, AutoDecadeConfig, ConfigSafetyLevel, get_safety_level
+from .common.config_manager import (
+    ConfigManager,
+    ConfigChangeEvent,
+    ConfigSnapshot,
+    ConfigHistory,
+    ClientStats,
+    get_client_stats,
+    ConfigManagerError,
+    ConfigValidationError,
+    ConfigSaveError,
+    ClientReloadError,
+)
 from .common.logging_config import setup_logging
 from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
@@ -116,8 +128,21 @@ __all__ = [
     "FFProbeConfig",
     "TagsConfig",
     "AutoDecadeConfig",
+    "ConfigSafetyLevel",
+    "get_safety_level",
+    "ConfigManager",
+    "ConfigChangeEvent",
+    "ConfigSnapshot",
+    "ConfigHistory",
+    "ClientStats",
+    "get_client_stats",
+    "ConfigManagerError",
+    "ConfigValidationError",
+    "ConfigSaveError",
+    "ClientReloadError",
     "configure",
     "get_config",
+    "get_config_manager",
     "get_repository",
     "VideoRepository",
     "VideoQuery",
@@ -192,6 +217,7 @@ logger = structlog.get_logger(__name__)
 # Global config and repository state
 _config: Optional[Config] = None
 _repository: Optional[VideoRepository] = None
+_config_manager: Optional[ConfigManager] = None
 
 
 async def configure(
@@ -212,7 +238,7 @@ async def configure(
         >>> from pathlib import Path
         >>> await fuzzbin.configure(config_path=Path("config.yaml"))
     """
-    global _config, _repository
+    global _config, _repository, _config_manager
 
     if config is not None:
         _config = config
@@ -227,6 +253,12 @@ async def configure(
     
     # Initialize database repository
     _repository = await VideoRepository.from_config(_config.database)
+    
+    # Initialize config manager
+    _config_manager = ConfigManager(
+        config=_config,
+        config_path=config_path,
+    )
     
     logger.info(
         "fuzzbin_configured",
@@ -255,6 +287,39 @@ def get_config() -> Config:
         _config = Config()
         setup_logging(_config.logging)
     return _config
+
+
+def get_config_manager() -> ConfigManager:
+    """
+    Get configuration manager instance, initializing if needed.
+
+    Returns:
+        ConfigManager instance
+
+    Note:
+        This creates a manager without a config_path if not previously configured.
+        Call configure() first for full functionality.
+
+    Example:
+        >>> import fuzzbin
+        >>> await fuzzbin.configure(config_path=Path("config.yaml"))
+        >>> manager = fuzzbin.get_config_manager()
+        >>> await manager.update("http.timeout", 60)
+    """
+    global _config_manager, _config
+    
+    if _config_manager is None:
+        if _config is None:
+            _config = Config()
+            setup_logging(_config.logging)
+        
+        _config_manager = ConfigManager(
+            config=_config,
+            config_path=None,  # No auto-save without explicit configure()
+        )
+        logger.info("config_manager_auto_initialized")
+    
+    return _config_manager
 
 
 async def get_repository() -> VideoRepository:
