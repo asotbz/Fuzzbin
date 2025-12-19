@@ -5,7 +5,7 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig
+from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig
 from .common.logging_config import setup_logging
 from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
@@ -20,6 +20,7 @@ from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
 from .api.discogs_client import DiscogsClient
 from .clients.ytdlp_client import YTDLPClient
+from .clients.ffprobe_client import FFProbeClient
 from .parsers import (
     ArtistNFO,
     MusicVideoNFO,
@@ -41,6 +42,11 @@ from .parsers import (
     DiscogsParser,
     MasterNotFoundError,
     ReleaseNotFoundError,
+    FFProbeFormat,
+    FFProbeVideoStream,
+    FFProbeAudioStream,
+    FFProbeMediaInfo,
+    FFProbeParser,
 )
 from .parsers.ytdlp_models import (
     YTDLPSearchResult,
@@ -63,6 +69,10 @@ from .core.exceptions import (
     YTDLPExecutionError,
     YTDLPParseError,
     DownloadCancelledError,
+    FFProbeError,
+    FFProbeNotFoundError,
+    FFProbeExecutionError,
+    FFProbeParseError,
 )
 from .core.db import (
     VideoRepository,
@@ -87,12 +97,14 @@ __all__ = [
     "IMVDbClient",
     "DiscogsClient",
     "YTDLPClient",
+    "FFProbeClient",
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
     "DatabaseConfig",
     "NFOConfig",
     "OrganizerConfig",
+    "FFProbeConfig",
     "configure",
     "get_config",
     "get_repository",
@@ -139,6 +151,15 @@ __all__ = [
     "YTDLPExecutionError",
     "YTDLPParseError",
     "DownloadCancelledError",
+    "FFProbeFormat",
+    "FFProbeVideoStream",
+    "FFProbeAudioStream",
+    "FFProbeMediaInfo",
+    "FFProbeParser",
+    "FFProbeError",
+    "FFProbeNotFoundError",
+    "FFProbeExecutionError",
+    "FFProbeParseError",
     "normalize_string",
     "remove_featured_artists",
     "normalize_for_matching",

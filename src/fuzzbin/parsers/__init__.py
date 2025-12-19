@@ -37,6 +37,13 @@ from .discogs_models import (
     ReleaseNotFoundError,
 )
 from .discogs_parser import DiscogsParser
+from .ffprobe_models import (
+    FFProbeFormat,
+    FFProbeVideoStream,
+    FFProbeAudioStream,
+    FFProbeMediaInfo,
+)
+from .ffprobe_parser import FFProbeParser
 
 __all__ = [
     "ArtistNFO",
@@ -74,4 +81,9 @@ __all__ = [
     "DiscogsParser",
     "MasterNotFoundError",
     "ReleaseNotFoundError",
+    "FFProbeFormat",
+    "FFProbeVideoStream",
+    "FFProbeAudioStream",
+    "FFProbeMediaInfo",
+    "FFProbeParser",
 ]

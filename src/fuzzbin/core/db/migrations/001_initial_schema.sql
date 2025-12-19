@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS videos (
     file_size INTEGER,
     file_checksum TEXT,
     file_verified_at TEXT,
+    -- Video file metadata fields (from ffprobe)
+    duration REAL,
+    width INTEGER,
+    height INTEGER,
+    video_codec TEXT,
+    audio_codec TEXT,
+    container_format TEXT,
+    bitrate INTEGER,
+    frame_rate REAL,
+    audio_channels INTEGER,
+    audio_sample_rate INTEGER,
+    aspect_ratio TEXT,
     -- Download tracking fields
     download_source TEXT,
     download_attempts INTEGER DEFAULT 0,

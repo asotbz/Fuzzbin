@@ -73,3 +73,38 @@ class DownloadCancelledError(YTDLPError):
     """Raised when a download is cancelled via CancellationToken."""
 
     pass
+
+
+# ffprobe exceptions
+class FFProbeError(Exception):
+    """Base exception for ffprobe errors."""
+
+    pass
+
+
+class FFProbeNotFoundError(FFProbeError):
+    """Raised when ffprobe binary is not found."""
+
+    def __init__(self, message: str, path: Optional[str] = None):
+        super().__init__(message)
+        self.path = path
+
+
+class FFProbeExecutionError(FFProbeError):
+    """Raised when ffprobe command execution fails."""
+
+    def __init__(
+        self,
+        message: str,
+        returncode: Optional[int] = None,
+        stderr: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.returncode = returncode
+        self.stderr = stderr
+
+
+class FFProbeParseError(FFProbeError):
+    """Raised when parsing ffprobe output fails."""
+
+    pass

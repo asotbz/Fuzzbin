@@ -341,6 +341,29 @@ class YTDLPConfig(BaseModel):
     )
 
 
+class FFProbeConfig(BaseModel):
+    """Configuration for ffprobe client."""
+
+    ffprobe_path: str = Field(
+        default="ffprobe",
+        description="Path to ffprobe binary",
+    )
+    timeout: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        description="Command execution timeout in seconds",
+    )
+    show_format: bool = Field(
+        default=True,
+        description="Include format/container information in output",
+    )
+    show_streams: bool = Field(
+        default=True,
+        description="Include stream information in output",
+    )
+
+
 class DatabaseConfig(BaseModel):
     """Configuration for SQLite database."""
 
@@ -458,6 +481,10 @@ class Config(BaseModel):
     ytdlp: Optional[YTDLPConfig] = Field(
         default=None,
         description="yt-dlp client configuration",
+    )
+    ffprobe: FFProbeConfig = Field(
+        default_factory=FFProbeConfig,
+        description="ffprobe client configuration",
     )
     nfo: NFOConfig = Field(
         default_factory=NFOConfig,

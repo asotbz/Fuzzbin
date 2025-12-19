@@ -14,6 +14,9 @@ CREATE INDEX IF NOT EXISTS idx_videos_genre ON videos(genre) WHERE genre IS NOT 
 CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at);
 CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status) WHERE status IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_videos_download_source ON videos(download_source) WHERE download_source IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_videos_duration ON videos(duration) WHERE duration IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_videos_resolution ON videos(width, height) WHERE width IS NOT NULL AND height IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_videos_video_codec ON videos(video_codec) WHERE video_codec IS NOT NULL;
 
 -- Artists table indexes
 CREATE INDEX IF NOT EXISTS idx_artists_imvdb_entity_id ON artists(imvdb_entity_id) WHERE imvdb_entity_id IS NOT NULL;

@@ -104,6 +104,68 @@ class VideoQuery:
         self._params.append(source)
         return self
 
+    def where_duration_range(
+        self, min_seconds: Optional[float] = None, max_seconds: Optional[float] = None
+    ) -> "VideoQuery":
+        """
+        Filter by video duration range.
+
+        Args:
+            min_seconds: Minimum duration in seconds (inclusive)
+            max_seconds: Maximum duration in seconds (inclusive)
+
+        Example:
+            .where_duration_range(60, 300)  # Between 1 and 5 minutes
+            .where_duration_range(min_seconds=180)  # At least 3 minutes
+        """
+        if min_seconds is not None:
+            self._where_clauses.append("v.duration >= ?")
+            self._params.append(min_seconds)
+        if max_seconds is not None:
+            self._where_clauses.append("v.duration <= ?")
+            self._params.append(max_seconds)
+        return self
+
+    def where_min_resolution(self, min_width: int, min_height: int) -> "VideoQuery":
+        """
+        Filter by minimum resolution.
+
+        Args:
+            min_width: Minimum width in pixels
+            min_height: Minimum height in pixels
+
+        Example:
+            .where_min_resolution(1920, 1080)  # At least 1080p
+            .where_min_resolution(1280, 720)   # At least 720p
+        """
+        self._where_clauses.append("v.width >= ? AND v.height >= ?")
+        self._params.extend([min_width, min_height])
+        return self
+
+    def where_codec(
+        self,
+        video_codec: Optional[str] = None,
+        audio_codec: Optional[str] = None,
+    ) -> "VideoQuery":
+        """
+        Filter by video and/or audio codec.
+
+        Args:
+            video_codec: Video codec name (e.g., 'h264', 'hevc', 'vp9')
+            audio_codec: Audio codec name (e.g., 'aac', 'mp3', 'opus')
+
+        Example:
+            .where_codec(video_codec='h264')
+            .where_codec(video_codec='hevc', audio_codec='aac')
+        """
+        if video_codec is not None:
+            self._where_clauses.append("v.video_codec = ?")
+            self._params.append(video_codec)
+        if audio_codec is not None:
+            self._where_clauses.append("v.audio_codec = ?")
+            self._params.append(audio_codec)
+        return self
+
     def search(self, query: str) -> "VideoQuery":
         """
         Full-text search using FTS5.

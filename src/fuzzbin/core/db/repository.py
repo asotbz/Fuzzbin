@@ -1148,6 +1148,20 @@ class VideoRepository:
             file_size=file_size,
         )
 
+        # Automatically analyze video file if FFProbe client is set
+        if hasattr(self, "_ffprobe_client") and self._ffprobe_client is not None:
+            try:
+                await self.analyze_video_file(video_id, file_path=Path(file_path))
+            except Exception as e:
+                # Log warning but don't fail the download marking
+                logger.warning(
+                    "video_analysis_failed",
+                    video_id=video_id,
+                    file_path=file_path,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
     async def mark_download_failed(
         self,
         video_id: int,
@@ -1279,6 +1293,114 @@ class VideoRepository:
         )
 
         return True
+
+    # ==================== FFProbe Integration Methods ====================
+
+    def set_ffprobe_client(self, client: Optional["FFProbeClient"]) -> None:
+        """
+        Set FFProbe client for video file analysis.
+
+        This allows external initialization of the FFProbe client to avoid
+        coupling the database layer to FFProbe configuration.
+
+        Args:
+            client: FFProbeClient instance or None to disable auto-analysis
+
+        Example:
+            >>> from fuzzbin.clients.ffprobe_client import FFProbeClient
+            >>> from fuzzbin.common.config import FFProbeConfig
+            >>> 
+            >>> ffprobe_config = FFProbeConfig(timeout=60)
+            >>> ffprobe_client = FFProbeClient.from_config(ffprobe_config)
+            >>> 
+            >>> repo = await VideoRepository.from_config(db_config)
+            >>> repo.set_ffprobe_client(ffprobe_client)
+        """
+        self._ffprobe_client = client
+        logger.debug(
+            "ffprobe_client_set",
+            enabled=client is not None,
+        )
+
+    async def analyze_video_file(
+        self,
+        video_id: int,
+        file_path: Optional[Path] = None,
+    ) -> Dict[str, Any]:
+        """
+        Analyze video file and update metadata fields.
+
+        Extracts technical metadata from video file using ffprobe and updates
+        the database with: duration, resolution, codecs, bitrate, frame rate,
+        audio channels, sample rate, aspect ratio, and container format.
+
+        Args:
+            video_id: Video ID
+            file_path: Optional explicit file path (if None, uses video_file_path from database)
+
+        Returns:
+            Dictionary of extracted metadata fields
+
+        Raises:
+            ValueError: If ffprobe client not set
+            VideoNotFoundError: If video not found
+            FileNotFoundError: If video file doesn't exist
+            FFProbeError: If ffprobe execution or parsing fails
+
+        Example:
+            >>> repo.set_ffprobe_client(ffprobe_client)
+            >>> metadata = await repo.analyze_video_file(video_id)
+            >>> print(f"Resolution: {metadata['width']}x{metadata['height']}")
+            >>> print(f"Duration: {metadata['duration']}s")
+        """
+        if not hasattr(self, "_ffprobe_client") or self._ffprobe_client is None:
+            raise ValueError(
+                "FFProbe client not set. Call set_ffprobe_client() first."
+            )
+
+        # Import here to avoid circular dependency
+        from ..parsers.ffprobe_parser import FFProbeParser
+
+        # Get video record
+        video = await self.get_video_by_id(video_id)
+
+        # Determine file path
+        if file_path is None:
+            file_path_str = video.get("video_file_path")
+            if not file_path_str:
+                raise ValueError(
+                    f"Video {video_id} has no file path and none was provided"
+                )
+            file_path = Path(file_path_str)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Video file not found: {file_path}")
+
+        logger.info(
+            "analyzing_video_file",
+            video_id=video_id,
+            file_path=str(file_path),
+        )
+
+        # Extract metadata using ffprobe
+        media_info = await self._ffprobe_client.get_media_info(file_path)
+        metadata = FFProbeParser.extract_video_metadata(media_info)
+
+        # Update video record with metadata
+        await self.update_video(video_id, **metadata)
+
+        logger.info(
+            "video_analysis_complete",
+            video_id=video_id,
+            duration=metadata.get("duration"),
+            resolution=f"{metadata.get('width')}x{metadata.get('height')}"
+            if metadata.get("width")
+            else None,
+            video_codec=metadata.get("video_codec"),
+            audio_codec=metadata.get("audio_codec"),
+        )
+
+        return metadata
 
     # ==================== Helper Methods ====================
 
