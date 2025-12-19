@@ -341,6 +341,33 @@ class YTDLPConfig(BaseModel):
     )
 
 
+class DatabaseConfig(BaseModel):
+    """Configuration for SQLite database."""
+
+    database_path: str = Field(
+        default=".db/fuzzbin_metadata.db",
+        description="Path to SQLite metadata database file",
+    )
+    workspace_root: Optional[str] = Field(
+        default=None,
+        description="Workspace root directory for relative path calculation",
+    )
+    enable_wal_mode: bool = Field(
+        default=True,
+        description="Enable Write-Ahead Logging mode for better concurrency",
+    )
+    connection_timeout: int = Field(
+        default=30,
+        ge=1,
+        le=300,
+        description="Database connection timeout in seconds",
+    )
+    backup_dir: str = Field(
+        default=".db/backups",
+        description="Directory for database backups",
+    )
+
+
 class NFOConfig(BaseModel):
     """Configuration for NFO file handling."""
 
@@ -419,6 +446,10 @@ class Config(BaseModel):
     logging: LoggingConfig = Field(
         default_factory=LoggingConfig,
         description="Logging configuration",
+    )
+    database: DatabaseConfig = Field(
+        default_factory=DatabaseConfig,
+        description="Database configuration",
     )
     apis: Optional[Dict[str, APIClientConfig]] = Field(
         default=None,

@@ -5,7 +5,7 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config, NFOConfig, OrganizerConfig
+from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig
 from .common.logging_config import setup_logging
 from .common.http_client import AsyncHTTPClient
 from .common.rate_limiter import RateLimiter
@@ -64,6 +64,21 @@ from .core.exceptions import (
     YTDLPParseError,
     DownloadCancelledError,
 )
+from .core.db import (
+    VideoRepository,
+    VideoQuery,
+    NFOExporter,
+    DatabaseBackup,
+    DatabaseError,
+    DatabaseConnectionError,
+    MigrationError,
+    VideoNotFoundError as DBVideoNotFoundError,
+    ArtistNotFoundError,
+    DuplicateRecordError,
+    BackupError,
+    QueryError,
+    TransactionError,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -75,10 +90,25 @@ __all__ = [
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
+    "DatabaseConfig",
     "NFOConfig",
     "OrganizerConfig",
     "configure",
     "get_config",
+    "get_repository",
+    "VideoRepository",
+    "VideoQuery",
+    "NFOExporter",
+    "DatabaseBackup",
+    "DatabaseError",
+    "DatabaseConnectionError",
+    "MigrationError",
+    "DBVideoNotFoundError",
+    "ArtistNotFoundError",
+    "DuplicateRecordError",
+    "BackupError",
+    "QueryError",
+    "TransactionError",
     "ArtistNFO",
     "MusicVideoNFO",
     "FeaturedArtistConfig",
@@ -124,18 +154,19 @@ __all__ = [
 # Module-level logger (not configured yet)
 logger = structlog.get_logger(__name__)
 
-# Global config state
+# Global config and repository state
 _config: Optional[Config] = None
+_repository: Optional[VideoRepository] = None
 
 
-def configure(
+async def configure(
     config_path: Optional[Path] = None, config: Optional[Config] = None
 ) -> None:
     """
-    Configure the fuzzbin package.
+    Configure the fuzzbin package (async).
 
     This function should be called once at application startup to initialize
-    the configuration and logging.
+    the configuration, logging, and database connection.
 
     Args:
         config_path: Path to YAML configuration file
@@ -144,9 +175,9 @@ def configure(
     Example:
         >>> import fuzzbin
         >>> from pathlib import Path
-        >>> fuzzbin.configure(config_path=Path("config.yaml"))
+        >>> await fuzzbin.configure(config_path=Path("config.yaml"))
     """
-    global _config
+    global _config, _repository
 
     if config is not None:
         _config = config
@@ -158,7 +189,15 @@ def configure(
 
     # Setup logging based on config
     setup_logging(_config.logging)
-    logger.info("fuzzbin_configured", version=__version__)
+    
+    # Initialize database repository
+    _repository = await VideoRepository.from_config(_config.database)
+    
+    logger.info(
+        "fuzzbin_configured",
+        version=__version__,
+        database_path=_config.database.database_path,
+    )
 
 
 def get_config() -> Config:
@@ -176,5 +215,40 @@ def get_config() -> Config:
     """
     global _config
     if _config is None:
-        configure()  # Auto-configure with defaults
+        # Note: This will not initialize the repository since it's not async
+        # Users should call await configure() explicitly
+        _config = Config()
+        setup_logging(_config.logging)
     return _config
+
+
+async def get_repository() -> VideoRepository:
+    """
+    Get video repository instance, initializing if needed (async).
+
+    Returns:
+        VideoRepository instance
+
+    Raises:
+        RuntimeError: If repository not initialized (call configure() first)
+
+    Example:
+        >>> import fuzzbin
+        >>> await fuzzbin.configure()
+        >>> repo = await fuzzbin.get_repository()
+        >>> videos = await repo.query().where_artist("Madonna").execute()
+    """
+    global _repository, _config
+    
+    if _repository is None:
+        if _config is None:
+            _config = Config()
+            setup_logging(_config.logging)
+        
+        _repository = await VideoRepository.from_config(_config.database)
+        logger.info(
+            "repository_auto_initialized",
+            database_path=_config.database.database_path,
+        )
+    
+    return _repository
