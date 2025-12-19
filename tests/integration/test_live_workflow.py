@@ -53,6 +53,7 @@ from fuzzbin.parsers import (
     MusicVideoNFO,
     ArtistNFOParser,
     MusicVideoNFOParser,
+    FeaturedArtistConfig,
     DiscogsParser,
 )
 from fuzzbin.core import build_media_paths
@@ -179,13 +180,21 @@ async def test_complete_workflow(
     if video.directors:
         director = video.directors[0].entity_name
     
-    artist_name = video.artists[0].name
+    # Primary artist name (for both NFOs and clean paths)
+    primary_artist_name = video.artists[0].name
     artist_slug = video.artists[0].slug
+    
+    # Featured artists as a list
+    featured_artists_list = []
+    if video.featured_artists:
+        featured_artists_list = [fa.name for fa in video.featured_artists]
+        print(f"Featured Artists: {', '.join(featured_artists_list)}")
+    
     video_title = video.song_title
     video_year = video.year
     
     print(f"Title: {video_title}")
-    print(f"Artist: {artist_name}")
+    print(f"Primary Artist: {primary_artist_name}")
     print(f"Artist Slug: {artist_slug}")
     print(f"Year: {video_year}")
     print(f"Director: {director if director else 'Not available'}")
@@ -214,10 +223,10 @@ async def test_complete_workflow(
     print(f"\n=== Discogs ID Extraction ===")
     
     # First, search for the entity by artist name to get entity ID
-    entity_search_results = await imvdb_client.search_entities(artist_name)
+    entity_search_results = await imvdb_client.search_entities(primary_artist_name)
     
     assert len(entity_search_results.results) > 0, (
-        f"No IMVDb entities found for artist '{artist_name}'"
+        f"No IMVDb entities found for artist '{primary_artist_name}'"
     )
     
     # Find entity matching the artist slug (most reliable match)
@@ -303,7 +312,7 @@ async def test_complete_workflow(
     # STEP 7: Generate Artist NFO
     # ========================================================================
     print(f"\n=== Artist NFO ===")
-    artist_nfo = ArtistNFO(name=artist_name)
+    artist_nfo = ArtistNFO(name=primary_artist_name)
     artist_parser = ArtistNFOParser()
     artist_xml = artist_parser.to_xml_string(artist_nfo)
     
@@ -318,15 +327,18 @@ async def test_complete_workflow(
     print(f"\n=== Music Video NFO ===")
     music_video_nfo = MusicVideoNFO(
         title=video_title,
-        artist=artist_name,
+        artist=primary_artist_name,
         year=video_year,
         director=director,
         album=album_title,
         genre=genre,
         studio=studio,
+        featured_artists=featured_artists_list,
     )
     
-    video_parser = MusicVideoNFOParser()
+    # Create parser with featured artists enabled
+    featured_config = FeaturedArtistConfig(enabled=True, append_to_field="artist")
+    video_parser = MusicVideoNFOParser(featured_config=featured_config)
     video_xml = video_parser.to_xml_string(music_video_nfo)
     
     assert video_xml, "Failed to generate music video NFO XML"
@@ -340,7 +352,7 @@ async def test_complete_workflow(
     print(f"\n=== Generated Paths ===")
     media_paths = build_media_paths(
         root_path=tmp_path,
-        pattern="{genre}/{artist}/{year}/{title}",
+        pattern="{artist}/{title}",
         nfo_data=music_video_nfo,
         normalize=True,
     )
