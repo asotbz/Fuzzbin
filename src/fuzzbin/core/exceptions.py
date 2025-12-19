@@ -32,3 +32,44 @@ class InvalidPathError(OrganizerError):
     def __init__(self, message: str, path: Optional[Path] = None):
         super().__init__(message)
         self.path = path
+
+
+# yt-dlp exceptions
+class YTDLPError(Exception):
+    """Base exception for yt-dlp errors."""
+
+    pass
+
+
+class YTDLPNotFoundError(YTDLPError):
+    """Raised when yt-dlp binary is not found."""
+
+    def __init__(self, message: str, path: Optional[str] = None):
+        super().__init__(message)
+        self.path = path
+
+
+class YTDLPExecutionError(YTDLPError):
+    """Raised when yt-dlp command execution fails."""
+
+    def __init__(
+        self,
+        message: str,
+        returncode: Optional[int] = None,
+        stderr: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.returncode = returncode
+        self.stderr = stderr
+
+
+class YTDLPParseError(YTDLPError):
+    """Raised when parsing yt-dlp output fails."""
+
+    pass
+
+
+class DownloadCancelledError(YTDLPError):
+    """Raised when a download is cancelled via CancellationToken."""
+
+    pass

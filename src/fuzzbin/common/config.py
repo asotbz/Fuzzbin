@@ -307,6 +307,39 @@ class APIClientConfig(BaseModel):
     )
 
 
+class YTDLPConfig(BaseModel):
+    """Configuration for yt-dlp client."""
+
+    ytdlp_path: str = Field(
+        default="yt-dlp",
+        description="Path to yt-dlp binary",
+    )
+    format_spec: Optional[str] = Field(
+        default="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        description="Default format specification for downloads",
+    )
+    geo_bypass: bool = Field(
+        default=False,
+        description="Bypass geographic restrictions",
+    )
+    quiet: bool = Field(
+        default=False,
+        description="Suppress progress output during downloads",
+    )
+    search_max_results: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Default maximum search results",
+    )
+    timeout: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Command execution timeout in seconds",
+    )
+
+
 class Config(BaseModel):
     """Main configuration class for Fuzzbin."""
 
@@ -321,6 +354,10 @@ class Config(BaseModel):
     apis: Optional[Dict[str, APIClientConfig]] = Field(
         default=None,
         description="API client configurations",
+    )
+    ytdlp: Optional[YTDLPConfig] = Field(
+        default=None,
+        description="yt-dlp client configuration",
     )
 
     @classmethod

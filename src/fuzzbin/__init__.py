@@ -19,6 +19,7 @@ from .common.string_utils import (
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
 from .api.discogs_client import DiscogsClient
+from .clients.ytdlp_client import YTDLPClient
 from .parsers import (
     ArtistNFO,
     MusicVideoNFO,
@@ -41,6 +42,13 @@ from .parsers import (
     MasterNotFoundError,
     ReleaseNotFoundError,
 )
+from .parsers.ytdlp_models import (
+    YTDLPSearchResult,
+    YTDLPDownloadResult,
+    DownloadProgress,
+    CancellationToken,
+    DownloadHooks,
+)
 from .core import (
     build_media_paths,
     MediaPaths,
@@ -49,6 +57,13 @@ from .core import (
     MissingFieldError,
     InvalidPathError,
 )
+from .core.exceptions import (
+    YTDLPError,
+    YTDLPNotFoundError,
+    YTDLPExecutionError,
+    YTDLPParseError,
+    DownloadCancelledError,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -56,6 +71,7 @@ __all__ = [
     "RateLimitedAPIClient",
     "IMVDbClient",
     "DiscogsClient",
+    "YTDLPClient",
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
@@ -81,6 +97,16 @@ __all__ = [
     "DiscogsParser",
     "MasterNotFoundError",
     "ReleaseNotFoundError",
+    "YTDLPSearchResult",
+    "YTDLPDownloadResult",
+    "DownloadProgress",
+    "CancellationToken",
+    "DownloadHooks",
+    "YTDLPError",
+    "YTDLPNotFoundError",
+    "YTDLPExecutionError",
+    "YTDLPParseError",
+    "DownloadCancelledError",
     "normalize_string",
     "remove_featured_artists",
     "normalize_for_matching",
