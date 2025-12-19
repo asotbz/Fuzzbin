@@ -36,9 +36,15 @@ class YTDLPClient:
     subprocess execution. Supports configurable format selection, geographic bypass,
     and timeout controls.
 
+    **Requirements:**
+        The yt-dlp binary must be installed separately and available in PATH.
+        Install via: `pip install yt-dlp` or `brew install yt-dlp`
+
     Features:
     - Search YouTube by artist and track title
     - Download videos in best quality MP4 format
+    - Real-time progress monitoring with hooks
+    - Download cancellation support
     - Non-blocking async subprocess execution
     - Configurable timeout and format specifications
     - Structured logging with operation context
