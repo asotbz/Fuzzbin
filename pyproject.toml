@@ -53,6 +53,7 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "live: Live tests that require real API credentials and make actual HTTP requests",
+    "database: Tests that require database initialization and state tracking",
 ]
 
 [tool.coverage.run]
