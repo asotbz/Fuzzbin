@@ -19,6 +19,8 @@ from .common.string_utils import (
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
 from .api.discogs_client import DiscogsClient
+from .api.spotify_client import SpotifyClient
+from .api.spotify_auth import SpotifyTokenManager
 from .clients.ytdlp_client import YTDLPClient
 from .clients.ffprobe_client import FFProbeClient
 from .parsers import (
@@ -89,6 +91,10 @@ from .core.db import (
     QueryError,
     TransactionError,
 )
+from .workflows import (
+    ImportResult,
+    SpotifyPlaylistImporter,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -96,6 +102,8 @@ __all__ = [
     "RateLimitedAPIClient",
     "IMVDbClient",
     "DiscogsClient",
+    "SpotifyClient",
+    "SpotifyTokenManager",
     "YTDLPClient",
     "FFProbeClient",
     "RateLimiter",
@@ -170,6 +178,8 @@ __all__ = [
     "InvalidPatternError",
     "MissingFieldError",
     "InvalidPathError",
+    "ImportResult",
+    "SpotifyPlaylistImporter",
 ]
 
 # Module-level logger (not configured yet)
