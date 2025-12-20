@@ -12,11 +12,19 @@ dependencies = [
     "httpx>=0.28.1",
     "pyyaml>=6.0.3",
     "pydantic>=2.12.5",
+    "pydantic-settings>=2.7.0",
     "tenacity>=9.1.2",
     "structlog>=25.5.0",
     "hishel[async]>=1.1.7",
     "aiosqlite>=0.22.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-multipart>=0.0.18",
+    "aiofiles>=24.1.0",
 ]
+
+[project.scripts]
+fuzzbin-api = "fuzzbin.web.main:run"
 
 [project.optional-dependencies]
 dev = [

@@ -12,7 +12,9 @@ import structlog
 from .connection import DatabaseConnection
 from .exceptions import (
     ArtistNotFoundError,
+    CollectionNotFoundError,
     QueryError,
+    TagNotFoundError,
     TransactionError,
     VideoNotFoundError,
 )
@@ -1048,7 +1050,10 @@ class VideoRepository:
         row = await cursor.fetchone()
 
         if not row:
-            raise QueryError(f"Collection {collection_id} not found")
+            raise CollectionNotFoundError(
+                f"Collection {collection_id} not found",
+                collection_id=collection_id,
+            )
 
         return dict(row)
 
@@ -1306,7 +1311,10 @@ class VideoRepository:
         row = await cursor.fetchone()
 
         if not row:
-            raise QueryError(f"Tag {tag_id} not found")
+            raise TagNotFoundError(
+                f"Tag {tag_id} not found",
+                tag_id=tag_id,
+            )
 
         return dict(row)
 

@@ -112,3 +112,31 @@ class TransactionError(DatabaseError):
     def __init__(self, message: str, operation: Optional[str] = None):
         super().__init__(message)
         self.operation = operation
+
+
+class CollectionNotFoundError(DatabaseError):
+    """Raised when a collection record cannot be found."""
+
+    def __init__(
+        self,
+        message: str,
+        collection_id: Optional[int] = None,
+        name: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.collection_id = collection_id
+        self.name = name
+
+
+class TagNotFoundError(DatabaseError):
+    """Raised when a tag record cannot be found."""
+
+    def __init__(
+        self,
+        message: str,
+        tag_id: Optional[int] = None,
+        name: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.tag_id = tag_id
+        self.name = name

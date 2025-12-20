@@ -5,11 +5,13 @@ from .connection import DatabaseConnection
 from .exceptions import (
     ArtistNotFoundError,
     BackupError,
+    CollectionNotFoundError,
     DatabaseConnectionError,
     DatabaseError,
     DuplicateRecordError,
     MigrationError,
     QueryError,
+    TagNotFoundError,
     TransactionError,
     VideoNotFoundError,
 )
@@ -30,6 +32,8 @@ __all__ = [
     "MigrationError",
     "VideoNotFoundError",
     "ArtistNotFoundError",
+    "CollectionNotFoundError",
+    "TagNotFoundError",
     "DuplicateRecordError",
     "BackupError",
     "QueryError",
