@@ -5,14 +5,16 @@ from typing import AsyncGenerator
 
 import structlog
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import fuzzbin
+from fuzzbin.auth import is_default_password
 from fuzzbin.common.logging_config import setup_logging
 
+from .dependencies import require_auth, get_api_settings
 from .middleware import RequestLoggingMiddleware, register_exception_handlers
-from .settings import get_settings
+from .settings import get_settings, APISettings
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +45,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         logger.info("api_using_existing_config")
 
+    # Check for default password if auth is enabled
+    if settings.auth_enabled:
+        logger.info("api_auth_enabled", jwt_algorithm=settings.jwt_algorithm)
+        await _check_default_password_warning()
+    else:
+        logger.info("api_auth_disabled", note="Set FUZZBIN_API_AUTH_ENABLED=true for production")
+
     logger.info(
         "api_ready",
         version=fuzzbin.__version__,
@@ -55,6 +64,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("api_shutting_down")
     if not already_configured and fuzzbin._repository is not None:
         await fuzzbin._repository.close()
+
+
+async def _check_default_password_warning() -> None:
+    """Check if admin user is using the default password and log a warning."""
+    try:
+        repo = await fuzzbin.get_repository()
+        cursor = await repo._connection.execute(
+            "SELECT password_hash FROM users WHERE username = 'admin'"
+        )
+        row = await cursor.fetchone()
+        
+        if row and is_default_password(row[0]):
+            logger.warning(
+                "SECURITY_WARNING_DEFAULT_PASSWORD",
+                message="Admin user is using the default password 'changeme'!",
+                action="Change immediately via POST /auth/password or CLI: fuzzbin user set-password",
+            )
+    except Exception as e:
+        # Don't fail startup if we can't check - just log
+        logger.debug("default_password_check_failed", error=str(e))
 
 
 def create_app() -> FastAPI:
@@ -97,6 +126,10 @@ def create_app() -> FastAPI:
             {
                 "name": "Health",
                 "description": "Health check and status endpoints",
+            },
+            {
+                "name": "Authentication",
+                "description": "User authentication, token management, and password operations",
             },
             {
                 "name": "Videos",
@@ -146,7 +179,9 @@ def create_app() -> FastAPI:
         summary="Health check",
         response_description="Health status of the API",
     )
-    async def health_check() -> dict:
+    async def health_check(
+        settings: APISettings = Depends(get_api_settings),
+    ) -> dict:
         """
         Check API health status.
 
@@ -155,16 +190,24 @@ def create_app() -> FastAPI:
         return {
             "status": "ok",
             "version": fuzzbin.__version__,
+            "auth_enabled": settings.auth_enabled,
         }
 
     # Import and include routers
-    from .routes import artists, collections, search, tags, videos
+    from .routes import artists, collections, search, tags, videos, auth
 
-    app.include_router(videos.router)
-    app.include_router(artists.router)
-    app.include_router(collections.router)
-    app.include_router(tags.router)
-    app.include_router(search.router)
+    # Auth routes (public - no authentication required)
+    app.include_router(auth.router)
+
+    # Protected routes - require authentication when auth_enabled=True
+    # The require_auth dependency will bypass auth check when auth_enabled=False
+    protected_dependencies = [Depends(require_auth)]
+
+    app.include_router(videos.router, dependencies=protected_dependencies)
+    app.include_router(artists.router, dependencies=protected_dependencies)
+    app.include_router(collections.router, dependencies=protected_dependencies)
+    app.include_router(tags.router, dependencies=protected_dependencies)
+    app.include_router(search.router, dependencies=protected_dependencies)
 
     logger.info("api_app_created", routes=len(app.routes))
 

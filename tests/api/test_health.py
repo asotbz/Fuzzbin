@@ -34,7 +34,7 @@ class TestHealthEndpoint:
         data = response.json()
 
         # Should have exactly these keys
-        assert set(data.keys()) == {"status", "version"}
+        assert set(data.keys()) == {"status", "version", "auth_enabled"}
 
 
 class TestCORSConfiguration:
