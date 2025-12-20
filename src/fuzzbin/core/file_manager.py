@@ -16,13 +16,14 @@ import aiofiles
 import aiofiles.os
 import structlog
 
-from ..common.config import FileManagerConfig, OrganizerConfig
+from ..common.config import FileManagerConfig, OrganizerConfig, ThumbnailConfig
 from ..parsers.models import MusicVideoNFO
 from .exceptions import InvalidPathError
 from .organizer import build_media_paths, MediaPaths
 
 if TYPE_CHECKING:
     from .db.repository import VideoRepository
+    from ..clients.ffmpeg_client import FFmpegClient
 
 logger = structlog.get_logger(__name__)
 
@@ -124,7 +125,7 @@ class DuplicateCandidate:
             "title": self.video_data.get("title"),
             "artist": self.video_data.get("artist"),
             "file_path": self.video_data.get("video_file_path"),
-            "file_hash": self.video_data.get("file_hash"),
+            "file_checksum": self.video_data.get("file_checksum"),
         }
 
 
@@ -143,7 +144,8 @@ class LibraryIssue:
         Initialize library issue.
 
         Args:
-            issue_type: Type of issue: 'missing_file', 'orphaned_file', 'broken_nfo', 'path_mismatch'
+            issue_type: Type of issue: 'missing_file', 'orphaned_file', 'broken_nfo', 
+                        'path_mismatch', 'orphaned_thumbnail'
             video_id: Video ID (if applicable)
             path: File path involved
             message: Human-readable description
@@ -178,6 +180,7 @@ class LibraryReport:
         self.orphaned_files: int = 0
         self.broken_nfos: int = 0
         self.path_mismatches: int = 0
+        self.orphaned_thumbnails: int = 0
 
     def add_issue(self, issue: LibraryIssue) -> None:
         """Add an issue to the report."""
@@ -190,6 +193,8 @@ class LibraryReport:
             self.broken_nfos += 1
         elif issue.issue_type == "path_mismatch":
             self.path_mismatches += 1
+        elif issue.issue_type == "orphaned_thumbnail":
+            self.orphaned_thumbnails += 1
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -200,6 +205,7 @@ class LibraryReport:
             "orphaned_files": self.orphaned_files,
             "broken_nfos": self.broken_nfos,
             "path_mismatches": self.path_mismatches,
+            "orphaned_thumbnails": self.orphaned_thumbnails,
             "total_issues": len(self.issues),
             "issues": [issue.to_dict() for issue in self.issues],
         }
@@ -231,6 +237,7 @@ class FileManager:
         config: FileManagerConfig,
         workspace_root: Path,
         organizer_config: Optional[OrganizerConfig] = None,
+        thumbnail_config: Optional[ThumbnailConfig] = None,
     ):
         """
         Initialize file manager.
@@ -239,16 +246,21 @@ class FileManager:
             config: FileManagerConfig with trash_dir, hash_algorithm, etc.
             workspace_root: Root directory for media files
             organizer_config: Optional OrganizerConfig for path generation
+            thumbnail_config: Optional ThumbnailConfig for thumbnail generation
         """
         self.config = config
         self.workspace_root = Path(workspace_root)
         self.organizer_config = organizer_config
+        self.thumbnail_config = thumbnail_config or ThumbnailConfig()
         self.trash_dir = self.workspace_root / config.trash_dir
+        self.thumbnail_cache_dir = self.workspace_root / self.thumbnail_config.cache_dir
+        self._ffmpeg_client: Optional["FFmpegClient"] = None
 
         logger.info(
             "file_manager_initialized",
             workspace_root=str(self.workspace_root),
             trash_dir=str(self.trash_dir),
+            thumbnail_cache_dir=str(self.thumbnail_cache_dir),
             hash_algorithm=config.hash_algorithm,
         )
 
@@ -258,6 +270,7 @@ class FileManager:
         file_manager_config: FileManagerConfig,
         workspace_root: Path,
         organizer_config: Optional[OrganizerConfig] = None,
+        thumbnail_config: Optional[ThumbnailConfig] = None,
     ) -> "FileManager":
         """
         Create FileManager from configuration.
@@ -266,6 +279,7 @@ class FileManager:
             file_manager_config: File manager configuration
             workspace_root: Root directory for media files
             organizer_config: Optional organizer configuration
+            thumbnail_config: Optional thumbnail configuration
 
         Returns:
             Configured FileManager instance
@@ -274,6 +288,7 @@ class FileManager:
             config=file_manager_config,
             workspace_root=workspace_root,
             organizer_config=organizer_config,
+            thumbnail_config=thumbnail_config,
         )
 
     async def compute_file_hash(self, file_path: Path) -> str:
@@ -360,6 +375,322 @@ class FileManager:
                 error=str(e),
             )
             return False
+
+    # ========== Thumbnail Management ==========
+
+    def get_thumbnail_path(self, video_id: int) -> Path:
+        """
+        Get the path where a video's thumbnail is/would be stored.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            Path to thumbnail file (may not exist yet)
+        """
+        return self.thumbnail_cache_dir / f"{video_id}.jpg"
+
+    async def thumbnail_exists(self, video_id: int) -> bool:
+        """
+        Check if thumbnail exists for video.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            True if thumbnail exists in cache
+        """
+        return await self.verify_file_exists(self.get_thumbnail_path(video_id))
+
+    async def _get_ffmpeg_client(self) -> "FFmpegClient":
+        """Get or create FFmpeg client instance."""
+        if self._ffmpeg_client is None:
+            from ..clients.ffmpeg_client import FFmpegClient
+            self._ffmpeg_client = FFmpegClient.from_config(self.thumbnail_config)
+        return self._ffmpeg_client
+
+    async def generate_thumbnail(
+        self,
+        video_id: int,
+        video_path: Path,
+        timestamp: Optional[float] = None,
+        force: bool = False,
+    ) -> Path:
+        """
+        Generate thumbnail for video and cache it.
+
+        Uses ffmpeg to extract a frame from the video and save as JPEG.
+        Thumbnails are stored in the thumbnail cache directory with naming
+        pattern: {video_id}.jpg
+
+        Args:
+            video_id: Video ID (used for cache filename)
+            video_path: Path to source video file
+            timestamp: Time in seconds to extract frame (default: config.default_timestamp)
+            force: If True, regenerate even if cached thumbnail exists
+
+        Returns:
+            Path to the generated/cached thumbnail
+
+        Raises:
+            FileNotFoundError: If video file doesn't exist
+            FFmpegNotFoundError: If ffmpeg binary not found
+            FFmpegExecutionError: If thumbnail generation fails
+            ThumbnailTooLargeError: If generated thumbnail exceeds size limit
+        """
+        thumb_path = self.get_thumbnail_path(video_id)
+
+        # Return cached thumbnail if exists and not forcing regeneration
+        if not force and await self.thumbnail_exists(video_id):
+            logger.debug(
+                "thumbnail_cache_hit",
+                video_id=video_id,
+                thumb_path=str(thumb_path),
+            )
+            return thumb_path
+
+        # Verify video exists
+        if not await self.verify_file_exists(video_path):
+            raise FileNotFoundError(
+                f"Video file not found: {video_path}",
+                path=video_path,
+            )
+
+        # Ensure cache directory exists
+        await self._ensure_directory(self.thumbnail_cache_dir)
+
+        # Generate thumbnail
+        client = await self._get_ffmpeg_client()
+        async with client:
+            result_path = await client.extract_frame(
+                video_path=video_path,
+                output_path=thumb_path,
+                timestamp=timestamp,
+            )
+
+        logger.info(
+            "thumbnail_generated",
+            video_id=video_id,
+            video_path=str(video_path),
+            thumb_path=str(result_path),
+        )
+
+        return result_path
+
+    async def delete_thumbnail(self, video_id: int) -> bool:
+        """
+        Delete thumbnail for video from cache.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            True if thumbnail was deleted, False if it didn't exist
+        """
+        thumb_path = self.get_thumbnail_path(video_id)
+
+        if await self.verify_file_exists(thumb_path):
+            await aiofiles.os.remove(thumb_path)
+            logger.info(
+                "thumbnail_deleted",
+                video_id=video_id,
+                thumb_path=str(thumb_path),
+            )
+            return True
+
+        return False
+
+    async def cleanup_orphaned_thumbnails(
+        self,
+        repository: "VideoRepository",
+    ) -> List[Path]:
+        """
+        Remove thumbnails that don't have corresponding videos in database.
+
+        Scans the thumbnail cache directory and removes any thumbnails
+        where the video_id (derived from filename) doesn't exist in the database.
+
+        Args:
+            repository: VideoRepository instance
+
+        Returns:
+            List of deleted thumbnail paths
+        """
+        deleted: List[Path] = []
+
+        if not await self.verify_file_exists(self.thumbnail_cache_dir):
+            return deleted
+
+        # Scan thumbnail directory
+        for entry in os.scandir(self.thumbnail_cache_dir):
+            if not entry.is_file() or not entry.name.endswith(".jpg"):
+                continue
+
+            # Extract video_id from filename (e.g., "123.jpg" -> 123)
+            try:
+                video_id = int(entry.name[:-4])  # Remove .jpg extension
+            except ValueError:
+                # Not a valid thumbnail filename, skip
+                continue
+
+            # Check if video exists
+            try:
+                await repository.get_video_by_id(video_id, include_deleted=True)
+            except Exception:
+                # Video doesn't exist, delete orphaned thumbnail
+                thumb_path = Path(entry.path)
+                await aiofiles.os.remove(thumb_path)
+                deleted.append(thumb_path)
+                logger.info(
+                    "orphaned_thumbnail_deleted",
+                    video_id=video_id,
+                    thumb_path=str(thumb_path),
+                )
+
+        if deleted:
+            logger.info(
+                "orphaned_thumbnails_cleanup_complete",
+                deleted_count=len(deleted),
+            )
+
+        return deleted
+
+    # ========== Video Format Validation ==========
+
+    async def validate_video_format(
+        self,
+        video_path: Path,
+        ffprobe_config: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Validate video file and extract media information using FFProbe.
+
+        Analyzes the video file to extract codec, resolution, duration,
+        and other technical metadata. This is useful for:
+        - Validating files after download
+        - Extracting metadata for database storage
+        - Checking file integrity
+
+        Args:
+            video_path: Path to video file
+            ffprobe_config: Optional FFProbeConfig (uses defaults if not provided)
+
+        Returns:
+            Dictionary with extracted media info:
+            - duration: Duration in seconds
+            - width: Video width in pixels
+            - height: Video height in pixels
+            - video_codec: Video codec name (e.g., "h264", "hevc")
+            - audio_codec: Audio codec name (e.g., "aac", "mp3")
+            - container_format: Container format (e.g., "mp4", "matroska")
+            - bitrate: Overall bitrate in bps
+            - frame_rate: Frame rate as float
+            - audio_channels: Number of audio channels
+            - audio_sample_rate: Audio sample rate in Hz
+
+        Raises:
+            FileNotFoundError: If video file doesn't exist
+            FFProbeNotFoundError: If ffprobe binary not found
+            FFProbeExecutionError: If ffprobe command fails
+        """
+        from ..clients.ffprobe_client import FFProbeClient
+        from ..common.config import FFProbeConfig
+
+        if not await self.verify_file_exists(video_path):
+            raise FileNotFoundError(
+                f"Video file not found: {video_path}",
+                path=video_path,
+            )
+
+        config = ffprobe_config or FFProbeConfig()
+        client = FFProbeClient.from_config(config)
+
+        async with client:
+            media_info = await client.get_media_info(video_path)
+
+        # Extract relevant information
+        result: Dict[str, Any] = {
+            "duration": media_info.format.duration,
+            "container_format": media_info.format.format_name,
+            "bitrate": media_info.format.bit_rate,
+        }
+
+        # Get primary video stream info
+        video_stream = media_info.get_primary_video_stream()
+        if video_stream:
+            result["width"] = video_stream.width
+            result["height"] = video_stream.height
+            result["video_codec"] = video_stream.codec_name
+            result["frame_rate"] = video_stream.get_frame_rate_as_float()
+
+        # Get primary audio stream info
+        audio_stream = media_info.get_primary_audio_stream()
+        if audio_stream:
+            result["audio_codec"] = audio_stream.codec_name
+            result["audio_channels"] = audio_stream.channels
+            result["audio_sample_rate"] = audio_stream.get_sample_rate_as_int()
+
+        logger.info(
+            "video_format_validated",
+            video_path=str(video_path),
+            duration=result.get("duration"),
+            resolution=f"{result.get('width')}x{result.get('height')}",
+            video_codec=result.get("video_codec"),
+        )
+
+        return result
+
+    async def validate_and_update_video(
+        self,
+        video_id: int,
+        video_path: Path,
+        repository: "VideoRepository",
+    ) -> Dict[str, Any]:
+        """
+        Validate video and update database with extracted media info.
+
+        Combines validate_video_format with automatic database update.
+        Useful when importing or organizing videos.
+
+        Args:
+            video_id: Video ID in database
+            video_path: Path to video file
+            repository: VideoRepository for database updates
+
+        Returns:
+            Dictionary with extracted media info (same as validate_video_format)
+
+        Raises:
+            FileNotFoundError: If video file doesn't exist
+            FFProbeNotFoundError: If ffprobe binary not found
+            FFProbeExecutionError: If ffprobe command fails
+        """
+        media_info = await self.validate_video_format(video_path)
+
+        # Update database with extracted info
+        await repository.update_video(
+            video_id,
+            duration=media_info.get("duration"),
+            width=media_info.get("width"),
+            height=media_info.get("height"),
+            video_codec=media_info.get("video_codec"),
+            audio_codec=media_info.get("audio_codec"),
+            container_format=media_info.get("container_format"),
+            bitrate=media_info.get("bitrate"),
+            frame_rate=media_info.get("frame_rate"),
+            audio_channels=media_info.get("audio_channels"),
+            audio_sample_rate=media_info.get("audio_sample_rate"),
+        )
+
+        logger.info(
+            "video_metadata_updated",
+            video_id=video_id,
+            video_path=str(video_path),
+        )
+
+        return media_info
+
+    # ========== Directory Management ==========
 
     async def _ensure_directory(self, dir_path: Path) -> None:
         """Ensure directory exists, creating if necessary."""
@@ -491,7 +822,7 @@ class FileManager:
                 video_id,
                 video_file_path=str(target_paths.video_path),
                 nfo_file_path=str(target_paths.nfo_path) if source_nfo_path else None,
-                file_hash=source_hash,
+                file_checksum=source_hash,
                 status="organized",
             )
 
@@ -588,13 +919,15 @@ class FileManager:
         if nfo_path and await self.verify_file_exists(nfo_path):
             await self._move_file(nfo_path, trash_nfo_path)
 
-        # Update database - mark as deleted
-        await repository.delete_video(video_id)
+        # Update database - update paths first, then mark as deleted
+        # (update_video must be called before delete_video since update_video
+        # calls get_video_by_id which excludes deleted videos by default)
         await repository.update_video(
             video_id,
             video_file_path=str(trash_video_path),
             nfo_file_path=str(trash_nfo_path) if nfo_path else None,
         )
+        await repository.delete_video(video_id)
 
         logger.info(
             "video_soft_deleted",
@@ -680,7 +1013,7 @@ class FileManager:
         nfo_path: Optional[Path] = None,
     ) -> None:
         """
-        Permanently delete files and database record.
+        Permanently delete files, thumbnail, and database record.
 
         Args:
             video_id: Video ID in database
@@ -697,6 +1030,9 @@ class FileManager:
         if nfo_path and await self.verify_file_exists(nfo_path):
             await aiofiles.os.remove(nfo_path)
             logger.debug("file_deleted", path=str(nfo_path))
+
+        # Delete thumbnail if exists
+        await self.delete_thumbnail(video_id)
 
         # Hard delete from database
         await repository.hard_delete_video(video_id)
@@ -788,15 +1124,15 @@ class FileManager:
             List of DuplicateCandidate with matching hashes
         """
         video = await repository.get_video_by_id(video_id)
-        file_hash = video.get("file_hash")
+        file_checksum = video.get("file_checksum")
 
-        if not file_hash:
+        if not file_checksum:
             # Need to compute hash first
             video_path = video.get("video_file_path")
             if not video_path or not await self.verify_file_exists(Path(video_path)):
                 return []
-            file_hash = await self.compute_file_hash(Path(video_path))
-            await repository.update_video(video_id, file_hash=file_hash)
+            file_checksum = await self.compute_file_hash(Path(video_path))
+            await repository.update_video(video_id, file_checksum=file_checksum)
 
         # Query for other videos with same hash
         # Using raw query since this isn't in the standard query builder
@@ -808,9 +1144,9 @@ class FileManager:
         cursor = await repository._connection.execute(
             """
             SELECT * FROM videos 
-            WHERE file_hash = ? AND id != ? AND is_deleted = 0
+            WHERE file_checksum = ? AND id != ? AND is_deleted = 0
             """,
-            (file_hash, video_id),
+            (file_checksum, video_id),
         )
         rows = await cursor.fetchall()
 
@@ -828,7 +1164,7 @@ class FileManager:
         logger.info(
             "duplicates_found_by_hash",
             video_id=video_id,
-            hash=file_hash[:16] + "...",
+            hash=file_checksum[:16] + "...",
             duplicate_count=len(duplicates),
         )
 
@@ -963,6 +1299,7 @@ class FileManager:
         self,
         repository: "VideoRepository",
         scan_orphans: bool = True,
+        scan_thumbnails: bool = True,
     ) -> LibraryReport:
         """
         Verify library integrity by checking DB paths vs filesystem.
@@ -971,10 +1308,12 @@ class FileManager:
         1. Videos in DB have existing files
         2. NFO paths in DB are valid
         3. (Optional) Files in workspace not in DB (orphans)
+        4. (Optional) Thumbnails without corresponding videos
 
         Args:
             repository: VideoRepository instance
             scan_orphans: Whether to scan for orphaned files
+            scan_thumbnails: Whether to scan for orphaned thumbnails
 
         Returns:
             LibraryReport with issues found
@@ -984,6 +1323,9 @@ class FileManager:
         # Get all non-deleted videos
         videos = await repository.query().execute()
         report.videos_checked = len(videos)
+
+        # Build set of valid video IDs for thumbnail check
+        valid_video_ids = {v["id"] for v in videos}
 
         # Check each video's files
         for video in videos:
@@ -1034,9 +1376,11 @@ class FileManager:
             video_extensions = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"}
             
             for root, _, files in os.walk(self.workspace_root):
-                # Skip trash directory
+                # Skip trash directory and thumbnail cache
                 root_path = Path(root)
                 if self.trash_dir in root_path.parents or root_path == self.trash_dir:
+                    continue
+                if self.thumbnail_cache_dir in root_path.parents or root_path == self.thumbnail_cache_dir:
                     continue
 
                 for filename in files:
@@ -1056,11 +1400,39 @@ class FileManager:
                                 )
                             )
 
+        # Scan for orphaned thumbnails
+        if scan_thumbnails and await self.verify_file_exists(self.thumbnail_cache_dir):
+            for entry in os.scandir(self.thumbnail_cache_dir):
+                if not entry.is_file() or not entry.name.endswith(".jpg"):
+                    continue
+
+                # Extract video_id from filename (e.g., "123.jpg" -> 123)
+                try:
+                    thumb_video_id = int(entry.name[:-4])  # Remove .jpg extension
+                except ValueError:
+                    continue
+
+                # Check if video exists (include deleted ones in check)
+                try:
+                    await repository.get_video_by_id(thumb_video_id, include_deleted=True)
+                except Exception:
+                    # Video doesn't exist, this is an orphaned thumbnail
+                    report.add_issue(
+                        LibraryIssue(
+                            issue_type="orphaned_thumbnail",
+                            video_id=thumb_video_id,
+                            path=entry.path,
+                            message=f"Thumbnail without corresponding video: {entry.name}",
+                            repair_action="delete_thumbnail",
+                        )
+                    )
+
         logger.info(
             "library_verified",
             videos_checked=report.videos_checked,
             files_scanned=report.files_scanned,
             issues_found=len(report.issues),
+            orphaned_thumbnails=report.orphaned_thumbnails,
         )
 
         return report
