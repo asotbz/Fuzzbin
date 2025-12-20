@@ -72,10 +72,10 @@ class VideoRepository:
         # Connect and run migrations
         await repo.connect()
 
-        # Run migrations
+        # Run migrations using the existing connection to avoid WAL conflicts
         migrations_dir = Path(__file__).parent / "migrations"
         migrator = Migrator(db_path, migrations_dir, enable_wal=config.enable_wal_mode)
-        await migrator.run_migrations()
+        await migrator.run_migrations(connection=repo._connection)
 
         logger.info(
             "repository_initialized",

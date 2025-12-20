@@ -248,21 +248,23 @@ async def configure(
         _config = config
     elif config_path is not None:
         _config = Config.from_yaml(config_path)
-    else:
-        # Use defaults
+    elif _config is None:
+        # Use defaults only if not already configured
         _config = Config()
 
     # Setup logging based on config
     setup_logging(_config.logging)
     
-    # Initialize database repository
-    _repository = await VideoRepository.from_config(_config.database)
+    # Initialize database repository (only if not already initialized)
+    if _repository is None:
+        _repository = await VideoRepository.from_config(_config.database)
     
-    # Initialize config manager
-    _config_manager = ConfigManager(
-        config=_config,
-        config_path=config_path,
-    )
+    # Initialize config manager (only if not already initialized)
+    if _config_manager is None:
+        _config_manager = ConfigManager(
+            config=_config,
+            config_path=config_path,
+        )
     
     logger.info(
         "fuzzbin_configured",
