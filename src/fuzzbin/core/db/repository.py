@@ -465,7 +465,9 @@ class VideoRepository:
             raise QueryError("No active connection")
 
         # Verify video exists and get current status
-        current_video = await self.get_video_by_id(video_id)
+        # Include deleted videos - update should work on deleted records too
+        # (e.g., when restoring from trash or updating paths during soft delete)
+        current_video = await self.get_video_by_id(video_id, include_deleted=True)
 
         # Build update query
         now = datetime.now(timezone.utc).isoformat()

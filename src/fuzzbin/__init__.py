@@ -5,7 +5,7 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, TagsConfig, AutoDecadeConfig, FileManagerConfig, ConfigSafetyLevel, get_safety_level
+from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, ThumbnailConfig, TagsConfig, AutoDecadeConfig, FileManagerConfig, ConfigSafetyLevel, get_safety_level
 from .common.config_manager import (
     ConfigManager,
     ConfigChangeEvent,
@@ -35,6 +35,7 @@ from .api.spotify_client import SpotifyClient
 from .api.spotify_auth import SpotifyTokenManager
 from .clients.ytdlp_client import YTDLPClient
 from .clients.ffprobe_client import FFProbeClient
+from .clients.ffmpeg_client import FFmpegClient
 from .parsers import (
     ArtistNFO,
     MusicVideoNFO,
@@ -97,6 +98,10 @@ from .core.exceptions import (
     FFProbeNotFoundError,
     FFProbeExecutionError,
     FFProbeParseError,
+    FFmpegError,
+    FFmpegNotFoundError,
+    FFmpegExecutionError,
+    ThumbnailTooLargeError,
 )
 from .core.db import (
     VideoRepository,
@@ -131,6 +136,7 @@ __all__ = [
     "SpotifyTokenManager",
     "YTDLPClient",
     "FFProbeClient",
+    "FFmpegClient",
     "RateLimiter",
     "ConcurrencyLimiter",
     "Config",
@@ -138,6 +144,7 @@ __all__ = [
     "NFOConfig",
     "OrganizerConfig",
     "FFProbeConfig",
+    "ThumbnailConfig",
     "TagsConfig",
     "AutoDecadeConfig",
     "FileManagerConfig",
@@ -211,6 +218,10 @@ __all__ = [
     "FFProbeNotFoundError",
     "FFProbeExecutionError",
     "FFProbeParseError",
+    "FFmpegError",
+    "FFmpegNotFoundError",
+    "FFmpegExecutionError",
+    "ThumbnailTooLargeError",
     "normalize_string",
     "remove_featured_artists",
     "normalize_for_matching",

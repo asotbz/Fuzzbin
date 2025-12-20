@@ -108,3 +108,41 @@ class FFProbeParseError(FFProbeError):
     """Raised when parsing ffprobe output fails."""
 
     pass
+
+
+# ffmpeg exceptions
+class FFmpegError(Exception):
+    """Base exception for ffmpeg errors."""
+
+    pass
+
+
+class FFmpegNotFoundError(FFmpegError):
+    """Raised when ffmpeg binary is not found."""
+
+    def __init__(self, message: str, path: Optional[str] = None):
+        super().__init__(message)
+        self.path = path
+
+
+class FFmpegExecutionError(FFmpegError):
+    """Raised when ffmpeg command execution fails."""
+
+    def __init__(
+        self,
+        message: str,
+        returncode: Optional[int] = None,
+        stderr: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.returncode = returncode
+        self.stderr = stderr
+
+
+class ThumbnailTooLargeError(FFmpegError):
+    """Raised when generated thumbnail exceeds size limit."""
+
+    def __init__(self, message: str, size: int, max_size: int):
+        super().__init__(message)
+        self.size = size
+        self.max_size = max_size

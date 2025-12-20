@@ -331,7 +331,7 @@ async def delete_video_files(
     By default, performs a soft delete by moving files to the trash directory.
     Use hard_delete=true to permanently remove files.
     """
-    # Get video from database
+    # Get video from database (include deleted to handle already soft-deleted videos)
     try:
         video = await repo.get_video_by_id(video_id, include_deleted=True)
     except Exception:

@@ -481,3 +481,150 @@ class TestVideoStatusUpdate:
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 1
+
+
+class TestVideoStream:
+    """Tests for GET /videos/{video_id}/stream endpoint."""
+
+    def test_stream_video_full(
+        self, test_app: TestClient, video_with_file: dict
+    ) -> None:
+        """Test streaming full video file without Range header."""
+        video_id = video_with_file["id"]
+
+        response = test_app.get(f"/videos/{video_id}/stream")
+
+        assert response.status_code == 200
+        assert response.headers.get("Accept-Ranges") == "bytes"
+        assert "Content-Length" in response.headers
+        assert response.content == b"test video content for testing"
+
+    def test_stream_video_with_range(
+        self, test_app: TestClient, video_with_file: dict
+    ) -> None:
+        """Test streaming video with Range header (206 Partial Content)."""
+        video_id = video_with_file["id"]
+
+        # Request first 10 bytes
+        response = test_app.get(
+            f"/videos/{video_id}/stream",
+            headers={"Range": "bytes=0-9"},
+        )
+
+        assert response.status_code == 206
+        assert response.content == b"test video"
+        assert "Content-Range" in response.headers
+        assert response.headers.get("Content-Range").startswith("bytes 0-9/")
+
+    def test_stream_video_suffix_range(
+        self, test_app: TestClient, video_with_file: dict
+    ) -> None:
+        """Test streaming video with suffix Range (last N bytes)."""
+        video_id = video_with_file["id"]
+
+        # Request last 7 bytes ("testing")
+        response = test_app.get(
+            f"/videos/{video_id}/stream",
+            headers={"Range": "bytes=-7"},
+        )
+
+        assert response.status_code == 206
+        assert response.content == b"testing"
+
+    def test_stream_video_open_ended_range(
+        self, test_app: TestClient, video_with_file: dict
+    ) -> None:
+        """Test streaming video with open-ended Range (from byte N to end)."""
+        video_id = video_with_file["id"]
+
+        # Request from byte 5 to end
+        response = test_app.get(
+            f"/videos/{video_id}/stream",
+            headers={"Range": "bytes=5-"},
+        )
+
+        assert response.status_code == 206
+        assert response.content == b"video content for testing"
+
+    def test_stream_video_not_found(
+        self, test_app: TestClient, sample_video_data: dict
+    ) -> None:
+        """Test streaming returns 404 for non-existent video."""
+        response = test_app.get("/videos/99999/stream")
+
+        # The repository raises VideoNotFoundError
+        assert response.status_code == 404
+
+    def test_stream_video_no_file(
+        self, test_app: TestClient, sample_video_data: dict
+    ) -> None:
+        """Test streaming returns 404 when video has no file path."""
+        # Create video without file path
+        create_response = test_app.post("/videos", json=sample_video_data)
+        video_id = create_response.json()["id"]
+
+        response = test_app.get(f"/videos/{video_id}/stream")
+
+        assert response.status_code == 404
+        assert "No video file" in response.json()["detail"]
+
+    def test_stream_video_missing_file(
+        self, test_app: TestClient, video_with_missing_file: dict
+    ) -> None:
+        """Test streaming returns 404 when file doesn't exist on disk."""
+        video_id = video_with_missing_file["id"]
+
+        response = test_app.get(f"/videos/{video_id}/stream")
+
+        assert response.status_code == 404
+        assert "not found on disk" in response.json()["detail"]
+
+    def test_stream_invalid_range(
+        self, test_app: TestClient, video_with_file: dict
+    ) -> None:
+        """Test streaming returns 416 for invalid range."""
+        video_id = video_with_file["id"]
+
+        # Request range beyond file size
+        response = test_app.get(
+            f"/videos/{video_id}/stream",
+            headers={"Range": "bytes=10000-20000"},
+        )
+
+        assert response.status_code == 416
+
+
+class TestVideoThumbnail:
+    """Tests for GET /videos/{video_id}/thumbnail endpoint."""
+
+    def test_thumbnail_video_not_found(
+        self, test_app: TestClient
+    ) -> None:
+        """Test thumbnail returns 404 for non-existent video."""
+        response = test_app.get("/videos/99999/thumbnail")
+
+        assert response.status_code == 404
+
+    def test_thumbnail_no_file_associated(
+        self, test_app: TestClient, sample_video_data: dict
+    ) -> None:
+        """Test thumbnail returns 404 when video has no file path."""
+        # Create video without file path
+        create_response = test_app.post("/videos", json=sample_video_data)
+        video_id = create_response.json()["id"]
+
+        response = test_app.get(f"/videos/{video_id}/thumbnail")
+
+        assert response.status_code == 404
+        assert "No video file" in response.json()["detail"]
+
+    def test_thumbnail_file_missing(
+        self, test_app: TestClient, video_with_missing_file: dict
+    ) -> None:
+        """Test thumbnail returns 404 when video file doesn't exist on disk."""
+        video_id = video_with_missing_file["id"]
+
+        response = test_app.get(f"/videos/{video_id}/thumbnail")
+
+        assert response.status_code == 404
+        assert "not found on disk" in response.json()["detail"]

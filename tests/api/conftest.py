@@ -179,8 +179,9 @@ async def video_with_file(
 
     response = test_app.post("/videos", json=video_data)
     assert response.status_code == 201
-
-    return response.json()
+    
+    result = response.json()
+    return result
 
 
 @pytest_asyncio.fixture

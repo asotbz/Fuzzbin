@@ -1,8 +1,12 @@
 """Video CRUD and management endpoints."""
 
-from typing import List, Optional
+import mimetypes
+from pathlib import Path
+from typing import AsyncIterator, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Query, status
+import aiofiles
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 
 from fuzzbin.core.db import VideoRepository
 
@@ -293,3 +297,277 @@ async def get_video_status_history(
     # Verify video exists
     await repo.get_video_by_id(video_id, include_deleted=True)
     return await repo.get_status_history(video_id)
+
+
+# Constants for streaming
+STREAM_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
+
+
+def _parse_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
+    """
+    Parse HTTP Range header and return start and end byte positions.
+    
+    Args:
+        range_header: The Range header value (e.g., "bytes=0-1023")
+        file_size: Total file size in bytes
+        
+    Returns:
+        Tuple of (start_byte, end_byte) inclusive
+        
+    Raises:
+        HTTPException: If range is invalid or unsatisfiable
+    """
+    if not range_header.startswith("bytes="):
+        raise HTTPException(
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            detail="Invalid range header format",
+        )
+    
+    range_spec = range_header[6:]  # Remove "bytes=" prefix
+    
+    # Handle multiple ranges - we only support single range
+    if "," in range_spec:
+        raise HTTPException(
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            detail="Multiple ranges not supported",
+        )
+    
+    try:
+        if range_spec.startswith("-"):
+            # Suffix range: -500 means last 500 bytes
+            suffix_length = int(range_spec[1:])
+            start = max(0, file_size - suffix_length)
+            end = file_size - 1
+        elif range_spec.endswith("-"):
+            # Open-ended range: 500- means from byte 500 to end
+            start = int(range_spec[:-1])
+            end = file_size - 1
+        else:
+            # Explicit range: 0-499
+            parts = range_spec.split("-")
+            start = int(parts[0])
+            end = int(parts[1]) if parts[1] else file_size - 1
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            detail="Invalid range values",
+        )
+    
+    # Validate range
+    if start < 0 or end >= file_size or start > end:
+        raise HTTPException(
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            detail=f"Range not satisfiable. File size: {file_size}",
+            headers={"Content-Range": f"bytes */{file_size}"},
+        )
+    
+    return start, end
+
+
+def _get_content_type(file_path: Path) -> str:
+    """Get MIME type for video file based on extension."""
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    return mime_type or "application/octet-stream"
+
+
+async def _stream_file_range(
+    file_path: Path, 
+    start: int, 
+    end: int,
+    chunk_size: int = STREAM_CHUNK_SIZE,
+) -> AsyncIterator[bytes]:
+    """
+    Async generator that streams a byte range from a file.
+    
+    Args:
+        file_path: Path to the file
+        start: Start byte position (inclusive)
+        end: End byte position (inclusive)
+        chunk_size: Size of chunks to read
+        
+    Yields:
+        Chunks of file data
+    """
+    async with aiofiles.open(file_path, "rb") as f:
+        await f.seek(start)
+        remaining = end - start + 1
+        
+        while remaining > 0:
+            read_size = min(chunk_size, remaining)
+            data = await f.read(read_size)
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
+
+
+@router.get(
+    "/{video_id}/stream",
+    summary="Stream video file",
+    description="Stream video file with HTTP Range support for seeking.",
+    responses={
+        200: {
+            "description": "Full video file (no Range header)",
+            "content": {"video/*": {}},
+        },
+        206: {
+            "description": "Partial content (Range header provided)",
+            "content": {"video/*": {}},
+        },
+        404: {"description": "Video not found or no file associated"},
+        416: {"description": "Requested range not satisfiable"},
+    },
+)
+async def stream_video(
+    video_id: int,
+    range: Optional[str] = Header(default=None, alias="Range"),
+    repo: VideoRepository = Depends(get_repository),
+) -> StreamingResponse:
+    """
+    Stream video file with HTTP Range support.
+    
+    Supports:
+    - Full file download (no Range header)
+    - Byte range requests for seeking (Range: bytes=start-end)
+    - Suffix ranges (Range: bytes=-500 for last 500 bytes)
+    - Open-ended ranges (Range: bytes=500- for byte 500 to end)
+    """
+    # Get video and verify it has a file
+    video = await repo.get_video_by_id(video_id)
+    file_path_str = video.get("video_file_path")
+    
+    if not file_path_str:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No video file associated with this video",
+        )
+    
+    file_path = Path(file_path_str)
+    
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video file not found on disk",
+        )
+    
+    file_size = file_path.stat().st_size
+    content_type = _get_content_type(file_path)
+    
+    # Handle Range header
+    if range:
+        start, end = _parse_range_header(range, file_size)
+        content_length = end - start + 1
+        
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(content_length),
+        }
+        
+        return StreamingResponse(
+            _stream_file_range(file_path, start, end),
+            status_code=status.HTTP_206_PARTIAL_CONTENT,
+            media_type=content_type,
+            headers=headers,
+        )
+    
+    # No Range header - return full file
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(file_size),
+    }
+    
+    return StreamingResponse(
+        _stream_file_range(file_path, 0, file_size - 1),
+        status_code=status.HTTP_200_OK,
+        media_type=content_type,
+        headers=headers,
+    )
+
+
+@router.get(
+    "/{video_id}/thumbnail",
+    summary="Get video thumbnail",
+    description="Get or generate a thumbnail image for a video.",
+    responses={
+        200: {
+            "description": "Thumbnail image",
+            "content": {"image/jpeg": {}},
+        },
+        404: {"description": "Video not found or no file associated"},
+        500: {"description": "Thumbnail generation failed"},
+    },
+)
+async def get_video_thumbnail(
+    video_id: int,
+    regenerate: bool = Query(default=False, description="Force thumbnail regeneration"),
+    timestamp: Optional[float] = Query(default=None, description="Timestamp in seconds to extract frame from"),
+    repo: VideoRepository = Depends(get_repository),
+) -> StreamingResponse:
+    """
+    Get or generate a thumbnail for a video.
+    
+    Returns a JPEG thumbnail extracted from the video file. Thumbnails
+    are cached in the thumbnail cache directory for subsequent requests.
+    
+    Use regenerate=true to force a new thumbnail to be generated.
+    """
+    import fuzzbin
+    from fuzzbin.core.file_manager import FileManager
+    
+    # Get video and verify it has a file
+    video = await repo.get_video_by_id(video_id)
+    file_path_str = video.get("video_file_path")
+    
+    if not file_path_str:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No video file associated with this video",
+        )
+    
+    file_path = Path(file_path_str)
+    
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video file not found on disk",
+        )
+    
+    # Get config and create file manager
+    config = fuzzbin.get_config()
+    workspace_root = Path(config.database.workspace_root or ".")
+    file_manager = FileManager(
+        config=config.file_manager,
+        workspace_root=workspace_root,
+        thumbnail_config=config.thumbnail,
+    )
+    
+    try:
+        # Generate or retrieve cached thumbnail
+        thumb_path = await file_manager.generate_thumbnail(
+            video_id=video_id,
+            video_path=file_path,
+            timestamp=timestamp,
+            force=regenerate,
+        )
+        
+        # Stream the thumbnail
+        thumb_size = thumb_path.stat().st_size
+        
+        return StreamingResponse(
+            _stream_file_range(thumb_path, 0, thumb_size - 1),
+            status_code=status.HTTP_200_OK,
+            media_type="image/jpeg",
+            headers={"Content-Length": str(thumb_size)},
+        )
+        
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Thumbnail generation failed: {e}",
+        )

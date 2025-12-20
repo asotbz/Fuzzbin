@@ -51,7 +51,7 @@ class TestDeleteVideoFiles:
         """Test soft delete moves file to trash."""
         video_id = video_with_file["id"]
         original_path = Path(video_with_file["video_file_path"])
-
+        
         response = test_app.delete(f"/files/videos/{video_id}")
 
         assert response.status_code == 200

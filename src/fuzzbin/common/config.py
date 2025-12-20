@@ -377,6 +377,53 @@ class FFProbeConfig(BaseModel):
     )
 
 
+class ThumbnailConfig(BaseModel):
+    """Configuration for thumbnail generation via ffmpeg."""
+
+    cache_dir: str = Field(
+        default=".thumbnails",
+        description="Directory for cached thumbnails (relative to workspace_root)",
+    )
+    default_timestamp: float = Field(
+        default=5.0,
+        ge=0.0,
+        description="Default timestamp in seconds to extract frame from",
+    )
+    width: int = Field(
+        default=320,
+        ge=32,
+        le=1920,
+        description="Thumbnail width in pixels",
+    )
+    height: int = Field(
+        default=180,
+        ge=32,
+        le=1080,
+        description="Thumbnail height in pixels",
+    )
+    quality: int = Field(
+        default=5,
+        ge=1,
+        le=31,
+        description="JPEG quality (1=best, 31=worst)",
+    )
+    max_file_size: int = Field(
+        default=5 * 1024 * 1024,  # 5MB
+        ge=1024,
+        description="Maximum thumbnail file size in bytes (safety limit)",
+    )
+    timeout: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        description="FFmpeg execution timeout in seconds",
+    )
+    ffmpeg_path: str = Field(
+        default="ffmpeg",
+        description="Path to ffmpeg binary",
+    )
+
+
 class DatabaseConfig(BaseModel):
     """Configuration for SQLite database."""
 
@@ -576,6 +623,10 @@ class Config(BaseModel):
     ffprobe: FFProbeConfig = Field(
         default_factory=FFProbeConfig,
         description="ffprobe client configuration",
+    )
+    thumbnail: ThumbnailConfig = Field(
+        default_factory=ThumbnailConfig,
+        description="Thumbnail generation configuration",
     )
     nfo: NFOConfig = Field(
         default_factory=NFOConfig,
