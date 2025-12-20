@@ -25,6 +25,12 @@ from fuzzbin.parsers.imvdb_models import (
 )
 
 
+@pytest.fixture(autouse=True)
+def clear_imvdb_env_vars(monkeypatch):
+    """Clear IMVDb environment variables before each test to prevent real credentials from interfering."""
+    monkeypatch.delenv("IMVDB_APP_KEY", raising=False)
+
+
 @pytest.fixture
 def examples_dir():
     """Get path to examples directory."""

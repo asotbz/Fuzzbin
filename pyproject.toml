@@ -41,9 +41,6 @@ dev = [
     "mypy>=1.19.1",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
@@ -67,9 +64,12 @@ markers = [
     "live: Live tests that require real API credentials and make actual HTTP requests",
     "database: Tests that require database initialization and state tracking",
 ]
+filterwarnings = [
+    "ignore::RuntimeWarning:httpx._models",
+]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["fuzzbin"]
 branch = true
 omit = ["*/tests/*", "*/conftest.py"]
 

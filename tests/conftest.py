@@ -1,4 +1,19 @@
-"""Shared pytest fixtures for all tests."""
+"""Shared pytest fixtures for all tests.
+
+Important Pattern for API Client Tests:
+---------------------------------------
+When testing API clients that support environment variable overrides (e.g., DISCOGS_API_KEY,
+IMVDB_APP_KEY), tests must clear these env vars to prevent real credentials from interfering
+with mock credentials. Use an autouse fixture in your test file:
+
+    @pytest.fixture(autouse=True)
+    def clear_api_env_vars(monkeypatch):
+        \"\"\"Clear API environment variables before each test.\"\"\"
+        monkeypatch.delenv("YOUR_API_KEY", raising=False)
+        monkeypatch.delenv("YOUR_API_SECRET", raising=False)
+
+See tests/unit/test_discogs_client.py and tests/unit/test_imvdb_client.py for examples.
+"""
 
 import pytest
 import pytest_asyncio

@@ -20,6 +20,13 @@ from fuzzbin.common.config import (
 )
 
 
+@pytest.fixture(autouse=True)
+def clear_discogs_env_vars(monkeypatch):
+    """Clear Discogs environment variables before each test to prevent real credentials from interfering."""
+    monkeypatch.delenv("DISCOGS_API_KEY", raising=False)
+    monkeypatch.delenv("DISCOGS_API_SECRET", raising=False)
+
+
 @pytest.fixture
 def examples_dir():
     """Get path to examples directory."""
