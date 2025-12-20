@@ -151,6 +151,10 @@ def create_app() -> FastAPI:
                 "name": "Search",
                 "description": "Full-text search across the video library",
             },
+            {
+                "name": "Files",
+                "description": "File operations: organize, delete, restore, verify, and duplicate detection",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -194,7 +198,7 @@ def create_app() -> FastAPI:
         }
 
     # Import and include routers
-    from .routes import artists, collections, search, tags, videos, auth
+    from .routes import artists, collections, search, tags, videos, auth, files
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -208,6 +212,7 @@ def create_app() -> FastAPI:
     app.include_router(collections.router, dependencies=protected_dependencies)
     app.include_router(tags.router, dependencies=protected_dependencies)
     app.include_router(search.router, dependencies=protected_dependencies)
+    app.include_router(files.router, dependencies=protected_dependencies)
 
     logger.info("api_app_created", routes=len(app.routes))
 

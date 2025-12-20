@@ -157,3 +157,50 @@ def sample_tag_data() -> dict:
     return {
         "name": "grunge",
     }
+
+
+# ==================== File Management Test Fixtures ====================
+
+
+@pytest_asyncio.fixture
+async def video_with_file(
+    test_app: TestClient, sample_video_data: dict, tmp_path: Path
+) -> dict:
+    """Create a video with an actual file on disk."""
+    # Create video file
+    media_dir = tmp_path / "media"
+    media_dir.mkdir(exist_ok=True)
+    video_file = media_dir / "test_video.mp4"
+    video_file.write_bytes(b"test video content for testing")
+
+    # Create video record with file path
+    video_data = sample_video_data.copy()
+    video_data["video_file_path"] = str(video_file)
+
+    response = test_app.post("/videos", json=video_data)
+    assert response.status_code == 201
+
+    return response.json()
+
+
+@pytest_asyncio.fixture
+async def video_with_missing_file(
+    test_app: TestClient, sample_video_data: dict, tmp_path: Path
+) -> dict:
+    """Create a video pointing to a non-existent file."""
+    # Create video record with non-existent file path
+    video_data = sample_video_data.copy()
+    video_data["video_file_path"] = str(tmp_path / "missing_video.mp4")
+
+    response = test_app.post("/videos", json=video_data)
+    assert response.status_code == 201
+
+    return response.json()
+
+
+@pytest.fixture
+def orphan_file(tmp_path: Path) -> Path:
+    """Create an orphaned video file not tracked in database."""
+    orphan = tmp_path / "orphan_video.mp4"
+    orphan.write_bytes(b"orphan video content")
+    return orphan

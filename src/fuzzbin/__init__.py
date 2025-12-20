@@ -5,7 +5,7 @@ from typing import Optional
 
 import structlog
 
-from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, TagsConfig, AutoDecadeConfig, ConfigSafetyLevel, get_safety_level
+from .common.config import Config, DatabaseConfig, NFOConfig, OrganizerConfig, FFProbeConfig, TagsConfig, AutoDecadeConfig, FileManagerConfig, ConfigSafetyLevel, get_safety_level
 from .common.config_manager import (
     ConfigManager,
     ConfigChangeEvent,
@@ -77,6 +77,16 @@ from .core import (
     MissingFieldError,
     InvalidPathError,
 )
+from .core.file_manager import (
+    FileManager,
+    FileManagerError,
+    HashMismatchError,
+    RollbackError,
+    FileTooLargeError,
+    DuplicateCandidate,
+    LibraryIssue,
+    LibraryReport,
+)
 from .core.exceptions import (
     YTDLPError,
     YTDLPNotFoundError,
@@ -130,6 +140,7 @@ __all__ = [
     "FFProbeConfig",
     "TagsConfig",
     "AutoDecadeConfig",
+    "FileManagerConfig",
     "ConfigSafetyLevel",
     "get_safety_level",
     "ConfigManager",
@@ -210,6 +221,14 @@ __all__ = [
     "InvalidPatternError",
     "MissingFieldError",
     "InvalidPathError",
+    "FileManager",
+    "FileManagerError",
+    "HashMismatchError",
+    "RollbackError",
+    "FileTooLargeError",
+    "DuplicateCandidate",
+    "LibraryIssue",
+    "LibraryReport",
     "ImportResult",
     "NFOImporter",
     "SpotifyPlaylistImporter",

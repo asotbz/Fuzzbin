@@ -506,6 +506,50 @@ class TagsConfig(BaseModel):
     )
 
 
+class FileManagerConfig(BaseModel):
+    """Configuration for file management operations.
+    
+    Controls file organization, soft delete/restore, and integrity verification.
+    All file operations use aiofiles for non-blocking I/O.
+    """
+
+    trash_dir: str = Field(
+        default=".trash",
+        description="Directory for soft-deleted files (relative to workspace_root)",
+    )
+    hash_algorithm: str = Field(
+        default="sha256",
+        description="Hash algorithm for file integrity checks: sha256 or xxhash",
+    )
+    verify_after_move: bool = Field(
+        default=True,
+        description="Verify file hash after move to ensure integrity",
+    )
+    max_file_size: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum file size in bytes for operations (None = no limit)",
+    )
+    chunk_size: int = Field(
+        default=8192,
+        ge=1024,
+        le=1048576,
+        description="Chunk size in bytes for file hashing operations",
+    )
+
+    @field_validator("hash_algorithm")
+    @classmethod
+    def validate_hash_algorithm(cls, v: str) -> str:
+        """Validate hash algorithm is supported."""
+        valid_algorithms = ["sha256", "xxhash", "md5"]
+        v_lower = v.lower()
+        if v_lower not in valid_algorithms:
+            raise ValueError(
+                f"Invalid hash algorithm: {v}. Must be one of {valid_algorithms}"
+            )
+        return v_lower
+
+
 class Config(BaseModel):
     """Main configuration class for Fuzzbin."""
 
@@ -544,6 +588,10 @@ class Config(BaseModel):
     tags: TagsConfig = Field(
         default_factory=TagsConfig,
         description="Tag management and auto-tagging configuration",
+    )
+    file_manager: FileManagerConfig = Field(
+        default_factory=FileManagerConfig,
+        description="File management and organization configuration",
     )
 
     @classmethod
