@@ -740,8 +740,6 @@ class VideoService(BaseService):
         """
         video = await self.get_by_id(video_id, include_deleted=True)
         file_manager = await self._get_file_manager()
-        config = self._get_config()
-        workspace_root = self._get_workspace_root()
 
         if not video.get("is_deleted"):
             raise ValidationError("Video is not deleted", field="is_deleted")
@@ -758,7 +756,9 @@ class VideoService(BaseService):
             target_nfo_path = target_restore_path.with_suffix(".nfo")
         else:
             # Calculate original location before trash
-            trash_dir = workspace_root / config.file_manager.trash_dir
+            # Use file_manager's paths (not global config) for test compatibility
+            trash_dir = file_manager.trash_dir
+            workspace_root = file_manager.workspace_root
             try:
                 relative = Path(current_path).relative_to(trash_dir)
                 target_restore_path = workspace_root / relative

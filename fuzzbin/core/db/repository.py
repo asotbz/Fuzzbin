@@ -834,6 +834,31 @@ class VideoRepository:
 
         return dict(row)
 
+    async def list_artists(self, include_deleted: bool = False) -> List[Dict[str, Any]]:
+        """
+        List all artists.
+
+        Args:
+            include_deleted: Include soft-deleted artists
+
+        Returns:
+            List of artist dicts
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM artists"
+
+        if not include_deleted:
+            query += " WHERE is_deleted = 0"
+
+        query += " ORDER BY name"
+
+        cursor = await self._connection.execute(query)
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
     # ==================== Video-Artist Relationship Methods ====================
 
     async def link_video_artist(

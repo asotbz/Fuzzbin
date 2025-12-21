@@ -76,7 +76,7 @@ def database_config(test_workspace: Path) -> DatabaseConfig:
 def file_manager_config(test_workspace: Path) -> FileManagerConfig:
     """Create FileManager config for test workspace."""
     return FileManagerConfig(
-        trash_dir=str(test_workspace / "trash"),
+        trash_dir="trash",  # Relative to workspace_root
         hash_algorithm="sha256",
         enable_hash_verification=True,
         organize_pattern="{artist}/{album}/{title}.{ext}",
@@ -87,7 +87,7 @@ def file_manager_config(test_workspace: Path) -> FileManagerConfig:
 def thumbnail_config(test_workspace: Path) -> ThumbnailConfig:
     """Create thumbnail config for tests."""
     return ThumbnailConfig(
-        cache_dir=str(test_workspace / "thumbnails"),
+        cache_dir="thumbnails",  # Relative to workspace_root
         default_timestamp=5.0,
         width=320,
         height=180,
@@ -485,7 +485,6 @@ class TestVideoServiceFileOpsIntegration:
         assert not video_path.exists()
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="File restore behavior needs investigation - ConflictError on restore path")
     async def test_restore_files_from_trash(
         self,
         video_service: VideoService,
@@ -673,7 +672,6 @@ class TestSearchServiceIntegration:
         assert "Basket Case" not in titles
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="SearchService.search_all calls non-existent repository.list_artists")
     async def test_search_all_entities(
         self,
         search_service: SearchService,
@@ -701,7 +699,6 @@ class TestSearchServiceIntegration:
         assert len(all_results) >= 1
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="SearchService.get_suggestions calls non-existent repository.list_artists")
     async def test_get_suggestions(
         self,
         search_service: SearchService,
@@ -752,7 +749,6 @@ class TestSearchServiceCachedIntegration:
     """Integration tests for cached search operations."""
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="SearchService.get_library_stats calls non-existent repository.list_artists")
     async def test_get_stats_cached(
         self,
         search_service: SearchService,
