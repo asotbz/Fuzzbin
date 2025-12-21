@@ -1,0 +1,857 @@
+"""Background job handlers.
+
+Each handler is an async function that processes a specific job type.
+Handlers receive a Job instance and are responsible for:
+1. Reading job.metadata for parameters
+2. Calling job.update_progress() periodically
+3. Calling job.mark_completed(result) on success
+4. Raising exceptions on failure (queue will call job.mark_failed())
+5. Checking job.status for cancellation requests
+"""
+
+import asyncio
+from pathlib import Path
+from typing import Any
+
+import structlog
+
+import fuzzbin
+from fuzzbin.tasks.models import Job, JobStatus, JobType
+from fuzzbin.tasks.queue import JobQueue
+from fuzzbin.workflows.nfo_importer import NFOImporter
+
+logger = structlog.get_logger(__name__)
+
+
+async def handle_nfo_import(job: Job) -> None:
+    """Handle NFO import job.
+
+    Wraps NFOImporter workflow with progress callback for real-time updates.
+
+    Job metadata parameters:
+        directory (str, required): Path to directory containing NFO files
+        recursive (bool, optional): Scan subdirectories (default: True)
+        skip_existing (bool, optional): Skip already imported videos (default: True)
+
+    Job result on completion:
+        imported: Number of videos imported
+        skipped: Number of videos skipped (already exist)
+        failed: Number of import failures
+        total_files: Total NFO files found
+        duration_seconds: Time taken for import
+
+    Args:
+        job: Job instance with metadata containing import parameters
+
+    Raises:
+        ValueError: If directory parameter is missing or invalid
+    """
+    # Extract parameters from job metadata
+    directory_str = job.metadata.get("directory")
+    if not directory_str:
+        raise ValueError("Missing required parameter: directory")
+
+    directory = Path(directory_str)
+    if not directory.exists():
+        raise ValueError(f"Directory not found: {directory}")
+
+    if not directory.is_dir():
+        raise ValueError(f"Path is not a directory: {directory}")
+
+    recursive = job.metadata.get("recursive", True)
+    skip_existing = job.metadata.get("skip_existing", True)
+
+    logger.info(
+        "nfo_import_job_starting",
+        job_id=job.id,
+        directory=str(directory),
+        recursive=recursive,
+        skip_existing=skip_existing,
+    )
+
+    job.update_progress(0, 1, "Initializing import...")
+
+    # Define progress callback that updates the job
+    def progress_callback(processed: int, total: int, current_file: str) -> None:
+        # Check for cancellation
+        if job.status == JobStatus.CANCELLED:
+            raise asyncio.CancelledError("Job cancelled by user")
+
+        job.update_progress(processed, total, f"Importing {current_file}...")
+
+    # Get repository from fuzzbin global state
+    repository = await fuzzbin.get_repository()
+
+    # Create importer with progress callback
+    importer = NFOImporter(
+        video_repository=repository,
+        skip_existing=skip_existing,
+        progress_callback=progress_callback,
+    )
+
+    # Run import
+    import asyncio
+
+    result = await importer.import_from_directory(
+        root_path=directory,
+        recursive=recursive,
+    )
+
+    # Check for cancellation after import
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Mark completed with result
+    job.mark_completed(
+        {
+            "imported": result.imported_count,
+            "skipped": result.skipped_count,
+            "failed": result.failed_count,
+            "total_files": result.total_tracks,
+            "duration_seconds": result.duration_seconds,
+            "failed_tracks": result.failed_tracks[:10],  # Limit to first 10 failures
+        }
+    )
+
+    logger.info(
+        "nfo_import_job_completed",
+        job_id=job.id,
+        imported=result.imported_count,
+        skipped=result.skipped_count,
+        failed=result.failed_count,
+    )
+
+
+async def handle_spotify_import(job: Job) -> None:
+    """Handle Spotify playlist import job.
+
+    Wraps SpotifyPlaylistImporter workflow with progress callback.
+
+    Job metadata parameters:
+        playlist_id (str, required): Spotify playlist ID
+        skip_existing (bool, optional): Skip already imported tracks (default: True)
+        initial_status (str, optional): Status for new tracks (default: "discovered")
+
+    Job result on completion:
+        imported: Number of tracks imported
+        skipped: Number of tracks skipped (already exist)
+        failed: Number of import failures
+        total_tracks: Total tracks in playlist
+        playlist_name: Name of the imported playlist
+        duration_seconds: Time taken for import
+
+    Args:
+        job: Job instance with metadata containing import parameters
+
+    Raises:
+        ValueError: If playlist_id parameter is missing
+        RuntimeError: If Spotify client cannot be initialized
+    """
+    from fuzzbin.api.spotify_client import SpotifyClient
+    from fuzzbin.workflows.spotify_importer import SpotifyPlaylistImporter
+
+    # Extract parameters
+    playlist_id = job.metadata.get("playlist_id")
+    if not playlist_id:
+        raise ValueError("Missing required parameter: playlist_id")
+
+    skip_existing = job.metadata.get("skip_existing", True)
+    initial_status = job.metadata.get("initial_status", "discovered")
+
+    logger.info(
+        "spotify_import_job_starting",
+        job_id=job.id,
+        playlist_id=playlist_id,
+        skip_existing=skip_existing,
+    )
+
+    job.update_progress(0, 1, "Connecting to Spotify...")
+
+    # Define progress callback
+    def progress_callback(processed: int, total: int, current_item: str) -> None:
+        if job.status == JobStatus.CANCELLED:
+            raise asyncio.CancelledError("Job cancelled by user")
+        job.update_progress(processed, total, f"Importing {current_item}...")
+
+    # Get config and repository
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+
+    # Check if Spotify is configured
+    spotify_config = config.apis.get("spotify")
+    if not spotify_config:
+        raise RuntimeError("Spotify API not configured in config.yaml")
+
+    # Create Spotify client and importer
+    async with SpotifyClient.from_config(spotify_config) as spotify_client:
+        importer = SpotifyPlaylistImporter(
+            spotify_client=spotify_client,
+            video_repository=repository,
+            initial_status=initial_status,
+            skip_existing=skip_existing,
+            progress_callback=progress_callback,
+        )
+
+        # Run import
+        result = await importer.import_playlist(playlist_id)
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Mark completed
+    job.mark_completed(
+        {
+            "imported": result.imported_count,
+            "skipped": result.skipped_count,
+            "failed": result.failed_count,
+            "total_tracks": result.total_tracks,
+            "playlist_name": result.playlist_name,
+            "duration_seconds": result.duration_seconds,
+            "failed_tracks": result.failed_tracks[:10],
+        }
+    )
+
+    logger.info(
+        "spotify_import_job_completed",
+        job_id=job.id,
+        playlist_id=playlist_id,
+        imported=result.imported_count,
+        skipped=result.skipped_count,
+        failed=result.failed_count,
+    )
+
+
+async def handle_file_organize(job: Job) -> None:
+    """Handle batch file organization job.
+
+    Placeholder for future implementation.
+
+    Job metadata parameters:
+        video_ids (list[int], required): List of video IDs to organize
+        pattern (str, optional): Target path pattern
+        normalize (bool, optional): Normalize filenames (default: False)
+
+    Args:
+        job: Job instance with metadata containing organization parameters
+    """
+    # TODO: Implement when FileManager.organize_video() is available
+    video_ids = job.metadata.get("video_ids")
+    if video_ids is None:
+        raise ValueError("Missing required parameter: video_ids")
+
+    job.update_progress(0, max(len(video_ids), 1), "Starting file organization...")
+
+    # Placeholder - mark completed immediately
+    job.mark_completed(
+        {
+            "organized": 0,
+            "errors": 0,
+            "total_videos": len(video_ids),
+            "message": "File organization not yet implemented",
+        }
+    )
+
+
+async def handle_youtube_download(job: Job) -> None:
+    """Handle YouTube video download job.
+
+    Downloads videos for database entries using yt-dlp with progress tracking.
+
+    Job metadata parameters:
+        video_ids (list[int], required): List of video IDs to download
+        output_directory (str, optional): Download destination directory
+        format (str, optional): yt-dlp format string (default from config)
+
+    Job result on completion:
+        downloaded: Number of videos downloaded
+        skipped: Number of videos skipped (no YouTube URL or already downloaded)
+        failed: Number of download failures
+        total_videos: Total videos to process
+        failed_videos: List of failed video IDs with errors
+
+    Args:
+        job: Job instance with metadata containing download parameters
+
+    Raises:
+        ValueError: If video_ids parameter is missing
+    """
+    from fuzzbin.clients.ytdlp_client import YTDLPClient
+    from fuzzbin.parsers.ytdlp_models import DownloadHooks, DownloadProgress
+
+    # Extract parameters
+    video_ids = job.metadata.get("video_ids")
+    if video_ids is None:
+        raise ValueError("Missing required parameter: video_ids")
+
+    output_directory = job.metadata.get("output_directory")
+    format_spec = job.metadata.get("format")
+
+    logger.info(
+        "youtube_download_job_starting",
+        job_id=job.id,
+        video_count=len(video_ids),
+        output_directory=output_directory,
+    )
+
+    # Get config and repository
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+
+    # Determine output directory
+    if output_directory:
+        output_path = Path(output_directory)
+    else:
+        output_path = Path(config.file_manager.workspace_root) / "downloads"
+
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Track progress across all videos
+    downloaded = 0
+    skipped = 0
+    failed = 0
+    failed_videos: list[dict[str, Any]] = []
+    current_video_idx = 0
+
+    # Create yt-dlp client
+    ytdlp_config = config.ytdlp if hasattr(config, "ytdlp") else None
+    async with YTDLPClient.from_config(ytdlp_config) if ytdlp_config else YTDLPClient() as client:
+        for idx, video_id in enumerate(video_ids, start=1):
+            current_video_idx = idx
+
+            # Check for cancellation
+            if job.status == JobStatus.CANCELLED:
+                logger.info("youtube_download_job_cancelled", job_id=job.id)
+                return
+
+            job.update_progress(
+                idx - 1, len(video_ids), f"Processing video {video_id}..."
+            )
+
+            try:
+                # Get video from database
+                video = await repository.get_video(video_id)
+                if not video:
+                    logger.warning("video_not_found", video_id=video_id)
+                    skipped += 1
+                    continue
+
+                # Check if video has a YouTube URL
+                youtube_url = getattr(video, "youtube_url", None) or getattr(
+                    video, "download_url", None
+                )
+                if not youtube_url:
+                    logger.debug(
+                        "video_no_youtube_url",
+                        video_id=video_id,
+                        title=video.title,
+                    )
+                    skipped += 1
+                    continue
+
+                # Check if already downloaded
+                if video.file_path and Path(video.file_path).exists():
+                    logger.debug(
+                        "video_already_downloaded",
+                        video_id=video_id,
+                        file_path=video.file_path,
+                    )
+                    skipped += 1
+                    continue
+
+                # Create progress hook for this video
+                def on_progress(progress: DownloadProgress) -> None:
+                    if job.status == JobStatus.CANCELLED:
+                        raise asyncio.CancelledError("Job cancelled")
+                    # Update job with download progress
+                    percent = progress.percent / 100.0
+                    overall_progress = (current_video_idx - 1 + percent) / len(
+                        video_ids
+                    )
+                    job.progress = min(overall_progress, 1.0)
+                    job.current_step = (
+                        f"Downloading {video.title}: {progress.percent:.1f}%"
+                    )
+
+                hooks = DownloadHooks(on_progress=on_progress)
+
+                # Generate output filename
+                safe_title = "".join(
+                    c if c.isalnum() or c in " -_" else "_" for c in video.title
+                )
+                output_file = output_path / f"{safe_title}.mp4"
+
+                # Download video
+                result = await client.download(
+                    url=youtube_url,
+                    output_path=output_file,
+                    format_spec=format_spec,
+                    hooks=hooks,
+                )
+
+                # Update database with file path
+                await repository.update_video(
+                    video_id, file_path=str(result.file_path)
+                )
+
+                downloaded += 1
+                logger.info(
+                    "video_downloaded",
+                    video_id=video_id,
+                    file_path=str(result.file_path),
+                    file_size=result.file_size,
+                )
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                failed += 1
+                failed_videos.append(
+                    {"video_id": video_id, "error": str(e)}
+                )
+                logger.error(
+                    "video_download_failed",
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Mark completed
+    job.mark_completed(
+        {
+            "downloaded": downloaded,
+            "skipped": skipped,
+            "failed": failed,
+            "total_videos": len(video_ids),
+            "failed_videos": failed_videos[:10],
+        }
+    )
+
+    logger.info(
+        "youtube_download_job_completed",
+        job_id=job.id,
+        downloaded=downloaded,
+        skipped=skipped,
+        failed=failed,
+    )
+
+
+async def handle_duplicate_resolution(job: Job) -> None:
+    """Handle batch duplicate resolution job.
+
+    Scans for duplicate videos and optionally resolves them.
+
+    Job metadata parameters:
+        video_ids (list[int], optional): Specific videos to check for duplicates
+        scan_all (bool, optional): Scan entire library (default: False)
+        strategy (str, optional): Resolution strategy - "report_only", "keep_best",
+            "keep_first", "keep_newest" (default: "report_only")
+        min_confidence (float, optional): Minimum confidence threshold (default: 0.8)
+        dry_run (bool, optional): Just report, don't delete (default: True)
+
+    Job result on completion:
+        duplicates_found: Number of duplicate groups found
+        videos_deleted: Number of videos deleted (0 if dry_run)
+        videos_kept: Number of videos kept
+        duplicate_groups: List of duplicate groups with details
+
+    Args:
+        job: Job instance with metadata containing resolution parameters
+    """
+    from fuzzbin.core.file_manager import FileManager
+
+    # Extract parameters
+    video_ids = job.metadata.get("video_ids", [])
+    scan_all = job.metadata.get("scan_all", False)
+    strategy = job.metadata.get("strategy", "report_only")
+    min_confidence = job.metadata.get("min_confidence", 0.8)
+    dry_run = job.metadata.get("dry_run", True)
+
+    if not video_ids and not scan_all:
+        raise ValueError("Must provide video_ids or set scan_all=True")
+
+    logger.info(
+        "duplicate_resolution_job_starting",
+        job_id=job.id,
+        video_count=len(video_ids) if video_ids else "all",
+        strategy=strategy,
+        dry_run=dry_run,
+    )
+
+    job.update_progress(0, 1, "Initializing duplicate scan...")
+
+    # Get repository and file manager
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+    file_manager = FileManager.from_config(config.file_manager)
+
+    # Get videos to scan
+    if scan_all:
+        all_videos = await repository.list_videos(limit=10000)
+        video_ids = [v.id for v in all_videos]
+
+    if not video_ids:
+        job.mark_completed(
+            {
+                "duplicates_found": 0,
+                "videos_deleted": 0,
+                "videos_kept": 0,
+                "duplicate_groups": [],
+                "message": "No videos to scan",
+            }
+        )
+        return
+
+    # Track results
+    duplicate_groups: list[dict[str, Any]] = []
+    videos_deleted = 0
+    videos_kept = 0
+    processed_ids: set[int] = set()
+
+    # Scan for duplicates
+    for idx, video_id in enumerate(video_ids, start=1):
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        # Skip if already processed as part of another group
+        if video_id in processed_ids:
+            continue
+
+        job.update_progress(
+            idx, len(video_ids), f"Scanning video {video_id} for duplicates..."
+        )
+
+        try:
+            # Find duplicates for this video
+            duplicates = await file_manager.find_all_duplicates(video_id, repository)
+
+            # Filter by confidence threshold
+            duplicates = [d for d in duplicates if d.confidence >= min_confidence]
+
+            if duplicates:
+                # Get the original video
+                original = await repository.get_video(video_id)
+                if not original:
+                    continue
+
+                # Create duplicate group
+                group = {
+                    "primary_video_id": video_id,
+                    "primary_title": original.title,
+                    "duplicates": [
+                        {
+                            "video_id": d.video_id,
+                            "title": d.title,
+                            "confidence": d.confidence,
+                            "match_type": d.match_type,
+                        }
+                        for d in duplicates
+                    ],
+                }
+                duplicate_groups.append(group)
+
+                # Mark all as processed
+                processed_ids.add(video_id)
+                for d in duplicates:
+                    processed_ids.add(d.video_id)
+
+                # Apply resolution strategy if not dry_run
+                if not dry_run and strategy != "report_only":
+                    # Determine which to keep based on strategy
+                    all_videos_in_group = [
+                        await repository.get_video(video_id)
+                    ] + [await repository.get_video(d.video_id) for d in duplicates]
+                    all_videos_in_group = [v for v in all_videos_in_group if v]
+
+                    if strategy == "keep_best":
+                        # Keep the one with highest quality (file size as proxy)
+                        def get_size(v: Any) -> int:
+                            if v.file_path and Path(v.file_path).exists():
+                                return Path(v.file_path).stat().st_size
+                            return 0
+
+                        all_videos_in_group.sort(key=get_size, reverse=True)
+                    elif strategy == "keep_newest":
+                        # Keep the newest by created_at
+                        all_videos_in_group.sort(
+                            key=lambda v: v.created_at or 0, reverse=True
+                        )
+                    # keep_first uses original order
+
+                    # Delete all except first
+                    keep_video = all_videos_in_group[0]
+                    for v in all_videos_in_group[1:]:
+                        await repository.delete_video(v.id)
+                        videos_deleted += 1
+                        logger.info(
+                            "duplicate_deleted",
+                            video_id=v.id,
+                            kept_video_id=keep_video.id,
+                        )
+
+                    videos_kept += 1
+
+        except Exception as e:
+            logger.error(
+                "duplicate_scan_error",
+                video_id=video_id,
+                error=str(e),
+            )
+
+    # Mark completed
+    job.mark_completed(
+        {
+            "duplicates_found": len(duplicate_groups),
+            "videos_deleted": videos_deleted,
+            "videos_kept": videos_kept,
+            "duplicate_groups": duplicate_groups[:50],  # Limit result size
+            "dry_run": dry_run,
+            "strategy": strategy,
+        }
+    )
+
+    logger.info(
+        "duplicate_resolution_job_completed",
+        job_id=job.id,
+        duplicates_found=len(duplicate_groups),
+        videos_deleted=videos_deleted,
+    )
+
+
+async def handle_metadata_enrich(job: Job) -> None:
+    """Handle metadata enrichment job.
+
+    Enriches video metadata from external APIs (IMVDb, Discogs).
+
+    Job metadata parameters:
+        video_ids (list[int], required): List of video IDs to enrich
+        sources (list[str], optional): APIs to use - ["imvdb", "discogs"]
+            (default: ["imvdb"])
+        overwrite (bool, optional): Overwrite existing metadata (default: False)
+        fields (list[str], optional): Specific fields to enrich (default: all)
+
+    Job result on completion:
+        enriched: Number of videos enriched
+        skipped: Number of videos skipped (no matches or already complete)
+        failed: Number of enrichment failures
+        total_videos: Total videos to process
+
+    Args:
+        job: Job instance with metadata containing enrichment parameters
+
+    Raises:
+        ValueError: If video_ids parameter is missing
+    """
+    # Extract parameters
+    video_ids = job.metadata.get("video_ids")
+    if not video_ids:
+        raise ValueError("Missing required parameter: video_ids")
+
+    sources = job.metadata.get("sources", ["imvdb"])
+    overwrite = job.metadata.get("overwrite", False)
+    fields = job.metadata.get("fields")  # None means all fields
+
+    logger.info(
+        "metadata_enrich_job_starting",
+        job_id=job.id,
+        video_count=len(video_ids),
+        sources=sources,
+        overwrite=overwrite,
+    )
+
+    job.update_progress(0, 1, "Initializing metadata enrichment...")
+
+    # Get config and repository
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+
+    # Initialize API clients based on sources
+    imvdb_client = None
+    discogs_client = None
+
+    if "imvdb" in sources:
+        imvdb_config = config.apis.get("imvdb")
+        if imvdb_config:
+            from fuzzbin.api.imvdb_client import IMVDbClient
+
+            imvdb_client = IMVDbClient.from_config(imvdb_config)
+
+    if "discogs" in sources:
+        discogs_config = config.apis.get("discogs")
+        if discogs_config:
+            from fuzzbin.api.discogs_client import DiscogsClient
+
+            discogs_client = DiscogsClient.from_config(discogs_config)
+
+    # Track results
+    enriched = 0
+    skipped = 0
+    failed = 0
+
+    try:
+        for idx, video_id in enumerate(video_ids, start=1):
+            if job.status == JobStatus.CANCELLED:
+                return
+
+            job.update_progress(
+                idx, len(video_ids), f"Enriching video {video_id}..."
+            )
+
+            try:
+                # Get video
+                video = await repository.get_video(video_id)
+                if not video:
+                    skipped += 1
+                    continue
+
+                # Track if any enrichment happened
+                was_enriched = False
+                updates: dict[str, Any] = {}
+
+                # Try IMVDb
+                if imvdb_client and video.title and video.artist:
+                    try:
+                        results = await imvdb_client.search_videos(
+                            artist=video.artist,
+                            title=video.title,
+                        )
+                        if results:
+                            # Get full details of best match
+                            best_match = results[0]
+                            video_data = await imvdb_client.get_video(
+                                best_match.id
+                            )
+
+                            # Map IMVDb fields to our model
+                            if video_data:
+                                if (overwrite or not video.director) and video_data.directors:
+                                    updates["director"] = video_data.directors[0].name
+                                if (overwrite or not video.year) and video_data.year:
+                                    updates["year"] = video_data.year
+                                if (
+                                    overwrite or not getattr(video, "imvdb_id", None)
+                                ) and video_data.id:
+                                    updates["imvdb_id"] = str(video_data.id)
+
+                                was_enriched = bool(updates)
+
+                    except Exception as e:
+                        logger.warning(
+                            "imvdb_enrichment_error",
+                            video_id=video_id,
+                            error=str(e),
+                        )
+
+                # Try Discogs
+                if discogs_client and video.artist:
+                    try:
+                        results = await discogs_client.search(
+                            query=f"{video.artist} {video.title or ''}",
+                            type="release",
+                        )
+                        if results and results.results:
+                            # Get best match
+                            best = results.results[0]
+                            if (overwrite or not video.genre) and best.genre:
+                                updates["genre"] = best.genre[0] if best.genre else None
+                            if (overwrite or not video.year) and best.year:
+                                updates["year"] = int(best.year)
+                            if (
+                                overwrite or not getattr(video, "discogs_id", None)
+                            ) and best.id:
+                                updates["discogs_release_id"] = best.id
+
+                            was_enriched = bool(updates)
+
+                    except Exception as e:
+                        logger.warning(
+                            "discogs_enrichment_error",
+                            video_id=video_id,
+                            error=str(e),
+                        )
+
+                # Apply updates if any
+                if updates:
+                    # Filter to requested fields if specified
+                    if fields:
+                        updates = {k: v for k, v in updates.items() if k in fields}
+
+                    if updates:
+                        await repository.update_video(video_id, **updates)
+                        enriched += 1
+                        logger.info(
+                            "video_enriched",
+                            video_id=video_id,
+                            updates=list(updates.keys()),
+                        )
+                    else:
+                        skipped += 1
+                elif was_enriched:
+                    skipped += 1  # Had data but nothing new
+                else:
+                    skipped += 1
+
+            except Exception as e:
+                failed += 1
+                logger.error(
+                    "metadata_enrich_error",
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+    finally:
+        # Clean up clients
+        if imvdb_client:
+            await imvdb_client.aclose()
+        if discogs_client:
+            await discogs_client.aclose()
+
+    # Mark completed
+    job.mark_completed(
+        {
+            "enriched": enriched,
+            "skipped": skipped,
+            "failed": failed,
+            "total_videos": len(video_ids),
+            "sources": sources,
+        }
+    )
+
+    logger.info(
+        "metadata_enrich_job_completed",
+        job_id=job.id,
+        enriched=enriched,
+        skipped=skipped,
+        failed=failed,
+    )
+
+
+def register_all_handlers(queue: JobQueue) -> None:
+    """Register all job handlers with the queue.
+
+    This should be called during application startup after the queue is created.
+
+    Args:
+        queue: JobQueue instance to register handlers with
+    """
+    queue.register_handler(JobType.IMPORT_NFO, handle_nfo_import)
+    queue.register_handler(JobType.IMPORT_SPOTIFY, handle_spotify_import)
+    queue.register_handler(JobType.DOWNLOAD_YOUTUBE, handle_youtube_download)
+    queue.register_handler(JobType.FILE_ORGANIZE, handle_file_organize)
+    queue.register_handler(JobType.FILE_DUPLICATE_RESOLVE, handle_duplicate_resolution)
+    queue.register_handler(JobType.METADATA_ENRICH, handle_metadata_enrich)
+
+    logger.info(
+        "job_handlers_registered",
+        handlers=[
+            JobType.IMPORT_NFO.value,
+            JobType.IMPORT_SPOTIFY.value,
+            JobType.DOWNLOAD_YOUTUBE.value,
+            JobType.FILE_ORGANIZE.value,
+            JobType.FILE_DUPLICATE_RESOLVE.value,
+            JobType.METADATA_ENRICH.value,
+        ],
+    )

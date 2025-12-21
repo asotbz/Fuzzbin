@@ -3,7 +3,7 @@
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 
@@ -61,6 +61,7 @@ class NFOImporter:
         initial_status: str = "discovered",
         skip_existing: bool = True,
         nfo_parser: Optional[MusicVideoNFOParser] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ):
         """
         Initialize NFO importer.
@@ -70,11 +71,15 @@ class NFOImporter:
             initial_status: Status for newly imported videos (default: "discovered")
             skip_existing: Skip videos that already exist in database (default: True)
             nfo_parser: Optional custom parser (default: creates MusicVideoNFOParser())
+            progress_callback: Optional callback for progress updates.
+                Called with (processed_count, total_count, current_file_name)
+                for real-time progress tracking in background tasks.
         """
         self.repository = video_repository
         self.initial_status = initial_status
         self.skip_existing = skip_existing
         self.parser = nfo_parser or MusicVideoNFOParser()
+        self.progress_callback = progress_callback
         self.logger = structlog.get_logger(__name__)
 
     async def import_from_directory(
@@ -418,6 +423,10 @@ class NFOImporter:
         # Import each NFO within a single transaction
         async with self.repository.transaction():
             for idx, nfo_path in enumerate(nfo_files, start=1):
+                # Report progress via callback if provided
+                if self.progress_callback:
+                    self.progress_callback(idx, len(nfo_files), nfo_path.name)
+
                 try:
                     # Parse NFO file
                     nfo = self.parser.parse_file(nfo_path)

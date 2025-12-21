@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 
@@ -73,6 +73,7 @@ class SpotifyPlaylistImporter:
         video_repository: VideoRepository,
         initial_status: str = "discovered",
         skip_existing: bool = True,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ):
         """
         Initialize playlist importer.
@@ -82,11 +83,14 @@ class SpotifyPlaylistImporter:
             video_repository: Database repository
             initial_status: Status for newly imported tracks (default: "discovered")
             skip_existing: Skip tracks that already exist in database (default: True)
+            progress_callback: Optional callback for progress updates.
+                Signature: (processed: int, total: int, current_item: str) -> None
         """
         self.spotify_client = spotify_client
         self.repository = video_repository
         self.initial_status = initial_status
         self.skip_existing = skip_existing
+        self.progress_callback = progress_callback
         self.logger = structlog.get_logger(__name__)
 
     async def import_playlist(self, playlist_id: str) -> ImportResult:
@@ -170,6 +174,14 @@ class SpotifyPlaylistImporter:
         # Import each track within a transaction
         async with self.repository.transaction():
             for idx, track in enumerate(tracks, start=1):
+                # Call progress callback if provided
+                if self.progress_callback:
+                    track_name = track.name or "Unknown"
+                    artist_name = track.artists[0].name if track.artists else "Unknown"
+                    self.progress_callback(
+                        idx, len(tracks), f"{artist_name} - {track_name}"
+                    )
+
                 try:
                     # Check if track already exists
                     if self.skip_existing and await self._check_track_exists(track):

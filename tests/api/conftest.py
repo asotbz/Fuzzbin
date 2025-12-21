@@ -65,13 +65,17 @@ async def test_repository(test_database_config: DatabaseConfig) -> AsyncGenerato
 @pytest_asyncio.fixture
 async def test_app(test_repository: VideoRepository, api_settings: APISettings, test_config: Config) -> AsyncGenerator[TestClient, None]:
     """
-    Provide a FastAPI TestClient with test database.
+    Provide a FastAPI TestClient with test database and job queue.
 
     This fixture:
     1. Creates a fresh test database
     2. Overrides the repository dependency to use the test database
-    3. Returns a TestClient for making HTTP requests
+    3. Initializes job queue via app lifespan (auto-starts workers)
+    4. Returns a TestClient for making HTTP requests
+    5. Cleans up job queue on teardown
     """
+    from fuzzbin.tasks import reset_job_queue
+
     # Override the global config before creating the app
     fuzzbin._config = test_config
     fuzzbin._repository = test_repository
@@ -84,12 +88,14 @@ async def test_app(test_repository: VideoRepository, api_settings: APISettings, 
 
     app.dependency_overrides[get_repository] = override_get_repository
 
-    # Create test client
+    # Create test client - lifespan hooks will run and start job queue
     with TestClient(app, raise_server_exceptions=True) as client:
         yield client
 
     # Cleanup
     app.dependency_overrides.clear()
+    # Reset job queue global state for next test
+    reset_job_queue()
 
 
 @pytest.fixture

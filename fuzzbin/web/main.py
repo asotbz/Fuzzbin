@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import fuzzbin
 from fuzzbin.auth import is_default_password
 from fuzzbin.common.logging_config import setup_logging
+from fuzzbin.tasks import init_job_queue, reset_job_queue
+from fuzzbin.tasks.handlers import register_all_handlers
 
 from .dependencies import require_auth, get_api_settings
 from .middleware import RequestLoggingMiddleware, register_exception_handlers
@@ -25,8 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Application lifespan context manager.
 
     Handles startup and shutdown events:
-    - Startup: Configure fuzzbin (logging, database)
-    - Shutdown: Close database connections
+    - Startup: Configure fuzzbin (logging, database), start job queue
+    - Shutdown: Stop job queue, close database connections
 
     Note: In test mode, fuzzbin._config and fuzzbin._repository are
     pre-configured by test fixtures, so we skip initialization.
@@ -45,6 +47,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         logger.info("api_using_existing_config")
 
+    # Initialize and start job queue
+    queue = init_job_queue(max_workers=2)
+    register_all_handlers(queue)
+    await queue.start()
+    logger.info("job_queue_started_in_lifespan")
+
     # Check for default password if auth is enabled
     if settings.auth_enabled:
         logger.info("api_auth_enabled", jwt_algorithm=settings.jwt_algorithm)
@@ -60,8 +68,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
-    # Cleanup on shutdown (only if we initialized)
+    # Cleanup on shutdown
     logger.info("api_shutting_down")
+
+    # Stop job queue
+    await queue.stop()
+    reset_job_queue()
+    logger.info("job_queue_stopped_in_lifespan")
+
+    # Close database (only if we initialized)
     if not already_configured and fuzzbin._repository is not None:
         await fuzzbin._repository.close()
 
@@ -155,6 +170,14 @@ def create_app() -> FastAPI:
                 "name": "Files",
                 "description": "File operations: organize, delete, restore, verify, and duplicate detection",
             },
+            {
+                "name": "Jobs",
+                "description": "Background job submission, status tracking, and cancellation",
+            },
+            {
+                "name": "WebSocket",
+                "description": "Real-time progress updates via WebSocket",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -198,10 +221,13 @@ def create_app() -> FastAPI:
         }
 
     # Import and include routers
-    from .routes import artists, collections, search, tags, videos, auth, files
+    from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
+
+    # WebSocket routes (handle their own authentication if needed)
+    app.include_router(websocket.router)
 
     # Protected routes - require authentication when auth_enabled=True
     # The require_auth dependency will bypass auth check when auth_enabled=False
@@ -213,6 +239,7 @@ def create_app() -> FastAPI:
     app.include_router(tags.router, dependencies=protected_dependencies)
     app.include_router(search.router, dependencies=protected_dependencies)
     app.include_router(files.router, dependencies=protected_dependencies)
+    app.include_router(jobs.router, dependencies=protected_dependencies)
 
     logger.info("api_app_created", routes=len(app.routes))
 
