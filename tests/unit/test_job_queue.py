@@ -660,3 +660,200 @@ class TestCronParser:
         assert parse_cron("invalid", now) is None
         assert parse_cron("1 2 3", now) is None  # Too few fields
         assert parse_cron("1 2 3 4 5 6", now) is None  # Too many fields
+
+
+class TestJobMetrics:
+    """Tests for job queue metrics and monitoring."""
+
+    @pytest.mark.asyncio
+    async def test_get_metrics_empty_queue(self, queue: JobQueue):
+        """Test getting metrics from empty queue."""
+        metrics = queue.get_metrics()
+
+        assert metrics.total_jobs == 0
+        assert metrics.pending_jobs == 0
+        assert metrics.running_jobs == 0
+        assert metrics.completed_jobs == 0
+        assert metrics.failed_jobs == 0
+        assert metrics.success_rate == 0.0
+        assert metrics.queue_depth == 0
+
+    @pytest.mark.asyncio
+    async def test_metrics_after_job_completion(self, queue: JobQueue):
+        """Test metrics are updated after job completion."""
+        queue.register_handler(JobType.IMPORT_NFO, dummy_handler)
+
+        job = Job(type=JobType.IMPORT_NFO)
+        await queue.submit(job)
+
+        await queue.start()
+        await asyncio.sleep(0.3)  # Allow job to complete
+        await queue.stop()
+
+        metrics = queue.get_metrics()
+        assert metrics.total_jobs == 1
+        assert metrics.completed_jobs == 1
+        assert metrics.success_rate == 1.0
+        assert metrics.avg_duration_seconds > 0
+        assert metrics.last_completion_at is not None
+
+    @pytest.mark.asyncio
+    async def test_metrics_after_job_failure(self, queue: JobQueue):
+        """Test metrics are updated after job failure."""
+        queue.register_handler(JobType.IMPORT_NFO, failing_handler)
+
+        job = Job(type=JobType.IMPORT_NFO)
+        await queue.submit(job)
+
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+
+        metrics = queue.get_metrics()
+        assert metrics.total_jobs == 1
+        assert metrics.failed_jobs == 1
+        assert metrics.success_rate == 0.0
+        assert metrics.last_failure_at is not None
+
+    @pytest.mark.asyncio
+    async def test_metrics_by_job_type(self, queue: JobQueue):
+        """Test per-type metrics are tracked."""
+        queue.register_handler(JobType.IMPORT_NFO, dummy_handler)
+        queue.register_handler(JobType.FILE_ORGANIZE, dummy_handler)
+
+        # Submit different job types
+        await queue.submit(Job(type=JobType.IMPORT_NFO))
+        await queue.submit(Job(type=JobType.IMPORT_NFO))
+        await queue.submit(Job(type=JobType.FILE_ORGANIZE))
+
+        await queue.start()
+        await asyncio.sleep(0.5)
+        await queue.stop()
+
+        metrics = queue.get_metrics()
+        assert JobType.IMPORT_NFO in metrics.by_type
+        assert JobType.FILE_ORGANIZE in metrics.by_type
+        assert metrics.by_type[JobType.IMPORT_NFO].completed == 2
+        assert metrics.by_type[JobType.FILE_ORGANIZE].completed == 1
+
+    @pytest.mark.asyncio
+    async def test_queue_depth(self, queue: JobQueue):
+        """Test queue depth tracking."""
+        queue.register_handler(JobType.IMPORT_NFO, slow_handler)
+
+        # Don't start queue - just submit jobs
+        await queue.submit(Job(type=JobType.IMPORT_NFO))
+        await queue.submit(Job(type=JobType.IMPORT_NFO))
+
+        assert queue.get_queue_depth() == 2
+
+        metrics = queue.get_metrics()
+        assert metrics.queue_depth == 2
+
+
+class TestFailedJobAlerts:
+    """Tests for failed job alert system."""
+
+    @pytest.mark.asyncio
+    async def test_failure_callback_triggered(self, queue: JobQueue):
+        """Test that failure callback is triggered on job failure."""
+        from fuzzbin.tasks import FailedJobAlert
+
+        alerts_received: list[FailedJobAlert] = []
+
+        async def capture_alert(alert: FailedJobAlert) -> None:
+            alerts_received.append(alert)
+
+        queue.register_handler(JobType.IMPORT_NFO, failing_handler)
+        queue.on_job_failed(capture_alert)
+
+        job = Job(type=JobType.IMPORT_NFO, metadata={"test": "data"})
+        await queue.submit(job)
+
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+
+        assert len(alerts_received) == 1
+        alert = alerts_received[0]
+        assert alert.job_id == job.id
+        assert alert.job_type == JobType.IMPORT_NFO
+        assert "Simulated failure" in alert.error
+        assert alert.metadata == {"test": "data"}
+
+    @pytest.mark.asyncio
+    async def test_failure_callback_on_timeout(self, queue: JobQueue):
+        """Test that failure callback is triggered on job timeout."""
+        from fuzzbin.tasks import FailedJobAlert
+
+        alerts_received: list[FailedJobAlert] = []
+
+        async def capture_alert(alert: FailedJobAlert) -> None:
+            alerts_received.append(alert)
+
+        async def very_slow_handler(job: Job) -> None:
+            await asyncio.sleep(10)
+
+        queue.register_handler(JobType.IMPORT_NFO, very_slow_handler)
+        queue.on_job_failed(capture_alert)
+
+        job = Job(type=JobType.IMPORT_NFO, timeout_seconds=1)
+        await queue.submit(job)
+
+        await queue.start()
+        await asyncio.sleep(2)
+        await queue.stop()
+
+        assert len(alerts_received) == 1
+        assert "timeout" in alerts_received[0].error.lower()
+
+    @pytest.mark.asyncio
+    async def test_multiple_failure_callbacks(self, queue: JobQueue):
+        """Test multiple failure callbacks are all triggered."""
+        callback1_count = 0
+        callback2_count = 0
+
+        async def callback1(alert) -> None:
+            nonlocal callback1_count
+            callback1_count += 1
+
+        async def callback2(alert) -> None:
+            nonlocal callback2_count
+            callback2_count += 1
+
+        queue.register_handler(JobType.IMPORT_NFO, failing_handler)
+        queue.on_job_failed(callback1)
+        queue.on_job_failed(callback2)
+
+        await queue.submit(Job(type=JobType.IMPORT_NFO))
+
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+
+        assert callback1_count == 1
+        assert callback2_count == 1
+
+    @pytest.mark.asyncio
+    async def test_failure_callback_exception_doesnt_break_queue(self, queue: JobQueue):
+        """Test that exception in callback doesn't break the queue."""
+
+        async def bad_callback(alert) -> None:
+            raise RuntimeError("Callback error")
+
+        async def good_callback(alert) -> None:
+            pass
+
+        queue.register_handler(JobType.IMPORT_NFO, failing_handler)
+        queue.on_job_failed(bad_callback)
+        queue.on_job_failed(good_callback)
+
+        await queue.submit(Job(type=JobType.IMPORT_NFO))
+
+        await queue.start()
+        await asyncio.sleep(0.3)
+        await queue.stop()
+
+        # Queue should still work
+        metrics = queue.get_metrics()
+        assert metrics.failed_jobs == 1

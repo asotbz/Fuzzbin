@@ -70,3 +70,55 @@ class JobProgressUpdate(BaseModel):
     total_items: int
     error: str | None = None
     result: dict[str, Any] | None = None
+
+
+class JobTypeMetricsResponse(BaseModel):
+    """Metrics for a specific job type."""
+
+    job_type: JobType
+    total_jobs: int
+    completed: int
+    failed: int
+    cancelled: int
+    timeout: int
+    success_rate: float
+    avg_duration_seconds: float
+    total_duration_seconds: float
+
+
+class JobMetricsResponse(BaseModel):
+    """Overall job queue metrics response.
+
+    Provides monitoring data for the job queue including:
+    - Job counts by status
+    - Success rate and average duration
+    - Queue depth
+    - Per-type breakdowns
+    """
+
+    total_jobs: int = Field(description="Total number of jobs ever submitted")
+    pending_jobs: int = Field(description="Jobs waiting in queue")
+    waiting_jobs: int = Field(description="Jobs waiting for dependencies")
+    running_jobs: int = Field(description="Currently executing jobs")
+    completed_jobs: int = Field(description="Successfully completed jobs")
+    failed_jobs: int = Field(description="Failed jobs")
+    cancelled_jobs: int = Field(description="Cancelled jobs")
+    timeout_jobs: int = Field(description="Timed out jobs")
+    success_rate: float = Field(
+        description="Ratio of completed to terminal jobs (0.0-1.0)"
+    )
+    avg_duration_seconds: float = Field(
+        description="Average duration of completed jobs in seconds"
+    )
+    queue_depth: int = Field(description="Current queue depth (pending jobs)")
+    by_type: dict[str, JobTypeMetricsResponse] = Field(
+        description="Metrics broken down by job type"
+    )
+    oldest_pending_age_seconds: float | None = Field(
+        description="Age of the oldest pending job in seconds"
+    )
+    last_failure_at: datetime | None = Field(description="When the last job failed")
+    last_completion_at: datetime | None = Field(
+        description="When the last job completed"
+    )
+

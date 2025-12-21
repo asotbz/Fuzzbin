@@ -8,6 +8,7 @@ from typing import Any
 
 import structlog
 
+from fuzzbin.tasks.metrics import FailedJobAlert, JobMetrics, MetricsCollector
 from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
 
 logger = structlog.get_logger(__name__)
@@ -197,6 +198,48 @@ class JobQueue:
         self.dependency_task: asyncio.Task[None] | None = None
         self.running = False
         self._lock = asyncio.Lock()
+        self._metrics = MetricsCollector()
+
+    def on_job_failed(
+        self,
+        callback: Callable[[FailedJobAlert], Coroutine[Any, Any, None]],
+    ) -> None:
+        """Register a callback for job failures (alerts).
+
+        Args:
+            callback: Async function to call when a job fails.
+                     Receives a FailedJobAlert with job details.
+
+        Example:
+            >>> async def alert_on_failure(alert: FailedJobAlert):
+            ...     print(f"Job {alert.job_id} failed: {alert.error}")
+            ...     await send_notification(alert)
+            ...
+            >>> queue.on_job_failed(alert_on_failure)
+        """
+        self._metrics.on_job_failed(callback)
+
+    def get_metrics(self) -> JobMetrics:
+        """Get current job queue metrics.
+
+        Returns:
+            JobMetrics with success rate, avg duration, queue depth, etc.
+
+        Example:
+            >>> metrics = queue.get_metrics()
+            >>> print(f"Success rate: {metrics.success_rate * 100:.1f}%")
+            >>> print(f"Queue depth: {metrics.queue_depth}")
+            >>> print(f"Avg duration: {metrics.avg_duration_seconds:.1f}s")
+        """
+        return self._metrics.calculate_metrics(self.jobs, self.queue.qsize())
+
+    def get_queue_depth(self) -> int:
+        """Get current queue depth (pending + waiting jobs).
+
+        Returns:
+            Number of jobs waiting to be processed
+        """
+        return self.queue.qsize()
 
     def register_handler(
         self,
@@ -408,6 +451,8 @@ class JobQueue:
                         )
                     except asyncio.TimeoutError:
                         job.mark_timeout()
+                        # Record timeout as failure for metrics
+                        await self._metrics.record_failure(job)
                         logger.warning(
                             "job_timeout",
                             job_id=job.id,
@@ -422,6 +467,9 @@ class JobQueue:
                 if job.status == JobStatus.RUNNING:
                     job.mark_completed({"status": "success"})
 
+                # Record completion metrics
+                await self._metrics.record_completion(job)
+
                 logger.info("job_completed", job_id=job.id, status=job.status.value)
 
                 # Check if any waiting jobs can now be queued
@@ -434,6 +482,8 @@ class JobQueue:
 
             except Exception as e:
                 job.mark_failed(str(e))
+                # Record failure and trigger alerts
+                await self._metrics.record_failure(job)
                 logger.error(
                     "job_failed",
                     job_id=job.id,

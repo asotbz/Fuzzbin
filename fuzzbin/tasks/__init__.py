@@ -29,11 +29,22 @@ Example:
     >>> job = Job(type=JobType.FILE_ORGANIZE, schedule="0 2 * * *")
     >>> await queue.submit(job)
     >>>
+    >>> # Get metrics
+    >>> metrics = queue.get_metrics()
+    >>> print(f"Success rate: {metrics.success_rate * 100:.1f}%")
+    >>> print(f"Queue depth: {metrics.queue_depth}")
+    >>>
+    >>> # Register failure alert
+    >>> async def on_failure(alert):
+    ...     print(f"Job {alert.job_id} failed: {alert.error}")
+    >>> queue.on_job_failed(on_failure)
+    >>>
     >>> # Check job status
     >>> job = await queue.get_job(job_id)
     >>> print(f"Progress: {job.progress * 100:.0f}%")
 """
 
+from fuzzbin.tasks.metrics import FailedJobAlert, JobMetrics, JobTypeMetrics
 from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
 from fuzzbin.tasks.queue import (
     JobQueue,
@@ -43,11 +54,14 @@ from fuzzbin.tasks.queue import (
 )
 
 __all__ = [
+    "FailedJobAlert",
     "Job",
+    "JobMetrics",
     "JobPriority",
+    "JobQueue",
     "JobStatus",
     "JobType",
-    "JobQueue",
+    "JobTypeMetrics",
     "get_job_queue",
     "init_job_queue",
     "reset_job_queue",
