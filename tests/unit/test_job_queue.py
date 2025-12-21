@@ -424,3 +424,239 @@ class TestJobHandlerRegistration:
             job_id = await queue.submit(job)
             assert job_id is not None
             assert job.id in queue.jobs
+
+
+class TestJobPriority:
+    """Tests for job priority features."""
+
+    def test_job_priority_default(self):
+        """Test that jobs have normal priority by default."""
+        from fuzzbin.tasks import JobPriority
+
+        job = Job(type=JobType.IMPORT_NFO)
+        assert job.priority == JobPriority.NORMAL
+
+    def test_job_with_custom_priority(self):
+        """Test creating a job with custom priority."""
+        from fuzzbin.tasks import JobPriority
+
+        job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.HIGH)
+        assert job.priority == JobPriority.HIGH
+
+    def test_job_comparison_by_priority(self):
+        """Test that jobs compare by priority (higher priority = lower value for heap)."""
+        from fuzzbin.tasks import JobPriority
+
+        low_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.LOW)
+        normal_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.NORMAL)
+        high_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.HIGH)
+        critical_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.CRITICAL)
+
+        # In a min-heap, critical should come first (lowest comparison value)
+        assert critical_job < high_job
+        assert high_job < normal_job
+        assert normal_job < low_job
+
+    @pytest.mark.asyncio
+    async def test_priority_queue_ordering(self, queue: JobQueue):
+        """Test that higher priority jobs are processed first."""
+        from fuzzbin.tasks import JobPriority
+
+        processed_order = []
+
+        async def tracking_handler(job: Job) -> None:
+            processed_order.append(job.id)
+            job.mark_completed({"priority": job.priority.value})
+
+        queue.register_handler(JobType.IMPORT_NFO, tracking_handler)
+
+        # Submit jobs in opposite order of priority
+        low_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.LOW)
+        normal_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.NORMAL)
+        high_job = Job(type=JobType.IMPORT_NFO, priority=JobPriority.HIGH)
+
+        await queue.submit(low_job)
+        await queue.submit(normal_job)
+        await queue.submit(high_job)
+
+        # Start queue and wait for completion
+        await queue.start()
+        await asyncio.sleep(0.5)  # Allow processing
+        await queue.stop()
+
+        # High priority should be processed first
+        assert processed_order[0] == high_job.id
+        assert processed_order[1] == normal_job.id
+        assert processed_order[2] == low_job.id
+
+
+class TestJobTimeout:
+    """Tests for job timeout features."""
+
+    def test_job_with_timeout(self):
+        """Test creating a job with timeout."""
+        job = Job(type=JobType.IMPORT_NFO, timeout_seconds=60)
+        assert job.timeout_seconds == 60
+
+    def test_job_mark_timeout(self):
+        """Test marking a job as timed out."""
+        job = Job(type=JobType.IMPORT_NFO, timeout_seconds=10)
+        job.mark_running()
+        job.mark_timeout()
+
+        assert job.status == JobStatus.TIMEOUT
+        assert job.error == "Job exceeded timeout of 10 seconds"
+        assert job.completed_at is not None
+
+    @pytest.mark.asyncio
+    async def test_job_timeout_in_queue(self, queue: JobQueue):
+        """Test that jobs timeout when exceeding their limit."""
+
+        async def slow_handler(job: Job) -> None:
+            await asyncio.sleep(5)  # Longer than timeout
+            job.mark_completed({})
+
+        queue.register_handler(JobType.IMPORT_NFO, slow_handler)
+
+        job = Job(type=JobType.IMPORT_NFO, timeout_seconds=1)
+        await queue.submit(job)
+
+        await queue.start()
+        await asyncio.sleep(2)  # Allow timeout to occur
+        await queue.stop()
+
+        assert job.status == JobStatus.TIMEOUT
+        assert "timeout" in job.error.lower()
+
+
+class TestJobDependencies:
+    """Tests for job dependency features."""
+
+    def test_job_with_dependencies(self):
+        """Test creating a job with dependencies."""
+        parent_job = Job(type=JobType.IMPORT_NFO)
+        child_job = Job(type=JobType.METADATA_ENRICH, depends_on=[parent_job.id])
+
+        assert child_job.depends_on == [parent_job.id]
+
+    def test_job_mark_waiting(self):
+        """Test marking a job as waiting for dependencies."""
+        job = Job(type=JobType.IMPORT_NFO, depends_on=["some-other-job"])
+        job.mark_waiting()
+
+        assert job.status == JobStatus.WAITING
+
+    @pytest.mark.asyncio
+    async def test_dependent_job_waits(self, queue: JobQueue):
+        """Test that dependent jobs wait for parent to complete."""
+
+        async def simple_handler(job: Job) -> None:
+            job.mark_completed({"done": True})
+
+        queue.register_handler(JobType.IMPORT_NFO, simple_handler)
+        queue.register_handler(JobType.METADATA_ENRICH, simple_handler)
+
+        parent_job = Job(type=JobType.IMPORT_NFO)
+        child_job = Job(type=JobType.METADATA_ENRICH, depends_on=[parent_job.id])
+
+        # Submit parent first
+        await queue.submit(parent_job)
+        # Submit child - should go to WAITING status
+        await queue.submit(child_job)
+
+        # Child should be waiting
+        assert child_job.status == JobStatus.WAITING
+
+        await queue.start()
+        await asyncio.sleep(0.5)  # Allow processing
+        await queue.stop()
+
+        # Both should be completed
+        assert parent_job.status == JobStatus.COMPLETED
+        assert child_job.status == JobStatus.COMPLETED
+
+
+class TestJobScheduling:
+    """Tests for job scheduling features."""
+
+    def test_job_with_schedule(self):
+        """Test creating a scheduled job."""
+        job = Job(type=JobType.FILE_ORGANIZE, schedule="0 2 * * *")
+        assert job.schedule == "0 2 * * *"
+
+    @pytest.mark.asyncio
+    async def test_scheduled_job_submission(self, queue: JobQueue):
+        """Test that scheduled jobs go to WAITING status."""
+        queue.register_handler(JobType.FILE_ORGANIZE, dummy_handler)
+
+        job = Job(type=JobType.FILE_ORGANIZE, schedule="0 2 * * *")
+        await queue.submit(job)
+
+        assert job.status == JobStatus.WAITING
+        assert job.next_run_at is not None
+
+    @pytest.mark.asyncio
+    async def test_invalid_schedule_raises_error(self, queue: JobQueue):
+        """Test that invalid cron expression raises error."""
+        queue.register_handler(JobType.FILE_ORGANIZE, dummy_handler)
+
+        job = Job(type=JobType.FILE_ORGANIZE, schedule="invalid cron")
+
+        with pytest.raises(ValueError, match="Invalid cron expression"):
+            await queue.submit(job)
+
+
+class TestCronParser:
+    """Tests for cron expression parsing."""
+
+    def test_parse_every_minute(self):
+        """Test parsing every-minute cron."""
+        from datetime import datetime, timezone
+
+        from fuzzbin.tasks.queue import parse_cron
+
+        now = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        next_run = parse_cron("* * * * *", now)
+
+        assert next_run is not None
+        assert next_run > now
+        assert next_run.minute == 31  # Next minute
+
+    def test_parse_every_hour(self):
+        """Test parsing every-hour cron."""
+        from datetime import datetime, timezone
+
+        from fuzzbin.tasks.queue import parse_cron
+
+        now = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        next_run = parse_cron("0 * * * *", now)
+
+        assert next_run is not None
+        assert next_run > now
+        assert next_run.minute == 0
+        assert next_run.hour >= 11  # At least next hour
+
+    def test_parse_every_15_minutes(self):
+        """Test parsing every-15-minutes cron."""
+        from datetime import datetime, timezone
+
+        from fuzzbin.tasks.queue import parse_cron
+
+        now = datetime(2024, 1, 15, 10, 7, 0, tzinfo=timezone.utc)
+        next_run = parse_cron("*/15 * * * *", now)
+
+        assert next_run is not None
+        assert next_run > now
+        assert next_run.minute in [0, 15, 30, 45]
+
+    def test_parse_invalid_cron(self):
+        """Test parsing invalid cron returns None."""
+        from datetime import datetime, timezone
+
+        from fuzzbin.tasks.queue import parse_cron
+
+        now = datetime.now(timezone.utc)
+
+        assert parse_cron("invalid", now) is None
+        assert parse_cron("1 2 3", now) is None  # Too few fields
+        assert parse_cron("1 2 3 4 5 6", now) is None  # Too many fields

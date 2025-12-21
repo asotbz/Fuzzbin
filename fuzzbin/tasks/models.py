@@ -23,10 +23,24 @@ class JobStatus(str, Enum):
     """Job status enumeration."""
 
     PENDING = "pending"
+    WAITING = "waiting"  # Waiting for dependencies
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    TIMEOUT = "timeout"
+
+
+class JobPriority(int, Enum):
+    """Job priority levels.
+
+    Higher values = higher priority (processed first).
+    """
+
+    LOW = 0
+    NORMAL = 5
+    HIGH = 10
+    CRITICAL = 20
 
 
 class Job(BaseModel):
@@ -38,6 +52,7 @@ class Job(BaseModel):
         id: Unique job identifier (UUID)
         type: Type of job (e.g., import_nfo, download_youtube)
         status: Current job status
+        priority: Job priority (higher = processed first)
         progress: Progress percentage (0.0 to 1.0)
         current_step: Human-readable description of current operation
         total_items: Total number of items to process
@@ -48,11 +63,16 @@ class Job(BaseModel):
         started_at: When the job started running
         completed_at: When the job finished (completed/failed/cancelled)
         metadata: Job-specific parameters
+        timeout_seconds: Maximum execution time (None = no timeout)
+        depends_on: List of job IDs that must complete before this job runs
+        schedule: Cron expression for scheduled jobs (None = run immediately)
+        next_run_at: Next scheduled run time (for scheduled jobs)
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     type: JobType
     status: JobStatus = JobStatus.PENDING
+    priority: JobPriority = JobPriority.NORMAL
     progress: float = Field(default=0.0, ge=0.0, le=1.0)
     current_step: str = "Initializing..."
     total_items: int = 0
@@ -63,6 +83,20 @@ class Job(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    # Advanced features
+    timeout_seconds: int | None = Field(
+        default=None, description="Maximum execution time in seconds"
+    )
+    depends_on: list[str] = Field(
+        default_factory=list, description="Job IDs that must complete first"
+    )
+    schedule: str | None = Field(
+        default=None, description="Cron expression for scheduled execution"
+    )
+    next_run_at: datetime | None = Field(
+        default=None, description="Next scheduled run time"
+    )
 
     def update_progress(self, processed: int, total: int, step: str) -> None:
         """Update job progress.
@@ -76,6 +110,10 @@ class Job(BaseModel):
         self.total_items = total
         self.current_step = step
         self.progress = processed / total if total > 0 else 0.0
+
+    def mark_waiting(self) -> None:
+        """Mark job as waiting for dependencies."""
+        self.status = JobStatus.WAITING
 
     def mark_running(self) -> None:
         """Mark job as running."""
@@ -108,15 +146,34 @@ class Job(BaseModel):
         self.status = JobStatus.CANCELLED
         self.completed_at = datetime.now(timezone.utc)
 
+    def mark_timeout(self) -> None:
+        """Mark job as timed out."""
+        self.status = JobStatus.TIMEOUT
+        self.completed_at = datetime.now(timezone.utc)
+        self.error = f"Job exceeded timeout of {self.timeout_seconds} seconds"
+
     @property
     def is_terminal(self) -> bool:
         """Check if job is in a terminal state.
 
         Returns:
-            True if job is completed, failed, or cancelled
+            True if job is completed, failed, cancelled, or timed out
         """
         return self.status in (
             JobStatus.COMPLETED,
             JobStatus.FAILED,
             JobStatus.CANCELLED,
+            JobStatus.TIMEOUT,
         )
+
+    def __lt__(self, other: "Job") -> bool:
+        """Compare jobs for priority queue ordering.
+
+        Higher priority jobs come first. For equal priorities,
+        older jobs (earlier created_at) come first.
+        """
+        if self.priority != other.priority:
+            # Higher priority value = higher priority
+            return self.priority.value > other.priority.value
+        # Equal priority: older jobs first (FIFO within same priority)
+        return self.created_at < other.created_at
