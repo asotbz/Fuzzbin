@@ -1,4 +1,4 @@
-"""FastAPI dependency injection for database and authentication."""
+"""FastAPI dependency injection for database, authentication, and services."""
 
 from typing import AsyncGenerator, Optional
 
@@ -9,6 +9,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import fuzzbin
 from fuzzbin.auth import decode_token, UserInfo
 from fuzzbin.core.db import VideoRepository
+from fuzzbin.services import ImportService, SearchService, VideoService
+from fuzzbin.services.base import ServiceCallback
 
 from .settings import APISettings, get_settings
 
@@ -172,3 +174,83 @@ async def require_auth(
 
     logger.debug("request_authenticated", user_id=user.id, username=user.username)
     return user
+
+
+# ==================== Service Dependencies ====================
+
+
+async def get_video_service(
+    repo: VideoRepository = Depends(get_repository),
+) -> VideoService:
+    """
+    Dependency that provides a VideoService instance.
+
+    The service is created per-request with the repository dependency.
+
+    Args:
+        repo: VideoRepository from get_repository dependency
+
+    Returns:
+        VideoService instance
+
+    Example:
+        @router.get("/videos/{video_id}")
+        async def get_video(
+            video_id: int,
+            video_service: VideoService = Depends(get_video_service)
+        ):
+            return await video_service.get_with_relationships(video_id)
+    """
+    return VideoService(repository=repo)
+
+
+async def get_import_service(
+    repo: VideoRepository = Depends(get_repository),
+) -> ImportService:
+    """
+    Dependency that provides an ImportService instance.
+
+    The service is created per-request with the repository dependency.
+    For Spotify imports, you'll need to pass a SpotifyClient explicitly.
+
+    Args:
+        repo: VideoRepository from get_repository dependency
+
+    Returns:
+        ImportService instance
+
+    Example:
+        @router.post("/imports/nfo")
+        async def import_nfo(
+            directory: str,
+            import_service: ImportService = Depends(get_import_service)
+        ):
+            return await import_service.import_nfo_directory(Path(directory))
+    """
+    return ImportService(repository=repo)
+
+
+async def get_search_service(
+    repo: VideoRepository = Depends(get_repository),
+) -> SearchService:
+    """
+    Dependency that provides a SearchService instance.
+
+    The service is created per-request with the repository dependency.
+    Note: Cached methods maintain their cache across requests.
+
+    Args:
+        repo: VideoRepository from get_repository dependency
+
+    Returns:
+        SearchService instance
+
+    Example:
+        @router.get("/search")
+        async def search(
+            q: str,
+            search_service: SearchService = Depends(get_search_service)
+        ):
+            return await search_service.search_videos(q)
+    """
+    return SearchService(repository=repo)

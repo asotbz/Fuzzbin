@@ -9,8 +9,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from fastapi.responses import StreamingResponse
 
 from fuzzbin.core.db import VideoRepository
+from fuzzbin.services import VideoService
+from fuzzbin.services.base import NotFoundError, ServiceError, ValidationError
 
-from ..dependencies import get_repository
+from ..dependencies import get_repository, get_video_service
 from ..schemas.common import PageParams, PaginatedResponse, SortParams
 from ..schemas.video import (
     VideoCreate,
@@ -504,7 +506,7 @@ async def get_video_thumbnail(
     timestamp: Optional[float] = Query(
         default=None, description="Timestamp in seconds to extract frame from"
     ),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> StreamingResponse:
     """
     Get or generate a thumbnail for a video.
@@ -514,43 +516,11 @@ async def get_video_thumbnail(
 
     Use regenerate=true to force a new thumbnail to be generated.
     """
-    import fuzzbin
-    from fuzzbin.core.file_manager import FileManager
-
-    # Get video and verify it has a file
-    video = await repo.get_video_by_id(video_id)
-    file_path_str = video.get("video_file_path")
-
-    if not file_path_str:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No video file associated with this video",
-        )
-
-    file_path = Path(file_path_str)
-
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Video file not found on disk",
-        )
-
-    # Get config and create file manager
-    config = fuzzbin.get_config()
-    workspace_root = Path(config.database.workspace_root or ".")
-    file_manager = FileManager(
-        config=config.file_manager,
-        workspace_root=workspace_root,
-        thumbnail_config=config.thumbnail,
-    )
-
     try:
-        # Generate or retrieve cached thumbnail
-        thumb_path = await file_manager.generate_thumbnail(
+        thumb_path = await video_service.get_thumbnail(
             video_id=video_id,
-            video_path=file_path,
             timestamp=timestamp,
-            force=regenerate,
+            regenerate=regenerate,
         )
 
         # Stream the thumbnail
@@ -563,13 +533,18 @@ async def get_video_thumbnail(
             headers={"Content-Length": str(thumb_size)},
         )
 
-    except FileNotFoundError as e:
+    except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail=str(e.message),
         )
-    except Exception as e:
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.message),
+        )
+    except ServiceError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Thumbnail generation failed: {e}",
+            detail=str(e.message),
         )

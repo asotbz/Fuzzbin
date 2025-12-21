@@ -1,28 +1,21 @@
 """File management endpoints for organizing, deleting, and verifying media files."""
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-import fuzzbin
 from fuzzbin.auth import UserInfo
-from fuzzbin.core.db import VideoRepository
-from fuzzbin.core.file_manager import (
-    FileManager,
-    FileManagerError,
-    FileNotFoundError as FMFileNotFoundError,
-    FileExistsError as FMFileExistsError,
-    HashMismatchError,
-    RollbackError,
-    DuplicateCandidate,
-    LibraryReport,
+from fuzzbin.services import VideoService
+from fuzzbin.services.base import (
+    ConflictError,
+    NotFoundError,
+    ServiceError,
+    ValidationError,
 )
-from fuzzbin.parsers.models import MusicVideoNFO
 
-from ..dependencies import get_repository, require_auth
+from ..dependencies import get_video_service, require_auth
 
 logger = structlog.get_logger(__name__)
 
@@ -170,35 +163,6 @@ class RepairResponse(BaseModel):
     total_repaired: int
 
 
-# ==================== Helper Functions ====================
-
-
-async def get_file_manager() -> FileManager:
-    """Get configured FileManager instance."""
-    config = fuzzbin.get_config()
-
-    workspace_root = Path(config.database.workspace_root or ".")
-
-    return FileManager(
-        config=config.file_manager,
-        workspace_root=workspace_root,
-        organizer_config=config.organizer,
-    )
-
-
-def nfo_from_video(video: Dict[str, Any]) -> MusicVideoNFO:
-    """Create MusicVideoNFO from video database record."""
-    return MusicVideoNFO(
-        title=video.get("title", ""),
-        artist=video.get("artist"),
-        album=video.get("album"),
-        year=video.get("year"),
-        director=video.get("director"),
-        genre=video.get("genre"),
-        studio=video.get("studio"),
-    )
-
-
 # ==================== Routes ====================
 
 
@@ -218,7 +182,7 @@ async def organize_video(
     video_id: int,
     request: OrganizeRequest = None,
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> OrganizeResponse:
     """
     Organize a video's files using the configured path pattern.
@@ -231,77 +195,36 @@ async def organize_video(
     if request is None:
         request = OrganizeRequest()
 
-    # Get video from database
     try:
-        video = await repo.get_video_by_id(video_id)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video not found: {video_id}",
-        )
-
-    # Get file manager
-    file_manager = await get_file_manager()
-
-    # Create NFO data from video
-    nfo_data = nfo_from_video(video)
-
-    try:
-        target_paths = await file_manager.organize_video(
+        result = await video_service.organize(
             video_id=video_id,
-            repository=repo,
-            nfo_data=nfo_data,
             dry_run=request.dry_run,
         )
-
-        # Determine status
-        current_path = video.get("video_file_path")
-        if str(target_paths.video_path) == current_path:
-            op_status = "already_organized"
-        elif request.dry_run:
-            op_status = "dry_run"
-        else:
-            op_status = "moved"
 
         return OrganizeResponse(
-            video_id=video_id,
-            source_video_path=current_path,
-            target_video_path=str(target_paths.video_path),
-            target_nfo_path=str(target_paths.nfo_path),
-            dry_run=request.dry_run,
-            status=op_status,
+            video_id=result.video_id,
+            source_video_path=result.source_video_path,
+            target_video_path=result.target_video_path,
+            target_nfo_path=result.target_nfo_path,
+            dry_run=result.dry_run,
+            status=result.status,
         )
 
-    except FMFileExistsError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Target file already exists: {e.path}",
-        )
-    except FMFileNotFoundError as e:
+    except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Source file not found: {e.path}",
+            detail=str(e.message),
         )
-    except HashMismatchError as e:
+    except ConflictError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e.message),
+        )
+    except ServiceError as e:
+        logger.error("organize_failed", video_id=video_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"File integrity check failed: {e}",
-        )
-    except RollbackError as e:
-        logger.error(
-            "organize_rollback_failed",
-            video_id=video_id,
-            error=str(e),
-            original_error=str(e.original_error),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"File operation failed and rollback failed: {e}",
-        )
-    except FileManagerError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"File operation failed: {e}",
+            detail=str(e.message),
         )
 
 
@@ -323,7 +246,7 @@ async def delete_video_files(
         description="If true, permanently delete files",
     ),
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> DeleteResponse:
     """
     Delete a video's files.
@@ -331,63 +254,34 @@ async def delete_video_files(
     By default, performs a soft delete by moving files to the trash directory.
     Use hard_delete=true to permanently remove files.
     """
-    # Get video from database (include deleted to handle already soft-deleted videos)
     try:
-        video = await repo.get_video_by_id(video_id, include_deleted=True)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video not found: {video_id}",
+        result = await video_service.delete_files(
+            video_id=video_id,
+            hard_delete=hard_delete,
         )
 
-    video_path = video.get("video_file_path")
-    nfo_path = video.get("nfo_file_path")
+        return DeleteResponse(
+            video_id=result.video_id,
+            deleted=result.deleted,
+            hard_delete=result.hard_delete,
+            trash_path=result.trash_path,
+        )
 
-    if not video_path:
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.message),
+        )
+    except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Video has no file path",
+            detail=str(e.message),
         )
-
-    file_manager = await get_file_manager()
-
-    try:
-        if hard_delete:
-            await file_manager.hard_delete(
-                video_id=video_id,
-                video_path=Path(video_path),
-                repository=repo,
-                nfo_path=Path(nfo_path) if nfo_path else None,
-            )
-            return DeleteResponse(
-                video_id=video_id,
-                deleted=True,
-                hard_delete=True,
-                trash_path=None,
-            )
-        else:
-            trash_path = await file_manager.soft_delete(
-                video_id=video_id,
-                video_path=Path(video_path),
-                repository=repo,
-                nfo_path=Path(nfo_path) if nfo_path else None,
-            )
-            return DeleteResponse(
-                video_id=video_id,
-                deleted=True,
-                hard_delete=False,
-                trash_path=str(trash_path),
-            )
-
-    except FMFileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File not found: {e.path}",
-        )
-    except FileManagerError as e:
+    except ServiceError as e:
+        logger.error("delete_failed", video_id=video_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Delete operation failed: {e}",
+            detail=str(e.message),
         )
 
 
@@ -407,7 +301,7 @@ async def restore_video(
     video_id: int,
     request: RestoreRequest = None,
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> RestoreResponse:
     """
     Restore a video that was soft-deleted to the trash.
@@ -418,81 +312,38 @@ async def restore_video(
     if request is None:
         request = RestoreRequest()
 
-    # Get video including deleted
     try:
-        video = await repo.get_video_by_id(video_id, include_deleted=True)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video not found: {video_id}",
-        )
-
-    if not video.get("is_deleted"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Video is not deleted",
-        )
-
-    current_path = video.get("video_file_path")
-    current_nfo_path = video.get("nfo_file_path")
-
-    if not current_path:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Video has no file path",
-        )
-
-    file_manager = await get_file_manager()
-    config = fuzzbin.get_config()
-    workspace_root = Path(config.database.workspace_root or ".")
-
-    # Determine restore path
-    if request.restore_path:
-        restore_path = Path(request.restore_path)
-        restore_nfo_path = restore_path.with_suffix(".nfo")
-    else:
-        # Try to restore to original location (before trash)
-        # The path in DB is the trash path, so we need to calculate original
-        trash_dir = workspace_root / config.file_manager.trash_dir
-        try:
-            relative = Path(current_path).relative_to(trash_dir)
-            restore_path = workspace_root / relative
-            restore_nfo_path = restore_path.with_suffix(".nfo")
-        except ValueError:
-            # Path isn't in trash - use as-is
-            restore_path = Path(current_path)
-            restore_nfo_path = Path(current_nfo_path) if current_nfo_path else None
-
-    try:
-        restored_path = await file_manager.restore(
+        result = await video_service.restore_files(
             video_id=video_id,
-            trash_video_path=Path(current_path),
-            restore_path=restore_path,
-            repository=repo,
-            trash_nfo_path=Path(current_nfo_path) if current_nfo_path else None,
-            restore_nfo_path=restore_nfo_path,
+            restore_path=request.restore_path,
         )
 
         return RestoreResponse(
-            video_id=video_id,
-            restored=True,
-            restored_path=str(restored_path),
+            video_id=result.video_id,
+            restored=result.restored,
+            restored_path=result.restored_path,
         )
 
-    except FMFileNotFoundError as e:
+    except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Trash file not found: {e.path}",
+            detail=str(e.message),
         )
-    except FMFileExistsError as e:
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.message),
+        )
+    except ConflictError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Restore target already exists: {e.path}",
+            detail=str(e.message),
         )
-    except FileManagerError as e:
+    except ServiceError as e:
+        logger.error("restore_failed", video_id=video_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Restore operation failed: {e}",
+            detail=str(e.message),
         )
 
 
@@ -513,7 +364,7 @@ async def find_duplicates(
         description="Detection method: 'hash', 'metadata', or 'all'",
     ),
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> DuplicatesResponse:
     """
     Find potential duplicates of a video.
@@ -523,48 +374,41 @@ async def find_duplicates(
     - 'metadata': Find videos with matching title/artist (potential duplicates)
     - 'all': Use both methods, merge results
     """
-    # Verify video exists
     try:
-        await repo.get_video_by_id(video_id)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video not found: {video_id}",
+        result = await video_service.find_duplicates(
+            video_id=video_id,
+            method=method,
         )
-
-    file_manager = await get_file_manager()
-
-    try:
-        if method == "hash":
-            candidates = await file_manager.find_duplicates_by_hash(video_id, repo)
-        elif method == "metadata":
-            candidates = await file_manager.find_duplicates_by_metadata(video_id, repo)
-        else:
-            candidates = await file_manager.find_all_duplicates(video_id, repo)
 
         duplicates = [
             DuplicateResponse(
-                video_id=c.video_id,
-                match_type=c.match_type,
-                confidence=c.confidence,
-                title=c.video_data.get("title"),
-                artist=c.video_data.get("artist"),
-                file_path=c.video_data.get("video_file_path"),
-                file_hash=c.video_data.get("file_hash"),
+                video_id=d.video_id,
+                match_type=d.match_type,
+                confidence=d.confidence,
+                title=d.video_data.get("title"),
+                artist=d.video_data.get("artist"),
+                file_path=d.video_data.get("video_file_path"),
+                file_hash=d.video_data.get("file_hash"),
             )
-            for c in candidates
+            for d in result.duplicates
         ]
 
         return DuplicatesResponse(
-            video_id=video_id,
+            video_id=result.video_id,
             duplicates=duplicates,
-            total=len(duplicates),
+            total=result.total,
         )
 
-    except FileManagerError as e:
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.message),
+        )
+    except ServiceError as e:
+        logger.error("find_duplicates_failed", video_id=video_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Duplicate detection failed: {e}",
+            detail=str(e.message),
         )
 
 
@@ -582,7 +426,7 @@ async def find_duplicates(
 async def resolve_duplicates(
     request: ResolveRequest,
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> ResolveResponse:
     """
     Resolve duplicates by keeping one video and removing others.
@@ -590,61 +434,30 @@ async def resolve_duplicates(
     The kept video is unchanged. Duplicate videos are either soft deleted
     (moved to trash) or hard deleted (permanently removed).
     """
-    # Verify keep video exists
     try:
-        await repo.get_video_by_id(request.keep_video_id)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video to keep not found: {request.keep_video_id}",
+        result = await video_service.resolve_duplicates(
+            keep_video_id=request.keep_video_id,
+            remove_video_ids=request.remove_video_ids,
+            hard_delete=request.hard_delete,
         )
 
-    file_manager = await get_file_manager()
-    removed_ids = []
+        return ResolveResponse(
+            kept_video_id=result.kept_video_id,
+            removed_count=result.removed_count,
+            removed_video_ids=result.removed_video_ids,
+        )
 
-    for remove_id in request.remove_video_ids:
-        try:
-            video = await repo.get_video_by_id(remove_id)
-            video_path = video.get("video_file_path")
-            nfo_path = video.get("nfo_file_path")
-
-            if video_path:
-                if request.hard_delete:
-                    await file_manager.hard_delete(
-                        video_id=remove_id,
-                        video_path=Path(video_path),
-                        repository=repo,
-                        nfo_path=Path(nfo_path) if nfo_path else None,
-                    )
-                else:
-                    await file_manager.soft_delete(
-                        video_id=remove_id,
-                        video_path=Path(video_path),
-                        repository=repo,
-                        nfo_path=Path(nfo_path) if nfo_path else None,
-                    )
-            else:
-                # No file path - just delete DB record
-                if request.hard_delete:
-                    await repo.hard_delete_video(remove_id)
-                else:
-                    await repo.delete_video(remove_id)
-
-            removed_ids.append(remove_id)
-
-        except Exception as e:
-            logger.warning(
-                "duplicate_removal_failed",
-                video_id=remove_id,
-                error=str(e),
-            )
-            # Continue with other removals
-
-    return ResolveResponse(
-        kept_video_id=request.keep_video_id,
-        removed_count=len(removed_ids),
-        removed_video_ids=removed_ids,
-    )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.message),
+        )
+    except ServiceError as e:
+        logger.error("resolve_duplicates_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e.message),
+        )
 
 
 @router.get(
@@ -663,7 +476,7 @@ async def verify_library(
         description="Also scan for files not in database",
     ),
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> VerifyResponse:
     """
     Verify library integrity by checking database paths against filesystem.
@@ -673,13 +486,8 @@ async def verify_library(
     - NFO paths in DB point to existing files
     - (Optional) Files in workspace that aren't tracked in DB
     """
-    file_manager = await get_file_manager()
-
     try:
-        report = await file_manager.verify_library(
-            repository=repo,
-            scan_orphans=scan_orphans,
-        )
+        report = await video_service.verify_library()
 
         return VerifyResponse(
             videos_checked=report.videos_checked,
@@ -701,11 +509,11 @@ async def verify_library(
             ],
         )
 
-    except Exception as e:
+    except ServiceError as e:
         logger.error("library_verification_failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Library verification failed: {e}",
+            detail=str(e.message),
         )
 
 
@@ -722,7 +530,7 @@ async def verify_library(
 async def repair_library(
     request: RepairRequest = None,
     user: Optional[UserInfo] = Depends(require_auth),
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> RepairResponse:
     """
     Repair library issues found during verification.
@@ -734,39 +542,21 @@ async def repair_library(
     if request is None:
         request = RepairRequest()
 
-    file_manager = await get_file_manager()
+    try:
+        result = await video_service.repair_library(
+            repair_missing=request.repair_missing_files,
+            repair_broken_nfos=request.repair_broken_nfos,
+        )
 
-    # First verify to find issues
-    report = await file_manager.verify_library(
-        repository=repo,
-        scan_orphans=False,  # Don't need orphans for repair
-    )
+        return RepairResponse(
+            repaired_missing_files=result.get("repaired_missing_files", 0),
+            repaired_broken_nfos=result.get("repaired_broken_nfos", 0),
+            total_repaired=result.get("total_repaired", 0),
+        )
 
-    repaired_missing = 0
-    repaired_nfos = 0
-
-    for issue in report.issues:
-        try:
-            if issue.issue_type == "missing_file" and request.repair_missing_files:
-                if issue.video_id:
-                    await file_manager.repair_missing_file(issue.video_id, repo)
-                    repaired_missing += 1
-
-            elif issue.issue_type == "broken_nfo" and request.repair_broken_nfos:
-                if issue.video_id:
-                    await file_manager.repair_broken_nfo(issue.video_id, repo)
-                    repaired_nfos += 1
-
-        except Exception as e:
-            logger.warning(
-                "repair_failed",
-                issue_type=issue.issue_type,
-                video_id=issue.video_id,
-                error=str(e),
-            )
-
-    return RepairResponse(
-        repaired_missing_files=repaired_missing,
-        repaired_broken_nfos=repaired_nfos,
-        total_repaired=repaired_missing + repaired_nfos,
-    )
+    except ServiceError as e:
+        logger.error("library_repair_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e.message),
+        )
