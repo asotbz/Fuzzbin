@@ -74,8 +74,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.auth_enabled:
         logger.info("api_auth_enabled", jwt_algorithm=settings.jwt_algorithm)
         await _check_default_password_warning()
+        
+        # Cleanup expired revoked tokens on startup
+        try:
+            from fuzzbin.auth import cleanup_expired_tokens
+            cleaned = await cleanup_expired_tokens()
+            if cleaned > 0:
+                logger.info("startup_token_cleanup", expired_tokens_removed=cleaned)
+        except Exception as e:
+            logger.debug("startup_token_cleanup_failed", error=str(e))
     else:
-        logger.info("api_auth_disabled", note="Set FUZZBIN_API_AUTH_ENABLED=true for production")
+        # Log prominent warning for insecure mode
+        logger.warning(
+            "SECURITY_WARNING_INSECURE_MODE",
+            message="Running in INSECURE MODE - authentication is disabled!",
+            bound_host=settings.host,
+            note="This mode is for local development only. All endpoints are unprotected.",
+        )
 
     # Register config change callback for WebSocket broadcast
     try:

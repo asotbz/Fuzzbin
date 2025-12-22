@@ -33,6 +33,27 @@ TEST_PASSWORD = "changeme"
 TEST_NEW_PASSWORD = "newpassword123"
 
 
+import os
+
+
+@pytest.fixture(autouse=True)
+def set_jwt_secret_env(monkeypatch):
+    """Set JWT secret environment variable for all tests in this module.
+    
+    This is required because APISettings now always requires jwt_secret,
+    and create_app() calls get_settings() before dependency overrides are set.
+    """
+    monkeypatch.setenv("FUZZBIN_API_JWT_SECRET", TEST_JWT_SECRET)
+    # Also set auth_enabled since it's the new default
+    monkeypatch.setenv("FUZZBIN_API_AUTH_ENABLED", "true")
+    # Allow insecure mode for tests that disable auth
+    monkeypatch.setenv("FUZZBIN_API_ALLOW_INSECURE_MODE", "true")
+    # Clear the settings cache to pick up the new env vars
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 class TestPasswordHashing:
     """Tests for password hashing utilities."""
 
@@ -257,6 +278,7 @@ def auth_disabled_settings() -> APISettings:
         allowed_origins=["*"],
         log_requests=False,
         auth_enabled=False,
+        allow_insecure_mode=True,  # Required when auth_enabled=False
         jwt_secret=TEST_JWT_SECRET,  # Still needed for login endpoint to work
     )
 
@@ -284,6 +306,12 @@ async def auth_test_repository(tmp_path) -> AsyncGenerator[VideoRepository, None
     )
     row = await cursor.fetchone()
     assert row is not None, "Admin user should be created by migration"
+    
+    # Clear password_must_change flag for most tests (separate tests cover rotation flow)
+    await repo._connection.execute(
+        "UPDATE users SET password_must_change = 0 WHERE username = 'admin'"
+    )
+    await repo._connection.commit()
     
     yield repo
     await repo.close()
@@ -505,6 +533,156 @@ class TestRefreshEndpoint:
         response = auth_test_app.post(
             "/auth/refresh",
             json={"refresh_token": access_token},
+        )
+        
+        assert response.status_code == 401
+
+
+@pytest_asyncio.fixture
+async def password_rotation_repository(tmp_path) -> AsyncGenerator[VideoRepository, None]:
+    """Repository with password_must_change=true for testing password rotation."""
+    db_config = DatabaseConfig(
+        database_path=str(tmp_path / "test_rotation.db"),
+        enable_wal_mode=False,
+        connection_timeout=30,
+        backup_dir=str(tmp_path / "backups"),
+    )
+    repo = await VideoRepository.from_config(db_config)
+    
+    # Keep password_must_change=true (set by migration 008)
+    cursor = await repo._connection.execute(
+        "SELECT password_must_change FROM users WHERE username = 'admin'"
+    )
+    row = await cursor.fetchone()
+    assert row[0] == 1, "password_must_change should be true from migration"
+    
+    yield repo
+    await repo.close()
+
+
+@pytest_asyncio.fixture
+async def password_rotation_app(
+    password_rotation_repository: VideoRepository,
+    auth_api_settings: APISettings,
+    fresh_throttle: LoginThrottle,
+) -> AsyncGenerator[TestClient, None]:
+    """Provide a FastAPI TestClient with password rotation required."""
+    from fuzzbin.auth import get_login_throttle
+    
+    test_config = Config(
+        database=DatabaseConfig(
+            database_path=":memory:",
+        ),
+        logging=LoggingConfig(
+            level="WARNING",
+            format="text",
+            handlers=["console"],
+        ),
+    )
+    
+    fuzzbin._config = test_config
+    fuzzbin._repository = password_rotation_repository
+
+    get_settings.cache_clear()
+    app = create_app()
+
+    async def override_get_repository() -> AsyncGenerator[VideoRepository, None]:
+        yield password_rotation_repository
+
+    def override_get_settings() -> APISettings:
+        return auth_api_settings
+
+    def override_get_throttle() -> LoginThrottle:
+        return fresh_throttle
+
+    app.dependency_overrides[get_repository] = override_get_repository
+    app.dependency_overrides[get_settings] = override_get_settings
+    app.dependency_overrides[get_api_settings] = override_get_settings
+    app.dependency_overrides[get_login_throttle] = override_get_throttle
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        yield client
+
+    app.dependency_overrides.clear()
+    get_settings.cache_clear()
+
+
+class TestPasswordRotation:
+    """Tests for password rotation (set-initial-password) endpoint."""
+
+    def test_login_blocked_when_password_must_change(self, password_rotation_app: TestClient):
+        """Test that login is blocked when password_must_change is true."""
+        response = password_rotation_app.post(
+            "/auth/login",
+            json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+        )
+        
+        assert response.status_code == 403
+        data = response.json()
+        assert "Password change required" in data["detail"]
+        assert "/auth/set-initial-password" in data["detail"]
+        # The password change requirement is also indicated via header
+        assert response.headers.get("X-Password-Change-Required") == "true"
+
+    def test_set_initial_password_success(self, password_rotation_app: TestClient):
+        """Test successful initial password change."""
+        response = password_rotation_app.post(
+            "/auth/set-initial-password",
+            json={
+                "username": TEST_USERNAME,
+                "current_password": TEST_PASSWORD,
+                "new_password": TEST_NEW_PASSWORD,
+            },
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_set_initial_password_then_login_works(self, password_rotation_app: TestClient):
+        """Test that login works after setting initial password."""
+        # Set initial password
+        password_rotation_app.post(
+            "/auth/set-initial-password",
+            json={
+                "username": TEST_USERNAME,
+                "current_password": TEST_PASSWORD,
+                "new_password": TEST_NEW_PASSWORD,
+            },
+        )
+        
+        # Now login should work
+        response = password_rotation_app.post(
+            "/auth/login",
+            json={"username": TEST_USERNAME, "password": TEST_NEW_PASSWORD},
+        )
+        
+        assert response.status_code == 200
+
+    def test_set_initial_password_wrong_current(self, password_rotation_app: TestClient):
+        """Test set-initial-password failure with wrong current password."""
+        response = password_rotation_app.post(
+            "/auth/set-initial-password",
+            json={
+                "username": TEST_USERNAME,
+                "current_password": "wrongpassword",
+                "new_password": TEST_NEW_PASSWORD,
+            },
+        )
+        
+        assert response.status_code == 401
+
+    def test_set_initial_password_wrong_username(self, password_rotation_app: TestClient):
+        """Test set-initial-password failure with non-existent username."""
+        response = password_rotation_app.post(
+            "/auth/set-initial-password",
+            json={
+                "username": "nonexistent",
+                "current_password": TEST_PASSWORD,
+                "new_password": TEST_NEW_PASSWORD,
+            },
         )
         
         assert response.status_code == 401

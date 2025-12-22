@@ -5,6 +5,8 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 
 from fuzzbin.auth import (
     LoginRequest,
@@ -19,6 +21,8 @@ from fuzzbin.auth import (
     verify_password,
     get_login_throttle,
     LoginThrottle,
+    revoke_token,
+    revoke_all_user_tokens,
 )
 from fuzzbin.core.db import VideoRepository
 
@@ -29,12 +33,39 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+# Bearer token security scheme for logout
+bearer_scheme = HTTPBearer(auto_error=False)
 
-def get_client_ip(request: Request) -> str:
-    """Extract client IP from request, considering proxies."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+
+class SetInitialPasswordRequest(BaseModel):
+    """Request body for setting initial password."""
+
+    username: str = Field(..., min_length=1, description="Username")
+    current_password: str = Field(..., min_length=1, description="Current password (default: changeme)")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
+
+
+class PasswordRotationRequiredResponse(BaseModel):
+    """Response when password rotation is required."""
+
+    detail: str = "Password change required"
+    redirect_to: str = "/auth/set-initial-password"
+    message: str = "Your account requires a password change before you can log in."
+
+
+def get_client_ip(request: Request, settings: APISettings = None) -> str:
+    """Extract client IP from request, considering trusted proxies.
+    
+    Only parses X-Forwarded-For when trusted_proxy_count > 0.
+    Takes the Nth-from-right IP where N = trusted_proxy_count.
+    """
+    if settings and settings.trusted_proxy_count > 0:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            ips = [ip.strip() for ip in forwarded.split(",")]
+            # Take Nth from right (trusted_proxy_count determines how many proxies we trust)
+            index = max(0, len(ips) - settings.trusted_proxy_count)
+            return ips[index]
     return request.client.host if request.client else "unknown"
 
 
@@ -45,6 +76,7 @@ def get_client_ip(request: Request) -> str:
     responses={
         200: {"description": "Successful authentication"},
         401: {"description": "Invalid credentials"},
+        403: {"description": "Password change required", "model": PasswordRotationRequiredResponse},
         429: {"description": "Too many failed attempts"},
     },
 )
@@ -61,9 +93,12 @@ async def login(
     Validates username and password, returns access and refresh tokens
     on successful authentication.
 
+    If the user's password_must_change flag is set, returns 403 with
+    instructions to use /auth/set-initial-password endpoint.
+
     Rate limited: 5 failed attempts per minute per IP address.
     """
-    client_ip = get_client_ip(request)
+    client_ip = get_client_ip(request, settings)
 
     # Check if IP is throttled
     if throttle.is_blocked(client_ip):
@@ -74,9 +109,9 @@ async def login(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Look up user
+    # Look up user (including password_must_change flag)
     cursor = await repo._connection.execute(
-        "SELECT id, username, password_hash, is_active FROM users WHERE username = ?",
+        "SELECT id, username, password_hash, is_active, password_must_change FROM users WHERE username = ?",
         (login_request.username,),
     )
     row = await cursor.fetchone()
@@ -89,7 +124,7 @@ async def login(
             detail="Invalid username or password",
         )
 
-    user_id, username, password_hash, is_active = row
+    user_id, username, password_hash, is_active, password_must_change = row
 
     if not is_active:
         throttle.record_failure(client_ip)
@@ -106,6 +141,15 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
+        )
+
+    # Check if password rotation is required
+    if password_must_change:
+        logger.info("login_blocked_password_rotation_required", username=username, user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password change required. Use /auth/set-initial-password to set a new password.",
+            headers={"X-Password-Change-Required": "true"},
         )
 
     # Successful login - clear throttle and update last_login_at
@@ -247,6 +291,7 @@ async def change_password(
     Change the password for the authenticated user.
 
     Requires authentication. Validates current password before updating.
+    After password change, all existing tokens for this user are invalidated.
     """
     if not user:
         raise HTTPException(
@@ -285,27 +330,197 @@ async def change_password(
     )
     await repo._connection.commit()
 
+    # Invalidate all existing tokens for this user
+    await revoke_all_user_tokens(
+        user_id=user.id,
+        reason="password_changed",
+        connection=repo._connection,
+    )
+
     logger.info("password_changed", user_id=user.id, username=user.username)
 
 
 @router.post(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Logout (no-op for stateless JWT)",
+    summary="Logout and revoke tokens",
     responses={
-        204: {"description": "Logout acknowledged"},
+        204: {"description": "Tokens revoked successfully"},
+        401: {"description": "Invalid or missing token"},
     },
 )
-async def logout() -> None:
+async def logout(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    settings: APISettings = Depends(get_api_settings),
+    repo: VideoRepository = Depends(get_repository),
+) -> None:
     """
-    Logout endpoint (no-op for stateless JWT).
+    Logout and revoke the current access token.
 
-    Since JWT tokens are stateless, this endpoint doesn't invalidate tokens.
-    Clients should discard tokens on logout.
-
-    Note: For true token invalidation, implement a token blacklist
-    (requires Redis or database storage - out of scope for single-user auth).
+    The provided Bearer token will be added to the revocation list,
+    preventing it from being used again even if it hasn't expired.
+    
+    Clients should also discard their refresh token after logout.
     """
-    # No-op: stateless JWT means no server-side session to invalidate
-    # Client should discard tokens
-    pass
+    if not credentials:
+        # No token provided - nothing to revoke
+        return
+    
+    token = credentials.credentials
+    payload = decode_token(
+        token=token,
+        secret_key=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        check_revoked=False,  # Don't fail if already revoked
+    )
+    
+    if not payload:
+        # Invalid token - nothing to revoke
+        return
+    
+    jti = payload.get("jti")
+    user_id = payload.get("user_id")
+    exp = payload.get("exp")
+    
+    if jti and user_id and exp:
+        # Convert exp timestamp to datetime
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        
+        await revoke_token(
+            jti=jti,
+            user_id=user_id,
+            expires_at=expires_at,
+            reason="logout",
+            connection=repo._connection,
+        )
+        
+        logger.info("logout_token_revoked", user_id=user_id, jti=jti)
+
+
+@router.post(
+    "/set-initial-password",
+    response_model=TokenResponse,
+    summary="Set initial password for first-time setup",
+    responses={
+        200: {"description": "Password changed, tokens issued"},
+        400: {"description": "Invalid current password or new password requirements not met"},
+        401: {"description": "Invalid credentials"},
+        403: {"description": "Password rotation not required for this user"},
+        429: {"description": "Too many failed attempts"},
+    },
+)
+async def set_initial_password(
+    request: Request,
+    password_request: SetInitialPasswordRequest,
+    repo: VideoRepository = Depends(get_repository),
+    settings: APISettings = Depends(get_api_settings),
+    throttle: LoginThrottle = Depends(get_login_throttle),
+) -> TokenResponse:
+    """
+    Set a new password for users requiring password rotation.
+
+    This endpoint is used during first-time setup or when an admin has
+    reset a user's password. It validates the current password, sets
+    the new password, clears the password_must_change flag, and returns
+    authentication tokens.
+
+    Unlike /auth/password, this endpoint does not require prior authentication
+    and is specifically for users who cannot log in due to password rotation
+    requirements.
+    """
+    client_ip = get_client_ip(request, settings)
+
+    # Check if IP is throttled
+    if throttle.is_blocked(client_ip):
+        retry_after = throttle.get_retry_after(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Look up user
+    cursor = await repo._connection.execute(
+        "SELECT id, username, password_hash, is_active, password_must_change FROM users WHERE username = ?",
+        (password_request.username,),
+    )
+    row = await cursor.fetchone()
+
+    if not row:
+        throttle.record_failure(client_ip)
+        logger.warning("set_initial_password_user_not_found", username=password_request.username, ip=client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+
+    user_id, username, password_hash, is_active, password_must_change = row
+
+    if not is_active:
+        throttle.record_failure(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is disabled",
+        )
+
+    # Verify this user actually requires password rotation
+    if not password_must_change:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password rotation is not required for this user. Use /auth/password instead.",
+        )
+
+    # Verify current password
+    if not verify_password(password_request.current_password, password_hash):
+        throttle.record_failure(client_ip)
+        logger.warning("set_initial_password_invalid_current", username=username, ip=client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+
+    # Ensure new password is different from current
+    if password_request.new_password == password_request.current_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password",
+        )
+
+    # Hash and store new password, clear the rotation flag
+    new_hash = hash_password(password_request.new_password)
+    now = datetime.now(timezone.utc).isoformat()
+
+    await repo._connection.execute(
+        "UPDATE users SET password_hash = ?, password_must_change = 0, last_login_at = ?, updated_at = ? WHERE id = ?",
+        (new_hash, now, now, user_id),
+    )
+    await repo._connection.commit()
+
+    # Clear throttle on success
+    throttle.clear(client_ip)
+
+    # Create tokens for immediate login
+    token_data = {"sub": username, "user_id": user_id}
+
+    access_token = create_access_token(
+        data=token_data,
+        secret_key=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        expires_minutes=settings.jwt_expires_minutes,
+    )
+
+    refresh_token = create_refresh_token(
+        data=token_data,
+        secret_key=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        expires_minutes=settings.refresh_token_expires_minutes,
+    )
+
+    logger.info("initial_password_set", username=username, user_id=user_id, ip=client_ip)
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in=settings.jwt_expires_minutes * 60,
+    )

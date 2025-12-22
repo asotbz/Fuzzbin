@@ -8,6 +8,8 @@ import aiofiles
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
+import fuzzbin
+from fuzzbin.common.path_security import PathSecurityError, validate_contained_path
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import VideoService
 from fuzzbin.services.base import NotFoundError, ServiceError, ValidationError
@@ -43,6 +45,56 @@ VALID_VIDEO_SORT_FIELDS = {
     "updated_at",
     "status",
 }
+
+
+def _get_library_dir() -> Path:
+    """Get configured library directory for path validation."""
+    config = fuzzbin.get_config()
+    if config.library_dir:
+        return config.library_dir
+    from fuzzbin.common.config import _get_default_library_dir
+    return _get_default_library_dir()
+
+
+def _validate_video_paths(
+    video_file_path: Optional[str],
+    nfo_file_path: Optional[str],
+) -> Tuple[Optional[str], Optional[str]]:
+    """Validate and normalize video/NFO file paths.
+    
+    Ensures paths are contained within library_dir to prevent path traversal.
+    
+    Returns:
+        Tuple of (validated_video_path, validated_nfo_path) as strings
+        
+    Raises:
+        HTTPException: If paths are outside allowed directories
+    """
+    library_dir = _get_library_dir()
+    validated_video = None
+    validated_nfo = None
+    
+    if video_file_path:
+        try:
+            validated = validate_contained_path(video_file_path, [library_dir])
+            validated_video = str(validated)
+        except PathSecurityError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid video file path: {e}. Path must be within library directory.",
+            )
+    
+    if nfo_file_path:
+        try:
+            validated = validate_contained_path(nfo_file_path, [library_dir])
+            validated_nfo = str(validated)
+        except PathSecurityError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid NFO file path: {e}. Path must be within library directory.",
+            )
+    
+    return validated_video, validated_nfo
 
 
 @router.get(
@@ -165,14 +217,20 @@ async def create_video(
     repo: VideoRepository = Depends(get_repository),
 ) -> VideoResponse:
     """Create a new video."""
+    # Validate file paths to prevent path traversal
+    validated_video_path, validated_nfo_path = _validate_video_paths(
+        video.video_file_path,
+        video.nfo_file_path,
+    )
+    
     video_id = await repo.create_video(**video.to_repo_kwargs())
 
-    # If file paths were provided, update them separately
-    if video.video_file_path or video.nfo_file_path:
+    # If file paths were provided, update them separately (with validated paths)
+    if validated_video_path or validated_nfo_path:
         await repo.update_video(
             video_id,
-            video_file_path=video.video_file_path,
-            nfo_file_path=video.nfo_file_path,
+            video_file_path=validated_video_path,
+            nfo_file_path=validated_nfo_path,
         )
 
     row = await repo.get_video_by_id(video_id)
@@ -194,6 +252,18 @@ async def update_video(
     """Update a video's metadata."""
     # Verify video exists
     await repo.get_video_by_id(video_id)
+
+    # Validate file paths if provided
+    if video.video_file_path is not None or video.nfo_file_path is not None:
+        validated_video_path, validated_nfo_path = _validate_video_paths(
+            video.video_file_path,
+            video.nfo_file_path,
+        )
+        # Update the video object with validated paths
+        if video.video_file_path is not None:
+            video.video_file_path = validated_video_path
+        if video.nfo_file_path is not None:
+            video.nfo_file_path = validated_nfo_path
 
     # Update with provided fields
     updates = video.to_repo_kwargs()
@@ -507,7 +577,15 @@ async def stream_video(
             detail="No video file associated with this video",
         )
 
-    file_path = Path(file_path_str)
+    # Validate the stored path is within library_dir (defense in depth)
+    library_dir = _get_library_dir()
+    try:
+        file_path = validate_contained_path(file_path_str, [library_dir], must_exist=False)
+    except PathSecurityError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Video file path is outside allowed directories",
+        )
 
     if not file_path.exists():
         raise HTTPException(

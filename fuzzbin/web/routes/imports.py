@@ -7,6 +7,7 @@ Provides endpoints for:
 
 from dataclasses import dataclass, field
 from typing import Annotated, List, Optional
+from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,8 +15,10 @@ from pydantic import BaseModel, Field
 
 import fuzzbin
 from fuzzbin.auth.schemas import UserInfo
+from fuzzbin.common.path_security import PathSecurityError, validate_contained_path
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.tasks import JobType, get_job_queue
+from fuzzbin.web.settings import get_settings
 
 from ..dependencies import get_repository, require_auth
 from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
@@ -98,6 +101,106 @@ def _is_background_available() -> bool:
         return False
 
 
+def _get_library_dir():
+    """Get configured library directory."""
+    config = fuzzbin.get_config()
+    if config.library_dir:
+        return config.library_dir
+    from fuzzbin.common.config import _get_default_library_dir
+    return _get_default_library_dir()
+
+
+def _validate_import_urls(urls: List[str]) -> None:
+    """Validate import URLs against allowlist.
+    
+    Raises:
+        HTTPException: If any URL fails validation
+    """
+    settings = get_settings()
+    allowed_schemes = settings.import_allowed_schemes
+    allowed_hosts = settings.import_allowed_hosts
+    
+    for url in urls:
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid URL format: {url}",
+            )
+        
+        # Validate scheme
+        if parsed.scheme.lower() not in [s.lower() for s in allowed_schemes]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"URL scheme '{parsed.scheme}' not allowed. Allowed schemes: {allowed_schemes}",
+            )
+        
+        # Validate host if allowlist is configured
+        if allowed_hosts is not None:
+            host = parsed.netloc.lower()
+            # Strip port if present
+            if ":" in host:
+                host = host.split(":")[0]
+            
+            # Check against allowlist (support wildcards like *.youtube.com)
+            allowed = False
+            for allowed_host in allowed_hosts:
+                allowed_host = allowed_host.lower()
+                if allowed_host.startswith("*."):
+                    # Wildcard match
+                    domain = allowed_host[2:]
+                    if host == domain or host.endswith("." + domain):
+                        allowed = True
+                        break
+                elif host == allowed_host:
+                    allowed = True
+                    break
+            
+            if not allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"URL host '{parsed.netloc}' not in allowed hosts list",
+                )
+
+
+def _validate_output_directory(output_directory: Optional[str]) -> Optional[str]:
+    """Validate and normalize output directory path.
+    
+    Returns:
+        Validated absolute path string, or None if not specified
+        
+    Raises:
+        HTTPException: If path is outside allowed directories
+    """
+    if not output_directory:
+        return None
+    
+    library_dir = _get_library_dir()
+    try:
+        validated = validate_contained_path(output_directory, [library_dir])
+        return str(validated)
+    except PathSecurityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid output directory: {e}. Path must be within library directory.",
+        )
+
+
+def _check_import_endpoints_enabled() -> None:
+    """Check if import endpoints are enabled.
+    
+    Raises:
+        HTTPException: If import endpoints are disabled
+    """
+    settings = get_settings()
+    if not settings.import_endpoints_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Import endpoints are disabled. Set FUZZBIN_API_IMPORT_ENDPOINTS_ENABLED=true to enable.",
+        )
+
+
 # ==================== YouTube Import ====================
 
 
@@ -105,7 +208,11 @@ def _is_background_available() -> bool:
     "/youtube",
     response_model=ImportResult,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        400: COMMON_ERROR_RESPONSES[400],
+        403: {"description": "Import endpoints disabled"},
+    },
     summary="Import from YouTube",
     description="Import videos from YouTube URLs. Small batches run synchronously, "
     "larger batches require background task queue.",
@@ -120,7 +227,19 @@ async def import_from_youtube(
 
     For small batches (under max_sync_import_items), runs synchronously.
     For larger batches, queues a background job if available.
+    
+    URLs are validated against the configured scheme/host allowlist.
+    Output directory must be within library_dir.
     """
+    # Check if import endpoints are enabled
+    _check_import_endpoints_enabled()
+    
+    # Validate URLs against allowlist
+    _validate_import_urls(request.urls)
+    
+    # Validate output directory if provided
+    validated_output_dir = _validate_output_directory(request.output_directory)
+    
     max_sync = await _get_max_sync_items()
 
     if len(request.urls) > max_sync:
@@ -136,7 +255,7 @@ async def import_from_youtube(
                     "import_type": "youtube",
                     "urls": request.urls,
                     "download_video": request.download_video,
-                    "output_directory": request.output_directory,
+                    "output_directory": validated_output_dir,  # Use validated path
                     "user": current_user.username if current_user else "anonymous",
                 },
             )

@@ -8,6 +8,13 @@ from .security import (
     decode_token,
     DEFAULT_PASSWORD_HASH,
     is_default_password,
+    # Token revocation
+    TokenDenylistCache,
+    get_token_denylist_cache,
+    revoke_token,
+    revoke_all_user_tokens,
+    check_token_revoked_in_db,
+    cleanup_expired_tokens,
 )
 from .schemas import (
     LoginRequest,
@@ -27,6 +34,13 @@ __all__ = [
     "decode_token",
     "DEFAULT_PASSWORD_HASH",
     "is_default_password",
+    # Token revocation
+    "TokenDenylistCache",
+    "get_token_denylist_cache",
+    "revoke_token",
+    "revoke_all_user_tokens",
+    "check_token_revoked_in_db",
+    "cleanup_expired_tokens",
     # Schemas
     "LoginRequest",
     "TokenResponse",

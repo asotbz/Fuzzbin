@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 import fuzzbin
 from fuzzbin.auth.schemas import UserInfo
+from fuzzbin.common.path_security import PathSecurityError, validate_contained_path
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.core.db.exporter import NFOExporter
 
@@ -250,10 +251,22 @@ async def export_playlist(
     - csv: CSV with title, artist, album, path columns
     - json: Full video metadata as JSON array
 
-    The output_path must be provided by the user specifying where to write the file.
+    The output_path must be within library_dir or config_dir for security.
     """
-    # Validate and prepare output path
-    file_path = Path(request.output_path)
+    # Validate output path is within allowed directories
+    library_dir = await _get_library_dir()
+    config_dir = await _get_config_dir()
+    
+    try:
+        file_path = validate_contained_path(
+            request.output_path,
+            [library_dir, config_dir],
+        )
+    except PathSecurityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid output path: {e}. Path must be within library or config directory.",
+        )
 
     # Ensure parent directory exists
     file_path.parent.mkdir(parents=True, exist_ok=True)

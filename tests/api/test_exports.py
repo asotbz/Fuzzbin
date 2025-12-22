@@ -106,17 +106,17 @@ class TestPlaylistExport:
     """Tests for POST /exports/playlist endpoint."""
 
     def test_export_m3u_playlist(
-        self, test_app: TestClient, sample_video_data: dict, tmp_path: Path
+        self, test_app: TestClient, sample_video_data: dict, test_config_dir: Path
     ) -> None:
         """Test exporting M3U playlist."""
         # Create video with file path
         video_data = {
             **sample_video_data,
-            "video_file_path": str(tmp_path / "video.mp4"),
+            "video_file_path": str(test_config_dir / "video.mp4"),
         }
         test_app.post("/videos", json=video_data)
 
-        output_file = tmp_path / "My Playlist.m3u"
+        output_file = test_config_dir / "My Playlist.m3u"
         response = test_app.post(
             "/exports/playlist",
             json={
@@ -134,12 +134,12 @@ class TestPlaylistExport:
         assert data["file_path"].endswith(".m3u")
 
     def test_export_csv_playlist(
-        self, test_app: TestClient, sample_video_data: dict, tmp_path: Path
+        self, test_app: TestClient, sample_video_data: dict, test_config_dir: Path
     ) -> None:
         """Test exporting CSV playlist."""
         test_app.post("/videos", json=sample_video_data)
 
-        output_file = tmp_path / "CSV Export.csv"
+        output_file = test_config_dir / "CSV Export.csv"
         response = test_app.post(
             "/exports/playlist",
             json={
@@ -155,13 +155,13 @@ class TestPlaylistExport:
         assert data["file_path"].endswith(".csv")
 
     def test_export_json_playlist(
-        self, test_app: TestClient, sample_video_data: dict, sample_video_data_2: dict, tmp_path: Path
+        self, test_app: TestClient, sample_video_data: dict, sample_video_data_2: dict, test_config_dir: Path
     ) -> None:
         """Test exporting JSON playlist."""
         test_app.post("/videos", json=sample_video_data)
         test_app.post("/videos", json=sample_video_data_2)
 
-        output_file = tmp_path / "JSON Export.json"
+        output_file = test_config_dir / "JSON Export.json"
         response = test_app.post(
             "/exports/playlist",
             json={
@@ -178,14 +178,14 @@ class TestPlaylistExport:
         assert data["file_path"].endswith(".json")
 
     def test_export_playlist_specific_videos(
-        self, test_app: TestClient, sample_video_data: dict, sample_video_data_2: dict, tmp_path: Path
+        self, test_app: TestClient, sample_video_data: dict, sample_video_data_2: dict, test_config_dir: Path
     ) -> None:
         """Test exporting playlist with specific videos."""
         r1 = test_app.post("/videos", json=sample_video_data)
         r2 = test_app.post("/videos", json=sample_video_data_2)
         video_id_1 = r1.json()["id"]
 
-        output_file = tmp_path / "Selected Videos.json"
+        output_file = test_config_dir / "Selected Videos.json"
         response = test_app.post(
             "/exports/playlist",
             json={
@@ -200,9 +200,9 @@ class TestPlaylistExport:
         data = response.json()
         assert data["total_tracks"] == 1
 
-    def test_export_playlist_empty(self, test_app: TestClient, tmp_path: Path) -> None:
+    def test_export_playlist_empty(self, test_app: TestClient, test_config_dir: Path) -> None:
         """Test exporting empty playlist."""
-        output_file = tmp_path / "Empty Playlist.json"
+        output_file = test_config_dir / "Empty Playlist.json"
         response = test_app.post(
             "/exports/playlist",
             json={
@@ -217,13 +217,13 @@ class TestPlaylistExport:
         assert data["total_tracks"] == 0
 
     def test_export_playlist_name_sanitization(
-        self, test_app: TestClient, sample_video_data: dict, tmp_path: Path
+        self, test_app: TestClient, sample_video_data: dict, test_config_dir: Path
     ) -> None:
         """Test that playlist names are sanitized for filenames."""
         test_app.post("/videos", json=sample_video_data)
 
         # User provides output_path, name is used for display only
-        output_file = tmp_path / "safe_playlist_name.m3u"
+        output_file = test_config_dir / "safe_playlist_name.m3u"
         response = test_app.post(
             "/exports/playlist",
             json={
@@ -238,13 +238,13 @@ class TestPlaylistExport:
         # User controls the output path now
         assert data["file_path"] == str(output_file)
 
-    def test_export_playlist_requires_name(self, test_app: TestClient, tmp_path: Path) -> None:
+    def test_export_playlist_requires_name(self, test_app: TestClient, test_config_dir: Path) -> None:
         """Test that playlist export requires a name."""
         response = test_app.post(
             "/exports/playlist",
             json={
                 "format": "json",
-                "output_path": str(tmp_path / "test.json"),
+                "output_path": str(test_config_dir / "test.json"),
             },
         )
 
@@ -262,14 +262,14 @@ class TestPlaylistExport:
 
         assert response.status_code == 422  # Validation error
 
-    def test_export_playlist_invalid_format(self, test_app: TestClient, tmp_path: Path) -> None:
+    def test_export_playlist_invalid_format(self, test_app: TestClient, test_config_dir: Path) -> None:
         """Test that invalid export format is rejected."""
         response = test_app.post(
             "/exports/playlist",
             json={
                 "name": "Test",
                 "format": "invalid_format",
-                "output_path": str(tmp_path / "test.txt"),
+                "output_path": str(test_config_dir / "test.txt"),
             },
         )
 
@@ -280,12 +280,12 @@ class TestExportIntegration:
     """Integration tests for export workflows."""
 
     def test_export_creates_files_at_user_specified_path(
-        self, test_app: TestClient, sample_video_data: dict, tmp_path: Path
+        self, test_app: TestClient, sample_video_data: dict, test_config_dir: Path
     ) -> None:
         """Test that playlist exports are created at the user-specified path."""
         test_app.post("/videos", json=sample_video_data)
 
-        output_file = tmp_path / "my_exports" / "Integration Test.json"
+        output_file = test_config_dir / "my_exports" / "Integration Test.json"
         response = test_app.post(
             "/exports/playlist",
             json={

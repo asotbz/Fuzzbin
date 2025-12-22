@@ -1,5 +1,6 @@
 """Shared pytest fixtures for API tests."""
 
+import os
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 
@@ -12,18 +13,42 @@ from fuzzbin.common.config import Config, DatabaseConfig, LoggingConfig
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.web.main import create_app
 from fuzzbin.web.dependencies import get_repository
-from fuzzbin.web.settings import APISettings
+from fuzzbin.web.settings import APISettings, get_settings
+
+
+# Test JWT secret used across all API tests
+TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
+
+
+@pytest.fixture(autouse=True)
+def set_jwt_secret_env(monkeypatch):
+    """Set JWT secret environment variable for all API tests.
+    
+    This is required because APISettings now always requires jwt_secret,
+    and create_app() calls get_settings() before dependency overrides are set.
+    """
+    monkeypatch.setenv("FUZZBIN_API_JWT_SECRET", TEST_JWT_SECRET)
+    # Disable auth for general API tests (auth-specific tests override this)
+    monkeypatch.setenv("FUZZBIN_API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("FUZZBIN_API_ALLOW_INSECURE_MODE", "true")
+    # Clear the settings cache to pick up the new env vars
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture
 def api_settings() -> APISettings:
-    """Provide test API settings."""
+    """Provide test API settings with auth disabled for general API tests."""
     return APISettings(
         host="127.0.0.1",
         port=8000,
         debug=True,
         allowed_origins=["*"],
         log_requests=False,  # Reduce noise in tests
+        jwt_secret=TEST_JWT_SECRET,  # Required for auth
+        auth_enabled=False,  # Disable auth for general API tests
+        allow_insecure_mode=True,  # Required when auth is disabled
     )
 
 
@@ -59,6 +84,18 @@ def test_config(test_database_config: DatabaseConfig, tmp_path: Path) -> Config:
             handlers=["console"],
         ),
     )
+
+
+@pytest.fixture
+def test_library_dir(test_config: Config) -> Path:
+    """Get the library directory from the test config."""
+    return test_config.library_dir
+
+
+@pytest.fixture
+def test_config_dir(test_config: Config) -> Path:
+    """Get the config directory from the test config."""
+    return test_config.config_dir
 
 
 @pytest_asyncio.fixture
