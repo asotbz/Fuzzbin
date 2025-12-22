@@ -53,6 +53,7 @@ def _get_library_dir() -> Path:
     if config.library_dir:
         return config.library_dir
     from fuzzbin.common.config import _get_default_library_dir
+
     return _get_default_library_dir()
 
 
@@ -61,19 +62,19 @@ def _validate_video_paths(
     nfo_file_path: Optional[str],
 ) -> Tuple[Optional[str], Optional[str]]:
     """Validate and normalize video/NFO file paths.
-    
+
     Ensures paths are contained within library_dir to prevent path traversal.
-    
+
     Returns:
         Tuple of (validated_video_path, validated_nfo_path) as strings
-        
+
     Raises:
         HTTPException: If paths are outside allowed directories
     """
     library_dir = _get_library_dir()
     validated_video = None
     validated_nfo = None
-    
+
     if video_file_path:
         try:
             validated = validate_contained_path(video_file_path, [library_dir])
@@ -83,7 +84,7 @@ def _validate_video_paths(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid video file path: {e}. Path must be within library directory.",
             )
-    
+
     if nfo_file_path:
         try:
             validated = validate_contained_path(nfo_file_path, [library_dir])
@@ -93,7 +94,7 @@ def _validate_video_paths(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid NFO file path: {e}. Path must be within library directory.",
             )
-    
+
     return validated_video, validated_nfo
 
 
@@ -222,7 +223,7 @@ async def create_video(
         video.video_file_path,
         video.nfo_file_path,
     )
-    
+
     video_id = await repo.create_video(**video.to_repo_kwargs())
 
     # If file paths were provided, update them separately (with validated paths)

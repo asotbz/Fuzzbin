@@ -256,7 +256,7 @@ async def export_playlist(
     # Validate output path is within allowed directories
     library_dir = await _get_library_dir()
     config_dir = await _get_config_dir()
-    
+
     try:
         file_path = validate_contained_path(
             request.output_path,

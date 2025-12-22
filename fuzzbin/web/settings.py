@@ -68,7 +68,7 @@ class APISettings(BaseSettings):
     @model_validator(mode="after")
     def validate_auth_config(self) -> "APISettings":
         """Validate authentication configuration.
-        
+
         Security requirements:
         - jwt_secret is ALWAYS required (no default)
         - auth_enabled=False requires allow_insecure_mode=True
@@ -80,7 +80,7 @@ class APISettings(BaseSettings):
                 "FUZZBIN_API_JWT_SECRET must be set. "
                 'Generate a secure secret with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
             )
-        
+
         # If auth is disabled, require explicit insecure mode acknowledgment
         if not self.auth_enabled:
             if not self.allow_insecure_mode:
@@ -98,7 +98,7 @@ class APISettings(BaseSettings):
                     stacklevel=2,
                 )
                 object.__setattr__(self, "host", "127.0.0.1")
-        
+
         return self
 
 

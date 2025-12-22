@@ -41,7 +41,9 @@ class SetInitialPasswordRequest(BaseModel):
     """Request body for setting initial password."""
 
     username: str = Field(..., min_length=1, description="Username")
-    current_password: str = Field(..., min_length=1, description="Current password (default: changeme)")
+    current_password: str = Field(
+        ..., min_length=1, description="Current password (default: changeme)"
+    )
     new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
 
 
@@ -55,7 +57,7 @@ class PasswordRotationRequiredResponse(BaseModel):
 
 def get_client_ip(request: Request, settings: APISettings = None) -> str:
     """Extract client IP from request, considering trusted proxies.
-    
+
     Only parses X-Forwarded-For when trusted_proxy_count > 0.
     Takes the Nth-from-right IP where N = trusted_proxy_count.
     """
@@ -359,13 +361,13 @@ async def logout(
 
     The provided Bearer token will be added to the revocation list,
     preventing it from being used again even if it hasn't expired.
-    
+
     Clients should also discard their refresh token after logout.
     """
     if not credentials:
         # No token provided - nothing to revoke
         return
-    
+
     token = credentials.credentials
     payload = decode_token(
         token=token,
@@ -373,19 +375,19 @@ async def logout(
         algorithm=settings.jwt_algorithm,
         check_revoked=False,  # Don't fail if already revoked
     )
-    
+
     if not payload:
         # Invalid token - nothing to revoke
         return
-    
+
     jti = payload.get("jti")
     user_id = payload.get("user_id")
     exp = payload.get("exp")
-    
+
     if jti and user_id and exp:
         # Convert exp timestamp to datetime
         expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
-        
+
         await revoke_token(
             jti=jti,
             user_id=user_id,
@@ -393,7 +395,7 @@ async def logout(
             reason="logout",
             connection=repo._connection,
         )
-        
+
         logger.info("logout_token_revoked", user_id=user_id, jti=jti)
 
 
@@ -448,7 +450,9 @@ async def set_initial_password(
 
     if not row:
         throttle.record_failure(client_ip)
-        logger.warning("set_initial_password_user_not_found", username=password_request.username, ip=client_ip)
+        logger.warning(
+            "set_initial_password_user_not_found", username=password_request.username, ip=client_ip
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",

@@ -73,20 +73,15 @@ class BackupCreateResponse(BaseModel):
 class BackupVerifyResponse(BaseModel):
     """Response from backup verification."""
 
-    valid: bool = Field(
-        description="True if backup passed all integrity checks"
-    )
-    filename: str = Field(
-        description="Name of the verified backup file"
-    )
+    valid: bool = Field(description="True if backup passed all integrity checks")
+    filename: str = Field(description="Name of the verified backup file")
     contains: List[str] = Field(
         description="List of items found in backup: 'config', 'database', 'thumbnails'"
     )
     database_valid: Optional[bool] = Field(
         default=None,
-        description="True if database passed SQLite integrity check (null if no database in backup)"
+        description="True if database passed SQLite integrity check (null if no database in backup)",
     )
     errors: List[str] = Field(
-        default_factory=list,
-        description="List of error messages if verification failed"
+        default_factory=list, description="List of error messages if verification failed"
     )

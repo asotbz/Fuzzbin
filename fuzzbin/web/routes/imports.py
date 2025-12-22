@@ -107,19 +107,20 @@ def _get_library_dir():
     if config.library_dir:
         return config.library_dir
     from fuzzbin.common.config import _get_default_library_dir
+
     return _get_default_library_dir()
 
 
 def _validate_import_urls(urls: List[str]) -> None:
     """Validate import URLs against allowlist.
-    
+
     Raises:
         HTTPException: If any URL fails validation
     """
     settings = get_settings()
     allowed_schemes = settings.import_allowed_schemes
     allowed_hosts = settings.import_allowed_hosts
-    
+
     for url in urls:
         try:
             parsed = urlparse(url)
@@ -128,21 +129,21 @@ def _validate_import_urls(urls: List[str]) -> None:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid URL format: {url}",
             )
-        
+
         # Validate scheme
         if parsed.scheme.lower() not in [s.lower() for s in allowed_schemes]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"URL scheme '{parsed.scheme}' not allowed. Allowed schemes: {allowed_schemes}",
             )
-        
+
         # Validate host if allowlist is configured
         if allowed_hosts is not None:
             host = parsed.netloc.lower()
             # Strip port if present
             if ":" in host:
                 host = host.split(":")[0]
-            
+
             # Check against allowlist (support wildcards like *.youtube.com)
             allowed = False
             for allowed_host in allowed_hosts:
@@ -156,7 +157,7 @@ def _validate_import_urls(urls: List[str]) -> None:
                 elif host == allowed_host:
                     allowed = True
                     break
-            
+
             if not allowed:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -166,16 +167,16 @@ def _validate_import_urls(urls: List[str]) -> None:
 
 def _validate_output_directory(output_directory: Optional[str]) -> Optional[str]:
     """Validate and normalize output directory path.
-    
+
     Returns:
         Validated absolute path string, or None if not specified
-        
+
     Raises:
         HTTPException: If path is outside allowed directories
     """
     if not output_directory:
         return None
-    
+
     library_dir = _get_library_dir()
     try:
         validated = validate_contained_path(output_directory, [library_dir])
@@ -189,7 +190,7 @@ def _validate_output_directory(output_directory: Optional[str]) -> Optional[str]
 
 def _check_import_endpoints_enabled() -> None:
     """Check if import endpoints are enabled.
-    
+
     Raises:
         HTTPException: If import endpoints are disabled
     """
@@ -227,19 +228,19 @@ async def import_from_youtube(
 
     For small batches (under max_sync_import_items), runs synchronously.
     For larger batches, queues a background job if available.
-    
+
     URLs are validated against the configured scheme/host allowlist.
     Output directory must be within library_dir.
     """
     # Check if import endpoints are enabled
     _check_import_endpoints_enabled()
-    
+
     # Validate URLs against allowlist
     _validate_import_urls(request.urls)
-    
+
     # Validate output directory if provided
     validated_output_dir = _validate_output_directory(request.output_directory)
-    
+
     max_sync = await _get_max_sync_items()
 
     if len(request.urls) > max_sync:

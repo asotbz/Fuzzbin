@@ -256,14 +256,26 @@ async def handle_file_organize(job: Job) -> None:
 async def handle_youtube_download(job: Job) -> None:
     """Handle YouTube video download job.
 
-    Downloads videos for database entries using yt-dlp with progress tracking.
+    Supports two modes:
+    1. Direct URL download: Provide `url` and `output_path` for single video download
+    2. Batch download: Provide `video_ids` to download videos from database entries
 
-    Job metadata parameters:
+    Job metadata parameters (Direct URL mode):
+        url (str, required): YouTube video URL or video ID
+        output_path (str, required): Full path where to save the video
+        format_spec (str, optional): yt-dlp format specification
+
+    Job metadata parameters (Batch mode):
         video_ids (list[int], required): List of video IDs to download
         output_directory (str, optional): Download destination directory
         format (str, optional): yt-dlp format string (default from config)
 
-    Job result on completion:
+    Job result on completion (Direct URL mode):
+        url: Source URL that was downloaded
+        file_path: Path to the downloaded file
+        file_size: File size in bytes
+
+    Job result on completion (Batch mode):
         downloaded: Number of videos downloaded
         skipped: Number of videos skipped (no YouTube URL or already downloaded)
         failed: Number of download failures
@@ -274,15 +286,141 @@ async def handle_youtube_download(job: Job) -> None:
         job: Job instance with metadata containing download parameters
 
     Raises:
-        ValueError: If video_ids parameter is missing
+        ValueError: If required parameters are missing
+    """
+    from fuzzbin.clients.ytdlp_client import YTDLPClient
+    from fuzzbin.core.exceptions import DownloadCancelledError
+    from fuzzbin.parsers.ytdlp_models import CancellationToken, DownloadHooks, DownloadProgress
+
+    # Determine mode based on metadata
+    url = job.metadata.get("url")
+    output_path = job.metadata.get("output_path")
+    video_ids = job.metadata.get("video_ids")
+
+    # Direct URL download mode
+    if url and output_path:
+        await _handle_direct_url_download(job, url, output_path)
+        return
+
+    # Batch download mode (original behavior)
+    if video_ids is not None:
+        await _handle_batch_youtube_download(job, video_ids)
+        return
+
+    raise ValueError("Missing required parameters: provide either (url, output_path) or video_ids")
+
+
+async def _handle_direct_url_download(job: Job, url: str, output_path: str) -> None:
+    """Handle direct URL download for a single YouTube video.
+
+    Args:
+        job: Job instance
+        url: YouTube URL or video ID
+        output_path: Destination file path
+    """
+    from fuzzbin.clients.ytdlp_client import YTDLPClient
+    from fuzzbin.core.exceptions import DownloadCancelledError
+    from fuzzbin.parsers.ytdlp_models import CancellationToken, DownloadHooks, DownloadProgress
+
+    format_spec = job.metadata.get("format_spec")
+
+    logger.info(
+        "youtube_direct_download_starting",
+        job_id=job.id,
+        url=url,
+        output_path=output_path,
+    )
+
+    # Create cancellation token that checks job status
+    cancellation_token = CancellationToken()
+
+    # Progress hook with cancellation check
+    def on_progress(progress: DownloadProgress) -> None:
+        # Check job status and signal cancellation if needed
+        if job.status == JobStatus.CANCELLED:
+            cancellation_token.cancel()
+            return
+
+        # Update job progress
+        job.progress = progress.percent / 100.0
+        speed_str = ""
+        if progress.speed_bytes_per_sec:
+            speed_mb = progress.speed_bytes_per_sec / (1024 * 1024)
+            speed_str = f" at {speed_mb:.1f} MB/s"
+
+        eta_str = ""
+        if progress.eta_seconds:
+            eta_str = f" (ETA: {progress.eta_seconds}s)"
+
+        job.current_step = f"Downloading: {progress.percent:.1f}%{speed_str}{eta_str}"
+
+    hooks = DownloadHooks(on_progress=on_progress)
+
+    # Get config
+    config = fuzzbin.get_config()
+    ytdlp_config = config.ytdlp if hasattr(config, "ytdlp") else None
+
+    # Ensure output directory exists
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        async with (
+            YTDLPClient.from_config(ytdlp_config) if ytdlp_config else YTDLPClient()
+        ) as client:
+            result = await client.download(
+                url=url,
+                output_path=output_file,
+                format_spec=format_spec,
+                hooks=hooks,
+                cancellation_token=cancellation_token,
+            )
+
+        # Check for cancellation after download
+        if job.status == JobStatus.CANCELLED:
+            logger.info("youtube_direct_download_cancelled", job_id=job.id)
+            return
+
+        # Mark completed
+        job.mark_completed(
+            {
+                "url": url,
+                "file_path": str(result.file_path),
+                "file_size": result.file_size,
+            }
+        )
+
+        logger.info(
+            "youtube_direct_download_completed",
+            job_id=job.id,
+            file_path=str(result.file_path),
+            file_size=result.file_size,
+        )
+
+    except DownloadCancelledError:
+        logger.info("youtube_direct_download_cancelled", job_id=job.id)
+        # Job already marked as cancelled by queue
+        return
+
+    except Exception as e:
+        logger.error(
+            "youtube_direct_download_failed",
+            job_id=job.id,
+            url=url,
+            error=str(e),
+        )
+        raise
+
+
+async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
+    """Handle batch YouTube download for database videos.
+
+    Args:
+        job: Job instance
+        video_ids: List of video IDs to download
     """
     from fuzzbin.clients.ytdlp_client import YTDLPClient
     from fuzzbin.parsers.ytdlp_models import DownloadHooks, DownloadProgress
-
-    # Extract parameters
-    video_ids = job.metadata.get("video_ids")
-    if video_ids is None:
-        raise ValueError("Missing required parameter: video_ids")
 
     output_directory = job.metadata.get("output_directory")
     format_spec = job.metadata.get("format")
@@ -1352,14 +1490,16 @@ async def handle_backup(job: Job) -> None:
     job.update_progress(3, 3, "Backup complete")
 
     # Mark completed with result
-    job.mark_completed({
-        "filename": backup_info["filename"],
-        "path": backup_info["path"],
-        "size_bytes": backup_info["size_bytes"],
-        "created_at": backup_info["created_at"],
-        "contains": backup_info["contains"],
-        "deleted_backups": deleted_backups,
-    })
+    job.mark_completed(
+        {
+            "filename": backup_info["filename"],
+            "path": backup_info["path"],
+            "size_bytes": backup_info["size_bytes"],
+            "created_at": backup_info["created_at"],
+            "contains": backup_info["contains"],
+            "deleted_backups": deleted_backups,
+        }
+    )
 
     logger.info(
         "backup_job_completed",

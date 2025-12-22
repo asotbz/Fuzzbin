@@ -79,7 +79,7 @@ class ConnectionManager:
 
     Thread-safe connection tracking with broadcast support for
     real-time event distribution to connected clients.
-    
+
     Note: This manager does NOT accept connections automatically.
     The caller must call websocket.accept() before adding to manager,
     allowing for authentication to occur first.
@@ -92,7 +92,7 @@ class ConnectionManager:
 
     async def add(self, websocket: WebSocket) -> None:
         """Register an already-accepted WebSocket connection.
-        
+
         The websocket must already be accepted before calling this method.
         This allows authentication to happen between accept and registration.
 
@@ -108,7 +108,7 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept and register a WebSocket connection.
-        
+
         Deprecated: Use accept() on websocket directly, then add().
         Kept for backward compatibility.
 
@@ -215,20 +215,20 @@ async def _authenticate_websocket(
     timeout_seconds: float = 10.0,
 ) -> Optional[Dict[str, Any]]:
     """Perform first-message authentication for WebSocket connections.
-    
+
     Waits for an auth message from the client, validates the JWT token,
     and returns user info on success.
-    
+
     Args:
         websocket: Already-accepted WebSocket connection
         timeout_seconds: How long to wait for auth message
-        
+
     Returns:
         Dict with user_id and username on success, None on failure
         (error response already sent to client)
     """
     settings = get_settings()
-    
+
     try:
         # Wait for first message with timeout
         raw_message = await asyncio.wait_for(
@@ -244,10 +244,11 @@ async def _authenticate_websocket(
         await websocket.close(code=WS_CLOSE_AUTH_TIMEOUT, reason="Auth timeout")
         logger.warning("websocket_auth_timeout")
         return None
-    
+
     # Parse the message
     try:
         import json
+
         data = json.loads(raw_message)
         auth_msg = WSAuthMessage.model_validate(data)
     except (json.JSONDecodeError, ValidationError) as e:
@@ -259,7 +260,7 @@ async def _authenticate_websocket(
         await websocket.close(code=WS_CLOSE_AUTH_FAILED, reason="Invalid auth message")
         logger.warning("websocket_auth_invalid_format", error=str(e))
         return None
-    
+
     # Decode and validate JWT token
     payload = decode_token(
         token=auth_msg.token,
@@ -267,7 +268,7 @@ async def _authenticate_websocket(
         algorithm=settings.jwt_algorithm,
         expected_type="access",
     )
-    
+
     if not payload:
         error = WSAuthErrorResponse(
             message="Invalid or expired token",
@@ -277,10 +278,10 @@ async def _authenticate_websocket(
         await websocket.close(code=WS_CLOSE_AUTH_FAILED, reason="Invalid token")
         logger.warning("websocket_auth_invalid_token")
         return None
-    
+
     user_id = payload.get("user_id")
     username = payload.get("sub")
-    
+
     if not user_id or not username:
         error = WSAuthErrorResponse(
             message="Invalid token payload",
@@ -290,7 +291,7 @@ async def _authenticate_websocket(
         await websocket.close(code=WS_CLOSE_AUTH_FAILED, reason="Invalid payload")
         logger.warning("websocket_auth_invalid_payload")
         return None
-    
+
     # Verify user exists and is active
     try:
         repo = await fuzzbin.get_repository()
@@ -299,7 +300,7 @@ async def _authenticate_websocket(
             (user_id,),
         )
         row = await cursor.fetchone()
-        
+
         if not row or not row[1]:
             error = WSAuthErrorResponse(
                 message="User not found or disabled",
@@ -318,11 +319,11 @@ async def _authenticate_websocket(
         await websocket.close(code=WS_CLOSE_AUTH_FAILED, reason="Auth error")
         logger.error("websocket_auth_db_error", error=str(e))
         return None
-    
+
     # Success! Send confirmation
     success = WSAuthSuccessResponse(user_id=user_id, username=username)
     await websocket.send_json(success.model_dump())
-    
+
     logger.info("websocket_authenticated", user_id=user_id, username=username)
     return {"user_id": user_id, "username": username}
 
@@ -367,17 +368,17 @@ async def events_websocket(websocket: WebSocket) -> None:
         - job_completed: Background job completed successfully
         - job_failed: Background job failed with error
         - client_reloaded: API client was reloaded with new configuration
-    
+
     WebSocket Close Codes:
         - 4000: Authentication timeout
         - 4001: Authentication failed
         - 4002: Authentication required
     """
     settings = get_settings()
-    
+
     # Accept the connection first
     await websocket.accept()
-    
+
     # Perform first-message authentication if auth is enabled
     if settings.auth_enabled:
         user_info = await _authenticate_websocket(websocket)
@@ -401,16 +402,17 @@ async def events_websocket(websocket: WebSocket) -> None:
         while True:
             try:
                 raw_message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                
+
                 # Handle client messages
                 try:
                     import json
+
                     data = json.loads(raw_message)
                     if data.get("type") == "ping":
                         await websocket.send_json(WSPongResponse().model_dump())
                 except (json.JSONDecodeError, Exception):
                     pass  # Ignore invalid messages
-                    
+
             except asyncio.TimeoutError:
                 # Send server ping to keep connection alive
                 try:
@@ -458,7 +460,7 @@ async def job_progress_websocket(websocket: WebSocket, job_id: str) -> None:
             "error": null,
             "result": null
         }
-    
+
     WebSocket Close Codes:
         - 4000: Authentication timeout
         - 4001: Authentication failed
@@ -466,7 +468,7 @@ async def job_progress_websocket(websocket: WebSocket, job_id: str) -> None:
         - 1011: Internal error
     """
     settings = get_settings()
-    
+
     # Accept the connection first
     await websocket.accept()
     logger.info("websocket_job_connecting", job_id=job_id)

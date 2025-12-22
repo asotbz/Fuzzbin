@@ -252,20 +252,20 @@ class BackupService:
                             stat.st_mtime, tz=timezone.utc
                         ).isoformat()
                 else:
-                    created_at = datetime.fromtimestamp(
-                        stat.st_mtime, tz=timezone.utc
-                    ).isoformat()
+                    created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
 
                 # Inspect zip contents
                 contains = self._inspect_backup_contents(backup_file)
 
-                backups.append({
-                    "filename": backup_file.name,
-                    "path": str(backup_file),
-                    "size_bytes": stat.st_size,
-                    "created_at": created_at,
-                    "contains": contains,
-                })
+                backups.append(
+                    {
+                        "filename": backup_file.name,
+                        "path": str(backup_file),
+                        "size_bytes": stat.st_size,
+                        "created_at": created_at,
+                        "contains": contains,
+                    }
+                )
 
             except (OSError, zipfile.BadZipFile) as e:
                 logger.warning(

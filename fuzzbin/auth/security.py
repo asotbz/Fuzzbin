@@ -23,14 +23,14 @@ DEFAULT_PASSWORD_HASH = "$2b$12$7TBJrDjfUukBIYBrrLaBiecdSJKLXGbkJHvzNT.j9PAsAvbL
 
 class TokenDenylistCache:
     """In-memory LRU cache for revoked token JTIs.
-    
+
     Caches both positive (token is revoked) and negative (token not revoked)
     results to minimize database queries. Negative results expire after 60s.
     """
-    
+
     def __init__(self, maxsize: int = 1000, negative_ttl_seconds: int = 60):
         """Initialize the cache.
-        
+
         Args:
             maxsize: Maximum number of entries to cache
             negative_ttl_seconds: How long to cache "not revoked" results
@@ -39,10 +39,10 @@ class TokenDenylistCache:
         self.negative_ttl = negative_ttl_seconds
         self._revoked: Dict[str, datetime] = {}  # jti -> revoked_at
         self._not_revoked: Dict[str, datetime] = {}  # jti -> cached_at
-    
+
     def is_revoked(self, jti: str) -> Optional[bool]:
         """Check if a token JTI is in the cache.
-        
+
         Returns:
             True if revoked (cached positive), False if not revoked (cached negative),
             None if not in cache (need to check DB)
@@ -50,7 +50,7 @@ class TokenDenylistCache:
         # Check positive cache (revoked tokens)
         if jti in self._revoked:
             return True
-        
+
         # Check negative cache (not revoked, with TTL)
         if jti in self._not_revoked:
             cached_at = self._not_revoked[jti]
@@ -58,35 +58,35 @@ class TokenDenylistCache:
                 return False
             # Expired negative cache entry
             del self._not_revoked[jti]
-        
+
         return None
-    
+
     def mark_revoked(self, jti: str) -> None:
         """Mark a token as revoked in the cache."""
         self._evict_if_needed()
         self._revoked[jti] = datetime.now(timezone.utc)
         # Remove from negative cache if present
         self._not_revoked.pop(jti, None)
-    
+
     def mark_not_revoked(self, jti: str) -> None:
         """Cache that a token is NOT revoked (negative cache)."""
         self._evict_if_needed()
         self._not_revoked[jti] = datetime.now(timezone.utc)
-    
+
     def invalidate(self, jti: str) -> None:
         """Remove a token from all caches."""
         self._revoked.pop(jti, None)
         self._not_revoked.pop(jti, None)
-    
+
     def invalidate_user(self, user_id: int) -> None:
         """Invalidate all cached entries (used when revoking all user tokens).
-        
+
         Note: This clears the entire cache since we don't track user_id per jti.
         A more sophisticated implementation could maintain a user_id index.
         """
         self._revoked.clear()
         self._not_revoked.clear()
-    
+
     def _evict_if_needed(self) -> None:
         """Evict oldest entries if cache is full."""
         total = len(self._revoked) + len(self._not_revoked)
@@ -94,16 +94,17 @@ class TokenDenylistCache:
             # Clear expired negative entries first
             now = datetime.now(timezone.utc)
             expired = [
-                jti for jti, cached_at in self._not_revoked.items()
+                jti
+                for jti, cached_at in self._not_revoked.items()
                 if now - cached_at >= timedelta(seconds=self.negative_ttl)
             ]
             for jti in expired:
                 del self._not_revoked[jti]
-            
+
             # If still full, clear half of negative cache
             if len(self._revoked) + len(self._not_revoked) >= self.maxsize:
                 items = list(self._not_revoked.items())
-                for jti, _ in items[:len(items)//2]:
+                for jti, _ in items[: len(items) // 2]:
                     del self._not_revoked[jti]
 
 
@@ -327,10 +328,10 @@ async def revoke_token(
     user_id: int,
     expires_at: datetime,
     reason: Optional[str] = None,
-    connection = None,
+    connection=None,
 ) -> None:
     """Revoke a single token by its JTI.
-    
+
     Args:
         jti: Token's unique identifier
         user_id: User who owns the token
@@ -340,12 +341,13 @@ async def revoke_token(
     """
     cache = get_token_denylist_cache()
     cache.mark_revoked(jti)
-    
+
     if connection is None:
         import fuzzbin
+
         repo = await fuzzbin.get_repository()
         connection = repo._connection
-    
+
     await connection.execute(
         """
         INSERT OR REPLACE INTO revoked_tokens (jti, user_id, revoked_at, expires_at, reason)
@@ -354,110 +356,113 @@ async def revoke_token(
         (jti, user_id, expires_at.isoformat(), reason),
     )
     await connection.commit()
-    
+
     logger.info("token_revoked", jti=jti, user_id=user_id, reason=reason)
 
 
 async def revoke_all_user_tokens(
     user_id: int,
     reason: Optional[str] = None,
-    connection = None,
+    connection=None,
 ) -> int:
     """Revoke all tokens for a user.
-    
+
     Note: This inserts a special marker and relies on cleanup to handle
     the actual tokens. New tokens issued after this call are not affected.
-    
+
     Args:
         user_id: User whose tokens should be revoked
         reason: Optional reason for revocation
         connection: Database connection
-        
+
     Returns:
         Number of tokens revoked (from existing revoked_tokens entries)
     """
     cache = get_token_denylist_cache()
     cache.invalidate_user(user_id)
-    
+
     if connection is None:
         import fuzzbin
+
         repo = await fuzzbin.get_repository()
         connection = repo._connection
-    
+
     # We can't revoke tokens we don't know about, but we can ensure
     # any token that gets checked against the DB will be rejected
     # by inserting a marker. For simplicity, we rely on password change
     # to invalidate old tokens (since they won't have new password claim).
-    
+
     logger.info("user_tokens_invalidated", user_id=user_id, reason=reason)
     return 0
 
 
 async def check_token_revoked_in_db(
     jti: str,
-    connection = None,
+    connection=None,
 ) -> bool:
     """Check if a token is revoked in the database.
-    
+
     Updates the cache with the result.
-    
+
     Args:
         jti: Token's unique identifier
         connection: Database connection
-        
+
     Returns:
         True if revoked, False otherwise
     """
     cache = get_token_denylist_cache()
-    
+
     # Check cache first
     cached = cache.is_revoked(jti)
     if cached is not None:
         return cached
-    
+
     if connection is None:
         import fuzzbin
+
         repo = await fuzzbin.get_repository()
         connection = repo._connection
-    
+
     cursor = await connection.execute(
         "SELECT 1 FROM revoked_tokens WHERE jti = ?",
         (jti,),
     )
     row = await cursor.fetchone()
-    
+
     is_revoked = row is not None
     if is_revoked:
         cache.mark_revoked(jti)
     else:
         cache.mark_not_revoked(jti)
-    
+
     return is_revoked
 
 
-async def cleanup_expired_tokens(connection = None) -> int:
+async def cleanup_expired_tokens(connection=None) -> int:
     """Remove expired entries from the revoked_tokens table.
-    
+
     Should be called periodically (e.g., daily) to prevent table growth.
-    
+
     Args:
         connection: Database connection
-        
+
     Returns:
         Number of entries removed
     """
     if connection is None:
         import fuzzbin
+
         repo = await fuzzbin.get_repository()
         connection = repo._connection
-    
+
     cursor = await connection.execute(
         "DELETE FROM revoked_tokens WHERE expires_at < datetime('now')"
     )
     await connection.commit()
-    
+
     deleted = cursor.rowcount
     if deleted > 0:
         logger.info("expired_tokens_cleaned", count=deleted)
-    
+
     return deleted

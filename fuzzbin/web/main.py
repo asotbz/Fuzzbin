@@ -74,10 +74,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.auth_enabled:
         logger.info("api_auth_enabled", jwt_algorithm=settings.jwt_algorithm)
         await _check_default_password_warning()
-        
+
         # Cleanup expired revoked tokens on startup
         try:
             from fuzzbin.auth import cleanup_expired_tokens
+
             cleaned = await cleanup_expired_tokens()
             if cleaned > 0:
                 logger.info("startup_token_cleanup", expired_tokens_removed=cleaned)
@@ -313,6 +314,10 @@ ws://localhost:8000/ws/jobs/{job_id}
                 "name": "Configuration",
                 "description": "Runtime configuration management with history/undo support and safety level enforcement",
             },
+            {
+                "name": "yt-dlp",
+                "description": "YouTube video search, metadata retrieval, and download with progress tracking",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -358,7 +363,14 @@ ws://localhost:8000/ws/jobs/{job_id}
 
     # Import and include routers
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
-    from .routes import bulk, imports, exports, backup, config  # Phase 7 routes + config
+    from .routes import (
+        bulk,
+        imports,
+        exports,
+        backup,
+        config,
+        ytdlp,
+    )  # Phase 7 routes + config + ytdlp
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -383,6 +395,7 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(exports.router, dependencies=protected_dependencies)
     app.include_router(backup.router, dependencies=protected_dependencies)
     app.include_router(config.router, dependencies=protected_dependencies)
+    app.include_router(ytdlp.router, dependencies=protected_dependencies)
 
     # Custom OpenAPI schema with security scheme
     def custom_openapi():
