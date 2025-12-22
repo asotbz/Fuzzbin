@@ -17,6 +17,9 @@ User authentication, token management, and password operations
 Validates username and password, returns access and refresh tokens
 on successful authentication.
 
+If the user's password_must_change flag is set, returns 403 with
+instructions to use /auth/set-initial-password endpoint.
+
 Rate limited: 5 failed attempts per minute per IP address.
 - `POST` `/auth/refresh` — Refresh access token
   - Refresh an access token using a valid refresh token.
@@ -26,14 +29,25 @@ Returns new access and refresh tokens.
   - Change the password for the authenticated user.
 
 Requires authentication. Validates current password before updating.
-- `POST` `/auth/logout` — Logout (no-op for stateless JWT)
-  - Logout endpoint (no-op for stateless JWT).
+After password change, all existing tokens for this user are invalidated.
+- `POST` `/auth/logout` — Logout and revoke tokens
+  - Logout and revoke the current access token.
 
-Since JWT tokens are stateless, this endpoint doesn't invalidate tokens.
-Clients should discard tokens on logout.
+The provided Bearer token will be added to the revocation list,
+preventing it from being used again even if it hasn't expired.
 
-Note: For true token invalidation, implement a token blacklist
-(requires Redis or database storage - out of scope for single-user auth).
+Clients should also discard their refresh token after logout.
+- `POST` `/auth/set-initial-password` — Set initial password for first-time setup
+  - Set a new password for users requiring password rotation.
+
+This endpoint is used during first-time setup or when an admin has
+reset a user's password. It validates the current password, sets
+the new password, clears the password_must_change flag, and returns
+authentication tokens.
+
+Unlike /auth/password, this endpoint does not require prior authentication
+and is specifically for users who cannot log in due to password rotation
+requirements.
 
 ## Videos
 Video CRUD operations and metadata management
@@ -222,3 +236,153 @@ Export NFO metadata files and generate playlists
   - Regenerate NFO files for videos. NFO files are written alongside video files in the library.
 - `POST` `/exports/playlist` — Export playlist
   - Export videos as a playlist in M3U, CSV, or JSON format.
+
+## Backup
+System backup creation, listing, download, and verification
+
+- `GET` `/backup` — List backups
+  - List all available backup archives.
+
+Returns backup metadata including filename, size, creation timestamp,
+and contents. Results are sorted by creation time (newest first).
+- `POST` `/backup` — Create backup
+  - Trigger an on-demand system backup.
+
+Creates a background job that generates a .zip archive containing:
+- **config.yaml**: User configuration file
+- **fuzzbin.db**: Library database (using SQLite backup API)
+- **.thumbnails/**: Cached thumbnail images
+
+The backup job runs asynchronously. Use the returned `job_id` to track
+progress via `GET /jobs/{job_id}` or WebSocket `/ws/jobs/{job_id}`.
+
+Old backups exceeding the retention count are automatically deleted.
+- `GET` `/backup/{filename}` — Download backup
+  - Download a backup archive by filename.
+
+Returns the .zip file as a binary download. The archive can be
+extracted and restored manually without the program running.
+- `GET` `/backup/{filename}/verify` — Verify backup integrity
+  - Verify a backup archive's integrity.
+
+Checks:
+- ZIP file structure and CRC checksums
+- Database SQLite integrity (if database is included)
+- Presence of expected files
+
+Returns verification results including any errors found.
+
+## Configuration
+Runtime configuration management with history/undo support and safety level enforcement
+
+- `GET` `/config` — Get current configuration
+  - Retrieve the complete current configuration as a nested dictionary.
+
+The configuration includes all settings for HTTP, logging, database, APIs,
+and other subsystems. API credentials are returned in full (single-user mode).
+- `PATCH` `/config` — Update configuration
+  - Update one or more configuration fields.
+
+**Safety Levels:**
+- `safe`: Changes apply immediately with no side effects
+- `requires_reload`: Components need reloading (API clients, connections)
+- `affects_state`: Changes affect persistent state (database paths, directories)
+
+For `requires_reload` or `affects_state` fields, returns **409 Conflict** unless
+`force=true` is set. The response includes `required_actions` describing what
+needs to happen to fully apply the changes.
+
+**Examples:**
+```json
+{
+    "updates": {
+        "http.timeout": 60,
+        "logging.level": "DEBUG"
+    },
+    "description": "Increased timeout for slow network"
+}
+```
+- `GET` `/config/field/{path}` — Get configuration field
+  - Retrieve a specific configuration field by dot-notation path.
+
+Examples:
+- `http.timeout` - HTTP timeout setting
+- `apis.discogs.rate_limit.requests_per_minute` - Discogs rate limit
+- `logging.level` - Current log level
+- `GET` `/config/history` — Get configuration history
+  - Retrieve recent configuration change history.
+
+History entries include timestamps, descriptions, and undo/redo availability.
+Use this to review changes before performing undo/redo operations.
+- `POST` `/config/undo` — Undo configuration change
+  - Undo the most recent configuration change.
+
+Restores the previous configuration state from history.
+The change is automatically saved to the configuration file.
+- `POST` `/config/redo` — Redo configuration change
+  - Redo a previously undone configuration change.
+
+Restores the next configuration state from history.
+The change is automatically saved to the configuration file.
+- `GET` `/config/safety/{path}` — Get field safety level
+  - Get the safety level for a configuration field path.
+
+Use this to check what side effects a configuration change may have
+before submitting an update request.
+
+**Safety Levels:**
+- `safe`: No side effects, changes apply immediately
+- `requires_reload`: Components need reloading after change
+- `affects_state`: Changes affect persistent state
+- `GET` `/config/clients` — List registered API clients
+  - List all API clients registered with the configuration manager.
+
+Registered clients can be hot-reloaded when their configuration changes.
+- `GET` `/config/clients/{name}/stats` — Get API client statistics
+  - Get real-time statistics for a registered API client.
+
+Statistics include:
+- Active request count
+- Concurrency utilization
+- Rate limit token availability
+- Rate limit capacity percentage
+
+## yt-dlp
+YouTube video search, metadata retrieval, and download with progress tracking
+
+- `GET` `/ytdlp/search` — Search YouTube for videos
+  - Search YouTube for music videos by artist and track title.
+
+Uses yt-dlp to query YouTube and returns metadata for matching videos.
+Results are sorted by relevance. The search query combines artist and track
+title for best results.
+
+**Example query:** `artist=Nirvana&track_title=Smells Like Teen Spirit&max_results=5`
+- `GET` `/ytdlp/info/{video_id}` — Get video metadata
+  - Get detailed metadata for a single YouTube video.
+
+Accepts either a YouTube video ID (e.g., `dQw4w9WgXcQ`) or a full URL.
+Returns video title, channel, view count, duration, and other metadata.
+- `POST` `/ytdlp/download` — Download a YouTube video
+  - Submit a YouTube video download job.
+
+The download runs as a background job. Connect to `/ws/jobs/{job_id}` for
+real-time progress updates via WebSocket.
+
+**Path validation:** The `output_path` must be within the configured library
+directory. Relative paths are resolved relative to the library directory.
+
+**Progress tracking:** Progress updates include download percentage, speed,
+and ETA. Subscribe to the WebSocket endpoint to receive real-time updates.
+
+**Cancellation:** Use `DELETE /ytdlp/download/{job_id}` to cancel an
+in-progress download.
+- `DELETE` `/ytdlp/download/{job_id}` — Cancel a download
+  - Cancel an in-progress YouTube video download.
+
+Cancellation is cooperative - the download will stop at the next progress
+check. Already downloaded data may be partially saved or cleaned up.
+
+Returns 204 No Content on successful cancellation.
+Returns 400 if the job has already completed, failed, or been cancelled.
+Returns 404 if the job does not exist.

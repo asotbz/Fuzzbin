@@ -34,7 +34,7 @@
           "Authentication"
         ],
         "summary": "Authenticate user",
-        "description": "Authenticate a user and return JWT tokens.\n\nValidates username and password, returns access and refresh tokens\non successful authentication.\n\nRate limited: 5 failed attempts per minute per IP address.",
+        "description": "Authenticate a user and return JWT tokens.\n\nValidates username and password, returns access and refresh tokens\non successful authentication.\n\nIf the user's password_must_change flag is set, returns 403 with\ninstructions to use /auth/set-initial-password endpoint.\n\nRate limited: 5 failed attempts per minute per IP address.",
         "operationId": "login_auth_login_post",
         "requestBody": {
           "content": {
@@ -59,6 +59,16 @@
           },
           "401": {
             "description": "Invalid credentials"
+          },
+          "403": {
+            "description": "Password change required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRotationRequiredResponse"
+                }
+              }
+            }
           },
           "429": {
             "description": "Too many failed attempts"
@@ -127,7 +137,7 @@
           "Authentication"
         ],
         "summary": "Change password",
-        "description": "Change the password for the authenticated user.\n\nRequires authentication. Validates current password before updating.",
+        "description": "Change the password for the authenticated user.\n\nRequires authentication. Validates current password before updating.\nAfter password change, all existing tokens for this user are invalidated.",
         "operationId": "change_password_auth_password_post",
         "requestBody": {
           "content": {
@@ -172,12 +182,74 @@
         "tags": [
           "Authentication"
         ],
-        "summary": "Logout (no-op for stateless JWT)",
-        "description": "Logout endpoint (no-op for stateless JWT).\n\nSince JWT tokens are stateless, this endpoint doesn't invalidate tokens.\nClients should discard tokens on logout.\n\nNote: For true token invalidation, implement a token blacklist\n(requires Redis or database storage - out of scope for single-user auth).",
+        "summary": "Logout and revoke tokens",
+        "description": "Logout and revoke the current access token.\n\nThe provided Bearer token will be added to the revocation list,\npreventing it from being used again even if it hasn't expired.\n\nClients should also discard their refresh token after logout.",
         "operationId": "logout_auth_logout_post",
         "responses": {
           "204": {
-            "description": "Logout acknowledged"
+            "description": "Tokens revoked successfully"
+          },
+          "401": {
+            "description": "Invalid or missing token"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/set-initial-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Set initial password for first-time setup",
+        "description": "Set a new password for users requiring password rotation.\n\nThis endpoint is used during first-time setup or when an admin has\nreset a user's password. It validates the current password, sets\nthe new password, clears the password_must_change flag, and returns\nauthentication tokens.\n\nUnlike /auth/password, this endpoint does not require prior authentication\nand is specifically for users who cannot log in due to password rotation\nrequirements.",
+        "operationId": "set_initial_password_auth_set_initial_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetInitialPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed, tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid current password or new password requirements not met"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "403": {
+            "description": "Password rotation not required for this user"
+          },
+          "429": {
+            "description": "Too many failed attempts"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -5144,14 +5216,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
+            "description": "Import endpoints disabled"
           },
           "400": {
             "description": "Bad Request - Invalid input or business rule violation",
@@ -6394,6 +6459,381 @@
           },
           "500": {
             "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ytdlp/search": {
+      "get": {
+        "tags": [
+          "yt-dlp"
+        ],
+        "summary": "Search YouTube for videos",
+        "description": "Search YouTube for music videos by artist and track title.\n\nUses yt-dlp to query YouTube and returns metadata for matching videos.\nResults are sorted by relevance. The search query combines artist and track\ntitle for best results.\n\n**Example query:** `artist=Nirvana&track_title=Smells Like Teen Spirit&max_results=5`",
+        "operationId": "search_youtube_ytdlp_search_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artist",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Artist name to search for",
+              "title": "Artist"
+            },
+            "description": "Artist name to search for"
+          },
+          {
+            "name": "track_title",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Track/song title to search for",
+              "title": "Track Title"
+            },
+            "description": "Track/song title to search for"
+          },
+          {
+            "name": "max_results",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Maximum number of results to return",
+              "default": 5,
+              "title": "Max Results"
+            },
+            "description": "Maximum number of results to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YTDLPSearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ytdlp/info/{video_id}": {
+      "get": {
+        "tags": [
+          "yt-dlp"
+        ],
+        "summary": "Get video metadata",
+        "description": "Get detailed metadata for a single YouTube video.\n\nAccepts either a YouTube video ID (e.g., `dQw4w9WgXcQ`) or a full URL.\nReturns video title, channel, view count, duration, and other metadata.",
+        "operationId": "get_video_info_ytdlp_info__video_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YTDLPVideoInfoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ytdlp/download": {
+      "post": {
+        "tags": [
+          "yt-dlp"
+        ],
+        "summary": "Download a YouTube video",
+        "description": "Submit a YouTube video download job.\n\nThe download runs as a background job. Connect to `/ws/jobs/{job_id}` for\nreal-time progress updates via WebSocket.\n\n**Path validation:** The `output_path` must be within the configured library\ndirectory. Relative paths are resolved relative to the library directory.\n\n**Progress tracking:** Progress updates include download percentage, speed,\nand ETA. Subscribe to the WebSocket endpoint to receive real-time updates.\n\n**Cancellation:** Use `DELETE /ytdlp/download/{job_id}` to cancel an\nin-progress download.",
+        "operationId": "download_video_ytdlp_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YTDLPDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/ytdlp/download/{job_id}": {
+      "delete": {
+        "tags": [
+          "yt-dlp"
+        ],
+        "summary": "Cancel a download",
+        "description": "Cancel an in-progress YouTube video download.\n\nCancellation is cooperative - the download will stop at the next progress\ncheck. Already downloaded data may be partially saved or cleaned up.\n\nReturns 204 No Content on successful cancellation.\nReturns 400 if the job has already completed, failed, or been cancelled.\nReturns 404 if the job does not exist.",
+        "operationId": "cancel_download_ytdlp_download__job_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
             "content": {
               "application/json": {
                 "schema": {
@@ -8869,6 +9309,28 @@
         "title": "PasswordChangeRequest",
         "description": "Request schema for password change."
       },
+      "PasswordRotationRequiredResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": "Password change required"
+          },
+          "redirect_to": {
+            "type": "string",
+            "title": "Redirect To",
+            "default": "/auth/set-initial-password"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Your account requires a password change before you can log in."
+          }
+        },
+        "type": "object",
+        "title": "PasswordRotationRequiredResponse",
+        "description": "Response when password rotation is required."
+      },
       "PlaylistExportRequest": {
         "properties": {
           "name": {
@@ -9591,6 +10053,36 @@
         "type": "object",
         "title": "SearchSuggestionsResponse",
         "description": "Search suggestions response for autocomplete."
+      },
+      "SetInitialPasswordRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Username",
+            "description": "Username"
+          },
+          "current_password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Current Password",
+            "description": "Current password (default: changeme)"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "New Password",
+            "description": "New password (min 8 characters)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "current_password",
+          "new_password"
+        ],
+        "title": "SetInitialPasswordRequest",
+        "description": "Request body for setting initial password."
       },
       "TagCreate": {
         "properties": {
@@ -10779,6 +11271,160 @@
         "title": "VideoUpdate",
         "description": "Schema for updating an existing video (all fields optional)."
       },
+      "YTDLPDownloadRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Url",
+            "description": "YouTube video URL or video ID"
+          },
+          "output_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Output Path",
+            "description": "Relative path within library directory where the video should be saved"
+          },
+          "format_spec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format Spec",
+            "description": "yt-dlp format specification (e.g., 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best')"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "output_path"
+        ],
+        "title": "YTDLPDownloadRequest",
+        "description": "Request to download a YouTube video.\n\nAttributes:\n    url: YouTube video URL or video ID\n    output_path: Path where the video file should be saved (within library_dir)\n    format_spec: Optional yt-dlp format specification\n\nExample:\n    >>> request = YTDLPDownloadRequest(\n    ...     url=\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\n    ...     output_path=\"Rick Astley/Never Gonna Give You Up.mp4\"\n    ... )"
+      },
+      "YTDLPSearchResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/YTDLPVideoInfo"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "List of video search results"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Search query used"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Number of results returned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results",
+          "query",
+          "total"
+        ],
+        "title": "YTDLPSearchResponse",
+        "description": "Response containing YouTube search results.\n\nAttributes:\n    results: List of video metadata results\n    query: The search query used (artist + track_title)\n    total: Number of results returned"
+      },
+      "YTDLPVideoInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "YouTube video ID"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Video title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Full YouTube URL"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel",
+            "description": "Channel name"
+          },
+          "channel_follower_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Follower Count",
+            "description": "Channel subscriber count"
+          },
+          "view_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Count",
+            "description": "Video view count"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "Video duration in seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url"
+        ],
+        "title": "YTDLPVideoInfo",
+        "description": "YouTube video metadata response.\n\nRepresents video information returned from yt-dlp.\n\nAttributes:\n    id: YouTube video ID\n    title: Video title\n    url: Full YouTube URL\n    channel: Channel name\n    channel_follower_count: Channel subscriber count\n    view_count: Video view count\n    duration: Video duration in seconds"
+      },
+      "YTDLPVideoInfoResponse": {
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/YTDLPVideoInfo",
+            "description": "Video metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "video"
+        ],
+        "title": "YTDLPVideoInfoResponse",
+        "description": "Response containing single video metadata.\n\nAttributes:\n    video: Video metadata"
+      },
       "YouTubeImportRequest": {
         "properties": {
           "urls": {
@@ -10892,6 +11538,10 @@
     {
       "name": "Configuration",
       "description": "Runtime configuration management with history/undo support and safety level enforcement"
+    },
+    {
+      "name": "yt-dlp",
+      "description": "YouTube video search, metadata retrieval, and download with progress tracking"
     }
   ]
 }
