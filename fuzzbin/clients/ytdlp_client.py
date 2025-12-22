@@ -266,6 +266,74 @@ class YTDLPClient:
 
         return results
 
+    async def get_video_info(
+        self,
+        video_id_or_url: str,
+    ) -> YTDLPSearchResult:
+        """
+        Get metadata for a single YouTube video without downloading.
+
+        Fetches detailed video information using yt-dlp's --dump-json option.
+        Accepts either a YouTube video ID or full URL.
+
+        Args:
+            video_id_or_url: YouTube video ID (e.g., "dQw4w9WgXcQ") or full URL
+                (e.g., "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+        Returns:
+            YTDLPSearchResult with video metadata
+
+        Raises:
+            YTDLPNotFoundError: If yt-dlp binary not found
+            YTDLPExecutionError: If video not found or request fails
+            YTDLPParseError: If response parsing fails
+
+        Example:
+            >>> async with YTDLPClient.from_config(config) as client:
+            ...     info = await client.get_video_info("dQw4w9WgXcQ")
+            ...     print(f"{info.title} - {info.view_count:,} views")
+            ...
+            ...     # Also accepts full URLs
+            ...     info = await client.get_video_info(
+            ...         "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            ...     )
+        """
+        # Normalize to URL if just video ID provided
+        if not video_id_or_url.startswith(("http://", "https://")):
+            url = f"https://www.youtube.com/watch?v={video_id_or_url}"
+        else:
+            url = video_id_or_url
+
+        self.logger.info(
+            "ytdlp_get_video_info",
+            url=url,
+        )
+
+        # Build command args
+        args = [
+            "--dump-json",  # Output JSON metadata
+            "--no-download",  # Don't download the video
+            "--no-warnings",  # Suppress warnings
+            url,
+        ]
+
+        # Add config options
+        if self.config.geo_bypass:
+            args.append("--geo-bypass")
+
+        # Execute and get JSON output
+        data = await self._execute_ytdlp(args, capture_json=True)
+
+        result = YTDLPSearchResult.from_dict(data)
+
+        self.logger.info(
+            "ytdlp_get_video_info_complete",
+            video_id=result.id,
+            title=result.title,
+        )
+
+        return result
+
     async def _call_hook(self, hook: Optional[Callable], *args: Any) -> None:
         """
         Call a hook function, handling both sync and async callbacks.

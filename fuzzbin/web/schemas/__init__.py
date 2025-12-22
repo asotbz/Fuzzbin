@@ -56,6 +56,15 @@ from .events import (
     JobFailedPayload,
     ClientReloadedPayload,
 )
+from .ytdlp import (
+    YTDLPDownloadProgress,
+    YTDLPDownloadRequest,
+    YTDLPDownloadResult,
+    YTDLPSearchRequest,
+    YTDLPSearchResponse,
+    YTDLPVideoInfo,
+    YTDLPVideoInfoResponse,
+)
 
 __all__ = [
     # Common
@@ -118,4 +127,12 @@ __all__ = [
     "JobCompletedPayload",
     "JobFailedPayload",
     "ClientReloadedPayload",
+    # yt-dlp
+    "YTDLPDownloadProgress",
+    "YTDLPDownloadRequest",
+    "YTDLPDownloadResult",
+    "YTDLPSearchRequest",
+    "YTDLPSearchResponse",
+    "YTDLPVideoInfo",
+    "YTDLPVideoInfoResponse",
 ]
