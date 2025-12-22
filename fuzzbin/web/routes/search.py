@@ -1,16 +1,126 @@
 """Full-text search endpoint."""
 
-from typing import Optional
+import json
+from typing import Annotated, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+import structlog
+from cachetools import TTLCache
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
+import fuzzbin
+from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
 
-from ..dependencies import get_repository
+from ..dependencies import get_current_user, get_repository, require_auth
 from ..schemas.common import PageParams, PaginatedResponse
 from ..schemas.video import VideoResponse
 
+logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/search", tags=["Search"])
+
+# In-memory facet cache with TTL (configured via advanced.facet_cache_ttl)
+_facet_cache: TTLCache = None
+
+
+def _get_facet_cache() -> TTLCache:
+    """Get or create facet cache with configured TTL."""
+    global _facet_cache
+    if _facet_cache is None:
+        config = fuzzbin.get_config()
+        ttl = config.advanced.facet_cache_ttl
+        _facet_cache = TTLCache(maxsize=10, ttl=ttl)
+    return _facet_cache
+
+
+def clear_facet_cache() -> None:
+    """Clear the facet cache. Useful for testing."""
+    global _facet_cache
+    if _facet_cache is not None:
+        _facet_cache.clear()
+
+
+# ==================== Facet Schemas ====================
+
+
+class FacetItem(BaseModel):
+    """Single facet value with count."""
+
+    value: str = Field(description="Facet value (e.g., tag name, genre)")
+    count: int = Field(description="Number of videos with this value")
+
+
+class FacetsResponse(BaseModel):
+    """Response containing all facets for filtering UI."""
+
+    tags: List[FacetItem] = Field(default_factory=list, description="Tag facets with counts")
+    genres: List[FacetItem] = Field(default_factory=list, description="Genre facets with counts")
+    years: List[FacetItem] = Field(default_factory=list, description="Year facets with counts")
+    directors: List[FacetItem] = Field(
+        default_factory=list, description="Director facets with counts"
+    )
+    total_videos: int = Field(default=0, description="Total number of videos in the library")
+
+    @classmethod
+    def from_repo_facets(cls, facets: Dict[str, List[dict]], total_videos: int = 0) -> "FacetsResponse":
+        """Create from repository facets dict."""
+        return cls(
+            tags=[FacetItem(**f) for f in facets.get("tags", [])],
+            genres=[FacetItem(**f) for f in facets.get("genres", [])],
+            years=[FacetItem(**f) for f in facets.get("years", [])],
+            directors=[FacetItem(**f) for f in facets.get("directors", [])],
+            total_videos=total_videos,
+        )
+
+
+# ==================== Saved Search Schemas ====================
+
+
+class SavedSearchCreate(BaseModel):
+    """Request to create a saved search."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Name for the saved search")
+    description: Optional[str] = Field(
+        default=None, max_length=500, description="Optional description"
+    )
+    query: dict = Field(
+        ...,
+        description="Search/filter parameters to save",
+        examples=[{"search": "nirvana", "genre": "Rock", "year_min": 1990}],
+    )
+
+
+class SavedSearchResponse(BaseModel):
+    """Response for a saved search."""
+
+    id: int = Field(description="Saved search ID")
+    name: str = Field(description="Saved search name")
+    description: Optional[str] = Field(description="Optional description")
+    query: dict = Field(description="Saved search/filter parameters")
+    created_at: str = Field(description="Creation timestamp")
+    updated_at: str = Field(description="Last update timestamp")
+
+    @classmethod
+    def from_db_row(cls, row: dict) -> "SavedSearchResponse":
+        """Create from database row."""
+        return cls(
+            id=row["id"],
+            name=row["name"],
+            description=row.get("description"),
+            query=json.loads(row["query_json"]) if row.get("query_json") else {},
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+
+class SavedSearchListResponse(BaseModel):
+    """Response for listing saved searches."""
+
+    items: List[SavedSearchResponse] = Field(description="List of saved searches")
+    total: int = Field(description="Total count")
+
+
+# ==================== Search Endpoints ====================
 
 
 @router.get(
@@ -119,3 +229,165 @@ async def search_suggestions(
     suggestions["albums"] = list(set(v["album"] for v in videos if v.get("album")))[:limit]
 
     return suggestions
+
+
+# ==================== Facet Endpoints ====================
+
+
+@router.get(
+    "/facets",
+    response_model=FacetsResponse,
+    summary="Get search facets",
+    description="Get faceted counts for building filter UIs. Results are cached briefly.",
+)
+async def get_facets(
+    include_deleted: bool = Query(default=False, description="Include soft-deleted videos"),
+    repo: VideoRepository = Depends(get_repository),
+) -> FacetsResponse:
+    """
+    Get faceted counts for filtering.
+
+    Returns counts by:
+    - Tags (most used first)
+    - Genres (most used first)
+    - Years (newest first)
+    - Directors (most videos first)
+
+    Results are cached for the configured TTL (default 60s) to improve performance.
+    """
+    cache = _get_facet_cache()
+    cache_key = f"facets:{include_deleted}"
+
+    # Check cache
+    if cache_key in cache:
+        logger.debug("facets_cache_hit", cache_key=cache_key)
+        return cache[cache_key]
+
+    # Fetch from database
+    facets = await repo.get_facets(include_deleted=include_deleted)
+
+    # Get total video count
+    total_videos = await repo.query().count()
+
+    response = FacetsResponse.from_repo_facets(facets, total_videos=total_videos)
+
+    # Cache result
+    cache[cache_key] = response
+    logger.debug(
+        "facets_cached",
+        cache_key=cache_key,
+        tags=len(response.tags),
+        genres=len(response.genres),
+        years=len(response.years),
+        directors=len(response.directors),
+    )
+
+    return response
+
+
+# ==================== Saved Search Endpoints ====================
+
+
+@router.post(
+    "/saved",
+    response_model=SavedSearchResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create saved search",
+    description="Save a search query for later reuse.",
+)
+async def create_saved_search(
+    request: SavedSearchCreate,
+    current_user: Annotated[UserInfo, Depends(require_auth)],
+    repo: VideoRepository = Depends(get_repository),
+) -> SavedSearchResponse:
+    """Create a new saved search."""
+    query_json = json.dumps(request.query, ensure_ascii=False)
+
+    search_id = await repo.create_saved_search(
+        name=request.name,
+        query_json=query_json,
+        description=request.description,
+    )
+
+    # Fetch created search
+    row = await repo.get_saved_search_by_id(search_id)
+
+    logger.info(
+        "saved_search_created",
+        search_id=search_id,
+        name=request.name,
+        user=current_user.username if current_user else "anonymous",
+    )
+
+    return SavedSearchResponse.from_db_row(row)
+
+
+@router.get(
+    "/saved",
+    response_model=SavedSearchListResponse,
+    summary="List saved searches",
+    description="Get all saved searches.",
+)
+async def list_saved_searches(
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+    repo: VideoRepository = Depends(get_repository),
+) -> SavedSearchListResponse:
+    """List all saved searches."""
+    rows = await repo.get_saved_searches()
+
+    return SavedSearchListResponse(
+        items=[SavedSearchResponse.from_db_row(row) for row in rows],
+        total=len(rows),
+    )
+
+
+@router.get(
+    "/saved/{search_id}",
+    response_model=SavedSearchResponse,
+    summary="Get saved search",
+    description="Get a saved search by ID.",
+)
+async def get_saved_search(
+    search_id: int,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+    repo: VideoRepository = Depends(get_repository),
+) -> SavedSearchResponse:
+    """Get a saved search by ID."""
+    try:
+        row = await repo.get_saved_search_by_id(search_id)
+        return SavedSearchResponse.from_db_row(row)
+    except Exception as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Saved search not found: {search_id}",
+            )
+        raise
+
+
+@router.delete(
+    "/saved/{search_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete saved search",
+    description="Delete a saved search.",
+)
+async def delete_saved_search(
+    search_id: int,
+    current_user: Annotated[UserInfo, Depends(require_auth)],
+    repo: VideoRepository = Depends(get_repository),
+) -> None:
+    """Delete a saved search."""
+    try:
+        await repo.delete_saved_search(search_id)
+        logger.info(
+            "saved_search_deleted",
+            search_id=search_id,
+            user=current_user.username if current_user else "anonymous",
+        )
+    except Exception as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Saved search not found: {search_id}",
+            )
+        raise

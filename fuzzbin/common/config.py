@@ -587,6 +587,44 @@ class FileManagerConfig(BaseModel):
         return v_lower
 
 
+class AdvancedFeaturesConfig(BaseModel):
+    """Configuration for Phase 7 advanced features.
+
+    Controls bulk operations, faceted search, imports/exports, and scheduling.
+    """
+
+    max_bulk_items: int = Field(
+        default=500,
+        ge=1,
+        le=10000,
+        description="Maximum number of items allowed in bulk operations",
+    )
+    facet_cache_ttl: int = Field(
+        default=60,
+        ge=1,
+        le=3600,
+        description="Time-to-live in seconds for faceted search result cache",
+    )
+    max_sync_import_items: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum items for synchronous import (larger batches require background tasks)",
+    )
+    export_dir: str = Field(
+        default=".exports",
+        description="Directory for export files (relative to workspace_root)",
+    )
+    scheduler_library_scan_cron: Optional[str] = Field(
+        default=None,
+        description="Cron expression for periodic library scans (e.g., '0 2 * * *' for daily at 2 AM)",
+    )
+    scheduler_metadata_refresh_cron: Optional[str] = Field(
+        default=None,
+        description="Cron expression for periodic metadata refresh (e.g., '0 3 * * 0' for weekly)",
+    )
+
+
 class Config(BaseModel):
     """Main configuration class for Fuzzbin."""
 
@@ -633,6 +671,10 @@ class Config(BaseModel):
     file_manager: FileManagerConfig = Field(
         default_factory=FileManagerConfig,
         description="File management and organization configuration",
+    )
+    advanced: AdvancedFeaturesConfig = Field(
+        default_factory=AdvancedFeaturesConfig,
+        description="Advanced features configuration (bulk ops, facets, imports/exports, scheduling)",
     )
 
     @classmethod

@@ -222,6 +222,7 @@ def create_app() -> FastAPI:
 
     # Import and include routers
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
+    from .routes import bulk, imports, exports  # Phase 7 routes
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -240,6 +241,10 @@ def create_app() -> FastAPI:
     app.include_router(search.router, dependencies=protected_dependencies)
     app.include_router(files.router, dependencies=protected_dependencies)
     app.include_router(jobs.router, dependencies=protected_dependencies)
+    # Phase 7 routes
+    app.include_router(bulk.router, dependencies=protected_dependencies)
+    app.include_router(imports.router, dependencies=protected_dependencies)
+    app.include_router(exports.router, dependencies=protected_dependencies)
 
     logger.info("api_app_created", routes=len(app.routes))
 

@@ -17,6 +17,9 @@ class JobType(str, Enum):
     FILE_ORGANIZE = "file_organize"
     FILE_DUPLICATE_RESOLVE = "file_duplicate_resolve"
     METADATA_ENRICH = "metadata_enrich"
+    METADATA_REFRESH = "metadata_refresh"  # Phase 7: Scheduled metadata refresh
+    LIBRARY_SCAN = "library_scan"  # Phase 7: Scheduled library scan
+    IMPORT = "import"  # Phase 7: Generic import job (YouTube/IMVDb)
 
 
 class JobStatus(str, Enum):

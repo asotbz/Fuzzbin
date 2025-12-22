@@ -87,7 +87,7 @@ async def create_collection(
     repo: VideoRepository = Depends(get_repository),
 ) -> CollectionResponse:
     """Create a new collection."""
-    collection_id = await repo.create_or_get_collection(**collection.to_repo_kwargs())
+    collection_id = await repo.upsert_collection(**collection.to_repo_kwargs())
     row = await repo.get_collection_by_id(collection_id)
     return CollectionResponse.from_db_row(row, video_count=0)
 

@@ -248,6 +248,42 @@ async def delete_video(
 
 
 @router.post(
+    "/{video_id}/tags/{tag_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Add tag to video",
+    description="Add a tag to a video.",
+)
+async def add_video_tag(
+    video_id: int,
+    tag_id: int,
+    repo: VideoRepository = Depends(get_repository),
+) -> None:
+    """Add a tag to a video."""
+    # Verify video and tag exist
+    await repo.get_video_by_id(video_id)
+    await repo.get_tag_by_id(tag_id)
+    await repo.add_video_tag(video_id, tag_id)
+
+
+@router.delete(
+    "/{video_id}/tags/{tag_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove tag from video",
+    description="Remove a tag from a video.",
+)
+async def remove_video_tag(
+    video_id: int,
+    tag_id: int,
+    repo: VideoRepository = Depends(get_repository),
+) -> None:
+    """Remove a tag from a video."""
+    # Verify video and tag exist
+    await repo.get_video_by_id(video_id)
+    await repo.get_tag_by_id(tag_id)
+    await repo.remove_video_tag(video_id, tag_id)
+
+
+@router.post(
     "/{video_id}/restore",
     response_model=VideoResponse,
     summary="Restore video",

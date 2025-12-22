@@ -2088,3 +2088,781 @@ class VideoRepository:
         if not json_str:
             return None
         return json.loads(json_str)
+
+    # ==================== Bulk Operations (Phase 7) ====================
+
+    async def bulk_update_videos(
+        self,
+        video_ids: List[int],
+        updates: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Update multiple videos in a single transaction.
+
+        Args:
+            video_ids: List of video IDs to update
+            updates: Fields to update for all videos
+
+        Returns:
+            Dict with 'success_ids', 'failed_ids', and 'errors'
+
+        Example:
+            result = await repo.bulk_update_videos(
+                video_ids=[1, 2, 3],
+                updates={"genre": "Rock", "studio": "Universal"}
+            )
+        """
+        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+
+        if not video_ids:
+            return result
+
+        async with self.transaction():
+            for video_id in video_ids:
+                try:
+                    await self.update_video(video_id, **updates)
+                    result["success_ids"].append(video_id)
+                except VideoNotFoundError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+                except QueryError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+
+        logger.info(
+            "bulk_videos_updated",
+            total=len(video_ids),
+            success=len(result["success_ids"]),
+            failed=len(result["failed_ids"]),
+        )
+        return result
+
+    async def bulk_delete_videos(
+        self,
+        video_ids: List[int],
+        hard_delete: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Delete multiple videos in a single transaction.
+
+        Args:
+            video_ids: List of video IDs to delete
+            hard_delete: If True, permanently delete; if False, soft delete
+
+        Returns:
+            Dict with 'success_ids', 'failed_ids', and 'errors'
+        """
+        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+
+        if not video_ids:
+            return result
+
+        async with self.transaction():
+            for video_id in video_ids:
+                try:
+                    if hard_delete:
+                        await self.hard_delete_video(video_id)
+                    else:
+                        await self.delete_video(video_id)
+                    result["success_ids"].append(video_id)
+                except VideoNotFoundError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+                except QueryError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+
+        logger.info(
+            "bulk_videos_deleted",
+            total=len(video_ids),
+            success=len(result["success_ids"]),
+            failed=len(result["failed_ids"]),
+            hard_delete=hard_delete,
+        )
+        return result
+
+    async def bulk_update_status(
+        self,
+        video_ids: List[int],
+        new_status: str,
+        reason: Optional[str] = None,
+        changed_by: Optional[str] = "bulk_update_status",
+    ) -> Dict[str, Any]:
+        """
+        Update status for multiple videos in a single transaction.
+
+        Args:
+            video_ids: List of video IDs
+            new_status: New status to set
+            reason: Reason for status change
+            changed_by: Component/user making the change
+
+        Returns:
+            Dict with 'success_ids', 'failed_ids', and 'errors'
+        """
+        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+
+        if not video_ids:
+            return result
+
+        async with self.transaction():
+            for video_id in video_ids:
+                try:
+                    await self.update_status(
+                        video_id=video_id,
+                        new_status=new_status,
+                        reason=reason,
+                        changed_by=changed_by,
+                    )
+                    result["success_ids"].append(video_id)
+                except (VideoNotFoundError, ValueError) as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+                except QueryError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+
+        logger.info(
+            "bulk_status_updated",
+            total=len(video_ids),
+            success=len(result["success_ids"]),
+            failed=len(result["failed_ids"]),
+            new_status=new_status,
+        )
+        return result
+
+    async def bulk_apply_tags(
+        self,
+        video_ids: List[int],
+        tag_names: List[str],
+        replace: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Apply tags to multiple videos in a single transaction.
+
+        Args:
+            video_ids: List of video IDs
+            tag_names: List of tag names to apply
+            replace: If True, replace existing tags; if False, add to existing
+
+        Returns:
+            Dict with 'success_ids', 'failed_ids', and 'errors'
+        """
+        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+
+        if not video_ids or not tag_names:
+            return result
+
+        # First, ensure all tags exist and get their IDs
+        tag_ids = []
+        for tag_name in tag_names:
+            tag_id = await self.upsert_tag(tag_name)
+            tag_ids.append(tag_id)
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        async with self.transaction():
+            for video_id in video_ids:
+                try:
+                    # Verify video exists
+                    await self.get_video_by_id(video_id)
+
+                    if replace:
+                        # Remove existing tags
+                        await self._connection.execute(
+                            "DELETE FROM video_tags WHERE video_id = ?",
+                            (video_id,),
+                        )
+
+                    # Add new tags
+                    for tag_id in tag_ids:
+                        await self._connection.execute(
+                            """
+                            INSERT OR IGNORE INTO video_tags 
+                            (video_id, tag_id, added_at, source)
+                            VALUES (?, ?, ?, 'manual')
+                            """,
+                            (video_id, tag_id, now),
+                        )
+
+                    result["success_ids"].append(video_id)
+                except VideoNotFoundError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+                except QueryError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+
+        logger.info(
+            "bulk_tags_applied",
+            total=len(video_ids),
+            success=len(result["success_ids"]),
+            failed=len(result["failed_ids"]),
+            tags=tag_names,
+            replace=replace,
+        )
+        return result
+
+    async def bulk_add_to_collection(
+        self,
+        video_ids: List[int],
+        collection_id: int,
+    ) -> Dict[str, Any]:
+        """
+        Add multiple videos to a collection in a single transaction.
+
+        Args:
+            video_ids: List of video IDs
+            collection_id: Collection ID to add videos to
+
+        Returns:
+            Dict with 'success_ids', 'failed_ids', and 'errors'
+        """
+        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+
+        if not video_ids:
+            return result
+
+        # Verify collection exists
+        try:
+            await self.get_collection_by_id(collection_id)
+        except CollectionNotFoundError as e:
+            for video_id in video_ids:
+                result["failed_ids"].append(video_id)
+                result["errors"][video_id] = str(e)
+            return result
+
+        async with self.transaction():
+            for video_id in video_ids:
+                try:
+                    await self.link_video_collection(video_id, collection_id)
+                    result["success_ids"].append(video_id)
+                except VideoNotFoundError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+                except QueryError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+
+        logger.info(
+            "bulk_added_to_collection",
+            total=len(video_ids),
+            success=len(result["success_ids"]),
+            failed=len(result["failed_ids"]),
+            collection_id=collection_id,
+        )
+        return result
+
+    async def bulk_organize_videos(
+        self,
+        video_updates: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Update file paths for multiple videos (used after file organization).
+
+        Args:
+            video_updates: List of dicts with 'video_id', 'video_file_path',
+                          and optionally 'nfo_file_path'
+
+        Returns:
+            Dict with 'success_ids', 'failed_ids', and 'errors'
+
+        Example:
+            result = await repo.bulk_organize_videos([
+                {"video_id": 1, "video_file_path": "/new/path/video.mp4"},
+                {"video_id": 2, "video_file_path": "/new/path/video2.mp4", "nfo_file_path": "/new/path/video2.nfo"},
+            ])
+        """
+        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+
+        if not video_updates:
+            return result
+
+        async with self.transaction():
+            for update in video_updates:
+                video_id = update.get("video_id")
+                if not video_id:
+                    continue
+
+                updates = {}
+                if "video_file_path" in update:
+                    updates["video_file_path"] = update["video_file_path"]
+                if "nfo_file_path" in update:
+                    updates["nfo_file_path"] = update["nfo_file_path"]
+
+                if not updates:
+                    continue
+
+                try:
+                    await self.update_video(video_id, **updates)
+                    result["success_ids"].append(video_id)
+                except VideoNotFoundError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+                except QueryError as e:
+                    result["failed_ids"].append(video_id)
+                    result["errors"][video_id] = str(e)
+
+        logger.info(
+            "bulk_videos_organized",
+            total=len(video_updates),
+            success=len(result["success_ids"]),
+            failed=len(result["failed_ids"]),
+        )
+        return result
+
+    # ==================== Faceted Search (Phase 7) ====================
+
+    async def get_facets(
+        self,
+        include_deleted: bool = False,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get faceted counts for filtering UI.
+
+        Returns counts by tag, genre, year, and director for building
+        filter UIs with counts.
+
+        Args:
+            include_deleted: Include soft-deleted videos in counts
+
+        Returns:
+            Dict with 'tags', 'genres', 'years', 'directors' facets,
+            each containing list of {'value': str, 'count': int}
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        deleted_filter = "" if include_deleted else "AND v.is_deleted = 0"
+
+        facets = {
+            "tags": [],
+            "genres": [],
+            "years": [],
+            "directors": [],
+        }
+
+        # Tag facets
+        cursor = await self._connection.execute(
+            f"""
+            SELECT t.name, COUNT(DISTINCT vt.video_id) as count
+            FROM tags t
+            JOIN video_tags vt ON t.id = vt.tag_id
+            JOIN videos v ON vt.video_id = v.id
+            WHERE 1=1 {deleted_filter}
+            GROUP BY t.name
+            ORDER BY count DESC, t.name
+            """,
+        )
+        rows = await cursor.fetchall()
+        facets["tags"] = [{"value": row["name"], "count": row["count"]} for row in rows]
+
+        # Genre facets
+        cursor = await self._connection.execute(
+            f"""
+            SELECT genre, COUNT(*) as count
+            FROM videos v
+            WHERE genre IS NOT NULL AND genre != '' {deleted_filter}
+            GROUP BY genre
+            ORDER BY count DESC, genre
+            """,
+        )
+        rows = await cursor.fetchall()
+        facets["genres"] = [{"value": row["genre"], "count": row["count"]} for row in rows]
+
+        # Year facets
+        cursor = await self._connection.execute(
+            f"""
+            SELECT year, COUNT(*) as count
+            FROM videos v
+            WHERE year IS NOT NULL {deleted_filter}
+            GROUP BY year
+            ORDER BY year DESC
+            """,
+        )
+        rows = await cursor.fetchall()
+        facets["years"] = [{"value": str(row["year"]), "count": row["count"]} for row in rows]
+
+        # Director facets
+        cursor = await self._connection.execute(
+            f"""
+            SELECT director, COUNT(*) as count
+            FROM videos v
+            WHERE director IS NOT NULL AND director != '' {deleted_filter}
+            GROUP BY director
+            ORDER BY count DESC, director
+            """,
+        )
+        rows = await cursor.fetchall()
+        facets["directors"] = [{"value": row["director"], "count": row["count"]} for row in rows]
+
+        logger.debug(
+            "facets_retrieved",
+            tag_count=len(facets["tags"]),
+            genre_count=len(facets["genres"]),
+            year_count=len(facets["years"]),
+            director_count=len(facets["directors"]),
+        )
+
+        return facets
+
+    # ==================== Saved Searches (Phase 7) ====================
+
+    async def create_saved_search(
+        self,
+        name: str,
+        query_json: str,
+        description: Optional[str] = None,
+    ) -> int:
+        """
+        Create a saved search.
+
+        Args:
+            name: Name for the saved search
+            query_json: JSON-serialized search/filter parameters
+            description: Optional description
+
+        Returns:
+            Created saved search ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        try:
+            cursor = await self._connection.execute(
+                """
+                INSERT INTO saved_searches (name, description, query_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (name, description, query_json, now, now),
+            )
+            await self._connection.commit()
+            search_id = cursor.lastrowid
+
+            logger.info("saved_search_created", search_id=search_id, name=name)
+            return search_id
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("saved_search_creation_failed", name=name, error=str(e))
+            raise QueryError(f"Failed to create saved search: {e}") from e
+
+    async def get_saved_searches(self) -> List[Dict[str, Any]]:
+        """
+        Get all saved searches.
+
+        Returns:
+            List of saved search records
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            """
+            SELECT * FROM saved_searches
+            ORDER BY created_at DESC
+            """,
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_saved_search_by_id(self, search_id: int) -> Dict[str, Any]:
+        """
+        Get saved search by ID.
+
+        Args:
+            search_id: Saved search ID
+
+        Returns:
+            Saved search record
+
+        Raises:
+            QueryError: If not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            "SELECT * FROM saved_searches WHERE id = ?",
+            (search_id,),
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            raise QueryError(f"Saved search not found: {search_id}")
+
+        return dict(row)
+
+    async def delete_saved_search(self, search_id: int) -> None:
+        """
+        Delete a saved search.
+
+        Args:
+            search_id: Saved search ID to delete
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        try:
+            cursor = await self._connection.execute(
+                "DELETE FROM saved_searches WHERE id = ?",
+                (search_id,),
+            )
+            await self._connection.commit()
+
+            if cursor.rowcount == 0:
+                raise QueryError(f"Saved search not found: {search_id}")
+
+            logger.info("saved_search_deleted", search_id=search_id)
+
+        except Exception as e:
+            await self._connection.rollback()
+            if "not found" in str(e):
+                raise
+            logger.error("saved_search_deletion_failed", search_id=search_id, error=str(e))
+            raise QueryError(f"Failed to delete saved search: {e}") from e
+
+    # ==================== Scheduled Tasks (Phase 7) ====================
+
+    async def create_scheduled_task(
+        self,
+        name: str,
+        job_type: str,
+        cron_expression: str,
+        description: Optional[str] = None,
+        metadata_json: Optional[str] = None,
+        enabled: bool = True,
+    ) -> int:
+        """
+        Create a scheduled task.
+
+        Args:
+            name: Unique name for the task
+            job_type: JobType enum value
+            cron_expression: Cron expression for scheduling
+            description: Optional description
+            metadata_json: Optional JSON metadata for job handler
+            enabled: Whether task is enabled
+
+        Returns:
+            Created task ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Calculate next run time
+        from fuzzbin.tasks.queue import parse_cron
+
+        next_run = parse_cron(cron_expression, datetime.now(timezone.utc))
+        next_run_str = next_run.isoformat() if next_run else None
+
+        try:
+            cursor = await self._connection.execute(
+                """
+                INSERT INTO scheduled_tasks 
+                (name, description, job_type, cron_expression, enabled, metadata_json, 
+                 next_run_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (name, description, job_type, cron_expression, 1 if enabled else 0,
+                 metadata_json, next_run_str, now, now),
+            )
+            await self._connection.commit()
+            task_id = cursor.lastrowid
+
+            logger.info(
+                "scheduled_task_created",
+                task_id=task_id,
+                name=name,
+                job_type=job_type,
+                cron=cron_expression,
+            )
+            return task_id
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("scheduled_task_creation_failed", name=name, error=str(e))
+            raise QueryError(f"Failed to create scheduled task: {e}") from e
+
+    async def get_scheduled_tasks(
+        self,
+        enabled_only: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all scheduled tasks.
+
+        Args:
+            enabled_only: Only return enabled tasks
+
+        Returns:
+            List of scheduled task records
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM scheduled_tasks"
+        if enabled_only:
+            query += " WHERE enabled = 1"
+        query += " ORDER BY name"
+
+        cursor = await self._connection.execute(query)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_scheduled_task_by_id(self, task_id: int) -> Dict[str, Any]:
+        """
+        Get scheduled task by ID.
+
+        Args:
+            task_id: Task ID
+
+        Returns:
+            Task record
+
+        Raises:
+            QueryError: If not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            "SELECT * FROM scheduled_tasks WHERE id = ?",
+            (task_id,),
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            raise QueryError(f"Scheduled task not found: {task_id}")
+
+        return dict(row)
+
+    async def update_scheduled_task(
+        self,
+        task_id: int,
+        **updates,
+    ) -> None:
+        """
+        Update a scheduled task.
+
+        Args:
+            task_id: Task ID
+            **updates: Fields to update (enabled, cron_expression, etc.)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify exists
+        await self.get_scheduled_task_by_id(task_id)
+
+        now = datetime.now(timezone.utc).isoformat()
+        updates["updated_at"] = now
+
+        # Recalculate next_run if cron changed
+        if "cron_expression" in updates:
+            from fuzzbin.tasks.queue import parse_cron
+
+            next_run = parse_cron(updates["cron_expression"], datetime.now(timezone.utc))
+            updates["next_run_at"] = next_run.isoformat() if next_run else None
+
+        set_clause = ", ".join(f"{key} = ?" for key in updates.keys())
+        values = list(updates.values())
+        values.append(task_id)
+
+        try:
+            await self._connection.execute(
+                f"UPDATE scheduled_tasks SET {set_clause} WHERE id = ?",
+                values,
+            )
+            await self._connection.commit()
+
+            logger.info("scheduled_task_updated", task_id=task_id, fields=list(updates.keys()))
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("scheduled_task_update_failed", task_id=task_id, error=str(e))
+            raise QueryError(f"Failed to update scheduled task: {e}") from e
+
+    async def delete_scheduled_task(self, task_id: int) -> None:
+        """
+        Delete a scheduled task.
+
+        Args:
+            task_id: Task ID to delete
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        try:
+            cursor = await self._connection.execute(
+                "DELETE FROM scheduled_tasks WHERE id = ?",
+                (task_id,),
+            )
+            await self._connection.commit()
+
+            if cursor.rowcount == 0:
+                raise QueryError(f"Scheduled task not found: {task_id}")
+
+            logger.info("scheduled_task_deleted", task_id=task_id)
+
+        except Exception as e:
+            await self._connection.rollback()
+            if "not found" in str(e):
+                raise
+            logger.error("scheduled_task_deletion_failed", task_id=task_id, error=str(e))
+            raise QueryError(f"Failed to delete scheduled task: {e}") from e
+
+    async def record_scheduled_task_run(
+        self,
+        task_id: int,
+        status: str,
+        error: Optional[str] = None,
+    ) -> None:
+        """
+        Record a scheduled task execution.
+
+        Args:
+            task_id: Task ID
+            status: Execution status (success, failed, cancelled)
+            error: Error message if failed
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Get current task to recalculate next run
+        task = await self.get_scheduled_task_by_id(task_id)
+
+        from fuzzbin.tasks.queue import parse_cron
+
+        next_run = parse_cron(task["cron_expression"], datetime.now(timezone.utc))
+        next_run_str = next_run.isoformat() if next_run else None
+
+        try:
+            await self._connection.execute(
+                """
+                UPDATE scheduled_tasks 
+                SET last_run_at = ?, next_run_at = ?, last_status = ?, 
+                    last_error = ?, run_count = run_count + 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (now, next_run_str, status, error, now, task_id),
+            )
+            await self._connection.commit()
+
+            logger.info(
+                "scheduled_task_run_recorded",
+                task_id=task_id,
+                status=status,
+                next_run=next_run_str,
+            )
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("scheduled_task_run_record_failed", task_id=task_id, error=str(e))
+            raise QueryError(f"Failed to record task run: {e}") from e
+

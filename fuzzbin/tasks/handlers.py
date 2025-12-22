@@ -829,6 +829,469 @@ async def handle_metadata_enrich(job: Job) -> None:
     )
 
 
+async def handle_metadata_refresh(job: Job) -> None:
+    """Handle metadata refresh job.
+
+    Refreshes metadata for videos that may be stale or incomplete.
+    Used by scheduled tasks to periodically update video information.
+
+    Job metadata parameters:
+        max_age_days (int, optional): Only refresh videos not updated in N days
+            (default: 30)
+        sources (list[str], optional): APIs to use - ["imvdb", "discogs"]
+            (default: ["imvdb"])
+        limit (int, optional): Maximum videos to process (default: 100)
+
+    Job result on completion:
+        refreshed: Number of videos refreshed
+        skipped: Number of videos skipped
+        failed: Number of refresh failures
+        total_checked: Total videos checked
+
+    Args:
+        job: Job instance with metadata containing refresh parameters
+    """
+    max_age_days = job.metadata.get("max_age_days", 30)
+    sources = job.metadata.get("sources", ["imvdb"])
+    limit = job.metadata.get("limit", 100)
+
+    logger.info(
+        "metadata_refresh_job_starting",
+        job_id=job.id,
+        max_age_days=max_age_days,
+        sources=sources,
+        limit=limit,
+    )
+
+    job.update_progress(0, 1, "Finding videos to refresh...")
+
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+
+    # Find videos that need refresh (old or incomplete metadata)
+    from datetime import datetime, timedelta, timezone
+
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+
+    # Query for videos that need refresh
+    query = repository.query()
+    videos = await query.execute()
+
+    # Filter to videos that need refresh
+    videos_to_refresh = []
+    for v in videos:
+        updated_at = v.get("updated_at")
+        if updated_at:
+            if isinstance(updated_at, str):
+                # Parse ISO format
+                try:
+                    updated = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                except Exception:
+                    videos_to_refresh.append(v)
+                    continue
+            else:
+                updated = updated_at
+
+            if updated < cutoff_date:
+                videos_to_refresh.append(v)
+        else:
+            # No updated_at, needs refresh
+            videos_to_refresh.append(v)
+
+    # Apply limit
+    videos_to_refresh = videos_to_refresh[:limit]
+
+    if not videos_to_refresh:
+        job.mark_completed({
+            "refreshed": 0,
+            "skipped": 0,
+            "failed": 0,
+            "total_checked": len(videos),
+            "message": "No videos need refresh",
+        })
+        return
+
+    job.update_progress(0, len(videos_to_refresh), "Refreshing metadata...")
+
+    # Track results
+    refreshed = 0
+    skipped = 0
+    failed = 0
+
+    # Initialize API clients
+    imvdb_client = None
+    discogs_client = None
+
+    if "imvdb" in sources:
+        imvdb_config = config.apis.get("imvdb")
+        if imvdb_config:
+            from fuzzbin.api.imvdb_client import IMVDbClient
+            imvdb_client = IMVDbClient.from_config(imvdb_config)
+
+    if "discogs" in sources:
+        discogs_config = config.apis.get("discogs")
+        if discogs_config:
+            from fuzzbin.api.discogs_client import DiscogsClient
+            discogs_client = DiscogsClient.from_config(discogs_config)
+
+    try:
+        for idx, video in enumerate(videos_to_refresh, start=1):
+            if job.status == JobStatus.CANCELLED:
+                return
+
+            video_id = video["id"]
+            job.update_progress(
+                idx, len(videos_to_refresh), f"Refreshing video {video_id}..."
+            )
+
+            try:
+                title = video.get("title")
+                artist = video.get("artist")
+
+                if not title or not artist:
+                    skipped += 1
+                    continue
+
+                updates: dict[str, Any] = {}
+
+                # Try IMVDb
+                if imvdb_client:
+                    try:
+                        results = await imvdb_client.search_videos(
+                            artist=artist,
+                            title=title,
+                        )
+                        if results:
+                            video_data = await imvdb_client.get_video(results[0].id)
+                            if video_data:
+                                if video_data.directors and not video.get("director"):
+                                    updates["director"] = video_data.directors[0]
+                                if video_data.year and not video.get("year"):
+                                    updates["year"] = video_data.year
+                    except Exception as e:
+                        logger.warning("imvdb_refresh_error", video_id=video_id, error=str(e))
+
+                # Try Discogs
+                if discogs_client:
+                    try:
+                        results = await discogs_client.search(
+                            query=f"{artist} {title}",
+                            search_type="release",
+                        )
+                        if results and results.results:
+                            release = results.results[0]
+                            if release.label and not video.get("studio"):
+                                updates["studio"] = release.label[0] if release.label else None
+                            if release.genre and not video.get("genre"):
+                                updates["genre"] = release.genre[0] if release.genre else None
+                    except Exception as e:
+                        logger.warning("discogs_refresh_error", video_id=video_id, error=str(e))
+
+                if updates:
+                    await repository.update_video(video_id, **updates)
+                    refreshed += 1
+                else:
+                    skipped += 1
+
+            except Exception as e:
+                failed += 1
+                logger.error(
+                    "metadata_refresh_error",
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+    finally:
+        if imvdb_client:
+            await imvdb_client.aclose()
+        if discogs_client:
+            await discogs_client.aclose()
+
+    job.mark_completed({
+        "refreshed": refreshed,
+        "skipped": skipped,
+        "failed": failed,
+        "total_checked": len(videos),
+        "videos_needing_refresh": len(videos_to_refresh),
+    })
+
+    logger.info(
+        "metadata_refresh_job_completed",
+        job_id=job.id,
+        refreshed=refreshed,
+        skipped=skipped,
+        failed=failed,
+    )
+
+
+async def handle_library_scan(job: Job) -> None:
+    """Handle library scan job.
+
+    Scans the library for new or modified files.
+    Used by scheduled tasks for periodic library maintenance.
+
+    Job metadata parameters:
+        directory (str, optional): Directory to scan (default: workspace root)
+        recursive (bool, optional): Scan subdirectories (default: True)
+        import_nfo (bool, optional): Import found NFO files (default: True)
+
+    Job result on completion:
+        new_files_found: Number of new files discovered
+        nfo_imported: Number of NFO files imported
+        errors: Number of errors encountered
+
+    Args:
+        job: Job instance with metadata containing scan parameters
+    """
+    directory_str = job.metadata.get("directory")
+    recursive = job.metadata.get("recursive", True)
+    import_nfo = job.metadata.get("import_nfo", True)
+
+    logger.info(
+        "library_scan_job_starting",
+        job_id=job.id,
+        directory=directory_str,
+        recursive=recursive,
+        import_nfo=import_nfo,
+    )
+
+    job.update_progress(0, 1, "Scanning library...")
+
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+
+    # Determine directory
+    if directory_str:
+        directory = Path(directory_str)
+    else:
+        directory = Path(config.database.workspace_root or ".")
+
+    if not directory.exists():
+        raise ValueError(f"Directory not found: {directory}")
+
+    # Find NFO files
+    pattern = "**/*.nfo" if recursive else "*.nfo"
+    nfo_files = list(directory.glob(pattern))
+
+    if not nfo_files:
+        job.mark_completed({
+            "new_files_found": 0,
+            "nfo_imported": 0,
+            "errors": 0,
+            "message": "No NFO files found",
+        })
+        return
+
+    new_files_found = 0
+    nfo_imported = 0
+    errors = 0
+
+    if import_nfo:
+        # Progress callback
+        def progress_callback(processed: int, total: int, current_file: str) -> None:
+            if job.status == JobStatus.CANCELLED:
+                raise asyncio.CancelledError("Job cancelled by user")
+            job.update_progress(processed, total, f"Processing {current_file}...")
+
+        # Use NFOImporter
+        importer = NFOImporter(
+            video_repository=repository,
+            skip_existing=True,
+            progress_callback=progress_callback,
+        )
+
+        result = await importer.import_from_directory(
+            root_path=directory,
+            recursive=recursive,
+        )
+
+        new_files_found = result.total_files
+        nfo_imported = result.imported
+        errors = result.failed
+    else:
+        # Just count files
+        new_files_found = len(nfo_files)
+
+    job.mark_completed({
+        "new_files_found": new_files_found,
+        "nfo_imported": nfo_imported,
+        "errors": errors,
+        "directory": str(directory),
+    })
+
+    logger.info(
+        "library_scan_job_completed",
+        job_id=job.id,
+        new_files_found=new_files_found,
+        nfo_imported=nfo_imported,
+        errors=errors,
+    )
+
+
+async def handle_import(job: Job) -> None:
+    """Handle generic import job.
+
+    Handles imports from various sources (YouTube, IMVDb).
+    Used by the imports API for background processing.
+
+    Job metadata parameters:
+        source (str, required): Import source - "youtube" or "imvdb"
+        urls (list[str], optional): YouTube URLs (for youtube source)
+        video_ids (list[str], optional): IMVDb video IDs (for imvdb source)
+        search_queries (list[str], optional): IMVDb search queries (for imvdb source)
+
+    Job result on completion:
+        imported: Number of items imported
+        failed: Number of failures
+        total: Total items processed
+
+    Args:
+        job: Job instance with metadata containing import parameters
+    """
+    source = job.metadata.get("source")
+    if not source:
+        raise ValueError("Missing required parameter: source")
+
+    logger.info(
+        "import_job_starting",
+        job_id=job.id,
+        source=source,
+    )
+
+    job.update_progress(0, 1, f"Starting {source} import...")
+
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+
+    imported = 0
+    failed = 0
+    total = 0
+
+    if source == "youtube":
+        urls = job.metadata.get("urls", [])
+        if not urls:
+            raise ValueError("Missing required parameter: urls")
+
+        total = len(urls)
+
+        from fuzzbin.clients import YTDLPClient
+
+        async with YTDLPClient.from_config(config) as client:
+            for idx, url in enumerate(urls, start=1):
+                if job.status == JobStatus.CANCELLED:
+                    return
+
+                job.update_progress(idx, total, f"Processing {url}...")
+
+                try:
+                    info = await client.extract_info(url)
+                    if info:
+                        # Create video record
+                        video_data = {
+                            "title": info.get("title"),
+                            "artist": info.get("artist") or info.get("uploader"),
+                            "youtube_id": info.get("id"),
+                            "video_file_path": None,  # Not downloaded yet
+                            "status": "pending",
+                        }
+                        await repository.create_video(**video_data)
+                        imported += 1
+                except Exception as e:
+                    logger.error("youtube_import_error", url=url, error=str(e))
+                    failed += 1
+
+    elif source == "imvdb":
+        video_ids = job.metadata.get("video_ids", [])
+        search_queries = job.metadata.get("search_queries", [])
+
+        imvdb_config = config.apis.get("imvdb")
+        if not imvdb_config:
+            raise ValueError("IMVDb API not configured")
+
+        from fuzzbin.api.imvdb_client import IMVDbClient
+
+        client = IMVDbClient.from_config(imvdb_config)
+
+        try:
+            # Process video IDs
+            if video_ids:
+                total += len(video_ids)
+                for idx, vid in enumerate(video_ids, start=1):
+                    if job.status == JobStatus.CANCELLED:
+                        return
+
+                    job.update_progress(idx, total, f"Fetching video {vid}...")
+
+                    try:
+                        video_data = await client.get_video(vid)
+                        if video_data:
+                            # Create video record
+                            record = {
+                                "title": video_data.song_title or video_data.title,
+                                "artist": ", ".join(video_data.artists) if video_data.artists else None,
+                                "imvdb_video_id": str(video_data.id),
+                                "director": video_data.directors[0] if video_data.directors else None,
+                                "year": video_data.year,
+                                "status": "complete",
+                            }
+                            await repository.create_video(**record)
+                            imported += 1
+                    except Exception as e:
+                        logger.error("imvdb_import_error", video_id=vid, error=str(e))
+                        failed += 1
+
+            # Process search queries
+            if search_queries:
+                total += len(search_queries)
+                for idx, query in enumerate(search_queries, start=1):
+                    if job.status == JobStatus.CANCELLED:
+                        return
+
+                    job.update_progress(
+                        len(video_ids) + idx, total, f"Searching: {query}..."
+                    )
+
+                    try:
+                        results = await client.search_videos(query=query)
+                        for result in results[:10]:  # Limit per query
+                            video_data = await client.get_video(result.id)
+                            if video_data:
+                                record = {
+                                    "title": video_data.song_title or video_data.title,
+                                    "artist": ", ".join(video_data.artists) if video_data.artists else None,
+                                    "imvdb_video_id": str(video_data.id),
+                                    "director": video_data.directors[0] if video_data.directors else None,
+                                    "year": video_data.year,
+                                    "status": "complete",
+                                }
+                                await repository.create_video(**record)
+                                imported += 1
+                    except Exception as e:
+                        logger.error("imvdb_search_error", query=query, error=str(e))
+                        failed += 1
+
+        finally:
+            await client.aclose()
+
+    else:
+        raise ValueError(f"Unknown import source: {source}")
+
+    job.mark_completed({
+        "imported": imported,
+        "failed": failed,
+        "total": total,
+        "source": source,
+    })
+
+    logger.info(
+        "import_job_completed",
+        job_id=job.id,
+        source=source,
+        imported=imported,
+        failed=failed,
+    )
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -843,6 +1306,10 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.FILE_ORGANIZE, handle_file_organize)
     queue.register_handler(JobType.FILE_DUPLICATE_RESOLVE, handle_duplicate_resolution)
     queue.register_handler(JobType.METADATA_ENRICH, handle_metadata_enrich)
+    # Phase 7: Scheduled task handlers
+    queue.register_handler(JobType.METADATA_REFRESH, handle_metadata_refresh)
+    queue.register_handler(JobType.LIBRARY_SCAN, handle_library_scan)
+    queue.register_handler(JobType.IMPORT, handle_import)
 
     logger.info(
         "job_handlers_registered",
@@ -853,5 +1320,8 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.FILE_ORGANIZE.value,
             JobType.FILE_DUPLICATE_RESOLVE.value,
             JobType.METADATA_ENRICH.value,
+            JobType.METADATA_REFRESH.value,
+            JobType.LIBRARY_SCAN.value,
+            JobType.IMPORT.value,
         ],
     )

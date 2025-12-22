@@ -76,7 +76,7 @@ async def create_tag(
     repo: VideoRepository = Depends(get_repository),
 ) -> TagResponse:
     """Create a new tag."""
-    tag_id = await repo.create_or_get_tag(tag.name)
+    tag_id = await repo.upsert_tag(tag.name)
     row = await repo.get_tag_by_id(tag_id)
     return TagResponse.from_db_row(row)
 
