@@ -5682,6 +5682,738 @@
           }
         }
       }
+    },
+    "/config": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get current configuration",
+        "description": "Retrieve the complete current configuration as a nested dictionary.\n\nThe configuration includes all settings for HTTP, logging, database, APIs,\nand other subsystems. API credentials are returned in full (single-user mode).",
+        "operationId": "get_config_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Update configuration",
+        "description": "Update one or more configuration fields.\n\n**Safety Levels:**\n- `safe`: Changes apply immediately with no side effects\n- `requires_reload`: Components need reloading (API clients, connections)\n- `affects_state`: Changes affect persistent state (database paths, directories)\n\nFor `requires_reload` or `affects_state` fields, returns **409 Conflict** unless\n`force=true` is set. The response includes `required_actions` describing what\nneeds to happen to fully apply the changes.\n\n**Examples:**\n```json\n{\n    \"updates\": {\n        \"http.timeout\": 60,\n        \"logging.level\": \"DEBUG\"\n    },\n    \"description\": \"Increased timeout for slow network\"\n}\n```",
+        "operationId": "update_config_config_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigUpdateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Configuration change requires additional actions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigConflictResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/config/field/{path}": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get configuration field",
+        "description": "Retrieve a specific configuration field by dot-notation path.\n\nExamples:\n- `http.timeout` - HTTP timeout setting\n- `apis.discogs.rate_limit.requests_per_minute` - Discogs rate limit\n- `logging.level` - Current log level",
+        "operationId": "get_config_field_config_field__path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigFieldResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/history": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get configuration history",
+        "description": "Retrieve recent configuration change history.\n\nHistory entries include timestamps, descriptions, and undo/redo availability.\nUse this to review changes before performing undo/redo operations.",
+        "operationId": "get_config_history_config_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum entries to return",
+              "default": 10,
+              "title": "Limit"
+            },
+            "description": "Maximum entries to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigHistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/undo": {
+      "post": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Undo configuration change",
+        "description": "Undo the most recent configuration change.\n\nRestores the previous configuration state from history.\nThe change is automatically saved to the configuration file.",
+        "operationId": "undo_config_config_undo_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "steps",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Number of steps to undo",
+              "default": 1,
+              "title": "Steps"
+            },
+            "description": "Number of steps to undo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigUndoRedoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/redo": {
+      "post": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Redo configuration change",
+        "description": "Redo a previously undone configuration change.\n\nRestores the next configuration state from history.\nThe change is automatically saved to the configuration file.",
+        "operationId": "redo_config_config_redo_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "steps",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Number of steps to redo",
+              "default": 1,
+              "title": "Steps"
+            },
+            "description": "Number of steps to redo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigUndoRedoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/safety/{path}": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get field safety level",
+        "description": "Get the safety level for a configuration field path.\n\nUse this to check what side effects a configuration change may have\nbefore submitting an update request.\n\n**Safety Levels:**\n- `safe`: No side effects, changes apply immediately\n- `requires_reload`: Components need reloading after change\n- `affects_state`: Changes affect persistent state",
+        "operationId": "get_field_safety_config_safety__path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SafetyLevelInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/clients": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "List registered API clients",
+        "description": "List all API clients registered with the configuration manager.\n\nRegistered clients can be hot-reloaded when their configuration changes.",
+        "operationId": "list_clients_config_clients_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/config/clients/{name}/stats": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get API client statistics",
+        "description": "Get real-time statistics for a registered API client.\n\nStatistics include:\n- Active request count\n- Concurrency utilization\n- Rate limit token availability\n- Rate limit capacity percentage",
+        "operationId": "get_client_stats_config_clients__name__stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientStatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6376,6 +7108,136 @@
         "title": "BulkUpdateRequest",
         "description": "Request for bulk updating videos."
       },
+      "ClientInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Client identifier",
+            "examples": [
+              "discogs",
+              "imvdb"
+            ]
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url",
+            "description": "Base URL for the API",
+            "examples": [
+              "https://api.discogs.com"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ClientInfo",
+        "description": "Information about a registered API client."
+      },
+      "ClientListResponse": {
+        "properties": {
+          "clients": {
+            "items": {
+              "$ref": "#/components/schemas/ClientInfo"
+            },
+            "type": "array",
+            "title": "Clients",
+            "description": "List of registered API clients"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of registered clients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clients",
+          "total"
+        ],
+        "title": "ClientListResponse",
+        "description": "Response containing list of registered API clients."
+      },
+      "ClientStatsResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Client identifier",
+            "examples": [
+              "discogs"
+            ]
+          },
+          "active_requests": {
+            "type": "integer",
+            "title": "Active Requests",
+            "description": "Number of currently active requests",
+            "examples": [
+              3
+            ]
+          },
+          "max_concurrent": {
+            "type": "integer",
+            "title": "Max Concurrent",
+            "description": "Maximum allowed concurrent requests",
+            "examples": [
+              5
+            ]
+          },
+          "available_tokens": {
+            "type": "number",
+            "title": "Available Tokens",
+            "description": "Available rate limit tokens",
+            "examples": [
+              45.5
+            ]
+          },
+          "rate_limit_capacity": {
+            "type": "number",
+            "title": "Rate Limit Capacity",
+            "description": "Total rate limit token capacity (burst size)",
+            "examples": [
+              60.0
+            ]
+          },
+          "utilization_pct": {
+            "type": "number",
+            "title": "Utilization Pct",
+            "description": "Concurrency utilization percentage (0-100)",
+            "examples": [
+              60.0
+            ]
+          },
+          "rate_limit_pct": {
+            "type": "number",
+            "title": "Rate Limit Pct",
+            "description": "Rate limit capacity percentage (0-100)",
+            "examples": [
+              75.8
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "active_requests",
+          "max_concurrent",
+          "available_tokens",
+          "rate_limit_capacity",
+          "utilization_pct",
+          "rate_limit_pct"
+        ],
+        "title": "ClientStatsResponse",
+        "description": "Real-time statistics for an API client."
+      },
       "CollectionCreate": {
         "properties": {
           "name": {
@@ -6508,6 +7370,332 @@
         "type": "object",
         "title": "CollectionUpdate",
         "description": "Schema for updating an existing collection (all fields optional)."
+      },
+      "ConfigConflictDetail": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Dot-notation path to the field"
+          },
+          "safety_level": {
+            "$ref": "#/components/schemas/SafetyLevel",
+            "description": "Safety level of the field"
+          },
+          "current_value": {
+            "title": "Current Value",
+            "description": "Current value of the field"
+          },
+          "requested_value": {
+            "title": "Requested Value",
+            "description": "Requested new value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "safety_level",
+          "current_value",
+          "requested_value"
+        ],
+        "title": "ConfigConflictDetail",
+        "description": "Details about a field that would cause side effects."
+      },
+      "ConfigConflictResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Error message",
+            "default": "Configuration change requires additional actions"
+          },
+          "error_type": {
+            "type": "string",
+            "title": "Error Type",
+            "description": "Error type identifier",
+            "default": "config_conflict"
+          },
+          "affected_fields": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigConflictDetail"
+            },
+            "type": "array",
+            "title": "Affected Fields",
+            "description": "Fields that would cause side effects"
+          },
+          "required_actions": {
+            "items": {
+              "$ref": "#/components/schemas/RequiredAction"
+            },
+            "type": "array",
+            "title": "Required Actions",
+            "description": "Actions that would be required after update"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable explanation",
+            "examples": [
+              "Changes to rate limit settings require reloading the API client. Set force=true to proceed, or use the clients endpoint to reload affected clients."
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "affected_fields",
+          "required_actions",
+          "message"
+        ],
+        "title": "ConfigConflictResponse",
+        "description": "Response when config update would cause side effects.\n\nReturned with HTTP 409 Conflict when REQUIRES_RELOAD or AFFECTS_STATE\nfields are modified without force=true."
+      },
+      "ConfigFieldResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Dot-notation path to the field",
+            "examples": [
+              "http.timeout",
+              "apis.discogs.rate_limit.requests_per_minute"
+            ]
+          },
+          "value": {
+            "title": "Value",
+            "description": "Current value of the field"
+          },
+          "safety_level": {
+            "$ref": "#/components/schemas/SafetyLevel",
+            "description": "Safety level for modifying this field"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "value",
+          "safety_level"
+        ],
+        "title": "ConfigFieldResponse",
+        "description": "Response for a single configuration field."
+      },
+      "ConfigHistoryEntry": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "When the change was made"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Human-readable description of the change",
+            "examples": [
+              "Changed http.timeout: 30 \u2192 60"
+            ]
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current",
+            "description": "Whether this is the current configuration state",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "description"
+        ],
+        "title": "ConfigHistoryEntry",
+        "description": "Entry in configuration change history."
+      },
+      "ConfigHistoryResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigHistoryEntry"
+            },
+            "type": "array",
+            "title": "Entries",
+            "description": "List of history entries (newest first)"
+          },
+          "current_index": {
+            "type": "integer",
+            "title": "Current Index",
+            "description": "Index of the current configuration in history"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo",
+            "description": "Whether undo is available"
+          },
+          "can_redo": {
+            "type": "boolean",
+            "title": "Can Redo",
+            "description": "Whether redo is available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "current_index",
+          "can_undo",
+          "can_redo"
+        ],
+        "title": "ConfigHistoryResponse",
+        "description": "Response containing configuration change history."
+      },
+      "ConfigResponse": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config",
+            "description": "Complete configuration as nested dictionary"
+          },
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path",
+            "description": "Path to the YAML configuration file",
+            "examples": [
+              "/Users/jbruns/Fuzzbin/config/config.yaml"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "config"
+        ],
+        "title": "ConfigResponse",
+        "description": "Full configuration response.\n\nReturns the complete current configuration state."
+      },
+      "ConfigUndoRedoResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether the operation succeeded"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Description of the restored state",
+            "examples": [
+              "Restored: Changed http.timeout: 30 \u2192 60"
+            ]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Timestamp of the restored snapshot"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "description",
+          "timestamp"
+        ],
+        "title": "ConfigUndoRedoResponse",
+        "description": "Response after undo or redo operation."
+      },
+      "ConfigUpdateRequest": {
+        "properties": {
+          "updates": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Updates",
+            "description": "Dictionary mapping dot-notation paths to new values",
+            "examples": [
+              {
+                "http.timeout": 60,
+                "logging.level": "DEBUG"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional description of the change for history",
+            "examples": [
+              "Increased timeout for slow network"
+            ]
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Force update even for REQUIRES_RELOAD or AFFECTS_STATE fields (acknowledges side effects)",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "updates"
+        ],
+        "title": "ConfigUpdateRequest",
+        "description": "Request to update one or more configuration fields."
+      },
+      "ConfigUpdateResponse": {
+        "properties": {
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Updated Fields",
+            "description": "List of field paths that were updated",
+            "examples": [
+              [
+                "http.timeout",
+                "logging.level"
+              ]
+            ]
+          },
+          "safety_level": {
+            "$ref": "#/components/schemas/SafetyLevel",
+            "description": "Highest safety level among updated fields"
+          },
+          "required_actions": {
+            "items": {
+              "$ref": "#/components/schemas/RequiredAction"
+            },
+            "type": "array",
+            "title": "Required Actions",
+            "description": "Actions required to fully apply the changes"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable summary of the update",
+            "examples": [
+              "Updated 2 fields successfully"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_fields",
+          "safety_level",
+          "message"
+        ],
+        "title": "ConfigUpdateResponse",
+        "description": "Response after successful configuration update."
       },
       "DeleteResponse": {
         "properties": {
@@ -7828,6 +9016,51 @@
         "title": "RepairResponse",
         "description": "Response for repair operation."
       },
+      "RequiredAction": {
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "Type of action required: 'reload_client', 'reconnect_database', 'restart_cache', 'restart_service'",
+            "examples": [
+              "reload_client:imvdb",
+              "reconnect_database",
+              "restart_cache:discogs"
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target",
+            "description": "Target of the action (e.g., API client name)",
+            "examples": [
+              "imvdb",
+              "discogs"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Human-readable description of the required action",
+            "examples": [
+              "Restart IMVDb client to apply rate limit changes"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_type",
+          "description"
+        ],
+        "title": "RequiredAction",
+        "description": "Action required after a configuration change.\n\nProvides structured information for UI/client to handle config changes\nthat require additional steps."
+      },
       "ResolveRequest": {
         "properties": {
           "keep_video_id": {
@@ -7927,6 +9160,48 @@
         ],
         "title": "RestoreResponse",
         "description": "Response for restore operation."
+      },
+      "SafetyLevel": {
+        "type": "string",
+        "enum": [
+          "safe",
+          "requires_reload",
+          "affects_state"
+        ],
+        "title": "SafetyLevel",
+        "description": "Safety level for configuration changes.\n\nDetermines what side effects a config change may have."
+      },
+      "SafetyLevelInfo": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Dot-notation path to the field",
+            "examples": [
+              "apis.discogs.rate_limit.requests_per_minute"
+            ]
+          },
+          "safety_level": {
+            "$ref": "#/components/schemas/SafetyLevel",
+            "description": "Safety level for the field"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "What this safety level means for this field",
+            "examples": [
+              "Changing rate limit settings requires reloading the Discogs API client"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "safety_level",
+          "description"
+        ],
+        "title": "SafetyLevelInfo",
+        "description": "Information about a field's safety level."
       },
       "SavedSearchCreate": {
         "properties": {
@@ -9613,6 +10888,10 @@
     {
       "name": "Backup",
       "description": "System backup creation, listing, download, and verification"
+    },
+    {
+      "name": "Configuration",
+      "description": "Runtime configuration management with history/undo support and safety level enforcement"
     }
   ]
 }

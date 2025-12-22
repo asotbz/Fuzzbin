@@ -1,5 +1,41 @@
 # Fuzzbin Configuration
-# This file contains the default configuration for the Fuzzbin HTTP client
+# =======================
+#
+# Path Configuration:
+# -------------------
+# Fuzzbin uses two root directories:
+#
+# 1. config_dir: Configuration, database, caches, and thumbnails
+#    - fuzzbin.db (video library database)
+#    - .cache/ (HTTP response caches)
+#    - .thumbnails/ (video thumbnails)
+#    - backups/ (database backups)
+#
+# 2. library_dir: Video files, NFO metadata, and trash
+#    - Organized media files (per organizer.path_pattern)
+#    - <basename>.nfo files (one per video)
+#    - artist.nfo files (one per artist directory)
+#    - .trash/ (soft-deleted files)
+#
+# Environment Variables:
+# ----------------------
+# - FUZZBIN_CONFIG_DIR: Override config_dir path
+# - FUZZBIN_LIBRARY_DIR: Override library_dir path
+# - FUZZBIN_DOCKER=1: Use Docker defaults (/config, /music_videos)
+#
+# Defaults:
+# ---------
+# Docker (FUZZBIN_DOCKER=1):
+#   config_dir: /config
+#   library_dir: /music_videos
+#
+# Non-Docker:
+#   config_dir: $HOME/Fuzzbin/config
+#   library_dir: $HOME/Fuzzbin/music_videos
+#
+# All relative paths in this file (database_path, cache storage_path, backup_dir,
+# thumbnail cache_dir) are resolved against config_dir at runtime.
+# =======================
 
 http:
   # Connection timeout in seconds (default: 30)
@@ -64,6 +100,21 @@ logging:
     httpx: WARNING
     httpcore: WARNING
     tenacity: INFO
+
+# Database configuration
+# Paths are relative to config_dir unless absolute
+database:
+  # SQLite database file (default: fuzzbin.db)
+  database_path: fuzzbin.db
+  
+  # Enable WAL mode for better concurrency (default: true)
+  enable_wal_mode: true
+  
+  # Connection timeout in seconds (default: 30)
+  connection_timeout: 30
+  
+  # Directory for database backups (default: backups)
+  backup_dir: backups
 
 # Response caching configuration using Hishel
 # Caching can significantly improve performance for repeated API requests
@@ -182,6 +233,115 @@ apis:
       api_key: YOUR_DISCOGS_API_KEY
       api_secret: YOUR_DISCOGS_API_SECRET
 
+  # Spotify Web API
+  spotify:
+    name: spotify
+    base_url: https://api.spotify.com/v1
+
+    # HTTP configuration with custom retry settings
+    # Retry 429 (rate limit) and server errors
+    http:
+      timeout: 30
+      retry:
+        max_attempts: 3
+        backoff_multiplier: 1.0
+        min_wait: 1.0
+        max_wait: 10.0
+        status_codes: [429, 500, 502, 503, 504]
+
+    # Rate limiting - Spotify doesn't publish exact limits
+    # Using conservative estimate of ~180 requests per minute
+    # Actual limits enforced via 429 responses
+    rate_limit:
+      enabled: true
+      requests_per_minute: 180
+      burst_size: 10  # Allow small bursts
+
+    # Concurrency control
+    concurrency:
+      max_concurrent_requests: 5
+
+    # Response caching - Playlist and track data can be cached
+    # Track metadata is relatively stable
+    cache:
+      enabled: true
+      storage_path: .cache/spotify.db
+      ttl: 3600  # 1 hour
+      stale_while_revalidate: 300  # 5 minutes
+      cacheable_methods:
+        - GET
+      cacheable_status_codes: [200]
+
+    # Spotify authentication - choose one of two methods:
+    #
+    # Method 1: OAuth Client Credentials (RECOMMENDED)
+    # - Automatic token management with auto-refresh
+    # - Get credentials from: https://developer.spotify.com/dashboard
+    # - Click "Create App", then copy Client ID and Client Secret
+    # - Can also use SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET env variables
+    custom:
+      client_id: YOUR_SPOTIFY_CLIENT_ID
+      client_secret: YOUR_SPOTIFY_CLIENT_SECRET
+
+    # Method 2: Manual Access Token (for testing only)
+    # - Tokens expire after 1 hour and must be manually refreshed
+    # - Get token from: https://developer.spotify.com/console/get-playlist-tracks/
+    # - Can also use SPOTIFY_ACCESS_TOKEN environment variable
+    # - Uncomment line below to use manual token instead of OAuth:
+    # custom:
+    #   access_token: YOUR_SPOTIFY_ACCESS_TOKEN
+
+# yt-dlp client configuration for YouTube video search and download
+ytdlp:
+  # Path to yt-dlp binary (default: "yt-dlp" from PATH)
+  ytdlp_path: yt-dlp
+
+  # Default format specification for downloads
+  # Downloads best quality MP4 video with M4A audio, falls back to best available MP4
+  format_spec: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+
+  # Bypass geographic restrictions (default: false)
+  geo_bypass: false
+
+  # Suppress progress output during downloads (default: false)
+  quiet: false
+
+  # Default maximum search results (default: 5)
+  search_max_results: 5
+
+  # Command execution timeout in seconds (default: 300 = 5 minutes)
+  timeout: 300
+
+# ffprobe client configuration for video file metadata extraction
+ffprobe:
+  # Path to ffprobe binary (default: "ffprobe" from PATH)
+  ffprobe_path: ffprobe
+
+  # Command execution timeout in seconds (default: 30)
+  timeout: 30
+
+  # Include format/container information in output (default: true)
+  show_format: true
+
+  # Include stream information in output (default: true)
+  show_streams: true
+
+# Thumbnail generation configuration
+# Thumbnails are stored in config_dir/.thumbnails
+thumbnail:
+  # Directory for cached thumbnails (relative to config_dir)
+  cache_dir: ".thumbnails"
+  
+  # Default timestamp in seconds to extract frame from
+  default_timestamp: 5.0
+  
+  # Thumbnail dimensions (width x height in pixels)
+  width: 320
+  height: 180
+  
+  # JPEG quality (1=best, 31=worst)
+  quality: 5
+
 # NFO file handling configuration
 nfo:
   # Featured artist handling
@@ -211,6 +371,81 @@ organizer:
   # When true: "Björk/Jóga" -> "bjork/joga"
   # When false: "Björk/Jóga" -> "Björk/Jóga"
   normalize_filenames: false
+
+# Tag management and auto-tagging configuration
+tags:
+  # Normalize tag names to lowercase for consistency
+  # When true: "Rock" and "rock" are treated as the same tag
+  normalize: true
+  
+  # Automatic decade tag configuration
+  auto_decade:
+    # Enable automatic decade tag generation based on video release year
+    # When enabled, videos will automatically receive a decade tag (e.g., "90s" for 1990-1999)
+    enabled: true
+    
+    # Format string for decade tags
+    # {decade} is replaced with the decade number (00, 10, 20, ..., 90)
+    # Examples:
+    #   - "{decade}s" produces "90s", "00s", "10s"
+    #   - "{decade}0s" produces "900s", "000s", "100s"
+    #   - "decade-{decade}" produces "decade-90", "decade-00"
+    format: "{decade}s"
+
+# File management configuration for organizing, moving, and verifying media files
+file_manager:
+  # Directory for soft-deleted files (relative to library_dir)
+  # Files moved here can be restored or permanently deleted later
+  trash_dir: ".trash"
+  
+  # Hash algorithm for file integrity checks
+  # Options: sha256 (recommended), xxhash (faster), md5 (legacy)
+  hash_algorithm: sha256
+  
+  # Verify file integrity after move operations
+  # When true, computes hash before and after move to ensure data integrity
+  verify_after_move: true
+  
+  # Maximum file size for operations in bytes (null = no limit)
+  # Set this to prevent accidental operations on very large files
+  # Example: 10737418240 = 10GB
+  # max_file_size: null
+  
+  # Chunk size for file hashing operations in bytes (default: 8192)
+  # Larger values may improve performance for large files
+  chunk_size: 8192
+
+# Advanced features configuration
+# Settings for bulk operations, faceted search, and scheduled tasks
+advanced:
+  # Maximum items allowed in bulk operations
+  # Prevents excessively large batch operations that could overwhelm the system
+  max_bulk_items: 500
+  
+  # Time-to-live for facet cache in seconds
+  # Facets (tag/genre/year/director counts) are cached to improve search performance
+  # Set to 0 to disable caching
+  facet_cache_ttl: 60
+  
+  # Maximum items for synchronous import operations
+  # Imports with more items will be queued as background jobs
+  # Set lower for faster API responses, higher for more sync imports
+  max_sync_import_items: 10
+  
+  # Cron expression for scheduled library scans (optional)
+  # Runs NFO import on library_dir to discover new files
+  # Format: "minute hour day month weekday" (5 fields)
+  # Examples:
+  #   - "0 * * * *" = every hour at minute 0
+  #   - "0 0 * * *" = daily at midnight
+  #   - "0 0 * * 0" = weekly on Sunday at midnight
+  # Uncomment to enable:
+  # scheduler_library_scan_cron: "0 0 * * *"
+  
+  # Cron expression for scheduled metadata refresh (optional)
+  # Refreshes metadata from external APIs (IMVDb, Discogs) for stale videos
+  # Uncomment to enable:
+  # scheduler_metadata_refresh_cron: "0 2 * * *"
 
 # Automatic backup configuration
 # Backups include config.yaml, the SQLite database, and thumbnail repository

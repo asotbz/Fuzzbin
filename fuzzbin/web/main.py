@@ -77,6 +77,44 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         logger.info("api_auth_disabled", note="Set FUZZBIN_API_AUTH_ENABLED=true for production")
 
+    # Register config change callback for WebSocket broadcast
+    try:
+        from fuzzbin.web.routes.websocket import get_connection_manager
+        from fuzzbin.web.schemas.events import WebSocketEvent
+        from fuzzbin.common.config_manager import ConfigChangeEvent
+
+        config_manager = fuzzbin.get_config_manager()
+        ws_manager = get_connection_manager()
+
+        async def broadcast_config_change(event: ConfigChangeEvent) -> None:
+            """Broadcast config changes to connected WebSocket clients."""
+            # Determine required actions based on safety level
+            required_actions = []
+            if event.safety_level.value == "requires_reload":
+                if event.path.startswith("apis."):
+                    parts = event.path.split(".")
+                    if len(parts) >= 2:
+                        required_actions.append(f"reload_client:{parts[1]}")
+            elif event.safety_level.value == "affects_state":
+                if "database" in event.path:
+                    required_actions.append("reconnect_database")
+                elif event.path in ("config_dir", "library_dir"):
+                    required_actions.append("restart_service")
+
+            ws_event = WebSocketEvent.config_changed(
+                path=event.path,
+                old_value=event.old_value,
+                new_value=event.new_value,
+                safety_level=event.safety_level.value,
+                required_actions=required_actions,
+            )
+            await ws_manager.broadcast(ws_event)
+
+        config_manager.on_change(broadcast_config_change)
+        logger.info("config_change_broadcast_registered")
+    except Exception as e:
+        logger.warning("config_change_broadcast_registration_failed", error=str(e))
+
     logger.info(
         "api_ready",
         version=fuzzbin.__version__,
@@ -256,6 +294,10 @@ ws://localhost:8000/ws/jobs/{job_id}
                 "name": "Backup",
                 "description": "System backup creation, listing, download, and verification",
             },
+            {
+                "name": "Configuration",
+                "description": "Runtime configuration management with history/undo support and safety level enforcement",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -301,7 +343,7 @@ ws://localhost:8000/ws/jobs/{job_id}
 
     # Import and include routers
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
-    from .routes import bulk, imports, exports, backup  # Phase 7 routes
+    from .routes import bulk, imports, exports, backup, config  # Phase 7 routes + config
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -325,6 +367,7 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(imports.router, dependencies=protected_dependencies)
     app.include_router(exports.router, dependencies=protected_dependencies)
     app.include_router(backup.router, dependencies=protected_dependencies)
+    app.include_router(config.router, dependencies=protected_dependencies)
 
     # Custom OpenAPI schema with security scheme
     def custom_openapi():

@@ -30,6 +30,32 @@ from .collection import (
     CollectionVideoAdd,
 )
 from .tag import TagCreate, TagResponse, TagsSet
+from .config import (
+    ClientInfo,
+    ClientListResponse,
+    ClientStatsResponse,
+    ConfigConflictDetail,
+    ConfigConflictResponse,
+    ConfigFieldResponse,
+    ConfigHistoryEntry,
+    ConfigHistoryResponse,
+    ConfigResponse,
+    ConfigUndoRedoResponse,
+    ConfigUpdateRequest,
+    ConfigUpdateResponse,
+    RequiredAction,
+    SafetyLevel,
+    SafetyLevelInfo,
+)
+from .events import (
+    EventType,
+    WebSocketEvent,
+    ConfigChangedPayload,
+    JobProgressPayload,
+    JobCompletedPayload,
+    JobFailedPayload,
+    ClientReloadedPayload,
+)
 
 __all__ = [
     # Common
@@ -68,4 +94,28 @@ __all__ = [
     "TagCreate",
     "TagResponse",
     "TagsSet",
+    # Config
+    "ClientInfo",
+    "ClientListResponse",
+    "ClientStatsResponse",
+    "ConfigConflictDetail",
+    "ConfigConflictResponse",
+    "ConfigFieldResponse",
+    "ConfigHistoryEntry",
+    "ConfigHistoryResponse",
+    "ConfigResponse",
+    "ConfigUndoRedoResponse",
+    "ConfigUpdateRequest",
+    "ConfigUpdateResponse",
+    "RequiredAction",
+    "SafetyLevel",
+    "SafetyLevelInfo",
+    # Events
+    "EventType",
+    "WebSocketEvent",
+    "ConfigChangedPayload",
+    "JobProgressPayload",
+    "JobCompletedPayload",
+    "JobFailedPayload",
+    "ClientReloadedPayload",
 ]
