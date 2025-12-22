@@ -1298,6 +1298,78 @@ async def handle_import(job: Job) -> None:
     )
 
 
+async def handle_backup(job: Job) -> None:
+    """Handle system backup job.
+
+    Creates a complete backup of config, database, and thumbnails.
+
+    Job metadata parameters:
+        description (str, optional): Description for the backup
+        retention_count (int, optional): Override retention count for cleanup
+
+    Job result on completion:
+        filename: Name of the backup file
+        path: Full path to backup file
+        size_bytes: Size of backup in bytes
+        created_at: ISO timestamp of creation
+        contains: List of items included (config, database, thumbnails)
+        deleted_backups: List of old backups deleted during cleanup
+
+    Args:
+        job: Job instance with metadata containing backup parameters
+    """
+    import fuzzbin
+    from fuzzbin.services.backup_service import BackupService
+
+    logger.info("backup_job_starting", job_id=job.id)
+    job.update_progress(0, 3, "Initializing backup...")
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Get config and create backup service
+    config = fuzzbin.get_config()
+    backup_service = BackupService(config)
+
+    # Extract parameters
+    description = job.metadata.get("description")
+    retention_count = job.metadata.get("retention_count", config.backup.retention_count)
+
+    job.update_progress(1, 3, "Creating backup archive...")
+
+    # Create backup
+    backup_info = await backup_service.create_backup(description=description)
+
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    job.update_progress(2, 3, "Cleaning up old backups...")
+
+    # Cleanup old backups
+    deleted_backups = backup_service.cleanup_old_backups(retention_count)
+
+    job.update_progress(3, 3, "Backup complete")
+
+    # Mark completed with result
+    job.mark_completed({
+        "filename": backup_info["filename"],
+        "path": backup_info["path"],
+        "size_bytes": backup_info["size_bytes"],
+        "created_at": backup_info["created_at"],
+        "contains": backup_info["contains"],
+        "deleted_backups": deleted_backups,
+    })
+
+    logger.info(
+        "backup_job_completed",
+        job_id=job.id,
+        filename=backup_info["filename"],
+        size_bytes=backup_info["size_bytes"],
+        deleted_count=len(deleted_backups),
+    )
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -1316,6 +1388,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.METADATA_REFRESH, handle_metadata_refresh)
     queue.register_handler(JobType.LIBRARY_SCAN, handle_library_scan)
     queue.register_handler(JobType.IMPORT, handle_import)
+    queue.register_handler(JobType.BACKUP, handle_backup)
 
     logger.info(
         "job_handlers_registered",
@@ -1329,5 +1402,6 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.METADATA_REFRESH.value,
             JobType.LIBRARY_SCAN.value,
             JobType.IMPORT.value,
+            JobType.BACKUP.value,
         ],
     )

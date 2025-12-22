@@ -12,7 +12,7 @@ from fastapi.openapi.utils import get_openapi
 import fuzzbin
 from fuzzbin.auth import is_default_password
 from fuzzbin.common.logging_config import setup_logging
-from fuzzbin.tasks import init_job_queue, reset_job_queue
+from fuzzbin.tasks import init_job_queue, reset_job_queue, Job, JobType
 from fuzzbin.tasks.handlers import register_all_handlers
 
 from .dependencies import require_auth, get_api_settings
@@ -54,6 +54,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     register_all_handlers(queue)
     await queue.start()
     logger.info("job_queue_started_in_lifespan")
+
+    # Schedule automatic backup if enabled
+    config = fuzzbin.get_config()
+    if config.backup.enabled:
+        backup_job = Job(
+            type=JobType.BACKUP,
+            schedule=config.backup.schedule,
+            metadata={"retention_count": config.backup.retention_count},
+        )
+        await queue.submit(backup_job)
+        logger.info(
+            "scheduled_backup_enabled",
+            schedule=config.backup.schedule,
+            retention_count=config.backup.retention_count,
+        )
 
     # Check for default password if auth is enabled
     if settings.auth_enabled:
@@ -237,6 +252,10 @@ ws://localhost:8000/ws/jobs/{job_id}
                 "name": "Exports",
                 "description": "Export NFO metadata files and generate playlists",
             },
+            {
+                "name": "Backup",
+                "description": "System backup creation, listing, download, and verification",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -282,7 +301,7 @@ ws://localhost:8000/ws/jobs/{job_id}
 
     # Import and include routers
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
-    from .routes import bulk, imports, exports  # Phase 7 routes
+    from .routes import bulk, imports, exports, backup  # Phase 7 routes
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -305,6 +324,7 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(bulk.router, dependencies=protected_dependencies)
     app.include_router(imports.router, dependencies=protected_dependencies)
     app.include_router(exports.router, dependencies=protected_dependencies)
+    app.include_router(backup.router, dependencies=protected_dependencies)
 
     # Custom OpenAPI schema with security scheme
     def custom_openapi():

@@ -621,6 +621,33 @@ class AdvancedFeaturesConfig(BaseModel):
     )
 
 
+class BackupConfig(BaseModel):
+    """Configuration for automatic system backups.
+
+    Backups include config.yaml, the SQLite database, and the thumbnail repository.
+    Archives are stored as timestamped .zip files that can be restored manually.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic scheduled backups",
+    )
+    schedule: str = Field(
+        default="0 2 * * *",
+        description="Cron expression for backup schedule (default: daily at 2 AM)",
+    )
+    retention_count: int = Field(
+        default=7,
+        ge=1,
+        le=365,
+        description="Number of backup archives to retain (oldest are deleted)",
+    )
+    output_dir: str = Field(
+        default="backups",
+        description="Directory for backup archives (relative to config_dir)",
+    )
+
+
 def _get_default_config_dir() -> Path:
     """
     Get default config directory based on environment.
@@ -752,6 +779,10 @@ class Config(BaseModel):
     advanced: AdvancedFeaturesConfig = Field(
         default_factory=AdvancedFeaturesConfig,
         description="Advanced features configuration (bulk ops, facets, scheduling)",
+    )
+    backup: BackupConfig = Field(
+        default_factory=BackupConfig,
+        description="Automatic backup configuration",
     )
 
     def resolve_paths(self, create_dirs: bool = True) -> "Config":

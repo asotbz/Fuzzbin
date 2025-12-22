@@ -211,3 +211,24 @@ organizer:
   # When true: "Björk/Jóga" -> "bjork/joga"
   # When false: "Björk/Jóga" -> "Björk/Jóga"
   normalize_filenames: false
+
+# Automatic backup configuration
+# Backups include config.yaml, the SQLite database, and thumbnail repository
+# Archives are stored as timestamped .zip files that can be restored manually
+backup:
+  # Whether automatic scheduled backups are enabled (default: true)
+  enabled: true
+  
+  # Cron expression for backup schedule (default: daily at 2 AM)
+  # Format: minute hour day-of-month month day-of-week
+  # Examples:
+  #   - "0 2 * * *"    -> Daily at 2:00 AM
+  #   - "0 */6 * * *"  -> Every 6 hours
+  #   - "0 3 * * 0"    -> Weekly on Sunday at 3:00 AM
+  schedule: "0 2 * * *"
+  
+  # Number of backup archives to retain (oldest are automatically deleted)
+  retention_count: 7
+  
+  # Directory for backup archives (relative to config_dir)
+  output_dir: backups

@@ -25,6 +25,7 @@ from .base import (
 from .video_service import VideoService
 from .import_service import ImportService
 from .search_service import SearchService
+from .backup_service import BackupService
 
 __all__ = [
     # Base classes and utilities
@@ -39,4 +40,5 @@ __all__ = [
     "VideoService",
     "ImportService",
     "SearchService",
+    "BackupService",
 ]

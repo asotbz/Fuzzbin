@@ -20,6 +20,7 @@ class JobType(str, Enum):
     METADATA_REFRESH = "metadata_refresh"  # Phase 7: Scheduled metadata refresh
     LIBRARY_SCAN = "library_scan"  # Phase 7: Scheduled library scan
     IMPORT = "import"  # Phase 7: Generic import job (YouTube/IMVDb)
+    BACKUP = "backup"  # System backup job
 
 
 class JobStatus(str, Enum):

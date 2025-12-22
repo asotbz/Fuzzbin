@@ -5411,6 +5411,277 @@
           }
         ]
       }
+    },
+    "/backup": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "List backups",
+        "description": "List all available backup archives.\n\nReturns backup metadata including filename, size, creation timestamp,\nand contents. Results are sorted by creation time (newest first).",
+        "operationId": "list_backups_backup_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Create backup",
+        "description": "Trigger an on-demand system backup.\n\nCreates a background job that generates a .zip archive containing:\n- **config.yaml**: User configuration file\n- **fuzzbin.db**: Library database (using SQLite backup API)\n- **.thumbnails/**: Cached thumbnail images\n\nThe backup job runs asynchronously. Use the returned `job_id` to track\nprogress via `GET /jobs/{job_id}` or WebSocket `/ws/jobs/{job_id}`.\n\nOld backups exceeding the retention count are automatically deleted.",
+        "operationId": "create_backup_backup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupCreateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/backup/{filename}": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Download backup",
+        "description": "Download a backup archive by filename.\n\nReturns the .zip file as a binary download. The archive can be\nextracted and restored manually without the program running.",
+        "operationId": "download_backup_backup__filename__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/backup/{filename}/verify": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Verify backup integrity",
+        "description": "Verify a backup archive's integrity.\n\nChecks:\n- ZIP file structure and CRC checksums\n- Database SQLite integrity (if database is included)\n- Presence of expected files\n\nReturns verification results including any errors found.",
+        "operationId": "verify_backup_backup__filename__verify_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupVerifyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5658,6 +5929,185 @@
         "type": "object",
         "title": "ArtistUpdate",
         "description": "Schema for updating an existing artist (all fields optional)."
+      },
+      "BackupCreateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional description for the backup",
+            "examples": [
+              "Pre-upgrade backup"
+            ]
+          }
+        },
+        "type": "object",
+        "title": "BackupCreateRequest",
+        "description": "Request to create a new backup."
+      },
+      "BackupCreateResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "ID of the background backup job",
+            "examples": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable status message",
+            "examples": [
+              "Backup job submitted successfully"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "message"
+        ],
+        "title": "BackupCreateResponse",
+        "description": "Response when a backup job is submitted.\n\nThe backup runs as a background job. Poll the job status endpoint\nfor progress and completion."
+      },
+      "BackupInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "Name of the backup file (e.g., 'fuzzbin_backup_20251222_140530.zip')",
+            "examples": [
+              "fuzzbin_backup_20251222_140530.zip"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "description": "Size of the backup archive in bytes",
+            "examples": [
+              15728640
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "description": "ISO 8601 timestamp when the backup was created",
+            "examples": [
+              "2025-12-22T14:05:30+00:00"
+            ]
+          },
+          "contains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Contains",
+            "description": "List of items included in backup: 'config', 'database', 'thumbnails'",
+            "examples": [
+              [
+                "config",
+                "database",
+                "thumbnails"
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "size_bytes",
+          "created_at",
+          "contains"
+        ],
+        "title": "BackupInfo",
+        "description": "Information about a backup archive.\n\nReturned when listing or creating backups."
+      },
+      "BackupListResponse": {
+        "properties": {
+          "backups": {
+            "items": {
+              "$ref": "#/components/schemas/BackupInfo"
+            },
+            "type": "array",
+            "title": "Backups",
+            "description": "List of available backup archives, sorted by creation time (newest first)"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of backups available",
+            "examples": [
+              7
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "backups",
+          "total"
+        ],
+        "title": "BackupListResponse",
+        "description": "Response containing list of available backups."
+      },
+      "BackupVerifyResponse": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid",
+            "description": "True if backup passed all integrity checks"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "Name of the verified backup file"
+          },
+          "contains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Contains",
+            "description": "List of items found in backup: 'config', 'database', 'thumbnails'"
+          },
+          "database_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database Valid",
+            "description": "True if database passed SQLite integrity check (null if no database in backup)"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "List of error messages if verification failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "filename",
+          "contains"
+        ],
+        "title": "BackupVerifyResponse",
+        "description": "Response from backup verification."
       },
       "BulkCollectionRequest": {
         "properties": {
@@ -6759,7 +7209,8 @@
           "metadata_enrich",
           "metadata_refresh",
           "library_scan",
-          "import"
+          "import",
+          "backup"
         ],
         "title": "JobType",
         "description": "Job type enumeration."
@@ -9158,6 +9609,10 @@
     {
       "name": "Exports",
       "description": "Export NFO metadata files and generate playlists"
+    },
+    {
+      "name": "Backup",
+      "description": "System backup creation, listing, download, and verification"
     }
   ]
 }
