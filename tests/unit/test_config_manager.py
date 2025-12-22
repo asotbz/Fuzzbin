@@ -100,7 +100,8 @@ class TestSafetyLevel:
     def test_affects_state_fields(self):
         """Test that state-affecting fields are correctly categorized."""
         assert get_safety_level("database.database_path") == ConfigSafetyLevel.AFFECTS_STATE
-        assert get_safety_level("database.workspace_root") == ConfigSafetyLevel.AFFECTS_STATE
+        assert get_safety_level("library_dir") == ConfigSafetyLevel.AFFECTS_STATE
+        assert get_safety_level("config_dir") == ConfigSafetyLevel.AFFECTS_STATE
         assert (
             get_safety_level("apis.discogs.cache.storage_path")
             == ConfigSafetyLevel.AFFECTS_STATE

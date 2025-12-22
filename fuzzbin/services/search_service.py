@@ -9,7 +9,7 @@ This service provides:
 
 Example:
     >>> from fuzzbin.services import SearchService
-    >>> 
+    >>>
     >>> async def my_route(search_service: SearchService = Depends(get_search_service)):
     ...     results = await search_service.search_all("nirvana")
     ...     facets = await search_service.get_facets()
@@ -227,9 +227,9 @@ class SearchService(BaseService):
 
         # Search artists
         artists = await self.repository.list_artists()
-        matching_artists = [
-            a for a in artists if query_lower in a.get("name", "").lower()
-        ][:limit_per_type]
+        matching_artists = [a for a in artists if query_lower in a.get("name", "").lower()][
+            :limit_per_type
+        ]
         for artist in matching_artists:
             results.artists.append(
                 SearchResult(
@@ -242,9 +242,9 @@ class SearchService(BaseService):
 
         # Search collections
         collections = await self.repository.list_collections()
-        matching_collections = [
-            c for c in collections if query_lower in c.get("name", "").lower()
-        ][:limit_per_type]
+        matching_collections = [c for c in collections if query_lower in c.get("name", "").lower()][
+            :limit_per_type
+        ]
         for collection in matching_collections:
             results.collections.append(
                 SearchResult(
@@ -258,9 +258,9 @@ class SearchService(BaseService):
 
         # Search tags
         tags = await self.repository.list_tags()
-        matching_tags = [
-            t for t in tags if query_lower in t.get("name", "").lower()
-        ][:limit_per_type]
+        matching_tags = [t for t in tags if query_lower in t.get("name", "").lower()][
+            :limit_per_type
+        ]
         for tag in matching_tags:
             results.tags.append(
                 SearchResult(
@@ -493,9 +493,7 @@ class SearchService(BaseService):
         # Search videos for title matches
         title_query = self.repository.query().where_title(query).limit(limit)
         videos = await title_query.execute()
-        suggestions.titles = list(
-            set(v["title"] for v in videos if v.get("title"))
-        )[:limit]
+        suggestions.titles = list(set(v["title"] for v in videos if v.get("title")))[:limit]
 
         # Search for artist matches
         artists = await self.repository.list_artists()
@@ -506,9 +504,7 @@ class SearchService(BaseService):
         # Search for album matches
         album_query = self.repository.query().where_album(query).limit(limit * 2)
         album_videos = await album_query.execute()
-        suggestions.albums = list(
-            set(v["album"] for v in album_videos if v.get("album"))
-        )[:limit]
+        suggestions.albums = list(set(v["album"] for v in album_videos if v.get("album")))[:limit]
 
         return suggestions
 
@@ -547,11 +543,13 @@ class SearchService(BaseService):
         for tag in tags:
             # Get video count for this tag
             videos = await self.repository.get_tag_videos(tag["id"])
-            tag_counts.append({
-                "id": tag["id"],
-                "name": tag["name"],
-                "count": len(videos),
-            })
+            tag_counts.append(
+                {
+                    "id": tag["id"],
+                    "name": tag["name"],
+                    "count": len(videos),
+                }
+            )
 
         # Sort by count descending and limit
         tag_counts.sort(key=lambda x: -x["count"])
@@ -573,11 +571,13 @@ class SearchService(BaseService):
 
         for artist in artists:
             videos = await self.repository.get_artist_videos(artist["id"])
-            artist_counts.append({
-                "id": artist["id"],
-                "name": artist["name"],
-                "video_count": len(videos),
-            })
+            artist_counts.append(
+                {
+                    "id": artist["id"],
+                    "name": artist["name"],
+                    "video_count": len(videos),
+                }
+            )
 
         artist_counts.sort(key=lambda x: -x["video_count"])
         return artist_counts[:limit]
@@ -598,12 +598,14 @@ class SearchService(BaseService):
 
         for collection in collections:
             videos = await self.repository.get_collection_videos(collection["id"])
-            collection_counts.append({
-                "id": collection["id"],
-                "name": collection["name"],
-                "description": collection.get("description"),
-                "video_count": len(videos),
-            })
+            collection_counts.append(
+                {
+                    "id": collection["id"],
+                    "name": collection["name"],
+                    "description": collection.get("description"),
+                    "video_count": len(videos),
+                }
+            )
 
         collection_counts.sort(key=lambda x: -x["video_count"])
         return collection_counts[:limit]
@@ -645,8 +647,13 @@ class SearchService(BaseService):
         Call this after bulk imports or updates that invalidate cached stats.
         """
         # Clear each cached method's cache
-        for method_name in ["get_facets", "get_tag_cloud", "get_top_artists",
-                           "get_top_collections", "get_library_stats"]:
+        for method_name in [
+            "get_facets",
+            "get_tag_cloud",
+            "get_top_artists",
+            "get_top_collections",
+            "get_library_stats",
+        ]:
             method = getattr(self, method_name)
             if hasattr(method, "clear_cache"):
                 # Note: This is a coroutine, but we're calling it from sync context

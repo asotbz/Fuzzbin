@@ -14,7 +14,7 @@ class TestOrganizeVideo:
         assert response.status_code == 404
 
     def test_organize_dry_run(
-        self, test_app: TestClient, video_with_file: dict, tmp_path: Path
+        self, test_app: TestClient, video_with_file: dict
     ) -> None:
         """Test organize dry run returns target paths without moving."""
         video_id = video_with_file["id"]
@@ -46,7 +46,7 @@ class TestDeleteVideoFiles:
         assert response.status_code == 404
 
     def test_soft_delete_success(
-        self, test_app: TestClient, video_with_file: dict, tmp_path: Path
+        self, test_app: TestClient, video_with_file: dict
     ) -> None:
         """Test soft delete moves file to trash."""
         video_id = video_with_file["id"]
@@ -69,7 +69,7 @@ class TestDeleteVideoFiles:
         assert Path(data["trash_path"]).exists()
 
     def test_hard_delete_success(
-        self, test_app: TestClient, video_with_file: dict, tmp_path: Path
+        self, test_app: TestClient, video_with_file: dict
     ) -> None:
         """Test hard delete permanently removes file."""
         video_id = video_with_file["id"]
@@ -108,7 +108,7 @@ class TestRestoreVideo:
         assert "not deleted" in response.json()["detail"]
 
     def test_restore_success(
-        self, test_app: TestClient, video_with_file: dict, tmp_path: Path
+        self, test_app: TestClient, video_with_file: dict
     ) -> None:
         """Test successful restore from trash."""
         video_id = video_with_file["id"]

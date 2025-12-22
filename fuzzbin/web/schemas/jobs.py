@@ -104,12 +104,8 @@ class JobMetricsResponse(BaseModel):
     failed_jobs: int = Field(description="Failed jobs")
     cancelled_jobs: int = Field(description="Cancelled jobs")
     timeout_jobs: int = Field(description="Timed out jobs")
-    success_rate: float = Field(
-        description="Ratio of completed to terminal jobs (0.0-1.0)"
-    )
-    avg_duration_seconds: float = Field(
-        description="Average duration of completed jobs in seconds"
-    )
+    success_rate: float = Field(description="Ratio of completed to terminal jobs (0.0-1.0)")
+    avg_duration_seconds: float = Field(description="Average duration of completed jobs in seconds")
     queue_depth: int = Field(description="Current queue depth (pending jobs)")
     by_type: dict[str, JobTypeMetricsResponse] = Field(
         description="Metrics broken down by job type"
@@ -118,7 +114,4 @@ class JobMetricsResponse(BaseModel):
         description="Age of the oldest pending job in seconds"
     )
     last_failure_at: datetime | None = Field(description="When the last job failed")
-    last_completion_at: datetime | None = Field(
-        description="When the last job completed"
-    )
-
+    last_completion_at: datetime | None = Field(description="When the last job completed")

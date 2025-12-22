@@ -242,8 +242,9 @@ class TestDatabaseBasics:
 
     async def test_relative_paths(self, test_repository: VideoRepository):
         """Test relative path calculation."""
-        if test_repository.workspace_root:
-            abs_path = str(test_repository.workspace_root / "videos" / "test.mp4")
+        library_dir = getattr(test_repository, 'library_dir', None)
+        if library_dir:
+            abs_path = str(library_dir / "videos" / "test.mp4")
             video_id = await test_repository.create_video(
                 title="Path Test",
                 artist="Artist",

@@ -30,43 +30,57 @@ class VideoRepository:
     def __init__(
         self,
         db_path: Path,
-        workspace_root: Optional[Path] = None,
         enable_wal: bool = True,
         timeout: int = 30,
+        library_dir: Optional[Path] = None,
     ):
         """
         Initialize video repository.
 
         Args:
-            db_path: Path to SQLite database file
-            workspace_root: Optional workspace root for relative path calculation
+            db_path: Absolute path to SQLite database file
             enable_wal: Enable Write-Ahead Logging mode
             timeout: Connection timeout in seconds
+            library_dir: Optional library directory for relative path calculation
         """
         self.db_path = db_path
-        self.workspace_root = workspace_root
+        self.library_dir = library_dir
         self._db_connection = DatabaseConnection(db_path, enable_wal, timeout)
         self._connection: Optional[aiosqlite.Connection] = None
 
     @classmethod
-    async def from_config(cls, config) -> "VideoRepository":
+    async def from_config(
+        cls,
+        config,
+        config_dir: Optional[Path] = None,
+        library_dir: Optional[Path] = None,
+    ) -> "VideoRepository":
         """
         Create repository from DatabaseConfig.
 
         Args:
             config: DatabaseConfig instance
+            config_dir: Config directory for resolving relative database_path.
+                       If not provided, database_path must be absolute or
+                       will be resolved relative to CWD.
+            library_dir: Optional library directory for relative path calculation.
 
         Returns:
             Initialized VideoRepository
         """
+        # Resolve database path
         db_path = Path(config.database_path)
-        workspace_root = Path(config.workspace_root) if config.workspace_root else None
+        if not db_path.is_absolute() and config_dir:
+            db_path = config_dir / db_path
+
+        # Ensure parent directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
 
         repo = cls(
             db_path=db_path,
-            workspace_root=workspace_root,
             enable_wal=config.enable_wal_mode,
             timeout=config.connection_timeout,
+            library_dir=library_dir,
         )
 
         # Connect and run migrations
@@ -80,7 +94,7 @@ class VideoRepository:
         logger.info(
             "repository_initialized",
             db_path=str(db_path),
-            workspace_root=str(workspace_root) if workspace_root else None,
+            library_dir=str(library_dir) if library_dir else None,
         )
 
         return repo
@@ -202,10 +216,10 @@ class VideoRepository:
 
         now = datetime.now(timezone.utc).isoformat()
 
-        # Calculate relative paths if workspace_root is set
+        # Calculate relative paths if library_dir is set
         video_rel_path = None
         nfo_rel_path = None
-        if self.workspace_root:
+        if self.library_dir:
             if video_file_path:
                 video_rel_path = self._get_relative_path(video_file_path)
             if nfo_file_path:
@@ -472,7 +486,7 @@ class VideoRepository:
         updates["updated_at"] = now
 
         # Calculate relative paths if updating file paths
-        if self.workspace_root:
+        if self.library_dir:
             if "video_file_path" in updates:
                 updates["video_file_path_relative"] = self._get_relative_path(
                     updates["video_file_path"]
@@ -1752,8 +1766,8 @@ class VideoRepository:
         """
         now = datetime.now(timezone.utc).isoformat()
 
-        # Calculate relative path if workspace_root is set
-        rel_path = self._get_relative_path(file_path) if self.workspace_root else None
+        # Calculate relative path if library_dir is set
+        rel_path = self._get_relative_path(file_path) if self.library_dir else None
 
         updates = {
             "status": "downloaded",
@@ -2070,12 +2084,12 @@ class VideoRepository:
 
     def _get_relative_path(self, absolute_path: str) -> Optional[str]:
         """Calculate relative path from workspace root."""
-        if not self.workspace_root or not absolute_path:
+        if not self.library_dir or not absolute_path:
             return None
 
         try:
             abs_path = Path(absolute_path)
-            return str(abs_path.relative_to(self.workspace_root))
+            return str(abs_path.relative_to(self.library_dir))
         except (ValueError, TypeError):
             return None
 
@@ -2668,8 +2682,17 @@ class VideoRepository:
                  next_run_at, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (name, description, job_type, cron_expression, 1 if enabled else 0,
-                 metadata_json, next_run_str, now, now),
+                (
+                    name,
+                    description,
+                    job_type,
+                    cron_expression,
+                    1 if enabled else 0,
+                    metadata_json,
+                    next_run_str,
+                    now,
+                    now,
+                ),
             )
             await self._connection.commit()
             task_id = cursor.lastrowid
@@ -2865,4 +2888,3 @@ class VideoRepository:
             await self._connection.rollback()
             logger.error("scheduled_task_run_record_failed", task_id=task_id, error=str(e))
             raise QueryError(f"Failed to record task run: {e}") from e
-

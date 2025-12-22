@@ -1,6 +1,20 @@
 """Pydantic schemas for API request/response DTOs."""
 
-from .common import PageParams, PaginatedResponse, SortParams
+from .common import (
+    AUTH_ERROR_RESPONSES,
+    COMMON_ERROR_RESPONSES,
+    PUBLIC_ERROR_RESPONSES,
+    ErrorDetail,
+    HealthCheckResponse,
+    PageParams,
+    PaginatedResponse,
+    SearchSuggestionsResponse,
+    SortParams,
+    ValidationErrorDetail,
+    ValidationErrorResponse,
+    VideoStatusHistoryEntry,
+    VideoStatusHistoryResponse,
+)
 from .video import (
     VideoCreate,
     VideoFilters,
@@ -22,6 +36,18 @@ __all__ = [
     "PageParams",
     "SortParams",
     "PaginatedResponse",
+    # Error responses
+    "ErrorDetail",
+    "ValidationErrorDetail",
+    "ValidationErrorResponse",
+    "COMMON_ERROR_RESPONSES",
+    "PUBLIC_ERROR_RESPONSES",
+    "AUTH_ERROR_RESPONSES",
+    # Concrete response models
+    "HealthCheckResponse",
+    "SearchSuggestionsResponse",
+    "VideoStatusHistoryEntry",
+    "VideoStatusHistoryResponse",
     # Video
     "VideoCreate",
     "VideoUpdate",

@@ -221,7 +221,11 @@ class FileManager:
     Example:
         >>> from fuzzbin.common.config import FileManagerConfig
         >>> config = FileManagerConfig(trash_dir=".trash", hash_algorithm="sha256")
-        >>> fm = FileManager(config, workspace_root=Path("/media"))
+        >>> fm = FileManager(
+        ...     config,
+        ...     library_dir=Path("/music_videos"),
+        ...     config_dir=Path("/config"),
+        ... )
         >>>
         >>> # Move video to organized location
         >>> paths = await fm.move_video_atomic(
@@ -235,7 +239,8 @@ class FileManager:
     def __init__(
         self,
         config: FileManagerConfig,
-        workspace_root: Path,
+        library_dir: Path,
+        config_dir: Path,
         organizer_config: Optional[OrganizerConfig] = None,
         thumbnail_config: Optional[ThumbnailConfig] = None,
     ):
@@ -244,21 +249,27 @@ class FileManager:
 
         Args:
             config: FileManagerConfig with trash_dir, hash_algorithm, etc.
-            workspace_root: Root directory for media files
+            library_dir: Root directory for media files, NFOs, and trash
+            config_dir: Directory for configuration, database, cache, and thumbnails
             organizer_config: Optional OrganizerConfig for path generation
             thumbnail_config: Optional ThumbnailConfig for thumbnail generation
         """
         self.config = config
-        self.workspace_root = Path(workspace_root)
+        self.library_dir = Path(library_dir)
+        self.config_dir = Path(config_dir)
+        # Keep workspace_root as alias for library_dir for backward compatibility in restore path calc
+        self.workspace_root = self.library_dir
         self.organizer_config = organizer_config
         self.thumbnail_config = thumbnail_config or ThumbnailConfig()
-        self.trash_dir = self.workspace_root / config.trash_dir
-        self.thumbnail_cache_dir = self.workspace_root / self.thumbnail_config.cache_dir
+        # Trash is in library_dir, thumbnails are in config_dir
+        self.trash_dir = self.library_dir / config.trash_dir
+        self.thumbnail_cache_dir = self.config_dir / self.thumbnail_config.cache_dir
         self._ffmpeg_client: Optional["FFmpegClient"] = None
 
         logger.info(
             "file_manager_initialized",
-            workspace_root=str(self.workspace_root),
+            library_dir=str(self.library_dir),
+            config_dir=str(self.config_dir),
             trash_dir=str(self.trash_dir),
             thumbnail_cache_dir=str(self.thumbnail_cache_dir),
             hash_algorithm=config.hash_algorithm,
@@ -268,7 +279,8 @@ class FileManager:
     def from_config(
         cls,
         file_manager_config: FileManagerConfig,
-        workspace_root: Path,
+        library_dir: Path,
+        config_dir: Path,
         organizer_config: Optional[OrganizerConfig] = None,
         thumbnail_config: Optional[ThumbnailConfig] = None,
     ) -> "FileManager":
@@ -277,7 +289,8 @@ class FileManager:
 
         Args:
             file_manager_config: File manager configuration
-            workspace_root: Root directory for media files
+            library_dir: Root directory for media files, NFOs, and trash
+            config_dir: Directory for configuration, database, cache, and thumbnails
             organizer_config: Optional organizer configuration
             thumbnail_config: Optional thumbnail configuration
 
@@ -286,7 +299,8 @@ class FileManager:
         """
         return cls(
             config=file_manager_config,
-            workspace_root=workspace_root,
+            library_dir=library_dir,
+            config_dir=config_dir,
             organizer_config=organizer_config,
             thumbnail_config=thumbnail_config,
         )

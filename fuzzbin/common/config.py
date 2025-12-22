@@ -7,7 +7,7 @@ from typing import Optional, Dict, List, Any, Set
 import string
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -374,7 +374,7 @@ class ThumbnailConfig(BaseModel):
 
     cache_dir: str = Field(
         default=".thumbnails",
-        description="Directory for cached thumbnails (relative to workspace_root)",
+        description="Directory for cached thumbnails (relative to config_dir)",
     )
     default_timestamp: float = Field(
         default=5.0,
@@ -417,15 +417,15 @@ class ThumbnailConfig(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
-    """Configuration for SQLite database."""
+    """Configuration for SQLite database.
+
+    Note: database_path and backup_dir are relative to config_dir unless absolute.
+    They are resolved at runtime via Config.resolve_paths().
+    """
 
     database_path: str = Field(
-        default=".db/fuzzbin_metadata.db",
-        description="Path to SQLite metadata database file",
-    )
-    workspace_root: Optional[str] = Field(
-        default=None,
-        description="Workspace root directory for relative path calculation",
+        default="fuzzbin.db",
+        description="Path to SQLite metadata database file (relative to config_dir)",
     )
     enable_wal_mode: bool = Field(
         default=True,
@@ -438,8 +438,8 @@ class DatabaseConfig(BaseModel):
         description="Database connection timeout in seconds",
     )
     backup_dir: str = Field(
-        default=".db/backups",
-        description="Directory for database backups",
+        default="backups",
+        description="Directory for database backups (relative to config_dir)",
     )
 
 
@@ -554,7 +554,7 @@ class FileManagerConfig(BaseModel):
 
     trash_dir: str = Field(
         default=".trash",
-        description="Directory for soft-deleted files (relative to workspace_root)",
+        description="Directory for soft-deleted files (relative to library_dir)",
     )
     hash_algorithm: str = Field(
         default="sha256",
@@ -590,7 +590,7 @@ class FileManagerConfig(BaseModel):
 class AdvancedFeaturesConfig(BaseModel):
     """Configuration for Phase 7 advanced features.
 
-    Controls bulk operations, faceted search, imports/exports, and scheduling.
+    Controls bulk operations, faceted search, and scheduling.
     """
 
     max_bulk_items: int = Field(
@@ -611,10 +611,6 @@ class AdvancedFeaturesConfig(BaseModel):
         le=100,
         description="Maximum items for synchronous import (larger batches require background tasks)",
     )
-    export_dir: str = Field(
-        default=".exports",
-        description="Directory for export files (relative to workspace_root)",
-    )
     scheduler_library_scan_cron: Optional[str] = Field(
         default=None,
         description="Cron expression for periodic library scans (e.g., '0 2 * * *' for daily at 2 AM)",
@@ -625,8 +621,85 @@ class AdvancedFeaturesConfig(BaseModel):
     )
 
 
+def _get_default_config_dir() -> Path:
+    """
+    Get default config directory based on environment.
+
+    Priority:
+    1. FUZZBIN_CONFIG_DIR environment variable
+    2. /config if FUZZBIN_DOCKER=1
+    3. $HOME/Fuzzbin/config otherwise
+
+    Returns:
+        Path to config directory
+    """
+    # Check explicit env var override
+    env_config_dir = os.environ.get("FUZZBIN_CONFIG_DIR")
+    if env_config_dir:
+        return Path(env_config_dir)
+
+    # Check if running in Docker
+    if os.environ.get("FUZZBIN_DOCKER") == "1":
+        return Path("/config")
+
+    # Default to $HOME/Fuzzbin/config
+    return Path.home() / "Fuzzbin" / "config"
+
+
+def _get_default_library_dir() -> Path:
+    """
+    Get default library directory based on environment.
+
+    Priority:
+    1. FUZZBIN_LIBRARY_DIR environment variable
+    2. /music_videos if FUZZBIN_DOCKER=1
+    3. $HOME/Fuzzbin/music_videos otherwise
+
+    Returns:
+        Path to library directory
+    """
+    # Check explicit env var override
+    env_library_dir = os.environ.get("FUZZBIN_LIBRARY_DIR")
+    if env_library_dir:
+        return Path(env_library_dir)
+
+    # Check if running in Docker
+    if os.environ.get("FUZZBIN_DOCKER") == "1":
+        return Path("/music_videos")
+
+    # Default to $HOME/Fuzzbin/music_videos
+    return Path.home() / "Fuzzbin" / "music_videos"
+
+
 class Config(BaseModel):
-    """Main configuration class for Fuzzbin."""
+    """Main configuration class for Fuzzbin.
+
+    Path Resolution:
+    - config_dir: Where configuration, database, caches, and thumbnails are stored
+    - library_dir: Where video files, NFOs, and trash are stored
+
+    Environment Variables:
+    - FUZZBIN_CONFIG_DIR: Override config_dir
+    - FUZZBIN_LIBRARY_DIR: Override library_dir
+    - FUZZBIN_DOCKER=1: Use Docker defaults (/config, /music_videos)
+
+    Defaults:
+    - Docker: config_dir=/config, library_dir=/music_videos
+    - Non-Docker: config_dir=$HOME/Fuzzbin/config, library_dir=$HOME/Fuzzbin/music_videos
+
+    All relative paths in config (database_path, cache storage_path, backup_dir, etc.)
+    are resolved against config_dir at runtime.
+    """
+
+    # Path configuration - resolved at runtime via resolve_paths()
+    config_dir: Optional[Path] = Field(
+        default=None,
+        description="Configuration directory (database, caches, thumbnails). Resolved from FUZZBIN_CONFIG_DIR or defaults.",
+    )
+    library_dir: Optional[Path] = Field(
+        default=None,
+        description="Video library directory (media files, NFOs, trash). Resolved from FUZZBIN_LIBRARY_DIR or defaults.",
+    )
 
     http: HTTPConfig = Field(
         default_factory=HTTPConfig,
@@ -639,6 +712,10 @@ class Config(BaseModel):
     database: DatabaseConfig = Field(
         default_factory=DatabaseConfig,
         description="Database configuration",
+    )
+    cache: Optional[CacheConfig] = Field(
+        default=None,
+        description="Global cache configuration (APIs can override)",
     )
     apis: Optional[Dict[str, APIClientConfig]] = Field(
         default=None,
@@ -674,8 +751,124 @@ class Config(BaseModel):
     )
     advanced: AdvancedFeaturesConfig = Field(
         default_factory=AdvancedFeaturesConfig,
-        description="Advanced features configuration (bulk ops, facets, imports/exports, scheduling)",
+        description="Advanced features configuration (bulk ops, facets, scheduling)",
     )
+
+    def resolve_paths(self, create_dirs: bool = True) -> "Config":
+        """
+        Resolve config_dir and library_dir from environment or defaults.
+
+        This method should be called after loading config to ensure paths
+        are properly resolved based on environment variables and defaults.
+
+        Args:
+            create_dirs: If True, create directories if they don't exist
+
+        Returns:
+            Self with resolved paths (for chaining)
+
+        Example:
+            >>> config = Config.from_yaml(Path("config.yaml")).resolve_paths()
+        """
+        # Resolve config_dir
+        if self.config_dir is None:
+            object.__setattr__(self, "config_dir", _get_default_config_dir())
+
+        # Resolve library_dir
+        if self.library_dir is None:
+            object.__setattr__(self, "library_dir", _get_default_library_dir())
+
+        # Create directories if requested
+        if create_dirs:
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+            self.library_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create subdirectories
+            (self.config_dir / ".cache").mkdir(parents=True, exist_ok=True)
+            (self.config_dir / ".thumbnails").mkdir(parents=True, exist_ok=True)
+            (self.config_dir / "backups").mkdir(parents=True, exist_ok=True)
+            (self.library_dir / ".trash").mkdir(parents=True, exist_ok=True)
+
+        logger.debug(
+            "paths_resolved",
+            config_dir=str(self.config_dir),
+            library_dir=str(self.library_dir),
+        )
+
+        return self
+
+    def get_database_path(self) -> Path:
+        """
+        Get absolute database path, resolved against config_dir.
+
+        Returns:
+            Absolute path to database file
+        """
+        db_path = Path(self.database.database_path)
+        if db_path.is_absolute():
+            return db_path
+
+        config_dir = self.config_dir or _get_default_config_dir()
+        return config_dir / db_path
+
+    def get_backup_dir(self) -> Path:
+        """
+        Get absolute backup directory path, resolved against config_dir.
+
+        Returns:
+            Absolute path to backup directory
+        """
+        backup_path = Path(self.database.backup_dir)
+        if backup_path.is_absolute():
+            return backup_path
+
+        config_dir = self.config_dir or _get_default_config_dir()
+        return config_dir / backup_path
+
+    def get_cache_path(self, storage_path: str) -> Path:
+        """
+        Get absolute cache path, resolved against config_dir.
+
+        Args:
+            storage_path: Relative or absolute path from cache config
+
+        Returns:
+            Absolute path to cache file
+        """
+        cache_path = Path(storage_path)
+        if cache_path.is_absolute():
+            return cache_path
+
+        config_dir = self.config_dir or _get_default_config_dir()
+        return config_dir / cache_path
+
+    def get_thumbnail_dir(self) -> Path:
+        """
+        Get absolute thumbnail directory path, resolved against config_dir.
+
+        Returns:
+            Absolute path to thumbnail directory
+        """
+        thumb_path = Path(self.thumbnail.cache_dir)
+        if thumb_path.is_absolute():
+            return thumb_path
+
+        config_dir = self.config_dir or _get_default_config_dir()
+        return config_dir / thumb_path
+
+    def get_trash_dir(self) -> Path:
+        """
+        Get absolute trash directory path, resolved against library_dir.
+
+        Returns:
+            Absolute path to trash directory
+        """
+        trash_path = Path(self.file_manager.trash_dir)
+        if trash_path.is_absolute():
+            return trash_path
+
+        library_dir = self.library_dir or _get_default_library_dir()
+        return library_dir / trash_path
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Config":
@@ -836,8 +1029,9 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     "apis.*.cache.cacheable_status_codes": ConfigSafetyLevel.REQUIRES_RELOAD,
     "apis.*.custom.*": ConfigSafetyLevel.REQUIRES_RELOAD,
     # Affects state - changes persistent files/connections
+    "config_dir": ConfigSafetyLevel.AFFECTS_STATE,
+    "library_dir": ConfigSafetyLevel.AFFECTS_STATE,
     "database.database_path": ConfigSafetyLevel.AFFECTS_STATE,
-    "database.workspace_root": ConfigSafetyLevel.AFFECTS_STATE,
     "database.enable_wal_mode": ConfigSafetyLevel.AFFECTS_STATE,
     "database.connection_timeout": ConfigSafetyLevel.AFFECTS_STATE,
     "database.backup_dir": ConfigSafetyLevel.AFFECTS_STATE,

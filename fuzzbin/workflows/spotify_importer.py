@@ -178,9 +178,7 @@ class SpotifyPlaylistImporter:
                 if self.progress_callback:
                     track_name = track.name or "Unknown"
                     artist_name = track.artists[0].name if track.artists else "Unknown"
-                    self.progress_callback(
-                        idx, len(tracks), f"{artist_name} - {track_name}"
-                    )
+                    self.progress_callback(idx, len(tracks), f"{artist_name} - {track_name}")
 
                 try:
                     # Check if track already exists

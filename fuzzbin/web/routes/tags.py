@@ -2,12 +2,17 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from fuzzbin.core.db import VideoRepository
 
 from ..dependencies import get_repository
-from ..schemas.common import PageParams, PaginatedResponse
+from ..schemas.common import (
+    AUTH_ERROR_RESPONSES,
+    COMMON_ERROR_RESPONSES,
+    PageParams,
+    PaginatedResponse,
+)
 from ..schemas.tag import TagCreate, TagResponse, TagsSet
 from ..schemas.video import VideoResponse
 
@@ -52,6 +57,7 @@ async def list_tags(
 @router.get(
     "/{tag_id}",
     response_model=TagResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Get tag by ID",
     description="Get detailed information about a specific tag.",
 )
@@ -84,6 +90,11 @@ async def create_tag(
 @router.delete(
     "/{tag_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        400: COMMON_ERROR_RESPONSES[400],
+        404: COMMON_ERROR_RESPONSES[404],
+    },
     summary="Delete tag",
     description="Delete a tag. Tags with usage_count > 0 cannot be deleted directly.",
 )
@@ -96,8 +107,6 @@ async def delete_tag(
     tag = await repo.get_tag_by_id(tag_id)
 
     if tag["usage_count"] > 0 and not force:
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=400,
             detail=f"Tag is in use by {tag['usage_count']} videos. Use force=true to delete anyway.",
@@ -109,6 +118,7 @@ async def delete_tag(
 @router.get(
     "/{tag_id}/videos",
     response_model=PaginatedResponse[VideoResponse],
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Get videos with tag",
     description="Get videos that have a specific tag.",
 )

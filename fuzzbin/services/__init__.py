@@ -7,7 +7,7 @@ enforcing business rules.
 
 Example:
     >>> from fuzzbin.services import VideoService, ImportService
-    >>> 
+    >>>
     >>> # Use via FastAPI dependency injection
     >>> async def my_route(video_service: VideoService = Depends(get_video_service)):
     ...     video = await video_service.get_with_relationships(video_id)

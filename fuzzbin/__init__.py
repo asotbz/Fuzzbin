@@ -273,6 +273,12 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
     This function should be called once at application startup to initialize
     the configuration, logging, and database connection.
 
+    Path Resolution:
+    - If config_path is provided, load from that file
+    - Otherwise, search in FUZZBIN_CONFIG_DIR, then defaults
+    - Config paths (database, cache, thumbnails) are resolved against config_dir
+    - Library paths (media, NFO, trash) are resolved against library_dir
+
     Args:
         config_path: Path to YAML configuration file
         config: Pre-loaded Config object (takes precedence over config_path)
@@ -284,20 +290,37 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
     """
     global _config, _repository, _config_manager
 
+    from fuzzbin.common.config import _get_default_config_dir
+
     if config is not None:
         _config = config
     elif config_path is not None:
         _config = Config.from_yaml(config_path)
     elif _config is None:
-        # Use defaults only if not already configured
-        _config = Config()
+        # Search for config.yaml in default locations
+        default_config_dir = _get_default_config_dir()
+        default_config_path = default_config_dir / "config.yaml"
+
+        if default_config_path.exists():
+            _config = Config.from_yaml(default_config_path)
+            config_path = default_config_path
+        else:
+            # Use defaults only if not already configured
+            _config = Config()
+
+    # Resolve paths (config_dir, library_dir) from environment or defaults
+    _config.resolve_paths(create_dirs=True)
 
     # Setup logging based on config
     setup_logging(_config.logging)
 
     # Initialize database repository (only if not already initialized)
     if _repository is None:
-        _repository = await VideoRepository.from_config(_config.database)
+        _repository = await VideoRepository.from_config(
+            _config.database,
+            config_dir=_config.config_dir,
+            library_dir=_config.library_dir,
+        )
 
     # Initialize config manager (only if not already initialized)
     if _config_manager is None:
@@ -309,7 +332,9 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
     logger.info(
         "fuzzbin_configured",
         version=__version__,
-        database_path=_config.database.database_path,
+        config_dir=str(_config.config_dir),
+        library_dir=str(_config.library_dir),
+        database_path=str(_config.get_database_path()),
     )
 
 

@@ -18,6 +18,7 @@ from fuzzbin.core.db.repository import QueryError
 from fuzzbin.tasks import Job, JobStatus, JobType, get_job_queue
 from fuzzbin.tasks.queue import parse_cron
 from fuzzbin.web.dependencies import get_current_user, get_repository, require_auth
+from fuzzbin.web.schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from fuzzbin.web.schemas.jobs import (
     JobListResponse,
     JobMetricsResponse,
@@ -34,6 +35,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
     "",
     response_model=JobResponse,
     status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Submit a background job",
     description="Submit a new background job for async processing. Returns 202 Accepted with job details.",
 )
@@ -79,9 +81,7 @@ async def list_jobs(
     job_status: Optional[JobStatus] = Query(
         None, alias="status", description="Filter by job status"
     ),
-    job_type: Optional[JobType] = Query(
-        None, alias="type", description="Filter by job type"
-    ),
+    job_type: Optional[JobType] = Query(None, alias="type", description="Filter by job type"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum jobs to return"),
 ) -> JobListResponse:
     """List all jobs with optional filtering."""
@@ -167,9 +167,7 @@ class ScheduledTaskCreate(BaseModel):
         examples=["0 * * * *", "0 0 * * *", "*/15 * * * *"],
     )
     enabled: bool = Field(default=True, description="Whether task is enabled")
-    metadata: Optional[dict] = Field(
-        default=None, description="Additional metadata for the job"
-    )
+    metadata: Optional[dict] = Field(default=None, description="Additional metadata for the job")
 
 
 class ScheduledTaskUpdate(BaseModel):
@@ -208,6 +206,7 @@ class ScheduledTaskResponse(BaseModel):
             return None
         if isinstance(v, str):
             import json
+
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
@@ -237,6 +236,7 @@ class ScheduledTaskListResponse(BaseModel):
     "/scheduled",
     response_model=ScheduledTaskResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Create scheduled task",
     description="Create a new scheduled task with cron expression.",
 )
@@ -305,6 +305,7 @@ async def list_scheduled_tasks(
 @router.get(
     "/scheduled/{task_id}",
     response_model=ScheduledTaskResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Get scheduled task",
     description="Get a scheduled task by ID.",
 )
@@ -330,6 +331,11 @@ async def get_scheduled_task(
 @router.patch(
     "/scheduled/{task_id}",
     response_model=ScheduledTaskResponse,
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        400: COMMON_ERROR_RESPONSES[400],
+        404: COMMON_ERROR_RESPONSES[404],
+    },
     summary="Update scheduled task",
     description="Update a scheduled task's settings.",
 )
@@ -381,6 +387,7 @@ async def update_scheduled_task(
 @router.delete(
     "/scheduled/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Delete scheduled task",
     description="Delete a scheduled task.",
 )
@@ -436,6 +443,7 @@ async def run_scheduled_task_now(
     task_metadata = task.get("metadata_json") or task.get("metadata") or {}
     if isinstance(task_metadata, str):
         import json
+
         try:
             task_metadata = json.loads(task_metadata)
         except json.JSONDecodeError:
@@ -464,6 +472,7 @@ async def run_scheduled_task_now(
 # ==================== Single Job Routes ====================
 # NOTE: /{job_id} routes MUST come LAST to avoid matching /scheduled, /metrics paths
 
+
 @router.get(
     "/{job_id}",
     response_model=JobResponse,
@@ -479,9 +488,7 @@ async def get_job(
     job = await queue.get_job(job_id)
 
     if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     return JobResponse.model_validate(job)
 

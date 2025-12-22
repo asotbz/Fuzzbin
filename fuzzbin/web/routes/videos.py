@@ -13,7 +13,14 @@ from fuzzbin.services import VideoService
 from fuzzbin.services.base import NotFoundError, ServiceError, ValidationError
 
 from ..dependencies import get_repository, get_video_service
-from ..schemas.common import PageParams, PaginatedResponse, SortParams
+from ..schemas.common import (
+    AUTH_ERROR_RESPONSES,
+    COMMON_ERROR_RESPONSES,
+    PageParams,
+    PaginatedResponse,
+    SortParams,
+    VideoStatusHistoryEntry,
+)
 from ..schemas.video import (
     VideoCreate,
     VideoFilters,
@@ -129,6 +136,7 @@ async def list_videos(
 @router.get(
     "/{video_id}",
     response_model=VideoResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Get video by ID",
     description="Get detailed information about a specific video.",
 )
@@ -174,6 +182,7 @@ async def create_video(
 @router.patch(
     "/{video_id}",
     response_model=VideoResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Update video",
     description="Update video metadata. Only provided fields are updated.",
 )
@@ -202,6 +211,7 @@ async def update_video(
 @router.patch(
     "/{video_id}/status",
     response_model=VideoResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Update video status",
     description="Update the status of a video with optional reason and metadata.",
 )
@@ -234,6 +244,7 @@ async def update_video_status(
 @router.delete(
     "/{video_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Soft delete video",
     description="Soft delete a video (can be restored later).",
 )
@@ -250,6 +261,7 @@ async def delete_video(
 @router.post(
     "/{video_id}/tags/{tag_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Add tag to video",
     description="Add a tag to a video.",
 )
@@ -268,6 +280,7 @@ async def add_video_tag(
 @router.delete(
     "/{video_id}/tags/{tag_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Remove tag from video",
     description="Remove a tag from a video.",
 )
@@ -286,6 +299,7 @@ async def remove_video_tag(
 @router.post(
     "/{video_id}/restore",
     response_model=VideoResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Restore video",
     description="Restore a soft-deleted video.",
 )
@@ -308,6 +322,7 @@ async def restore_video(
 @router.delete(
     "/{video_id}/permanent",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Permanently delete video",
     description="Permanently delete a video. This cannot be undone.",
 )
@@ -323,18 +338,30 @@ async def hard_delete_video(
 
 @router.get(
     "/{video_id}/status-history",
-    response_model=List[dict],
+    response_model=List[VideoStatusHistoryEntry],
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Get status history",
     description="Get the status change history for a video.",
 )
 async def get_video_status_history(
     video_id: int,
     repo: VideoRepository = Depends(get_repository),
-) -> List[dict]:
+) -> List[VideoStatusHistoryEntry]:
     """Get a video's status change history."""
     # Verify video exists
     await repo.get_video_by_id(video_id, include_deleted=True)
-    return await repo.get_status_history(video_id)
+    history = await repo.get_status_history(video_id)
+    return [
+        VideoStatusHistoryEntry(
+            id=entry["id"],
+            video_id=entry["video_id"],
+            old_status=entry.get("old_status"),
+            new_status=entry["new_status"],
+            reason=entry.get("reason"),
+            changed_at=entry["changed_at"],
+        )
+        for entry in history
+    ]
 
 
 # Constants for streaming

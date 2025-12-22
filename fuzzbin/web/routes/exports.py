@@ -23,6 +23,7 @@ from fuzzbin.core.db import VideoRepository
 from fuzzbin.core.db.exporter import NFOExporter
 
 from ..dependencies import get_repository, require_auth
+from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from ..schemas.video import VideoFilters
 
 logger = structlog.get_logger(__name__)
@@ -39,9 +40,7 @@ class NFOExportRequest(BaseModel):
         default=None, description="Specific video IDs to export (exports all if not specified)"
     )
     include_deleted: bool = Field(default=False, description="Include soft-deleted videos")
-    overwrite_existing: bool = Field(
-        default=False, description="Overwrite existing NFO files"
-    )
+    overwrite_existing: bool = Field(default=False, description="Overwrite existing NFO files")
 
 
 class NFOExportResult(BaseModel):
@@ -51,7 +50,7 @@ class NFOExportResult(BaseModel):
     exported_count: int = Field(description="Successfully exported")
     skipped_count: int = Field(description="Skipped (no file path or exists)")
     failed_count: int = Field(description="Failed to export")
-    export_dir: str = Field(description="Export directory")
+    library_dir: str = Field(description="Library directory where NFO files are written")
     manifest_path: Optional[str] = Field(description="Path to manifest file")
 
 
@@ -59,12 +58,15 @@ class PlaylistExportRequest(BaseModel):
     """Request for playlist export."""
 
     name: str = Field(..., min_length=1, max_length=200, description="Playlist name")
+    output_path: str = Field(
+        ...,
+        min_length=1,
+        description="Full path where playlist file will be written (including filename)",
+    )
     video_ids: Optional[List[int]] = Field(
         default=None, description="Specific video IDs (exports all if not specified)"
     )
-    format: Literal["m3u", "csv", "json"] = Field(
-        default="m3u", description="Export format"
-    )
+    format: Literal["m3u", "csv", "json"] = Field(default="m3u", description="Export format")
     include_deleted: bool = Field(default=False, description="Include soft-deleted videos")
 
 
@@ -80,13 +82,26 @@ class PlaylistExportResult(BaseModel):
 # ==================== Helper Functions ====================
 
 
-async def _get_export_dir() -> Path:
-    """Get configured export directory."""
+async def _get_library_dir() -> Path:
+    """Get configured library directory for NFO file output."""
     config = fuzzbin.get_config()
-    workspace_root = Path(config.database.workspace_root or ".")
-    export_dir = workspace_root / config.advanced.export_dir
-    export_dir.mkdir(parents=True, exist_ok=True)
-    return export_dir
+    if config.library_dir:
+        return config.library_dir
+    # Fallback to default
+    from fuzzbin.common.config import _get_default_library_dir
+
+    return _get_default_library_dir()
+
+
+async def _get_config_dir() -> Path:
+    """Get configured config directory for manifest files."""
+    config = fuzzbin.get_config()
+    if config.config_dir:
+        return config.config_dir
+    # Fallback to default
+    from fuzzbin.common.config import _get_default_config_dir
+
+    return _get_default_config_dir()
 
 
 # ==================== NFO Export ====================
@@ -95,8 +110,9 @@ async def _get_export_dir() -> Path:
 @router.post(
     "/nfo",
     response_model=NFOExportResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Export NFO files",
-    description="Regenerate NFO files for videos. Can export all or specific videos.",
+    description="Regenerate NFO files for videos. NFO files are written alongside video files in the library.",
 )
 async def export_nfo_files(
     request: NFOExportRequest,
@@ -107,9 +123,12 @@ async def export_nfo_files(
     Export/regenerate NFO files for videos.
 
     This creates or updates NFO metadata files based on current database state.
-    Useful for syncing metadata changes back to NFO files.
+    NFO files are written alongside video files in the library directory:
+    - <basename>.nfo: One per video file, matching the video's base name
+    - artist.nfo: One per artist directory (created automatically)
     """
-    export_dir = await _get_export_dir()
+    library_dir = await _get_library_dir()
+    config_dir = await _get_config_dir()
     exporter = NFOExporter(repo)
 
     # Get videos to export
@@ -138,7 +157,7 @@ async def export_nfo_files(
         nfo_path_str = video.get("nfo_file_path")
 
         if not nfo_path_str:
-            # No NFO path, try to generate one
+            # No NFO path, try to generate one from video path
             video_path = video.get("video_file_path")
             if video_path:
                 nfo_path = Path(video_path).with_suffix(".nfo")
@@ -156,11 +175,13 @@ async def export_nfo_files(
         try:
             exported_path = await exporter.export_video_to_nfo(video_id, nfo_path)
             exported_count += 1
-            manifest_entries.append({
-                "video_id": video_id,
-                "title": video.get("title"),
-                "nfo_path": str(exported_path),
-            })
+            manifest_entries.append(
+                {
+                    "video_id": video_id,
+                    "title": video.get("title"),
+                    "nfo_path": str(exported_path),
+                }
+            )
         except Exception as e:
             failed_count += 1
             logger.error(
@@ -169,18 +190,22 @@ async def export_nfo_files(
                 error=str(e),
             )
 
-    # Write manifest
+    # Write manifest to config_dir
     manifest_path = None
     if manifest_entries:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        manifest_file = export_dir / f"nfo_export_{timestamp}.json"
+        manifest_file = config_dir / f"nfo_export_{timestamp}.json"
         with open(manifest_file, "w") as f:
-            json.dump({
-                "exported_at": datetime.now().isoformat(),
-                "exported_by": current_user.username if current_user else "anonymous",
-                "total": len(manifest_entries),
-                "files": manifest_entries,
-            }, f, indent=2)
+            json.dump(
+                {
+                    "exported_at": datetime.now().isoformat(),
+                    "exported_by": current_user.username if current_user else "anonymous",
+                    "total": len(manifest_entries),
+                    "files": manifest_entries,
+                },
+                f,
+                indent=2,
+            )
         manifest_path = str(manifest_file)
 
     logger.info(
@@ -197,7 +222,7 @@ async def export_nfo_files(
         exported_count=exported_count,
         skipped_count=skipped_count,
         failed_count=failed_count,
-        export_dir=str(export_dir),
+        library_dir=str(library_dir),
         manifest_path=manifest_path,
     )
 
@@ -208,6 +233,7 @@ async def export_nfo_files(
 @router.post(
     "/playlist",
     response_model=PlaylistExportResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Export playlist",
     description="Export videos as a playlist in M3U, CSV, or JSON format.",
 )
@@ -223,8 +249,14 @@ async def export_playlist(
     - m3u: Extended M3U playlist (for media players)
     - csv: CSV with title, artist, album, path columns
     - json: Full video metadata as JSON array
+
+    The output_path must be provided by the user specifying where to write the file.
     """
-    export_dir = await _get_export_dir()
+    # Validate and prepare output path
+    file_path = Path(request.output_path)
+
+    # Ensure parent directory exists
+    file_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Get videos
     if request.video_ids:
@@ -245,18 +277,12 @@ async def export_playlist(
     if request.format == "m3u":
         videos = [v for v in videos if v.get("video_file_path")]
 
-    # Generate filename
-    safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in request.name)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
+    # Generate content based on format
     if request.format == "m3u":
-        file_path = export_dir / f"{safe_name}_{timestamp}.m3u"
         content = _generate_m3u(videos, request.name)
     elif request.format == "csv":
-        file_path = export_dir / f"{safe_name}_{timestamp}.csv"
         content = _generate_csv(videos)
     else:  # json
-        file_path = export_dir / f"{safe_name}_{timestamp}.json"
         content = _generate_json(videos, request.name)
 
     # Write file
@@ -309,25 +335,37 @@ def _generate_csv(videos: List[dict]) -> str:
     writer = csv.writer(output)
 
     # Header
-    writer.writerow([
-        "id", "title", "artist", "album", "year", "genre",
-        "director", "studio", "video_file_path", "status"
-    ])
+    writer.writerow(
+        [
+            "id",
+            "title",
+            "artist",
+            "album",
+            "year",
+            "genre",
+            "director",
+            "studio",
+            "video_file_path",
+            "status",
+        ]
+    )
 
     # Rows
     for video in videos:
-        writer.writerow([
-            video.get("id"),
-            video.get("title"),
-            video.get("artist"),
-            video.get("album"),
-            video.get("year"),
-            video.get("genre"),
-            video.get("director"),
-            video.get("studio"),
-            video.get("video_file_path"),
-            video.get("status"),
-        ])
+        writer.writerow(
+            [
+                video.get("id"),
+                video.get("title"),
+                video.get("artist"),
+                video.get("album"),
+                video.get("year"),
+                video.get("genre"),
+                video.get("director"),
+                video.get("studio"),
+                video.get("video_file_path"),
+                video.get("status"),
+            ]
+        )
 
     return output.getvalue()
 
@@ -353,9 +391,13 @@ def _generate_json(videos: List[dict], playlist_name: str) -> str:
         }
         clean_videos.append(clean)
 
-    return json.dumps({
-        "playlist_name": playlist_name,
-        "exported_at": datetime.now().isoformat(),
-        "total_tracks": len(clean_videos),
-        "videos": clean_videos,
-    }, indent=2, ensure_ascii=False)
+    return json.dumps(
+        {
+            "playlist_name": playlist_name,
+            "exported_at": datetime.now().isoformat(),
+            "total_tracks": len(clean_videos),
+            "videos": clean_videos,
+        },
+        indent=2,
+        ensure_ascii=False,
+    )

@@ -65,7 +65,6 @@ def database_config(test_workspace: Path) -> DatabaseConfig:
     """Create database config pointing to test workspace."""
     return DatabaseConfig(
         database_path=str(test_workspace / "test.db"),
-        workspace_root=str(test_workspace),
         enable_wal_mode=False,  # Disable WAL for tests
         connection_timeout=30,
         backup_dir=str(test_workspace / "backups"),
@@ -76,7 +75,7 @@ def database_config(test_workspace: Path) -> DatabaseConfig:
 def file_manager_config(test_workspace: Path) -> FileManagerConfig:
     """Create FileManager config for test workspace."""
     return FileManagerConfig(
-        trash_dir="trash",  # Relative to workspace_root
+        trash_dir="trash",  # Relative to library_dir
         hash_algorithm="sha256",
         enable_hash_verification=True,
         organize_pattern="{artist}/{album}/{title}.{ext}",
@@ -87,7 +86,7 @@ def file_manager_config(test_workspace: Path) -> FileManagerConfig:
 def thumbnail_config(test_workspace: Path) -> ThumbnailConfig:
     """Create thumbnail config for tests."""
     return ThumbnailConfig(
-        cache_dir="thumbnails",  # Relative to workspace_root
+        cache_dir="thumbnails",  # Relative to config_dir
         default_timestamp=5.0,
         width=320,
         height=180,
@@ -111,7 +110,8 @@ def file_manager(
     """Create a real FileManager for tests."""
     return FileManager(
         config=file_manager_config,
-        workspace_root=test_workspace,
+        library_dir=test_workspace / "media",
+        config_dir=test_workspace / "config",
         thumbnail_config=thumbnail_config,
     )
 

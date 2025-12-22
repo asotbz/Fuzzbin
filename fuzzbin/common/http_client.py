@@ -90,6 +90,7 @@ class AsyncHTTPClient:
         config: HTTPConfig,
         base_url: str = "",
         cache_config: Optional[CacheConfig] = None,
+        config_dir: Optional[Path] = None,
     ):
         """
         Initialize the async HTTP client.
@@ -98,10 +99,12 @@ class AsyncHTTPClient:
             config: HTTPConfig object with client settings
             base_url: Base URL for all requests (optional)
             cache_config: CacheConfig object for response caching (optional)
+            config_dir: Directory for resolving relative cache paths (optional)
         """
         self.config = config
         self.base_url = base_url
         self.cache_config = cache_config
+        self.config_dir = config_dir
         self._client: Optional[Union[httpx.AsyncClient, Any]] = None
         self._storage: Optional[Any] = None  # Hishel storage for cache management
         self.logger = logger.bind(component="http_client")
@@ -115,8 +118,10 @@ class AsyncHTTPClient:
 
         # Setup cache if enabled
         if self.cache_config and self.cache_config.enabled and HISHEL_AVAILABLE:
-            # Create cache storage directory if it doesn't exist
+            # Resolve cache storage path against config_dir if relative
             storage_path = Path(self.cache_config.storage_path)
+            if not storage_path.is_absolute() and self.config_dir:
+                storage_path = self.config_dir / storage_path
             storage_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Create SQLite storage backend with TTL configuration

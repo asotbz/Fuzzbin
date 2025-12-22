@@ -69,21 +69,36 @@ def mock_http():
 @pytest.fixture
 def database_config(tmp_path: Path) -> DatabaseConfig:
     """Provide a test database configuration."""
-    db_path = tmp_path / "test_fuzzbin.db"
-    backup_dir = tmp_path / "backups"
+    db_path = tmp_path / "config" / "test_fuzzbin.db"
+    backup_dir = tmp_path / "config" / "backups"
     return DatabaseConfig(
         database_path=str(db_path),
-        workspace_root=str(tmp_path),
         enable_wal_mode=False,  # Disable WAL mode in tests to avoid lock issues
         connection_timeout=30,
         backup_dir=str(backup_dir),
     )
 
 
+@pytest.fixture
+def config_dir(tmp_path: Path) -> Path:
+    """Provide a test config directory."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
+@pytest.fixture
+def library_dir(tmp_path: Path) -> Path:
+    """Provide a test library directory."""
+    library_dir = tmp_path / "music_videos"
+    library_dir.mkdir(parents=True, exist_ok=True)
+    return library_dir
+
+
 @pytest_asyncio.fixture
-async def test_db(database_config: DatabaseConfig) -> VideoRepository:
+async def test_db(database_config: DatabaseConfig, config_dir: Path) -> VideoRepository:
     """Provide a test database with migrations applied."""
-    repo = await VideoRepository.from_config(database_config)
+    repo = await VideoRepository.from_config(database_config, config_dir=config_dir)
     yield repo
     await repo.close()
 

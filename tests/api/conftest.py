@@ -34,7 +34,6 @@ def test_database_config(tmp_path: Path) -> DatabaseConfig:
     backup_dir = tmp_path / "backups"
     return DatabaseConfig(
         database_path=str(db_path),
-        workspace_root=str(tmp_path),
         enable_wal_mode=False,  # Disable WAL in tests to avoid lock issues
         connection_timeout=30,
         backup_dir=str(backup_dir),
@@ -42,9 +41,17 @@ def test_database_config(tmp_path: Path) -> DatabaseConfig:
 
 
 @pytest.fixture
-def test_config(test_database_config: DatabaseConfig) -> Config:
+def test_config(test_database_config: DatabaseConfig, tmp_path: Path) -> Config:
     """Provide a test configuration."""
+    # Create library and config subdirectories for tests
+    library_dir = tmp_path / "music_videos"
+    config_dir = tmp_path / "config"
+    library_dir.mkdir(exist_ok=True)
+    config_dir.mkdir(exist_ok=True)
+    
     return Config(
+        config_dir=config_dir,
+        library_dir=library_dir,
         database=test_database_config,
         logging=LoggingConfig(
             level="WARNING",  # Reduce noise in tests
@@ -170,11 +177,11 @@ def sample_tag_data() -> dict:
 
 @pytest_asyncio.fixture
 async def video_with_file(
-    test_app: TestClient, sample_video_data: dict, tmp_path: Path
+    test_app: TestClient, sample_video_data: dict, test_config: Config
 ) -> dict:
     """Create a video with an actual file on disk."""
-    # Create video file
-    media_dir = tmp_path / "media"
+    # Create video file inside the library directory
+    media_dir = test_config.library_dir / "media"
     media_dir.mkdir(exist_ok=True)
     video_file = media_dir / "test_video.mp4"
     video_file.write_bytes(b"test video content for testing")
@@ -192,12 +199,12 @@ async def video_with_file(
 
 @pytest_asyncio.fixture
 async def video_with_missing_file(
-    test_app: TestClient, sample_video_data: dict, tmp_path: Path
+    test_app: TestClient, sample_video_data: dict, test_config: Config
 ) -> dict:
     """Create a video pointing to a non-existent file."""
     # Create video record with non-existent file path
     video_data = sample_video_data.copy()
-    video_data["video_file_path"] = str(tmp_path / "missing_video.mp4")
+    video_data["video_file_path"] = str(test_config.library_dir / "missing_video.mp4")
 
     response = test_app.post("/videos", json=video_data)
     assert response.status_code == 201
@@ -206,8 +213,8 @@ async def video_with_missing_file(
 
 
 @pytest.fixture
-def orphan_file(tmp_path: Path) -> Path:
+def orphan_file(test_config: Config) -> Path:
     """Create an orphaned video file not tracked in database."""
-    orphan = tmp_path / "orphan_video.mp4"
+    orphan = test_config.library_dir / "orphan_video.mp4"
     orphan.write_bytes(b"orphan video content")
     return orphan

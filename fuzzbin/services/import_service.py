@@ -9,7 +9,7 @@ and provides a unified interface for all import operations. It handles:
 
 Example:
     >>> from fuzzbin.services import ImportService
-    >>> 
+    >>>
     >>> async def my_route(import_service: ImportService = Depends(get_import_service)):
     ...     result = await import_service.import_nfo_directory(
     ...         directory=Path("/media/videos"),
@@ -219,9 +219,7 @@ class ImportService(BaseService):
             )
 
             # Convert to service result
-            service_result = NFOImportResult.from_workflow_result(
-                result, str(directory)
-            )
+            service_result = NFOImportResult.from_workflow_result(result, str(directory))
 
             # Report completion via callback
             await self._report_complete(service_result)
@@ -364,8 +362,7 @@ class ImportService(BaseService):
             NotImplementedError: This feature is not yet implemented
         """
         raise NotImplementedError(
-            "YouTube import is not yet implemented. "
-            "Use the yt-dlp client directly for now."
+            "YouTube import is not yet implemented. " "Use the yt-dlp client directly for now."
         )
 
     # ==================== Batch Import ====================
@@ -393,9 +390,7 @@ class ImportService(BaseService):
         total_dirs = len(directories)
 
         for i, directory in enumerate(directories, start=1):
-            await self._report_progress(
-                i, total_dirs, f"Importing from {directory.name}"
-            )
+            await self._report_progress(i, total_dirs, f"Importing from {directory.name}")
 
             try:
                 result = await self.import_nfo_directory(

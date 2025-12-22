@@ -446,9 +446,7 @@ class JobQueue:
                 # Apply timeout if specified
                 if job.timeout_seconds:
                     try:
-                        await asyncio.wait_for(
-                            handler(job), timeout=job.timeout_seconds
-                        )
+                        await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
                     except asyncio.TimeoutError:
                         job.mark_timeout()
                         # Record timeout as failure for metrics
@@ -510,8 +508,7 @@ class JobQueue:
                 # Check dependencies
                 if job.depends_on:
                     all_completed = all(
-                        self.jobs.get(dep_id)
-                        and self.jobs[dep_id].status == JobStatus.COMPLETED
+                        self.jobs.get(dep_id) and self.jobs[dep_id].status == JobStatus.COMPLETED
                         for dep_id in job.depends_on
                     )
 
@@ -583,9 +580,7 @@ class JobQueue:
             return
 
         self.running = True
-        self.workers = [
-            asyncio.create_task(self._worker(i)) for i in range(self.max_workers)
-        ]
+        self.workers = [asyncio.create_task(self._worker(i)) for i in range(self.max_workers)]
         self.scheduler_task = asyncio.create_task(self._scheduler())
         logger.info("job_queue_started", max_workers=self.max_workers)
 

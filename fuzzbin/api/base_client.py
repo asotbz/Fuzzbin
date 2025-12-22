@@ -1,5 +1,6 @@
 """Base API client with rate limiting and concurrency control."""
 
+from pathlib import Path
 from typing import Any, Optional, Dict
 
 import httpx
@@ -46,6 +47,7 @@ class RateLimitedAPIClient(AsyncHTTPClient):
         concurrency_limiter: Optional[ConcurrencyLimiter] = None,
         auth_headers: Optional[Dict[str, str]] = None,
         cache_config: Optional[CacheConfig] = None,
+        config_dir: Optional[Path] = None,
     ):
         """
         Initialize the rate-limited API client.
@@ -57,8 +59,9 @@ class RateLimitedAPIClient(AsyncHTTPClient):
             concurrency_limiter: Optional concurrency limiter instance
             auth_headers: Optional authentication headers to include in all requests
             cache_config: Optional cache configuration
+            config_dir: Directory for resolving relative cache paths (optional)
         """
-        super().__init__(http_config, base_url, cache_config)
+        super().__init__(http_config, base_url, cache_config, config_dir)
         self.rate_limiter = rate_limiter
         self.concurrency_limiter = concurrency_limiter
         self.auth_headers = auth_headers or {}
@@ -72,12 +75,15 @@ class RateLimitedAPIClient(AsyncHTTPClient):
         )
 
     @classmethod
-    def from_config(cls, config: APIClientConfig) -> "RateLimitedAPIClient":
+    def from_config(
+        cls, config: APIClientConfig, config_dir: Optional[Path] = None
+    ) -> "RateLimitedAPIClient":
         """
         Create a client from APIClientConfig.
 
         Args:
             config: API client configuration
+            config_dir: Directory for resolving relative cache paths (optional)
 
         Returns:
             Configured RateLimitedAPIClient instance
@@ -112,6 +118,7 @@ class RateLimitedAPIClient(AsyncHTTPClient):
             concurrency_limiter=concurrency_limiter,
             auth_headers=config.auth,
             cache_config=config.cache,
+            config_dir=config_dir,
         )
 
     async def _apply_limiters_and_auth(

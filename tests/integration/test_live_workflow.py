@@ -160,12 +160,11 @@ async def test_repository(tmp_path: Path):
     """Provide test database with migrations applied."""
     db_config = DatabaseConfig(
         database_path=str(tmp_path / "test_workflow.db"),
-        workspace_root=str(tmp_path / "media"),
         enable_wal_mode=False,  # Disable WAL mode in tests to avoid lock issues
         connection_timeout=30,
         backup_dir=str(tmp_path / "backups"),
     )
-    repo = await VideoRepository.from_config(db_config)
+    repo = await VideoRepository.from_config(db_config, config_dir=tmp_path / "config")
     try:
         yield repo
     finally:

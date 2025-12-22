@@ -334,10 +334,25 @@ class BaseService(ABC):
         """Get the fuzzbin configuration."""
         return fuzzbin.get_config()
 
-    def _get_workspace_root(self) -> Path:
-        """Get the workspace root directory."""
+    def _get_library_dir(self) -> Path:
+        """Get the library directory for media files."""
         config = self._get_config()
-        return Path(config.database.workspace_root or ".")
+        if config.library_dir:
+            return config.library_dir
+        # Fallback to default if not resolved
+        from fuzzbin.common.config import _get_default_library_dir
+
+        return _get_default_library_dir()
+
+    def _get_config_dir(self) -> Path:
+        """Get the config directory for database, cache, thumbnails."""
+        config = self._get_config()
+        if config.config_dir:
+            return config.config_dir
+        # Fallback to default if not resolved
+        from fuzzbin.common.config import _get_default_config_dir
+
+        return _get_default_config_dir()
 
     async def _report_progress(
         self,

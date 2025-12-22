@@ -18,6 +18,7 @@ from fuzzbin.core.db import VideoRepository
 from fuzzbin.tasks import JobType, get_job_queue
 
 from ..dependencies import get_repository, require_auth
+from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/imports", tags=["Imports"])
@@ -104,6 +105,7 @@ def _is_background_available() -> bool:
     "/youtube",
     response_model=ImportResult,
     status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Import from YouTube",
     description="Import videos from YouTube URLs. Small batches run synchronously, "
     "larger batches require background task queue.",
@@ -272,6 +274,7 @@ def _extract_youtube_id(url: str) -> Optional[str]:
     "/imvdb",
     response_model=ImportResult,
     status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Import from IMVDb",
     description="Import video metadata from IMVDb by ID or search query.",
 )

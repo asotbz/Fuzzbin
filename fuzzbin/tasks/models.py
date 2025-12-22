@@ -97,9 +97,7 @@ class Job(BaseModel):
     schedule: str | None = Field(
         default=None, description="Cron expression for scheduled execution"
     )
-    next_run_at: datetime | None = Field(
-        default=None, description="Next scheduled run time"
-    )
+    next_run_at: datetime | None = Field(default=None, description="Next scheduled run time")
 
     def update_progress(self, processed: int, total: int, step: str) -> None:
         """Update job progress.

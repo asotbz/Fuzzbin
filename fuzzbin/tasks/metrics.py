@@ -139,9 +139,7 @@ class MetricsCollector:
         self._type_durations: dict[JobType, list[float]] = {}
         self._last_failure_at: datetime | None = None
         self._last_completion_at: datetime | None = None
-        self._failure_callbacks: list[
-            Callable[[FailedJobAlert], Coroutine[Any, Any, None]]
-        ] = []
+        self._failure_callbacks: list[Callable[[FailedJobAlert], Coroutine[Any, Any, None]]] = []
 
     def on_job_failed(
         self,
@@ -299,9 +297,7 @@ class MetricsCollector:
         for job_type, durations in self._type_durations.items():
             if job_type in metrics.by_type and durations:
                 metrics.by_type[job_type].total_duration_seconds = sum(durations)
-                metrics.by_type[job_type].avg_duration_seconds = sum(durations) / len(
-                    durations
-                )
+                metrics.by_type[job_type].avg_duration_seconds = sum(durations) / len(durations)
 
         return metrics
 

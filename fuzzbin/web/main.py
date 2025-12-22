@@ -7,6 +7,7 @@ import structlog
 import uvicorn
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 import fuzzbin
 from fuzzbin.auth import is_default_password
@@ -17,6 +18,7 @@ from fuzzbin.tasks.handlers import register_all_handlers
 from .dependencies import require_auth, get_api_settings
 from .middleware import RequestLoggingMiddleware, register_exception_handlers
 from .settings import get_settings, APISettings
+from .schemas.common import HealthCheckResponse, AUTH_ERROR_RESPONSES
 
 logger = structlog.get_logger(__name__)
 
@@ -133,9 +135,54 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Fuzzbin API",
         version=fuzzbin.__version__,
-        description="Music video library management API. "
-        "Provides CRUD operations for videos, artists, collections, and tags, "
-        "with full-text search and filtering capabilities.",
+        description="""Music video library management API.
+Provides CRUD operations for videos, artists, collections, and tags,
+with full-text search and filtering capabilities.
+
+## Authentication
+
+When authentication is enabled (`FUZZBIN_API_AUTH_ENABLED=true`), protected endpoints require
+a Bearer token in the `Authorization` header:
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+Obtain a token via `POST /auth/token` with username/password credentials.
+
+## WebSocket API
+
+### Real-time Job Progress: `/ws/jobs/{job_id}`
+
+Connect to receive live progress updates for background jobs.
+
+**Connection:**
+```
+ws://localhost:8000/ws/jobs/{job_id}
+```
+
+**Message Format (JSON):**
+```json
+{
+  "job_id": "uuid-string",
+  "status": "running",
+  "progress": 0.45,
+  "message": "Processing file 45 of 100",
+  "result": null
+}
+```
+
+**Fields:**
+- `job_id`: Job identifier
+- `status`: One of `pending`, `running`, `completed`, `failed`, `cancelled`
+- `progress`: Float 0.0-1.0 indicating completion percentage
+- `message`: Human-readable status message
+- `result`: Job result data (populated on completion)
+
+**Close Codes:**
+- `1008` (Policy Violation): Invalid or unknown job ID
+- `1011` (Internal Error): Server error during progress streaming
+""",
         openapi_url=settings.openapi_url,
         openapi_tags=[
             {
@@ -178,6 +225,18 @@ def create_app() -> FastAPI:
                 "name": "WebSocket",
                 "description": "Real-time progress updates via WebSocket",
             },
+            {
+                "name": "Bulk Operations",
+                "description": "Batch operations for updating, deleting, tagging, and organizing multiple videos",
+            },
+            {
+                "name": "Imports",
+                "description": "Import workflows for YouTube and IMVDb content",
+            },
+            {
+                "name": "Exports",
+                "description": "Export NFO metadata files and generate playlists",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -204,21 +263,22 @@ def create_app() -> FastAPI:
         "/health",
         tags=["Health"],
         summary="Health check",
+        response_model=HealthCheckResponse,
         response_description="Health status of the API",
     )
     async def health_check(
         settings: APISettings = Depends(get_api_settings),
-    ) -> dict:
+    ) -> HealthCheckResponse:
         """
         Check API health status.
 
         Returns basic health information including API version.
         """
-        return {
-            "status": "ok",
-            "version": fuzzbin.__version__,
-            "auth_enabled": settings.auth_enabled,
-        }
+        return HealthCheckResponse(
+            status="ok",
+            version=fuzzbin.__version__,
+            auth_enabled=settings.auth_enabled,
+        )
 
     # Import and include routers
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
@@ -245,6 +305,31 @@ def create_app() -> FastAPI:
     app.include_router(bulk.router, dependencies=protected_dependencies)
     app.include_router(imports.router, dependencies=protected_dependencies)
     app.include_router(exports.router, dependencies=protected_dependencies)
+
+    # Custom OpenAPI schema with security scheme
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        openapi_schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+        )
+        # Add security scheme for Bearer authentication
+        openapi_schema["components"]["securitySchemes"] = {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "JWT token obtained from POST /auth/token",
+            }
+        }
+        app.openapi_schema = openapi_schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi
 
     logger.info("api_app_created", routes=len(app.routes))
 

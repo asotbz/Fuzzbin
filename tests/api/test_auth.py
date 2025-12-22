@@ -272,7 +272,6 @@ async def auth_test_repository(tmp_path) -> AsyncGenerator[VideoRepository, None
     """Provide a test database repository with admin user seeded."""
     db_config = DatabaseConfig(
         database_path=str(tmp_path / "test_auth.db"),
-        workspace_root=str(tmp_path),
         enable_wal_mode=False,
         connection_timeout=30,
         backup_dir=str(tmp_path / "backups"),
@@ -302,7 +301,6 @@ async def auth_test_app(
     test_config = Config(
         database=DatabaseConfig(
             database_path=":memory:",  # Not used, but required
-            workspace_root="/tmp",
         ),
         logging=LoggingConfig(
             level="WARNING",
@@ -352,7 +350,6 @@ async def auth_disabled_test_app(
     test_config = Config(
         database=DatabaseConfig(
             database_path=":memory:",
-            workspace_root="/tmp",
         ),
         logging=LoggingConfig(
             level="WARNING",

@@ -10,7 +10,7 @@ into a single cohesive class. It orchestrates:
 
 Example:
     >>> from fuzzbin.services import VideoService
-    >>> 
+    >>>
     >>> async def my_route(video_service: VideoService = Depends(get_video_service)):
     ...     video = await video_service.get_with_relationships(video_id)
     ...     await video_service.organize(video_id, dry_run=False)
@@ -174,10 +174,12 @@ class VideoService(BaseService):
         """
         if not self._file_manager_initialized:
             config = self._get_config()
-            workspace_root = self._get_workspace_root()
+            library_dir = self._get_library_dir()
+            config_dir = self._get_config_dir()
             self._file_manager = FileManager(
                 config=config.file_manager,
-                workspace_root=workspace_root,
+                library_dir=library_dir,
+                config_dir=config_dir,
                 organizer_config=config.organizer,
                 thumbnail_config=config.thumbnail,
             )
@@ -205,9 +207,7 @@ class VideoService(BaseService):
             NotFoundError: If video not found
         """
         try:
-            video = await self.repository.get_video_by_id(
-                video_id, include_deleted=include_deleted
-            )
+            video = await self.repository.get_video_by_id(video_id, include_deleted=include_deleted)
             return video
         except Exception as e:
             raise NotFoundError(

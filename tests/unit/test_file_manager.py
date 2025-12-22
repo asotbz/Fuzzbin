@@ -67,28 +67,36 @@ class TestFileManagerInit:
     def test_basic_init(self, tmp_path):
         """Test basic initialization."""
         config = FileManagerConfig()
-        fm = FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        fm = FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
         assert fm.config == config
-        assert fm.workspace_root == tmp_path
-        assert fm.trash_dir == tmp_path / ".trash"
+        assert fm.library_dir == library_dir
+        assert fm.workspace_root == library_dir  # Backward compat alias
+        assert fm.trash_dir == library_dir / ".trash"
+        assert fm.thumbnail_cache_dir == config_dir / ".thumbnails"
         assert fm.organizer_config is None
 
     def test_init_with_organizer_config(self, tmp_path):
         """Test initialization with organizer config."""
         config = FileManagerConfig()
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
         org_config = OrganizerConfig(path_pattern="{artist}/{title}")
-        fm = FileManager(config, workspace_root=tmp_path, organizer_config=org_config)
+        fm = FileManager(config, library_dir=library_dir, config_dir=config_dir, organizer_config=org_config)
 
         assert fm.organizer_config == org_config
 
     def test_from_config(self, tmp_path):
         """Test factory method."""
         config = FileManagerConfig(trash_dir=".deleted")
-        fm = FileManager.from_config(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        fm = FileManager.from_config(config, library_dir=library_dir, config_dir=config_dir)
 
         assert fm.config == config
-        assert fm.trash_dir == tmp_path / ".deleted"
+        assert fm.trash_dir == library_dir / ".deleted"
 
 
 class TestComputeFileHash:
@@ -98,7 +106,9 @@ class TestComputeFileHash:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig(chunk_size=1024)
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest_asyncio.fixture
     async def test_file(self, tmp_path):
@@ -135,7 +145,9 @@ class TestComputeFileHash:
     async def test_hash_file_too_large(self, tmp_path):
         """Test error for file exceeding max size."""
         config = FileManagerConfig(max_file_size=10)
-        fm = FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        fm = FileManager(config, library_dir=library_dir, config_dir=config_dir)
         
         # Create file larger than limit
         large_file = tmp_path / "large.mp4"
@@ -152,7 +164,9 @@ class TestVerifyFileExists:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig()
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest.mark.asyncio
     async def test_existing_file(self, file_manager, tmp_path):
@@ -177,7 +191,9 @@ class TestMoveVideoAtomic:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig(verify_after_move=True)
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest_asyncio.fixture
     async def source_file(self, tmp_path):
@@ -357,7 +373,9 @@ class TestSoftDelete:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig(trash_dir=".trash")
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest_asyncio.fixture
     async def video_file(self, tmp_path):
@@ -415,7 +433,9 @@ class TestRestore:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig(trash_dir=".trash")
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest_asyncio.fixture
     async def trash_file(self, tmp_path):
@@ -488,7 +508,9 @@ class TestHardDelete:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig()
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest_asyncio.fixture
     async def video_file(self, tmp_path):
@@ -543,7 +565,9 @@ class TestFindDuplicates:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig()
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest.mark.asyncio
     async def test_find_duplicates_by_hash_no_hash(self, file_manager, tmp_path):
@@ -606,7 +630,9 @@ class TestVerifyLibrary:
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
         config = FileManagerConfig(trash_dir=".trash")
-        return FileManager(config, workspace_root=tmp_path)
+        library_dir = tmp_path / "music_videos"
+        config_dir = tmp_path / "config"
+        return FileManager(config, library_dir=library_dir, config_dir=config_dir)
 
     @pytest.mark.asyncio
     async def test_verify_finds_missing_files(self, file_manager, tmp_path):
@@ -635,8 +661,10 @@ class TestVerifyLibrary:
     @pytest.mark.asyncio
     async def test_verify_finds_orphaned_files(self, file_manager, tmp_path):
         """Test verification finds orphaned files."""
-        # Create an orphaned video file
-        orphan = tmp_path / "orphan.mp4"
+        # Create an orphaned video file in the library_dir (not tmp_path root)
+        library_dir = tmp_path / "music_videos"
+        library_dir.mkdir(parents=True, exist_ok=True)
+        orphan = library_dir / "orphan.mp4"
         orphan.write_text("orphan content")
         
         # Mock repository with no videos

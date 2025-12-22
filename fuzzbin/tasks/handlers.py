@@ -298,11 +298,16 @@ async def handle_youtube_download(job: Job) -> None:
     config = fuzzbin.get_config()
     repository = await fuzzbin.get_repository()
 
-    # Determine output directory
+    # Determine output directory - default to downloads in library_dir
     if output_directory:
         output_path = Path(output_directory)
     else:
-        output_path = Path(config.file_manager.workspace_root) / "downloads"
+        library_dir = config.library_dir
+        if not library_dir:
+            from fuzzbin.common.config import _get_default_library_dir
+
+            library_dir = _get_default_library_dir()
+        output_path = library_dir / "downloads"
 
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -324,9 +329,7 @@ async def handle_youtube_download(job: Job) -> None:
                 logger.info("youtube_download_job_cancelled", job_id=job.id)
                 return
 
-            job.update_progress(
-                idx - 1, len(video_ids), f"Processing video {video_id}..."
-            )
+            job.update_progress(idx - 1, len(video_ids), f"Processing video {video_id}...")
 
             try:
                 # Get video from database
@@ -365,20 +368,14 @@ async def handle_youtube_download(job: Job) -> None:
                         raise asyncio.CancelledError("Job cancelled")
                     # Update job with download progress
                     percent = progress.percent / 100.0
-                    overall_progress = (current_video_idx - 1 + percent) / len(
-                        video_ids
-                    )
+                    overall_progress = (current_video_idx - 1 + percent) / len(video_ids)
                     job.progress = min(overall_progress, 1.0)
-                    job.current_step = (
-                        f"Downloading {video.title}: {progress.percent:.1f}%"
-                    )
+                    job.current_step = f"Downloading {video.title}: {progress.percent:.1f}%"
 
                 hooks = DownloadHooks(on_progress=on_progress)
 
                 # Generate output filename
-                safe_title = "".join(
-                    c if c.isalnum() or c in " -_" else "_" for c in video.title
-                )
+                safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in video.title)
                 output_file = output_path / f"{safe_title}.mp4"
 
                 # Download video
@@ -390,9 +387,7 @@ async def handle_youtube_download(job: Job) -> None:
                 )
 
                 # Update database with file path
-                await repository.update_video(
-                    video_id, file_path=str(result.file_path)
-                )
+                await repository.update_video(video_id, file_path=str(result.file_path))
 
                 downloaded += 1
                 logger.info(
@@ -406,9 +401,7 @@ async def handle_youtube_download(job: Job) -> None:
                 raise
             except Exception as e:
                 failed += 1
-                failed_videos.append(
-                    {"video_id": video_id, "error": str(e)}
-                )
+                failed_videos.append({"video_id": video_id, "error": str(e)})
                 logger.error(
                     "video_download_failed",
                     video_id=video_id,
@@ -520,9 +513,7 @@ async def handle_duplicate_resolution(job: Job) -> None:
         if video_id in processed_ids:
             continue
 
-        job.update_progress(
-            idx, len(video_ids), f"Scanning video {video_id} for duplicates..."
-        )
+        job.update_progress(idx, len(video_ids), f"Scanning video {video_id} for duplicates...")
 
         try:
             # Find duplicates for this video
@@ -561,9 +552,9 @@ async def handle_duplicate_resolution(job: Job) -> None:
                 # Apply resolution strategy if not dry_run
                 if not dry_run and strategy != "report_only":
                     # Determine which to keep based on strategy
-                    all_videos_in_group = [
-                        await repository.get_video(video_id)
-                    ] + [await repository.get_video(d.video_id) for d in duplicates]
+                    all_videos_in_group = [await repository.get_video(video_id)] + [
+                        await repository.get_video(d.video_id) for d in duplicates
+                    ]
                     all_videos_in_group = [v for v in all_videos_in_group if v]
 
                     if strategy == "keep_best":
@@ -576,9 +567,7 @@ async def handle_duplicate_resolution(job: Job) -> None:
                         all_videos_in_group.sort(key=get_size, reverse=True)
                     elif strategy == "keep_newest":
                         # Keep the newest by created_at
-                        all_videos_in_group.sort(
-                            key=lambda v: v.created_at or 0, reverse=True
-                        )
+                        all_videos_in_group.sort(key=lambda v: v.created_at or 0, reverse=True)
                     # keep_first uses original order
 
                     # Delete all except first
@@ -696,9 +685,7 @@ async def handle_metadata_enrich(job: Job) -> None:
             if job.status == JobStatus.CANCELLED:
                 return
 
-            job.update_progress(
-                idx, len(video_ids), f"Enriching video {video_id}..."
-            )
+            job.update_progress(idx, len(video_ids), f"Enriching video {video_id}...")
 
             try:
                 # Get video
@@ -721,9 +708,7 @@ async def handle_metadata_enrich(job: Job) -> None:
                         if results:
                             # Get full details of best match
                             best_match = results[0]
-                            video_data = await imvdb_client.get_video(
-                                best_match.id
-                            )
+                            video_data = await imvdb_client.get_video(best_match.id)
 
                             # Map IMVDb fields to our model
                             if video_data:
@@ -759,9 +744,7 @@ async def handle_metadata_enrich(job: Job) -> None:
                                 updates["genre"] = best.genre[0] if best.genre else None
                             if (overwrite or not video.year) and best.year:
                                 updates["year"] = int(best.year)
-                            if (
-                                overwrite or not getattr(video, "discogs_id", None)
-                            ) and best.id:
+                            if (overwrite or not getattr(video, "discogs_id", None)) and best.id:
                                 updates["discogs_release_id"] = best.id
 
                             was_enriched = bool(updates)
@@ -902,13 +885,15 @@ async def handle_metadata_refresh(job: Job) -> None:
     videos_to_refresh = videos_to_refresh[:limit]
 
     if not videos_to_refresh:
-        job.mark_completed({
-            "refreshed": 0,
-            "skipped": 0,
-            "failed": 0,
-            "total_checked": len(videos),
-            "message": "No videos need refresh",
-        })
+        job.mark_completed(
+            {
+                "refreshed": 0,
+                "skipped": 0,
+                "failed": 0,
+                "total_checked": len(videos),
+                "message": "No videos need refresh",
+            }
+        )
         return
 
     job.update_progress(0, len(videos_to_refresh), "Refreshing metadata...")
@@ -926,12 +911,14 @@ async def handle_metadata_refresh(job: Job) -> None:
         imvdb_config = config.apis.get("imvdb")
         if imvdb_config:
             from fuzzbin.api.imvdb_client import IMVDbClient
+
             imvdb_client = IMVDbClient.from_config(imvdb_config)
 
     if "discogs" in sources:
         discogs_config = config.apis.get("discogs")
         if discogs_config:
             from fuzzbin.api.discogs_client import DiscogsClient
+
             discogs_client = DiscogsClient.from_config(discogs_config)
 
     try:
@@ -940,9 +927,7 @@ async def handle_metadata_refresh(job: Job) -> None:
                 return
 
             video_id = video["id"]
-            job.update_progress(
-                idx, len(videos_to_refresh), f"Refreshing video {video_id}..."
-            )
+            job.update_progress(idx, len(videos_to_refresh), f"Refreshing video {video_id}...")
 
             try:
                 title = video.get("title")
@@ -1007,13 +992,15 @@ async def handle_metadata_refresh(job: Job) -> None:
         if discogs_client:
             await discogs_client.aclose()
 
-    job.mark_completed({
-        "refreshed": refreshed,
-        "skipped": skipped,
-        "failed": failed,
-        "total_checked": len(videos),
-        "videos_needing_refresh": len(videos_to_refresh),
-    })
+    job.mark_completed(
+        {
+            "refreshed": refreshed,
+            "skipped": skipped,
+            "failed": failed,
+            "total_checked": len(videos),
+            "videos_needing_refresh": len(videos_to_refresh),
+        }
+    )
 
     logger.info(
         "metadata_refresh_job_completed",
@@ -1060,11 +1047,16 @@ async def handle_library_scan(job: Job) -> None:
     config = fuzzbin.get_config()
     repository = await fuzzbin.get_repository()
 
-    # Determine directory
+    # Determine directory - default to library_dir
     if directory_str:
         directory = Path(directory_str)
     else:
-        directory = Path(config.database.workspace_root or ".")
+        library_dir = config.library_dir
+        if not library_dir:
+            from fuzzbin.common.config import _get_default_library_dir
+
+            library_dir = _get_default_library_dir()
+        directory = library_dir
 
     if not directory.exists():
         raise ValueError(f"Directory not found: {directory}")
@@ -1074,12 +1066,14 @@ async def handle_library_scan(job: Job) -> None:
     nfo_files = list(directory.glob(pattern))
 
     if not nfo_files:
-        job.mark_completed({
-            "new_files_found": 0,
-            "nfo_imported": 0,
-            "errors": 0,
-            "message": "No NFO files found",
-        })
+        job.mark_completed(
+            {
+                "new_files_found": 0,
+                "nfo_imported": 0,
+                "errors": 0,
+                "message": "No NFO files found",
+            }
+        )
         return
 
     new_files_found = 0
@@ -1112,12 +1106,14 @@ async def handle_library_scan(job: Job) -> None:
         # Just count files
         new_files_found = len(nfo_files)
 
-    job.mark_completed({
-        "new_files_found": new_files_found,
-        "nfo_imported": nfo_imported,
-        "errors": errors,
-        "directory": str(directory),
-    })
+    job.mark_completed(
+        {
+            "new_files_found": new_files_found,
+            "nfo_imported": nfo_imported,
+            "errors": errors,
+            "directory": str(directory),
+        }
+    )
 
     logger.info(
         "library_scan_job_completed",
@@ -1228,9 +1224,13 @@ async def handle_import(job: Job) -> None:
                             # Create video record
                             record = {
                                 "title": video_data.song_title or video_data.title,
-                                "artist": ", ".join(video_data.artists) if video_data.artists else None,
+                                "artist": (
+                                    ", ".join(video_data.artists) if video_data.artists else None
+                                ),
                                 "imvdb_video_id": str(video_data.id),
-                                "director": video_data.directors[0] if video_data.directors else None,
+                                "director": (
+                                    video_data.directors[0] if video_data.directors else None
+                                ),
                                 "year": video_data.year,
                                 "status": "complete",
                             }
@@ -1247,9 +1247,7 @@ async def handle_import(job: Job) -> None:
                     if job.status == JobStatus.CANCELLED:
                         return
 
-                    job.update_progress(
-                        len(video_ids) + idx, total, f"Searching: {query}..."
-                    )
+                    job.update_progress(len(video_ids) + idx, total, f"Searching: {query}...")
 
                     try:
                         results = await client.search_videos(query=query)
@@ -1258,9 +1256,15 @@ async def handle_import(job: Job) -> None:
                             if video_data:
                                 record = {
                                     "title": video_data.song_title or video_data.title,
-                                    "artist": ", ".join(video_data.artists) if video_data.artists else None,
+                                    "artist": (
+                                        ", ".join(video_data.artists)
+                                        if video_data.artists
+                                        else None
+                                    ),
                                     "imvdb_video_id": str(video_data.id),
-                                    "director": video_data.directors[0] if video_data.directors else None,
+                                    "director": (
+                                        video_data.directors[0] if video_data.directors else None
+                                    ),
                                     "year": video_data.year,
                                     "status": "complete",
                                 }
@@ -1276,12 +1280,14 @@ async def handle_import(job: Job) -> None:
     else:
         raise ValueError(f"Unknown import source: {source}")
 
-    job.mark_completed({
-        "imported": imported,
-        "failed": failed,
-        "total": total,
-        "source": source,
-    })
+    job.mark_completed(
+        {
+            "imported": imported,
+            "failed": failed,
+            "total": total,
+            "source": source,
+        }
+    )
 
     logger.info(
         "import_job_completed",

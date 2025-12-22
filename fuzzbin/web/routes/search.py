@@ -13,7 +13,12 @@ from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
 
 from ..dependencies import get_current_user, get_repository, require_auth
-from ..schemas.common import PageParams, PaginatedResponse
+from ..schemas.common import (
+    PageParams,
+    PaginatedResponse,
+    SearchSuggestionsResponse,
+    AUTH_ERROR_RESPONSES,
+)
 from ..schemas.video import VideoResponse
 
 logger = structlog.get_logger(__name__)
@@ -62,7 +67,9 @@ class FacetsResponse(BaseModel):
     total_videos: int = Field(default=0, description="Total number of videos in the library")
 
     @classmethod
-    def from_repo_facets(cls, facets: Dict[str, List[dict]], total_videos: int = 0) -> "FacetsResponse":
+    def from_repo_facets(
+        cls, facets: Dict[str, List[dict]], total_videos: int = 0
+    ) -> "FacetsResponse":
         """Create from repository facets dict."""
         return cls(
             tags=[FacetItem(**f) for f in facets.get("tags", [])],
@@ -186,7 +193,8 @@ async def search_videos(
 
 @router.get(
     "/suggestions",
-    response_model=dict,
+    response_model=SearchSuggestionsResponse,
+    responses={**AUTH_ERROR_RESPONSES},
     summary="Get search suggestions",
     description="Get autocomplete suggestions based on partial query.",
 )
@@ -194,7 +202,7 @@ async def search_suggestions(
     q: str = Query(..., min_length=2, description="Partial search query"),
     limit: int = Query(default=10, ge=1, le=50, description="Maximum suggestions"),
     repo: VideoRepository = Depends(get_repository),
-) -> dict:
+) -> SearchSuggestionsResponse:
     """
     Get search suggestions for autocomplete.
 
@@ -206,29 +214,27 @@ async def search_suggestions(
     Note: This is a simple implementation. For production, consider
     using a dedicated search index like Elasticsearch or MeiliSearch.
     """
-    suggestions = {
-        "titles": [],
-        "artists": [],
-        "albums": [],
-    }
-
     q_lower = q.lower()
 
     # Search videos for title matches
     query = repo.query().where_title(q).limit(limit)
     videos = await query.execute()
-    suggestions["titles"] = list(set(v["title"] for v in videos if v.get("title")))[:limit]
+    titles = list(set(v["title"] for v in videos if v.get("title")))[:limit]
 
     # Search for artist matches
-    artists = await repo.list_artists()
-    suggestions["artists"] = [a["name"] for a in artists if q_lower in a["name"].lower()][:limit]
+    artists_list = await repo.list_artists()
+    artists = [a["name"] for a in artists_list if q_lower in a["name"].lower()][:limit]
 
     # Search for album matches (from videos)
     query = repo.query().where_album(q).limit(limit * 2)
     videos = await query.execute()
-    suggestions["albums"] = list(set(v["album"] for v in videos if v.get("album")))[:limit]
+    albums = list(set(v["album"] for v in videos if v.get("album")))[:limit]
 
-    return suggestions
+    return SearchSuggestionsResponse(
+        titles=titles,
+        artists=artists,
+        albums=albums,
+    )
 
 
 # ==================== Facet Endpoints ====================

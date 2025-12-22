@@ -11,6 +11,7 @@ from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
 
 from ..dependencies import get_repository, require_auth
+from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/videos/bulk", tags=["Bulk Operations"])
@@ -133,6 +134,7 @@ def _validate_bulk_limit(count: int, max_items: int) -> None:
 @router.post(
     "/update",
     response_model=BulkOperationResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Bulk update videos",
     description="Update multiple videos with the same field values in a single transaction.",
 )
@@ -164,6 +166,7 @@ async def bulk_update_videos(
 @router.post(
     "/delete",
     response_model=BulkOperationResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Bulk delete videos",
     description="Delete multiple videos (soft delete by default, hard delete optional).",
 )
@@ -196,6 +199,7 @@ async def bulk_delete_videos(
 @router.post(
     "/status",
     response_model=BulkOperationResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Bulk update status",
     description="Update status for multiple videos in a single transaction.",
 )
@@ -230,6 +234,7 @@ async def bulk_update_status(
 @router.post(
     "/tags",
     response_model=BulkOperationResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Bulk apply tags",
     description="Apply tags to multiple videos. Can add to existing tags or replace them.",
 )
@@ -264,6 +269,11 @@ async def bulk_apply_tags(
 @router.post(
     "/collections",
     response_model=BulkOperationResult,
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        400: COMMON_ERROR_RESPONSES[400],
+        404: COMMON_ERROR_RESPONSES[404],
+    },
     summary="Bulk add to collection",
     description="Add multiple videos to a collection in a single transaction.",
 )
@@ -296,6 +306,7 @@ async def bulk_add_to_collection(
 @router.post(
     "/organize",
     response_model=BulkOperationResult,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Bulk update file paths",
     description="Update file paths for multiple videos after file organization.",
 )

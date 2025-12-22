@@ -86,11 +86,7 @@ async def job_progress_websocket(websocket: WebSocket, job_id: str) -> None:
                 break
 
             # Only send update if something changed
-            if (
-                job.progress != last_progress
-                or job.current_step != last_step
-                or job.is_terminal
-            ):
+            if job.progress != last_progress or job.current_step != last_step or job.is_terminal:
                 update = JobProgressUpdate(
                     job_id=job.id,
                     status=job.status,
