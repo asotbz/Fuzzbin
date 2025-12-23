@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 import fuzzbin
-from fuzzbin.auth import decode_token, UserInfo
+from fuzzbin.auth import check_token_revoked_in_db, decode_token, UserInfo
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import ImportService, SearchService, VideoService
 from fuzzbin.services.base import ServiceCallback
@@ -98,6 +98,7 @@ async def get_current_user(
     # Extract user info from token
     user_id = payload.get("user_id")
     username = payload.get("sub")
+    jti = payload.get("jti")
 
     if not user_id or not username:
         raise HTTPException(
@@ -105,6 +106,16 @@ async def get_current_user(
             detail="Invalid token payload",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Enforce DB-backed denylist checks (cache-first with DB fallback)
+    if jti:
+        is_revoked = await check_token_revoked_in_db(jti=jti, connection=repo._connection)
+        if is_revoked:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     # Verify user exists and is active in database
     cursor = await repo._connection.execute(

@@ -293,7 +293,11 @@ async def change_password(
     Change the password for the authenticated user.
 
     Requires authentication. Validates current password before updating.
-    After password change, all existing tokens for this user are invalidated.
+    Note: Password change does not guarantee immediate server-side revocation of
+    previously issued JWTs. Clients should discard existing tokens and re-authenticate.
+
+    Remediation note: implement true "revoke all tokens" with a DB-backed mechanism
+    (e.g., per-user token versioning) so old tokens are reliably rejected.
     """
     if not user:
         raise HTTPException(

@@ -217,7 +217,7 @@ a Bearer token in the `Authorization` header:
 Authorization: Bearer <your-jwt-token>
 ```
 
-Obtain a token via `POST /auth/token` with username/password credentials.
+Obtain a token via `POST /auth/login` with username/password credentials.
 
 ## WebSocket API
 
@@ -330,6 +330,7 @@ ws://localhost:8000/ws/jobs/{job_id}
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Password-Change-Required", "Retry-After"],
     )
 
     # Add request logging middleware if enabled
@@ -414,7 +415,7 @@ ws://localhost:8000/ws/jobs/{job_id}
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "description": "JWT token obtained from POST /auth/token",
+                "description": "JWT token obtained from POST /auth/login",
             }
         }
         app.openapi_schema = openapi_schema
