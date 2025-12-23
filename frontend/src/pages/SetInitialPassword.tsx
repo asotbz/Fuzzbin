@@ -71,13 +71,13 @@ export default function SetInitialPasswordPage() {
 
       const data = (await resp.json()) as TokenResponse
       setTokens({ accessToken: data.access_token, refreshToken: data.refresh_token })
-      navigate('/')
+      navigate('/library')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (tokens.accessToken) return <Navigate to="/" replace />
+  if (tokens.accessToken) return <Navigate to="/library" replace />
 
   return (
     <div className="centeredPage">
