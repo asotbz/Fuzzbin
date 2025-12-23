@@ -7,6 +7,9 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 import fuzzbin
+from fuzzbin.api.discogs_client import DiscogsClient
+from fuzzbin.api.imvdb_client import IMVDbClient
+from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth import check_token_revoked_in_db, decode_token, UserInfo
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import ImportService, SearchService, VideoService
@@ -15,6 +18,14 @@ from fuzzbin.services.base import ServiceCallback
 from .settings import APISettings, get_settings
 
 logger = structlog.get_logger(__name__)
+
+# ==================== Shared API Client Singletons ====================
+# These clients are initialized once and shared across all requests for
+# proper rate limiting, connection pooling, and cache sharing.
+
+_imvdb_client: Optional[IMVDbClient] = None
+_discogs_client: Optional[DiscogsClient] = None
+_spotify_client: Optional[SpotifyClient] = None
 
 # Optional bearer scheme - doesn't require auth header, allows checking if present
 optional_bearer = HTTPBearer(auto_error=False)
@@ -265,3 +276,163 @@ async def get_search_service(
             return await search_service.search_videos(q)
     """
     return SearchService(repository=repo)
+
+
+# ==================== External API Client Dependencies ====================
+
+
+async def get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
+    """
+    Dependency that provides a shared IMVDb client instance.
+
+    The client is initialized once on first request and reused across all
+    subsequent requests. This ensures proper rate limiting, connection pooling,
+    and cache sharing across the application.
+
+    The client is cleaned up during application shutdown via the lifespan handler.
+
+    Yields:
+        IMVDbClient instance
+
+    Raises:
+        HTTPException(503): If IMVDb API is not configured
+
+    Example:
+        @router.get("/imvdb/videos/{video_id}")
+        async def get_video(
+            video_id: int,
+            client: IMVDbClient = Depends(get_imvdb_client)
+        ):
+            return await client.get_video(video_id)
+    """
+    global _imvdb_client
+
+    if _imvdb_client is None:
+        config = fuzzbin.get_config()
+        api_config = config.apis.get("imvdb")
+
+        if not api_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="IMVDb API is not configured",
+            )
+
+        _imvdb_client = IMVDbClient.from_config(api_config)
+        await _imvdb_client.__aenter__()
+        logger.info("imvdb_client_initialized_singleton")
+
+    yield _imvdb_client
+
+
+async def get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
+    """
+    Dependency that provides a shared Discogs client instance.
+
+    The client is initialized once on first request and reused across all
+    subsequent requests. This ensures proper rate limiting, connection pooling,
+    and cache sharing across the application.
+
+    The client is cleaned up during application shutdown via the lifespan handler.
+
+    Yields:
+        DiscogsClient instance
+
+    Raises:
+        HTTPException(503): If Discogs API is not configured
+
+    Example:
+        @router.get("/discogs/masters/{master_id}")
+        async def get_master(
+            master_id: int,
+            client: DiscogsClient = Depends(get_discogs_client)
+        ):
+            return await client.get_master(master_id)
+    """
+    global _discogs_client
+
+    if _discogs_client is None:
+        config = fuzzbin.get_config()
+        api_config = config.apis.get("discogs")
+
+        if not api_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Discogs API is not configured",
+            )
+
+        _discogs_client = DiscogsClient.from_config(api_config)
+        await _discogs_client.__aenter__()
+        logger.info("discogs_client_initialized_singleton")
+
+    yield _discogs_client
+
+
+async def get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
+    """
+    Dependency that provides a shared Spotify client instance.
+
+    The client is initialized once on first request and reused across all
+    subsequent requests. This ensures proper rate limiting, connection pooling,
+    and cache sharing across the application.
+
+    The client handles OAuth token management automatically using the
+    SpotifyTokenManager for Client Credentials flow.
+
+    The client is cleaned up during application shutdown via the lifespan handler.
+
+    Yields:
+        SpotifyClient instance
+
+    Raises:
+        HTTPException(503): If Spotify API is not configured
+
+    Example:
+        @router.get("/spotify/playlists/{playlist_id}")
+        async def get_playlist(
+            playlist_id: str,
+            client: SpotifyClient = Depends(get_spotify_client)
+        ):
+            return await client.get_playlist(playlist_id)
+    """
+    global _spotify_client
+
+    if _spotify_client is None:
+        config = fuzzbin.get_config()
+        api_config = config.apis.get("spotify")
+
+        if not api_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spotify API is not configured",
+            )
+
+        _spotify_client = SpotifyClient.from_config(api_config)
+        await _spotify_client.__aenter__()
+        logger.info("spotify_client_initialized_singleton")
+
+    yield _spotify_client
+
+
+async def cleanup_api_clients() -> None:
+    """
+    Clean up shared API client instances.
+
+    Called during application shutdown to properly close HTTP connections
+    and release resources.
+    """
+    global _imvdb_client, _discogs_client, _spotify_client
+
+    if _imvdb_client is not None:
+        await _imvdb_client.__aexit__(None, None, None)
+        _imvdb_client = None
+        logger.info("imvdb_client_cleanup_complete")
+
+    if _discogs_client is not None:
+        await _discogs_client.__aexit__(None, None, None)
+        _discogs_client = None
+        logger.info("discogs_client_cleanup_complete")
+
+    if _spotify_client is not None:
+        await _spotify_client.__aexit__(None, None, None)
+        _spotify_client = None
+        logger.info("spotify_client_cleanup_complete")

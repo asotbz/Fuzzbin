@@ -5176,54 +5176,77 @@
         ]
       }
     },
-    "/imports/youtube": {
-      "post": {
+    "/imvdb/search/videos": {
+      "get": {
         "tags": [
-          "Imports"
+          "IMVDb"
         ],
-        "summary": "Import from YouTube",
-        "description": "Import videos from YouTube URLs. Small batches run synchronously, larger batches require background task queue.",
-        "operationId": "import_from_youtube_imports_youtube_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/YouTubeImportRequest"
-              }
-            }
+        "summary": "Search for music videos",
+        "description": "Search IMVDb for music videos by artist and track title.\n\nReturns paginated results with video thumbnails, release year, and artist info.\nUse `/imvdb/videos/{video_id}` to get full details including credits and sources.\n\n**Rate Limited:** Shares rate limit with other IMVDb endpoints.\n\n**Cached:** Results are cached for 30 minutes.",
+        "operationId": "search_videos_imvdb_search_videos_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artist",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Artist name to search for",
+              "title": "Artist"
+            },
+            "description": "Artist name to search for"
           },
-          "required": true
-        },
+          {
+            "name": "track",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Track/song title to search for",
+              "title": "Track"
+            },
+            "description": "Track/song title to search for"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Results per page",
+              "default": 25,
+              "title": "Per Page"
+            },
+            "description": "Results per page"
+          }
+        ],
         "responses": {
-          "202": {
-            "description": "Successful Response",
+          "200": {
+            "description": "Paginated list of matching music videos",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImportResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Import endpoints disabled"
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
+                  "$ref": "#/components/schemas/IMVDbVideoSearchResponse"
                 }
               }
             }
@@ -5238,69 +5261,69 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
-    "/imports/imvdb": {
-      "post": {
+    "/imvdb/search/entities": {
+      "get": {
         "tags": [
-          "Imports"
+          "IMVDb"
         ],
-        "summary": "Import from IMVDb",
-        "description": "Import video metadata from IMVDb by ID or search query.",
-        "operationId": "import_from_imvdb_imports_imvdb_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IMVDbImportRequest"
-              }
-            }
+        "summary": "Search for artists/directors/entities",
+        "description": "Search IMVDb for entities (artists, directors, production companies, etc.).\n\nReturns paginated results with entity IDs, Discogs links, and video counts.\nUse `/imvdb/entities/{entity_id}` to get full details including video listings.\n\n**Rate Limited:** Shares rate limit with other IMVDb endpoints.\n\n**Cached:** Results are cached for 30 minutes.",
+        "operationId": "search_entities_imvdb_search_entities_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Search query (artist name, director, etc.)",
+              "title": "Q"
+            },
+            "description": "Search query (artist name, director, etc.)"
           },
-          "required": true
-        },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Results per page",
+              "default": 25,
+              "title": "Per Page"
+            },
+            "description": "Results per page"
+          }
+        ],
         "responses": {
-          "202": {
-            "description": "Successful Response",
+          "200": {
+            "description": "Paginated list of matching entities",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImportResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
+                  "$ref": "#/components/schemas/IMVDbEntitySearchResponse"
                 }
               }
             }
@@ -5315,12 +5338,649 @@
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/imvdb/videos/{video_id}": {
+      "get": {
+        "tags": [
+          "IMVDb"
+        ],
+        "summary": "Get video details",
+        "description": "Get detailed metadata for an IMVDb video.\n\nReturns full video information including:\n- Primary and featured artists\n- Directors and full crew credits\n- Video sources (YouTube, Vimeo, etc.)\n- Multiple version information\n- Production status and release year\n\n**Rate Limited:** Shares rate limit with other IMVDb endpoints.\n\n**Cached:** Results are cached for 30 minutes.",
+        "operationId": "get_video_imvdb_videos__video_id__get",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full video metadata including credits and sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IMVDbVideoDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imvdb/entities/{entity_id}": {
+      "get": {
+        "tags": [
+          "IMVDb"
+        ],
+        "summary": "Get entity details",
+        "description": "Get detailed metadata for an IMVDb entity (artist, director, etc.).\n\nReturns full entity information including:\n- Profile information and biography\n- Discogs ID for cross-referencing\n- Videos as primary artist\n- Videos as featured artist\n\n**Rate Limited:** Shares rate limit with other IMVDb endpoints.\n\n**Cached:** Results are cached for 30 minutes.",
+        "operationId": "get_entity_imvdb_entities__entity_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full entity metadata including video listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IMVDbEntityDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/discogs/search": {
+      "get": {
+        "tags": [
+          "Discogs"
+        ],
+        "summary": "Search for releases",
+        "description": "Search Discogs for music releases by artist and/or track title.\n\nReturns paginated results with release thumbnails, year, format, and label info.\nUse `/discogs/masters/{master_id}` or `/discogs/releases/{release_id}` for full details.\n\n**Search modes:**\n- Use `artist` + `track` for targeted music video lookups\n- Use `q` for general free-text search\n- Default type is `master` (canonical release), use `release` for specific pressings\n\n**Rate Limited:** 60 requests/minute (authenticated). Shares rate limit with other Discogs endpoints.\n\n**Cached:** Results are cached for 2 hours.",
+        "operationId": "search_releases_discogs_search_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artist",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Artist name to search for",
+              "title": "Artist"
+            },
+            "description": "Artist name to search for"
+          },
+          {
+            "name": "track",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Track title to search for",
+              "title": "Track"
+            },
+            "description": "Track title to search for"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "General search query",
+              "title": "Q"
+            },
+            "description": "General search query"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Result type: master, release, artist",
+              "default": "master",
+              "title": "Type"
+            },
+            "description": "Result type: master, release, artist"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Results per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Results per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of matching releases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscogsSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/discogs/masters/{master_id}": {
+      "get": {
+        "tags": [
+          "Discogs"
+        ],
+        "summary": "Get master release details",
+        "description": "Get detailed metadata for a Discogs master release.\n\nA master release represents the canonical version of an album across\nall its various pressings and formats.\n\nReturns full information including:\n- Complete tracklist with durations\n- Artists with proper credits\n- Genres and styles\n- Cover images at various sizes\n- Related videos (music videos, documentaries)\n- Market statistics (for sale count, lowest price)\n- Links to all release versions\n\n**Rate Limited:** 60 requests/minute (authenticated).\n\n**Cached:** Results are cached for 2 hours.",
+        "operationId": "get_master_discogs_masters__master_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "master_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Master Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full master release metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscogsMaster"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/discogs/releases/{release_id}": {
+      "get": {
+        "tags": [
+          "Discogs"
+        ],
+        "summary": "Get specific release details",
+        "description": "Get detailed metadata for a specific Discogs release.\n\nA release represents a specific pressing/version of an album with\nunique catalog numbers, barcodes, and format details.\n\nReturns full information including:\n- Complete tracklist with durations\n- Label and catalog information\n- Format details (vinyl, CD, etc.)\n- All identifiers (barcodes, matrix numbers)\n- Extra artists (producers, engineers, etc.)\n- Release notes and credits\n- Cover images\n- Related videos\n\n**Rate Limited:** 60 requests/minute (authenticated).\n\n**Cached:** Results are cached for 2 hours.",
+        "operationId": "get_release_discogs_releases__release_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Release Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full release metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscogsRelease"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/discogs/artists/{artist_id}/releases": {
+      "get": {
+        "tags": [
+          "Discogs"
+        ],
+        "summary": "Get artist discography",
+        "description": "Get an artist's complete discography from Discogs.\n\nReturns a paginated list of all releases associated with an artist,\nincluding albums, singles, compilations, and appearances.\n\nEach release includes:\n- Release/Master ID and type\n- Title and year\n- Artist role (Main, Remix, Producer, etc.)\n- Thumbnail image\n- Community statistics (want/have counts)\n\n**Rate Limited:** 60 requests/minute (authenticated).\n\n**Cached:** Results are cached for 2 hours.",
+        "operationId": "get_artist_releases_discogs_artists__artist_id__releases_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Artist Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Results per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Results per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort field: year, title, format",
+              "default": "year",
+              "title": "Sort"
+            },
+            "description": "Sort field: year, title, format"
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort order: asc, desc",
+              "default": "desc",
+              "title": "Sort Order"
+            },
+            "description": "Sort order: asc, desc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of artist's releases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscogsArtistReleasesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/spotify/playlists/{playlist_id}": {
+      "get": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Get playlist metadata",
+        "description": "Retrieve metadata for a Spotify playlist by ID.",
+        "operationId": "get_playlist_spotify_playlists__playlist_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Playlist Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyPlaylistSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/spotify/playlists/{playlist_id}/tracks": {
+      "get": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Get playlist tracks (paginated)",
+        "description": "Retrieve tracks from a Spotify playlist with pagination.",
+        "operationId": "get_playlist_tracks_spotify_playlists__playlist_id__tracks_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Playlist Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page (max 100)",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Items per page (max 100)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyPlaylistTracksResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/spotify/playlists/{playlist_id}/tracks/all": {
+      "get": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Get all playlist tracks",
+        "description": "Retrieve all tracks from a Spotify playlist (handles pagination automatically).",
+        "operationId": "get_all_playlist_tracks_spotify_playlists__playlist_id__tracks_all_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Playlist Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyAllTracksResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/spotify/tracks/{track_id}": {
+      "get": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Get track metadata",
+        "description": "Retrieve metadata for a Spotify track by ID.",
+        "operationId": "get_track_spotify_tracks__track_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyTrackSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/exports/nfo": {
@@ -6854,6 +7514,189 @@
           }
         }
       }
+    },
+    "/scan/preview": {
+      "post": {
+        "tags": [
+          "Library Scan"
+        ],
+        "summary": "Preview directory scan",
+        "description": "Scan a directory and preview what would be imported without making changes.",
+        "operationId": "preview_scan_scan_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/scan": {
+      "post": {
+        "tags": [
+          "Library Scan"
+        ],
+        "summary": "Scan and import music videos",
+        "description": "Scan a directory for music videos and import them into the library.\n\n**Import Modes:**\n- `full`: Import all metadata from NFO files, set status to 'imported'\n- `discovery`: Only import title/artist, set status to 'discovered' for follow-on workflows\n\nThe scan runs as a background job. Track progress via:\n- `GET /jobs/{job_id}` for status polling\n- `WebSocket /ws/jobs/{job_id}` for real-time updates",
+        "operationId": "start_scan_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/scan/statuses": {
+      "get": {
+        "tags": [
+          "Library Scan"
+        ],
+        "summary": "Get video status definitions",
+        "description": "Get the list of video statuses and their meanings for workflow planning.",
+        "operationId": "get_status_definitions_scan_statuses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Status Definitions Scan Statuses Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -8172,6 +9015,1257 @@
         "title": "DeleteResponse",
         "description": "Response for delete operation."
       },
+      "DiscogsArtistRef": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Discogs artist ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Artist name"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          },
+          "anv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anv",
+            "description": "Artist name variation"
+          },
+          "join": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join",
+            "description": "Join phrase"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role",
+            "description": "Role"
+          },
+          "tracks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracks",
+            "description": "Track numbers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "resource_url"
+        ],
+        "title": "DiscogsArtistRef",
+        "description": "Artist reference in release data."
+      },
+      "DiscogsArtistRelease": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Release/Master ID"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Type (release, master)"
+          },
+          "main_release": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Release",
+            "description": "Main release ID (for masters)"
+          },
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "description": "Artist name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Release title"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "Artist role (Main, Remix, etc.)"
+          },
+          "thumb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb",
+            "description": "Thumbnail URL"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "Release status"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format",
+            "description": "Release format"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Record label"
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stats",
+            "description": "Community stats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "artist",
+          "title",
+          "resource_url",
+          "role"
+        ],
+        "title": "DiscogsArtistRelease",
+        "description": "Release item in artist's discography."
+      },
+      "DiscogsArtistReleasesResponse": {
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/DiscogsPagination",
+            "description": "Pagination metadata"
+          },
+          "releases": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsArtistRelease"
+            },
+            "type": "array",
+            "title": "Releases",
+            "description": "Artist's releases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pagination"
+        ],
+        "title": "DiscogsArtistReleasesResponse",
+        "description": "Response from artist releases endpoint."
+      },
+      "DiscogsCommunity": {
+        "properties": {
+          "want": {
+            "type": "integer",
+            "title": "Want",
+            "description": "Users who want this",
+            "default": 0
+          },
+          "have": {
+            "type": "integer",
+            "title": "Have",
+            "description": "Users who have this",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DiscogsCommunity",
+        "description": "Community stats for a release."
+      },
+      "DiscogsFormat": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Format name"
+          },
+          "qty": {
+            "type": "string",
+            "title": "Qty",
+            "description": "Quantity"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Additional text"
+          },
+          "descriptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Descriptions",
+            "description": "Format descriptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "qty"
+        ],
+        "title": "DiscogsFormat",
+        "description": "Release format details."
+      },
+      "DiscogsIdentifier": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Identifier type"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Identifier value"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "DiscogsIdentifier",
+        "description": "Release identifier (barcode, matrix, etc.)."
+      },
+      "DiscogsImage": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Image type (primary, secondary)"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Full-size image URL"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          },
+          "uri150": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uri150",
+            "description": "150px thumbnail URL"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width",
+            "description": "Image width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height",
+            "description": "Image height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "uri",
+          "resource_url",
+          "width",
+          "height"
+        ],
+        "title": "DiscogsImage",
+        "description": "Image metadata."
+      },
+      "DiscogsLabel": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Label ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Label name"
+          },
+          "catno": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catno",
+            "description": "Catalog number"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type",
+            "description": "Entity type"
+          },
+          "entity_type_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type Name",
+            "description": "Entity type name"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "resource_url"
+        ],
+        "title": "DiscogsLabel",
+        "description": "Label information."
+      },
+      "DiscogsMaster": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Master ID"
+          },
+          "main_release": {
+            "type": "integer",
+            "title": "Main Release",
+            "description": "Main release ID"
+          },
+          "most_recent_release": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Recent Release",
+            "description": "Most recent release ID"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Discogs web URL"
+          },
+          "versions_url": {
+            "type": "string",
+            "title": "Versions Url",
+            "description": "Versions list API URL"
+          },
+          "main_release_url": {
+            "type": "string",
+            "title": "Main Release Url",
+            "description": "Main release API URL"
+          },
+          "most_recent_release_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Recent Release Url",
+            "description": "Most recent release API URL"
+          },
+          "num_for_sale": {
+            "type": "integer",
+            "title": "Num For Sale",
+            "description": "Copies for sale",
+            "default": 0
+          },
+          "lowest_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Price",
+            "description": "Lowest sale price"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsImage"
+            },
+            "type": "array",
+            "title": "Images",
+            "description": "Cover images"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres",
+            "description": "Genres"
+          },
+          "styles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Styles",
+            "description": "Styles"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "tracklist": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsTrack"
+            },
+            "type": "array",
+            "title": "Tracklist",
+            "description": "Track listing"
+          },
+          "artists": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsArtistRef"
+            },
+            "type": "array",
+            "title": "Artists",
+            "description": "Artists"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Release title"
+          },
+          "data_quality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Quality",
+            "description": "Data quality rating"
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsVideo"
+            },
+            "type": "array",
+            "title": "Videos",
+            "description": "Related videos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "main_release",
+          "resource_url",
+          "uri",
+          "versions_url",
+          "main_release_url"
+        ],
+        "title": "DiscogsMaster",
+        "description": "Master release details."
+      },
+      "DiscogsPagination": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "Current page number"
+          },
+          "pages": {
+            "type": "integer",
+            "title": "Pages",
+            "description": "Total number of pages"
+          },
+          "per_page": {
+            "type": "integer",
+            "title": "Per Page",
+            "description": "Results per page"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items",
+            "description": "Total item count"
+          },
+          "urls": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Urls",
+            "description": "Navigation URLs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "pages",
+          "per_page",
+          "items"
+        ],
+        "title": "DiscogsPagination",
+        "description": "Pagination metadata from Discogs API."
+      },
+      "DiscogsRelease": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Release ID"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "Release status"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Discogs web URL"
+          },
+          "artists": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsArtistRef"
+            },
+            "type": "array",
+            "title": "Artists",
+            "description": "Artists"
+          },
+          "artists_sort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artists Sort",
+            "description": "Sorted artist names"
+          },
+          "labels": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsLabel"
+            },
+            "type": "array",
+            "title": "Labels",
+            "description": "Record labels"
+          },
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsFormat"
+            },
+            "type": "array",
+            "title": "Formats",
+            "description": "Release formats"
+          },
+          "community": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscogsCommunity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Community stats"
+          },
+          "format_quantity": {
+            "type": "integer",
+            "title": "Format Quantity",
+            "description": "Number of format items",
+            "default": 1
+          },
+          "date_added": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Added",
+            "description": "Date added to Discogs"
+          },
+          "date_changed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Changed",
+            "description": "Date last modified"
+          },
+          "num_for_sale": {
+            "type": "integer",
+            "title": "Num For Sale",
+            "description": "Copies for sale",
+            "default": 0
+          },
+          "lowest_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Price",
+            "description": "Lowest sale price"
+          },
+          "master_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Master Id",
+            "description": "Master release ID"
+          },
+          "master_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Master Url",
+            "description": "Master API URL"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Release title"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Release country"
+          },
+          "released": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released",
+            "description": "Release date string"
+          },
+          "released_formatted": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released Formatted",
+            "description": "Formatted release date"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Release notes"
+          },
+          "identifiers": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsIdentifier"
+            },
+            "type": "array",
+            "title": "Identifiers",
+            "description": "Identifiers"
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsVideo"
+            },
+            "type": "array",
+            "title": "Videos",
+            "description": "Related videos"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres",
+            "description": "Genres"
+          },
+          "styles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Styles",
+            "description": "Styles"
+          },
+          "tracklist": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsTrack"
+            },
+            "type": "array",
+            "title": "Tracklist",
+            "description": "Track listing"
+          },
+          "extraartists": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsArtistRef"
+            },
+            "type": "array",
+            "title": "Extraartists",
+            "description": "Additional credits"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsImage"
+            },
+            "type": "array",
+            "title": "Images",
+            "description": "Cover images"
+          },
+          "thumb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb",
+            "description": "Thumbnail URL"
+          },
+          "estimated_weight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Weight",
+            "description": "Estimated weight (g)"
+          },
+          "data_quality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Quality",
+            "description": "Data quality rating"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "resource_url",
+          "uri",
+          "title"
+        ],
+        "title": "DiscogsRelease",
+        "description": "Full release details."
+      },
+      "DiscogsSearchResponse": {
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/DiscogsPagination",
+            "description": "Pagination metadata"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DiscogsSearchResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Search results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pagination"
+        ],
+        "title": "DiscogsSearchResponse",
+        "description": "Response from Discogs search endpoint."
+      },
+      "DiscogsSearchResult": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Master/Release ID"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Result type (master, release, artist)"
+          },
+          "master_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Master Id",
+            "description": "Master release ID"
+          },
+          "master_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Master Url",
+            "description": "Master API URL"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Discogs web URI"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Title (Artist - Release)"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Release country"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "format": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Format",
+            "description": "Release formats"
+          },
+          "label": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Label",
+            "description": "Record labels"
+          },
+          "genre": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genre",
+            "description": "Genres"
+          },
+          "style": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Style",
+            "description": "Styles"
+          },
+          "catno": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catno",
+            "description": "Catalog number"
+          },
+          "barcode": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Barcode",
+            "description": "Barcodes"
+          },
+          "thumb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb",
+            "description": "Thumbnail URL"
+          },
+          "cover_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image",
+            "description": "Cover image URL"
+          },
+          "resource_url": {
+            "type": "string",
+            "title": "Resource Url",
+            "description": "API resource URL"
+          },
+          "community": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscogsCommunity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Community stats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "uri",
+          "title",
+          "resource_url"
+        ],
+        "title": "DiscogsSearchResult",
+        "description": "Individual search result item."
+      },
+      "DiscogsTrack": {
+        "properties": {
+          "position": {
+            "type": "string",
+            "title": "Position",
+            "description": "Track position (e.g., 'A1', '1')"
+          },
+          "type_": {
+            "type": "string",
+            "title": "Type",
+            "description": "Entry type (track, heading, index)"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Track title"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "Duration string"
+          },
+          "extraartists": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Extraartists",
+            "description": "Additional artists"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position",
+          "type_",
+          "title"
+        ],
+        "title": "DiscogsTrack",
+        "description": "Track listing entry."
+      },
+      "DiscogsVideo": {
+        "properties": {
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Video URL"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Video title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Video description"
+          },
+          "duration": {
+            "type": "integer",
+            "title": "Duration",
+            "description": "Duration in seconds",
+            "default": 0
+          },
+          "embed": {
+            "type": "boolean",
+            "title": "Embed",
+            "description": "Embeddable",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "uri",
+          "title"
+        ],
+        "title": "DiscogsVideo",
+        "description": "Video link from release."
+      },
       "DuplicateResponse": {
         "properties": {
           "video_id": {
@@ -8397,71 +10491,203 @@
         "title": "HealthCheckResponse",
         "description": "Health check endpoint response."
       },
-      "IMVDbImportRequest": {
+      "IMVDbArtistRef": {
         "properties": {
-          "video_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Video Ids",
-            "description": "Specific IMVDb video IDs to import",
-            "examples": [
-              [
-                121779770452,
-                138862728833
-              ]
-            ]
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Artist name"
           },
-          "search_queries": {
+          "slug": {
             "anyOf": [
               {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "type": "array"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Search Queries",
-            "description": "Search queries to find videos (artist + title pairs)",
-            "examples": [
-              [
-                {
-                  "artist": "Robin Thicke",
-                  "title": "Blurred Lines"
-                }
-              ]
-            ]
+            "title": "Slug",
+            "description": "URL-friendly slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb profile URL"
           }
         },
         "type": "object",
-        "title": "IMVDbImportRequest",
-        "description": "Request for IMVDb bulk import."
+        "required": [
+          "name"
+        ],
+        "title": "IMVDbArtistRef",
+        "description": "Artist reference in IMVDb responses."
       },
-      "ImportItemResult": {
+      "IMVDbArtistVideos": {
         "properties": {
-          "identifier": {
+          "total_videos": {
+            "type": "integer",
+            "title": "Total Videos",
+            "description": "Total video count",
+            "default": 0
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbVideoSearchItem"
+            },
+            "type": "array",
+            "title": "Videos",
+            "description": "Videos"
+          }
+        },
+        "type": "object",
+        "title": "IMVDbArtistVideos",
+        "description": "Container for entity's artist videos."
+      },
+      "IMVDbCredit": {
+        "properties": {
+          "position_name": {
             "type": "string",
-            "title": "Identifier",
-            "description": "URL, ID, or search query identifier"
+            "title": "Position Name",
+            "description": "Position name (e.g., 'Director')"
           },
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "description": "Whether import succeeded"
+          "position_code": {
+            "type": "string",
+            "title": "Position Code",
+            "description": "Position code (e.g., 'dir')"
           },
-          "video_id": {
+          "entity_name": {
+            "type": "string",
+            "title": "Entity Name",
+            "description": "Person/company name"
+          },
+          "entity_slug": {
+            "type": "string",
+            "title": "Entity Slug",
+            "description": "Entity URL slug"
+          },
+          "entity_id": {
+            "type": "integer",
+            "title": "Entity Id",
+            "description": "Entity ID"
+          },
+          "entity_url": {
+            "type": "string",
+            "title": "Entity Url",
+            "description": "Entity IMVDb profile URL"
+          },
+          "position_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Notes",
+            "description": "Additional notes"
+          },
+          "position_id": {
+            "type": "integer",
+            "title": "Position Id",
+            "description": "Position record ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position_name",
+          "position_code",
+          "entity_name",
+          "entity_slug",
+          "entity_id",
+          "entity_url",
+          "position_id"
+        ],
+        "title": "IMVDbCredit",
+        "description": "Crew credit entry."
+      },
+      "IMVDbCredits": {
+        "properties": {
+          "total_credits": {
+            "type": "integer",
+            "title": "Total Credits",
+            "description": "Total credit count",
+            "default": 0
+          },
+          "crew": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbCredit"
+            },
+            "type": "array",
+            "title": "Crew",
+            "description": "Crew credits"
+          },
+          "cast": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Cast",
+            "description": "Cast credits"
+          }
+        },
+        "type": "object",
+        "title": "IMVDbCredits",
+        "description": "Credits container with crew and cast lists."
+      },
+      "IMVDbEntityDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "IMVDb entity ID"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Entity name"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug",
+            "description": "URL slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb profile URL"
+          },
+          "discogs_id": {
             "anyOf": [
               {
                 "type": "integer"
@@ -8470,10 +10696,10 @@
                 "type": "null"
               }
             ],
-            "title": "Video Id",
-            "description": "Created/updated video ID"
+            "title": "Discogs Id",
+            "description": "Linked Discogs ID"
           },
-          "error": {
+          "byline": {
             "anyOf": [
               {
                 "type": "string"
@@ -8482,44 +10708,230 @@
                 "type": "null"
               }
             ],
-            "title": "Error",
-            "description": "Error message if failed"
+            "title": "Byline",
+            "description": "Short description"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio",
+            "description": "Biography"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image",
+            "description": "Profile image URL"
+          },
+          "artist_video_count": {
+            "type": "integer",
+            "title": "Artist Video Count",
+            "description": "Videos as primary artist",
+            "default": 0
+          },
+          "featured_video_count": {
+            "type": "integer",
+            "title": "Featured Video Count",
+            "description": "Videos as featured artist",
+            "default": 0
+          },
+          "artist_videos": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IMVDbArtistVideos"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Videos as primary artist"
+          },
+          "featured_videos": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IMVDbArtistVideos"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Videos as featured artist"
           }
         },
         "type": "object",
         "required": [
-          "identifier",
-          "success"
+          "id"
         ],
-        "title": "ImportItemResult",
-        "description": "Result for a single import item."
+        "title": "IMVDbEntityDetail",
+        "description": "Full entity details including video listings."
       },
-      "ImportResult": {
+      "IMVDbEntitySearchItem": {
         "properties": {
-          "total": {
+          "id": {
             "type": "integer",
-            "title": "Total",
-            "description": "Total items processed"
+            "title": "Id",
+            "description": "IMVDb entity ID"
           },
-          "success_count": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Entity name"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug",
+            "description": "URL slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb profile URL"
+          },
+          "discogs_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discogs Id",
+            "description": "Linked Discogs ID"
+          },
+          "byline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Byline",
+            "description": "Short description"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio",
+            "description": "Biography"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image",
+            "description": "Profile image URL"
+          },
+          "artist_video_count": {
             "type": "integer",
-            "title": "Success Count",
-            "description": "Successful imports"
+            "title": "Artist Video Count",
+            "description": "Videos as primary artist",
+            "default": 0
           },
-          "failed_count": {
+          "featured_video_count": {
             "type": "integer",
-            "title": "Failed Count",
-            "description": "Failed imports"
+            "title": "Featured Video Count",
+            "description": "Videos as featured artist",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "IMVDbEntitySearchItem",
+        "description": "Entity item in search results."
+      },
+      "IMVDbEntitySearchResponse": {
+        "properties": {
+          "total_results": {
+            "type": "integer",
+            "title": "Total Results",
+            "description": "Total matching results"
           },
-          "items": {
+          "current_page": {
+            "type": "integer",
+            "title": "Current Page",
+            "description": "Current page number"
+          },
+          "per_page": {
+            "type": "integer",
+            "title": "Per Page",
+            "description": "Results per page"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages",
+            "description": "Total number of pages"
+          },
+          "results": {
             "items": {
-              "$ref": "#/components/schemas/ImportItemResult"
+              "$ref": "#/components/schemas/IMVDbEntitySearchItem"
             },
             "type": "array",
-            "title": "Items",
-            "description": "Per-item results"
-          },
-          "job_id": {
+            "title": "Results",
+            "description": "Entity results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_results",
+          "current_page",
+          "per_page",
+          "total_pages"
+        ],
+        "title": "IMVDbEntitySearchResponse",
+        "description": "Response from IMVDb entity search endpoint."
+      },
+      "IMVDbImageSet": {
+        "properties": {
+          "o": {
             "anyOf": [
               {
                 "type": "string"
@@ -8528,19 +10940,510 @@
                 "type": "null"
               }
             ],
-            "title": "Job Id",
-            "description": "Background job ID (if async processing)"
+            "title": "O",
+            "description": "Original size"
+          },
+          "l": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "L",
+            "description": "Large size"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B",
+            "description": "Banner size"
+          },
+          "t": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T",
+            "description": "Thumbnail size"
+          },
+          "s": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S",
+            "description": "Small size"
+          }
+        },
+        "type": "object",
+        "title": "IMVDbImageSet",
+        "description": "Image URLs at various sizes."
+      },
+      "IMVDbSource": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Source platform name"
+          },
+          "source_slug": {
+            "type": "string",
+            "title": "Source Slug",
+            "description": "Source platform slug"
+          },
+          "source_data": {
+            "title": "Source Data",
+            "description": "Platform-specific video identifier"
+          },
+          "is_primary": {
+            "type": "boolean",
+            "title": "Is Primary",
+            "description": "Whether this is the primary source",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "total",
-          "success_count",
-          "failed_count",
-          "items"
+          "source",
+          "source_slug",
+          "source_data"
         ],
-        "title": "ImportResult",
-        "description": "Result of an import operation."
+        "title": "IMVDbSource",
+        "description": "Video source (YouTube, Vimeo, etc.)."
+      },
+      "IMVDbVideoDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "IMVDb video ID"
+          },
+          "production_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Status",
+            "description": "Production status code"
+          },
+          "song_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Song Title",
+            "description": "Song title"
+          },
+          "song_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Song Slug",
+            "description": "Song URL slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb video URL"
+          },
+          "multiple_versions": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiple Versions",
+            "description": "Has multiple versions"
+          },
+          "version_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Name",
+            "description": "Version name"
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number",
+            "description": "Version number"
+          },
+          "is_imvdb_pick": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Imvdb Pick",
+            "description": "Featured pick"
+          },
+          "aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "verified_credits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Credits",
+            "description": "Credits verified"
+          },
+          "artists": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbArtistRef"
+            },
+            "type": "array",
+            "title": "Artists",
+            "description": "Primary artists"
+          },
+          "featured_artists": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbArtistRef"
+            },
+            "type": "array",
+            "title": "Featured Artists",
+            "description": "Featured artists"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IMVDbImageSet"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thumbnail images"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbSource"
+            },
+            "type": "array",
+            "title": "Sources",
+            "description": "Video sources"
+          },
+          "directors": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbCredit"
+            },
+            "type": "array",
+            "title": "Directors",
+            "description": "Director credits"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IMVDbCredits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full credits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "IMVDbVideoDetail",
+        "description": "Full video details including credits and sources."
+      },
+      "IMVDbVideoSearchItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "IMVDb video ID"
+          },
+          "production_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Status",
+            "description": "Production status code"
+          },
+          "song_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Song Title",
+            "description": "Song title"
+          },
+          "song_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Song Slug",
+            "description": "Song URL slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb video URL"
+          },
+          "multiple_versions": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiple Versions",
+            "description": "Has multiple versions"
+          },
+          "version_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Name",
+            "description": "Version name"
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number",
+            "description": "Version number"
+          },
+          "is_imvdb_pick": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Imvdb Pick",
+            "description": "Featured pick"
+          },
+          "aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "verified_credits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Credits",
+            "description": "Credits verified"
+          },
+          "artists": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbArtistRef"
+            },
+            "type": "array",
+            "title": "Artists",
+            "description": "Primary artists"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IMVDbImageSet"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thumbnail images"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "IMVDbVideoSearchItem",
+        "description": "Video item in search results (summary, no credits)."
+      },
+      "IMVDbVideoSearchResponse": {
+        "properties": {
+          "total_results": {
+            "type": "integer",
+            "title": "Total Results",
+            "description": "Total matching results"
+          },
+          "current_page": {
+            "type": "integer",
+            "title": "Current Page",
+            "description": "Current page number"
+          },
+          "per_page": {
+            "type": "integer",
+            "title": "Per Page",
+            "description": "Results per page"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages",
+            "description": "Total number of pages"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbVideoSearchItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Video results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_results",
+          "current_page",
+          "per_page",
+          "total_pages"
+        ],
+        "title": "IMVDbVideoSearchResponse",
+        "description": "Response from IMVDb video search endpoint."
+      },
+      "ImportMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "discovery"
+        ],
+        "title": "ImportMode",
+        "description": "Import mode for scanned videos.\n\nDetermines how much data is imported and what status videos receive."
       },
       "JobListResponse": {
         "properties": {
@@ -9786,6 +12689,195 @@
         "title": "SavedSearchResponse",
         "description": "Response for a saved search."
       },
+      "ScanJobResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Background job ID for tracking"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Status message"
+          },
+          "directory": {
+            "type": "string",
+            "title": "Directory",
+            "description": "Directory being scanned"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "description": "Import mode being used"
+          },
+          "initial_status": {
+            "type": "string",
+            "title": "Initial Status",
+            "description": "Status that will be assigned to new videos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "message",
+          "directory",
+          "mode",
+          "initial_status"
+        ],
+        "title": "ScanJobResponse",
+        "description": "Response when submitting a scan job.\n\nThe scan runs as a background job. Use the job_id to track progress\nvia GET /jobs/{job_id} or WebSocket /ws/jobs/{job_id}."
+      },
+      "ScanPreviewItem": {
+        "properties": {
+          "nfo_path": {
+            "type": "string",
+            "title": "Nfo Path",
+            "description": "Path to the NFO file"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Video title from NFO"
+          },
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "description": "Primary artist from NFO"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album",
+            "description": "Album name"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "already_exists": {
+            "type": "boolean",
+            "title": "Already Exists",
+            "description": "Whether this video already exists in the database",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "nfo_path",
+          "title",
+          "artist"
+        ],
+        "title": "ScanPreviewItem",
+        "description": "Preview of a single video to be imported."
+      },
+      "ScanPreviewResponse": {
+        "properties": {
+          "directory": {
+            "type": "string",
+            "title": "Directory",
+            "description": "Directory that was scanned"
+          },
+          "total_nfo_files": {
+            "type": "integer",
+            "title": "Total Nfo Files",
+            "description": "Total NFO files found"
+          },
+          "musicvideo_nfos": {
+            "type": "integer",
+            "title": "Musicvideo Nfos",
+            "description": "Music video NFO files (vs artist NFOs)"
+          },
+          "would_import": {
+            "type": "integer",
+            "title": "Would Import",
+            "description": "Videos that would be imported"
+          },
+          "would_skip": {
+            "type": "integer",
+            "title": "Would Skip",
+            "description": "Videos that would be skipped (already exist)"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScanPreviewItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Preview of individual videos (limited to first 100)"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "description": "Import mode that would be used"
+          }
+        },
+        "type": "object",
+        "required": [
+          "directory",
+          "total_nfo_files",
+          "musicvideo_nfos",
+          "would_import",
+          "would_skip",
+          "mode"
+        ],
+        "title": "ScanPreviewResponse",
+        "description": "Response from scan preview (dry run).\n\nShows what would be imported without making any changes."
+      },
+      "ScanRequest": {
+        "properties": {
+          "directory": {
+            "type": "string",
+            "title": "Directory",
+            "description": "Path to directory to scan for music videos/NFO files",
+            "examples": [
+              "/media/music_videos",
+              "/home/user/downloads/videos"
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode",
+            "description": "Import mode: 'full' imports all metadata, 'discovery' only title/artist",
+            "default": "full"
+          },
+          "recursive": {
+            "type": "boolean",
+            "title": "Recursive",
+            "description": "Scan subdirectories recursively",
+            "default": true
+          },
+          "skip_existing": {
+            "type": "boolean",
+            "title": "Skip Existing",
+            "description": "Skip videos that already exist in the database (by title+artist)",
+            "default": true
+          },
+          "update_file_paths": {
+            "type": "boolean",
+            "title": "Update File Paths",
+            "description": "Store NFO file paths in database records",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "directory"
+        ],
+        "title": "ScanRequest",
+        "description": "Request to scan a directory for music videos.\n\nSupports two modes:\n- `full`: Import all metadata from NFO files, set status to 'imported'\n- `discovery`: Only capture title/artist, set status to 'discovered'\n\nExample:\n    >>> # Full import\n    >>> request = ScanRequest(\n    ...     directory=\"/media/music_videos\",\n    ...     mode=ImportMode.FULL,\n    ...     recursive=True\n    ... )\n    \n    >>> # Discovery for workflow\n    >>> request = ScanRequest(\n    ...     directory=\"/media/unsorted\",\n    ...     mode=ImportMode.DISCOVERY,\n    ...     skip_existing=True\n    ... )"
+      },
       "ScheduledTaskCreate": {
         "properties": {
           "name": {
@@ -10083,6 +13175,407 @@
         ],
         "title": "SetInitialPasswordRequest",
         "description": "Request body for setting initial password."
+      },
+      "SpotifyAlbumSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Spotify album ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Album name"
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date",
+            "description": "Release date (YYYY-MM-DD or YYYY)"
+          },
+          "release_date_precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date Precision",
+            "description": "Precision: year, month, day"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Spotify URI"
+          },
+          "images": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Images",
+            "description": "Album artwork images"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "uri"
+        ],
+        "title": "SpotifyAlbumSchema",
+        "description": "Spotify album information."
+      },
+      "SpotifyAllTracksResponseSchema": {
+        "properties": {
+          "playlist_id": {
+            "type": "string",
+            "title": "Playlist Id",
+            "description": "Spotify playlist ID"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of tracks"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SpotifyTrackSchema"
+            },
+            "type": "array",
+            "title": "Tracks",
+            "description": "All tracks in the playlist"
+          }
+        },
+        "type": "object",
+        "required": [
+          "playlist_id",
+          "total"
+        ],
+        "title": "SpotifyAllTracksResponseSchema",
+        "description": "Response containing all tracks from a playlist."
+      },
+      "SpotifyArtistSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Spotify artist ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Artist name"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Spotify URI"
+          },
+          "href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Href",
+            "description": "API endpoint URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "uri"
+        ],
+        "title": "SpotifyArtistSchema",
+        "description": "Spotify artist information (simplified)."
+      },
+      "SpotifyPlaylistSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Spotify playlist ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Playlist name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Playlist description"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Spotify URI"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Playlist owner"
+          },
+          "tracks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpotifyPlaylistTracksResponseSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tracks (if included)"
+          },
+          "public": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public",
+            "description": "Public visibility"
+          },
+          "collaborative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collaborative",
+            "description": "Collaborative flag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "uri"
+        ],
+        "title": "SpotifyPlaylistSchema",
+        "description": "Spotify playlist metadata."
+      },
+      "SpotifyPlaylistTrackSchema": {
+        "properties": {
+          "track": {
+            "$ref": "#/components/schemas/SpotifyTrackSchema",
+            "description": "Track object"
+          },
+          "added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added At",
+            "description": "Timestamp when added"
+          },
+          "added_by": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added By",
+            "description": "User who added track"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track"
+        ],
+        "title": "SpotifyPlaylistTrackSchema",
+        "description": "Playlist track item (wraps track with added_at, added_by)."
+      },
+      "SpotifyPlaylistTracksResponseSchema": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href",
+            "description": "API endpoint for this page"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SpotifyPlaylistTrackSchema"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Playlist tracks on this page"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Maximum items per page"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "URL for next page"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "description": "Offset of first item"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous",
+            "description": "URL for previous page"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "href",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "title": "SpotifyPlaylistTracksResponseSchema",
+        "description": "Response from /playlists/{id}/tracks endpoint."
+      },
+      "SpotifyTrackSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Spotify track ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Track name"
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "Spotify URI"
+          },
+          "artists": {
+            "items": {
+              "$ref": "#/components/schemas/SpotifyArtistSchema"
+            },
+            "type": "array",
+            "title": "Artists",
+            "description": "Track artists"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpotifyAlbumSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Album information"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms",
+            "description": "Track duration in milliseconds"
+          },
+          "popularity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Popularity",
+            "description": "Popularity score 0-100"
+          },
+          "explicit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explicit",
+            "description": "Explicit content flag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "uri"
+        ],
+        "title": "SpotifyTrackSchema",
+        "description": "Spotify track information."
       },
       "TagCreate": {
         "properties": {
@@ -11424,49 +14917,6 @@
         ],
         "title": "YTDLPVideoInfoResponse",
         "description": "Response containing single video metadata.\n\nAttributes:\n    video: Video metadata"
-      },
-      "YouTubeImportRequest": {
-        "properties": {
-          "urls": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "minItems": 1,
-            "title": "Urls",
-            "description": "YouTube video URLs to import",
-            "examples": [
-              [
-                "https://youtube.com/watch?v=abc123",
-                "https://youtu.be/def456"
-              ]
-            ]
-          },
-          "download_video": {
-            "type": "boolean",
-            "title": "Download Video",
-            "description": "Download video files (False = metadata only)",
-            "default": true
-          },
-          "output_directory": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Directory",
-            "description": "Output directory for downloads (uses default if not specified)"
-          }
-        },
-        "type": "object",
-        "required": [
-          "urls"
-        ],
-        "title": "YouTubeImportRequest",
-        "description": "Request for YouTube import."
       }
     },
     "securitySchemes": {
@@ -11524,8 +14974,16 @@
       "description": "Batch operations for updating, deleting, tagging, and organizing multiple videos"
     },
     {
-      "name": "Imports",
-      "description": "Import workflows for YouTube and IMVDb content"
+      "name": "IMVDb",
+      "description": "IMVDb music video database: search videos/entities, get metadata and credits"
+    },
+    {
+      "name": "Discogs",
+      "description": "Discogs music database: search releases, get master/release details and artist discographies"
+    },
+    {
+      "name": "Spotify",
+      "description": "Spotify Web API: get playlists, tracks, and collect all metadata from a playlist"
     },
     {
       "name": "Exports",
@@ -11542,6 +15000,10 @@
     {
       "name": "yt-dlp",
       "description": "YouTube video search, metadata retrieval, and download with progress tracking"
+    },
+    {
+      "name": "Library Scan",
+      "description": "Scan directories for music videos and import into library with full or discovery mode"
     }
   ]
 }

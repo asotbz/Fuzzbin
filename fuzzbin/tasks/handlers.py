@@ -60,6 +60,8 @@ async def handle_nfo_import(job: Job) -> None:
 
     recursive = job.metadata.get("recursive", True)
     skip_existing = job.metadata.get("skip_existing", True)
+    initial_status = job.metadata.get("initial_status", "discovered")
+    update_file_paths = job.metadata.get("update_file_paths", True)
 
     logger.info(
         "nfo_import_job_starting",
@@ -67,6 +69,7 @@ async def handle_nfo_import(job: Job) -> None:
         directory=str(directory),
         recursive=recursive,
         skip_existing=skip_existing,
+        initial_status=initial_status,
     )
 
     job.update_progress(0, 1, "Initializing import...")
@@ -85,6 +88,7 @@ async def handle_nfo_import(job: Job) -> None:
     # Create importer with progress callback
     importer = NFOImporter(
         video_repository=repository,
+        initial_status=initial_status,
         skip_existing=skip_existing,
         progress_callback=progress_callback,
     )
@@ -95,6 +99,7 @@ async def handle_nfo_import(job: Job) -> None:
     result = await importer.import_from_directory(
         root_path=directory,
         recursive=recursive,
+        update_file_paths=update_file_paths,
     )
 
     # Check for cancellation after import
@@ -110,6 +115,7 @@ async def handle_nfo_import(job: Job) -> None:
             "total_files": result.total_tracks,
             "duration_seconds": result.duration_seconds,
             "failed_tracks": result.failed_tracks[:10],  # Limit to first 10 failures
+            "initial_status": initial_status,
         }
     )
 
@@ -118,6 +124,7 @@ async def handle_nfo_import(job: Job) -> None:
         job_id=job.id,
         imported=result.imported_count,
         skipped=result.skipped_count,
+        initial_status=initial_status,
         failed=result.failed_count,
     )
 

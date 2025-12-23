@@ -29,10 +29,11 @@ Returns new access and refresh tokens.
   - Change the password for the authenticated user.
 
 Requires authentication. Validates current password before updating.
-Note: Password change does not guarantee immediate server-side revocation of previously issued JWTs.
-Clients should discard existing tokens and re-authenticate.
+Note: Password change does not guarantee immediate server-side revocation of
+previously issued JWTs. Clients should discard existing tokens and re-authenticate.
 
-Remediation note: implement true "revoke all tokens" with a DB-backed mechanism (e.g., per-user token versioning) so old tokens are reliably rejected.
+Remediation note: implement true "revoke all tokens" with a DB-backed mechanism
+(e.g., per-user token versioning) so old tokens are reliably rejected.
 - `POST` `/auth/logout` — Logout and revoke tokens
   - Logout and revoke the current access token.
 
@@ -224,13 +225,135 @@ Batch operations for updating, deleting, tagging, and organizing multiple videos
 - `POST` `/videos/bulk/organize` — Bulk update file paths
   - Update file paths for multiple videos after file organization.
 
-## Imports
-Import workflows for YouTube and IMVDb content
+## IMVDb
+IMVDb music video database: search videos/entities, get metadata and credits
 
-- `POST` `/imports/youtube` — Import from YouTube
-  - Import videos from YouTube URLs. Small batches run synchronously, larger batches require background task queue.
-- `POST` `/imports/imvdb` — Import from IMVDb
-  - Import video metadata from IMVDb by ID or search query.
+- `GET` `/imvdb/search/videos` — Search for music videos
+  - Search IMVDb for music videos by artist and track title.
+
+Returns paginated results with video thumbnails, release year, and artist info.
+Use `/imvdb/videos/{video_id}` to get full details including credits and sources.
+
+**Rate Limited:** Shares rate limit with other IMVDb endpoints.
+
+**Cached:** Results are cached for 30 minutes.
+- `GET` `/imvdb/search/entities` — Search for artists/directors/entities
+  - Search IMVDb for entities (artists, directors, production companies, etc.).
+
+Returns paginated results with entity IDs, Discogs links, and video counts.
+Use `/imvdb/entities/{entity_id}` to get full details including video listings.
+
+**Rate Limited:** Shares rate limit with other IMVDb endpoints.
+
+**Cached:** Results are cached for 30 minutes.
+- `GET` `/imvdb/videos/{video_id}` — Get video details
+  - Get detailed metadata for an IMVDb video.
+
+Returns full video information including:
+- Primary and featured artists
+- Directors and full crew credits
+- Video sources (YouTube, Vimeo, etc.)
+- Multiple version information
+- Production status and release year
+
+**Rate Limited:** Shares rate limit with other IMVDb endpoints.
+
+**Cached:** Results are cached for 30 minutes.
+- `GET` `/imvdb/entities/{entity_id}` — Get entity details
+  - Get detailed metadata for an IMVDb entity (artist, director, etc.).
+
+Returns full entity information including:
+- Profile information and biography
+- Discogs ID for cross-referencing
+- Videos as primary artist
+- Videos as featured artist
+
+**Rate Limited:** Shares rate limit with other IMVDb endpoints.
+
+**Cached:** Results are cached for 30 minutes.
+
+## Discogs
+Discogs music database: search releases, get master/release details and artist discographies
+
+- `GET` `/discogs/search` — Search for releases
+  - Search Discogs for music releases by artist and/or track title.
+
+Returns paginated results with release thumbnails, year, format, and label info.
+Use `/discogs/masters/{master_id}` or `/discogs/releases/{release_id}` for full details.
+
+**Search modes:**
+- Use `artist` + `track` for targeted music video lookups
+- Use `q` for general free-text search
+- Default type is `master` (canonical release), use `release` for specific pressings
+
+**Rate Limited:** 60 requests/minute (authenticated). Shares rate limit with other Discogs endpoints.
+
+**Cached:** Results are cached for 2 hours.
+- `GET` `/discogs/masters/{master_id}` — Get master release details
+  - Get detailed metadata for a Discogs master release.
+
+A master release represents the canonical version of an album across
+all its various pressings and formats.
+
+Returns full information including:
+- Complete tracklist with durations
+- Artists with proper credits
+- Genres and styles
+- Cover images at various sizes
+- Related videos (music videos, documentaries)
+- Market statistics (for sale count, lowest price)
+- Links to all release versions
+
+**Rate Limited:** 60 requests/minute (authenticated).
+
+**Cached:** Results are cached for 2 hours.
+- `GET` `/discogs/releases/{release_id}` — Get specific release details
+  - Get detailed metadata for a specific Discogs release.
+
+A release represents a specific pressing/version of an album with
+unique catalog numbers, barcodes, and format details.
+
+Returns full information including:
+- Complete tracklist with durations
+- Label and catalog information
+- Format details (vinyl, CD, etc.)
+- All identifiers (barcodes, matrix numbers)
+- Extra artists (producers, engineers, etc.)
+- Release notes and credits
+- Cover images
+- Related videos
+
+**Rate Limited:** 60 requests/minute (authenticated).
+
+**Cached:** Results are cached for 2 hours.
+- `GET` `/discogs/artists/{artist_id}/releases` — Get artist discography
+  - Get an artist's complete discography from Discogs.
+
+Returns a paginated list of all releases associated with an artist,
+including albums, singles, compilations, and appearances.
+
+Each release includes:
+- Release/Master ID and type
+- Title and year
+- Artist role (Main, Remix, Producer, etc.)
+- Thumbnail image
+- Community statistics (want/have counts)
+
+**Rate Limited:** 60 requests/minute (authenticated).
+
+**Cached:** Results are cached for 2 hours.
+
+## Spotify
+Spotify Web API: get playlists, tracks, and collect all metadata from a playlist
+
+- `GET` `/spotify/playlists/{playlist_id}` — Get playlist metadata
+  - Retrieve metadata for a Spotify playlist by ID.
+- `GET` `/spotify/playlists/{playlist_id}/tracks` — Get playlist tracks (paginated)
+  - Retrieve tracks from a Spotify playlist with pagination.
+- `GET` `/spotify/playlists/{playlist_id}/tracks/all` — Get all playlist tracks
+  - Retrieve all tracks from a Spotify playlist (handles pagination automatically).
+- `GET` `/spotify/tracks/{track_id}` — Get track metadata
+  - Retrieve metadata for a Spotify track by ID.
 
 ## Exports
 Export NFO metadata files and generate playlists
@@ -389,3 +512,21 @@ check. Already downloaded data may be partially saved or cleaned up.
 Returns 204 No Content on successful cancellation.
 Returns 400 if the job has already completed, failed, or been cancelled.
 Returns 404 if the job does not exist.
+
+## Library Scan
+Scan directories for music videos and import into library with full or discovery mode
+
+- `POST` `/scan/preview` — Preview directory scan
+  - Scan a directory and preview what would be imported without making changes.
+- `POST` `/scan` — Scan and import music videos
+  - Scan a directory for music videos and import them into the library.
+
+**Import Modes:**
+- `full`: Import all metadata from NFO files, set status to 'imported'
+- `discovery`: Only import title/artist, set status to 'discovered' for follow-on workflows
+
+The scan runs as a background job. Track progress via:
+- `GET /jobs/{job_id}` for status polling
+- `WebSocket /ws/jobs/{job_id}` for real-time updates
+- `GET` `/scan/statuses` — Get video status definitions
+  - Get the list of video statuses and their meanings for workflow planning.

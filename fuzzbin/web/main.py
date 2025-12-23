@@ -142,6 +142,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cleanup on shutdown
     logger.info("api_shutting_down")
 
+    # Cleanup shared API clients
+    from .dependencies import cleanup_api_clients
+
+    await cleanup_api_clients()
+
     # Stop job queue
     await queue.stop()
     reset_job_queue()
@@ -299,8 +304,16 @@ ws://localhost:8000/ws/jobs/{job_id}
                 "description": "Batch operations for updating, deleting, tagging, and organizing multiple videos",
             },
             {
-                "name": "Imports",
-                "description": "Import workflows for YouTube and IMVDb content",
+                "name": "IMVDb",
+                "description": "IMVDb music video database: search videos/entities, get metadata and credits",
+            },
+            {
+                "name": "Discogs",
+                "description": "Discogs music database: search releases, get master/release details and artist discographies",
+            },
+            {
+                "name": "Spotify",
+                "description": "Spotify Web API: get playlists, tracks, and collect all metadata from a playlist",
             },
             {
                 "name": "Exports",
@@ -317,6 +330,10 @@ ws://localhost:8000/ws/jobs/{job_id}
             {
                 "name": "yt-dlp",
                 "description": "YouTube video search, metadata retrieval, and download with progress tracking",
+            },
+            {
+                "name": "Library Scan",
+                "description": "Scan directories for music videos and import into library with full or discovery mode",
             },
         ],
         lifespan=lifespan,
@@ -366,12 +383,15 @@ ws://localhost:8000/ws/jobs/{job_id}
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
     from .routes import (
         bulk,
-        imports,
+        discogs,
         exports,
         backup,
         config,
+        imvdb,
+        scan,
+        spotify,
         ytdlp,
-    )  # Phase 7 routes + config + ytdlp
+    )  # Phase 7 routes + config + ytdlp + external APIs
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -392,11 +412,14 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(jobs.router, dependencies=protected_dependencies)
     # Phase 7 routes
     app.include_router(bulk.router, dependencies=protected_dependencies)
-    app.include_router(imports.router, dependencies=protected_dependencies)
+    app.include_router(imvdb.router, dependencies=protected_dependencies)
+    app.include_router(discogs.router, dependencies=protected_dependencies)
+    app.include_router(spotify.router, dependencies=protected_dependencies)
     app.include_router(exports.router, dependencies=protected_dependencies)
     app.include_router(backup.router, dependencies=protected_dependencies)
     app.include_router(config.router, dependencies=protected_dependencies)
     app.include_router(ytdlp.router, dependencies=protected_dependencies)
+    app.include_router(scan.router, dependencies=protected_dependencies)
 
     # Custom OpenAPI schema with security scheme
     def custom_openapi():
