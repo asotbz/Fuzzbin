@@ -1,0 +1,110 @@
+/* Fuzzbin Neo-MTV Design Tokens */
+
+:root {
+  /* Channel Colors (Primary Zones) */
+  --channel-library: #00F0FF;    /* Electric Cyan - Video Library */
+  --channel-import: #FF006E;     /* Hot Magenta - YouTube Import */
+  --channel-player: #FFD60A;     /* Laser Yellow - Video Player */
+  --channel-manage: #39FF14;     /* Neon Green - Collections/Tags */
+  --channel-system: #9D4EDD;     /* Purple - Admin/Settings */
+
+  /* Base Palette */
+  /* Backgrounds */
+  --bg-base: #0A0014;            /* Deep purple-black */
+  --bg-surface: #1A0F2E;         /* Dark purple - cards */
+  --bg-surface-light: #2D1B4E;   /* Purple-gray - elevated */
+  --bg-surface-hover: #3D2B5E;   /* Lighter hover state */
+
+  /* Text */
+  --text-primary: #F8F8FF;       /* Off-white */
+  --text-secondary: #B8A8D8;     /* Light purple-gray */
+  --text-tertiary: #8B7AA8;      /* Muted purple */
+
+  /* Semantic Colors */
+  --success: #39FF14;            /* Neon green */
+  --warning: #FFD60A;            /* Laser yellow */
+  --error: #FF006E;              /* Hot magenta */
+  --info: #00F0FF;               /* Electric cyan */
+
+  /* Typography */
+  --font-display: 'Barlow Condensed', 'Impact', sans-serif;
+  --font-body: 'Outfit', 'Segoe UI', sans-serif;
+  --font-ui: 'Barlow', 'Arial Narrow', sans-serif;
+
+  /* Type Scale */
+  --text-xs: 0.75rem;            /* 12px */
+  --text-sm: 0.875rem;           /* 14px */
+  --text-base: 1rem;             /* 16px */
+  --text-lg: 1.125rem;           /* 18px */
+  --text-xl: 1.5rem;             /* 24px */
+  --text-2xl: 2rem;              /* 32px */
+  --text-3xl: 3rem;              /* 48px */
+  --text-4xl: 4rem;              /* 64px */
+
+  /* Spacing Scale */
+  --space-1: 0.25rem;            /* 4px */
+  --space-2: 0.5rem;             /* 8px */
+  --space-3: 0.75rem;            /* 12px */
+  --space-4: 1rem;               /* 16px */
+  --space-5: 1.5rem;             /* 24px */
+  --space-6: 2rem;               /* 32px */
+  --space-8: 3rem;               /* 48px */
+  --space-10: 4rem;              /* 64px */
+  --space-12: 6rem;              /* 96px */
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows (Chunky Depth) */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4),
+               0 1px 2px rgba(0, 0, 0, 0.3);
+
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5),
+               0 2px 4px rgba(0, 0, 0, 0.4);
+
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.6),
+               0 4px 8px rgba(0, 0, 0, 0.5);
+
+  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.7),
+               0 8px 16px rgba(0, 0, 0, 0.6);
+
+  /* Colored Glow Shadows */
+  --shadow-glow-cyan: 0 0 20px rgba(0, 240, 255, 0.5),
+                      0 0 40px rgba(0, 240, 255, 0.2);
+
+  --shadow-glow-magenta: 0 0 20px rgba(255, 0, 110, 0.5),
+                         0 0 40px rgba(255, 0, 110, 0.2);
+
+  --shadow-glow-yellow: 0 0 20px rgba(255, 214, 10, 0.5),
+                        0 0 40px rgba(255, 214, 10, 0.2);
+
+  /* Gradient Mesh Background */
+  --gradient-mesh: radial-gradient(at 0% 0%, rgba(157, 78, 221, 0.3) 0px, transparent 50%),
+                   radial-gradient(at 100% 0%, rgba(0, 240, 255, 0.2) 0px, transparent 50%),
+                   radial-gradient(at 100% 100%, rgba(255, 0, 110, 0.25) 0px, transparent 50%),
+                   radial-gradient(at 0% 100%, rgba(255, 214, 10, 0.2) 0px, transparent 50%);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Easing Functions */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-sharp: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Accessibility - Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
