@@ -335,6 +335,10 @@ ws://localhost:8000/ws/jobs/{job_id}
                 "name": "Library Scan",
                 "description": "Scan directories for music videos and import into library with full or discovery mode",
             },
+            {
+                "name": "Add",
+                "description": "Import hub endpoints: batch preview and import job submission",
+            },
         ],
         lifespan=lifespan,
         debug=settings.debug,
@@ -382,6 +386,7 @@ ws://localhost:8000/ws/jobs/{job_id}
     # Import and include routers
     from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
     from .routes import (
+        add,
         bulk,
         discogs,
         exports,
@@ -410,6 +415,7 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(search.router, dependencies=protected_dependencies)
     app.include_router(files.router, dependencies=protected_dependencies)
     app.include_router(jobs.router, dependencies=protected_dependencies)
+    app.include_router(add.router, dependencies=protected_dependencies)
     # Phase 7 routes
     app.include_router(bulk.router, dependencies=protected_dependencies)
     app.include_router(imvdb.router, dependencies=protected_dependencies)
