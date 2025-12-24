@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthTokens } from '../auth/useAuthTokens'
 import LibraryPage from '../features/library/pages/LibraryPage'
+import AddPage from '../pages/Add'
 import LoginPage from '../pages/Login'
 import SetInitialPasswordPage from '../pages/SetInitialPassword'
 
@@ -22,6 +23,15 @@ export default function AppRoutes() {
         element={
           <RequireAuth>
             <LibraryPage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/add"
+        element={
+          <RequireAuth>
+            <AddPage />
           </RequireAuth>
         }
       />

@@ -1,6 +1,7 @@
 """FastAPI application factory and entry point."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import structlog
@@ -45,7 +46,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if not already_configured:
         # Initialize fuzzbin configuration and database
-        await fuzzbin.configure()
+        if settings.config_path:
+            await fuzzbin.configure(config_path=Path(settings.config_path))
+        else:
+            await fuzzbin.configure()
     else:
         logger.info("api_using_existing_config")
 

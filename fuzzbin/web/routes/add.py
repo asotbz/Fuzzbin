@@ -363,6 +363,12 @@ async def search_single_video(
     if want_imvdb:
         api_config = _get_api_config("imvdb")
         if not api_config:
+            logger.info(
+                "add_search_source_skipped",
+                source=AddSearchSource.IMVDB.value,
+                reason="IMVDb API is not configured",
+                user=user_label,
+            )
             skipped.append(
                 AddSearchSkippedSource(
                     source=AddSearchSource.IMVDB,
@@ -409,6 +415,12 @@ async def search_single_video(
                 counts[AddSearchSource.IMVDB.value] = len(imvdb_items)
                 results.extend(imvdb_items)
             except Exception as e:
+                logger.warning(
+                    "add_search_source_failed",
+                    source=AddSearchSource.IMVDB.value,
+                    error=str(e),
+                    user=user_label,
+                )
                 skipped.append(
                     AddSearchSkippedSource(
                         source=AddSearchSource.IMVDB,
@@ -419,6 +431,12 @@ async def search_single_video(
     if want_discogs:
         api_config = _get_api_config("discogs")
         if not api_config:
+            logger.info(
+                "add_search_source_skipped",
+                source="discogs",
+                reason="Discogs API is not configured",
+                user=user_label,
+            )
             skipped.append(
                 AddSearchSkippedSource(
                     source=AddSearchSource.DISCOGS_MASTER,
@@ -492,6 +510,12 @@ async def search_single_video(
                 results.extend(discogs_master_items)
                 results.extend(discogs_release_items)
             except Exception as e:
+                logger.warning(
+                    "add_search_source_failed",
+                    source="discogs",
+                    error=str(e),
+                    user=user_label,
+                )
                 skipped.append(
                     AddSearchSkippedSource(
                         source=AddSearchSource.DISCOGS_MASTER,
@@ -549,6 +573,8 @@ async def search_single_video(
         track_title=request.track_title,
         total_results=len(results),
         skipped=len(skipped),
+        counts=counts,
+        skipped_sources=[{"source": s.source.value, "reason": s.reason} for s in skipped],
     )
 
     return AddSearchResponse(

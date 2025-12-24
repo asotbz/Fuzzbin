@@ -32,6 +32,7 @@ class APISettings(BaseSettings):
         import_endpoints_enabled: Enable import endpoints (default: True)
         import_allowed_schemes: Allowed URL schemes for imports (default: ["https"])
         import_allowed_hosts: Allowed hostnames for imports (None = allow all)
+        config_path: Optional path to a YAML configuration file to load at startup
     """
 
     model_config = SettingsConfigDict(
@@ -64,6 +65,10 @@ class APISettings(BaseSettings):
 
     # Proxy settings for IP extraction
     trusted_proxy_count: int = 0
+
+    # Optional explicit config file override (useful in dev)
+    # If unset, fuzzbin.configure() searches FUZZBIN_CONFIG_DIR then defaults.
+    config_path: Optional[str] = None
 
     # Import endpoint settings
     import_endpoints_enabled: bool = True

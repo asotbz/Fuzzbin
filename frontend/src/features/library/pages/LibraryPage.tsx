@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import VideoCard from '../../../components/video/VideoCard'
 import VideoGrid from '../../../components/video/VideoGrid'
 import type { FacetsResponse, ListVideosQuery, SortOrder, Video } from '../../../lib/api/types'
@@ -49,6 +50,7 @@ function toggle<T>(current: T | undefined, next: T): T | undefined {
 }
 
 export default function LibraryPage() {
+  const location = useLocation()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
@@ -58,6 +60,16 @@ export default function LibraryPage() {
   const pageSize = 20
 
   const [filters, setFilters] = useState<FacetSelections>({})
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const urlSearch = (params.get('search') ?? '').trim()
+    if (!urlSearch) return
+
+    setSearch(urlSearch)
+    setDebouncedSearch(urlSearch)
+    setPage(1)
+  }, [location.search])
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -123,6 +135,10 @@ export default function LibraryPage() {
             <option value="artist">Artist</option>
             <option value="year">Year</option>
           </select>
+
+          <Link className="primaryButton" to="/add" aria-label="Open Import Hub">
+            Import Hub
+          </Link>
 
           <button
             className="primaryButton"

@@ -54,6 +54,20 @@ describe('LibraryPage', () => {
       </MemoryRouter>
     )
 
+    const importHubLink = screen.getByRole('link', { name: /import hub/i })
+    expect(importHubLink).toHaveAttribute('href', '/add')
+
     expect(await screen.findByText('rock')).toBeInTheDocument()
+  })
+
+  it('initializes search from URL query param', async () => {
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={['/library?search=nirvana']}>
+        <LibraryPage />
+      </MemoryRouter>
+    )
+
+    const input = await screen.findByLabelText('Search videos')
+    expect(input).toHaveValue('nirvana')
   })
 })

@@ -296,15 +296,26 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
         _config = config
     elif config_path is not None:
         _config = Config.from_yaml(config_path)
-    elif _config is None:
-        # Search for config.yaml in default locations
+    else:
+        # Search for config.yaml in default locations.
+        #
+        # Important: fuzzbin.get_config() can be called before configure() (sync).
+        # That initializes _config with defaults, but we still want configure() to
+        # load YAML if available.
         default_config_dir = _get_default_config_dir()
         default_config_path = default_config_dir / "config.yaml"
+
+        # Also allow running from a repo / working directory without copying files
+        # into the default config_dir.
+        cwd_config_path = Path.cwd() / "config.yaml"
 
         if default_config_path.exists():
             _config = Config.from_yaml(default_config_path)
             config_path = default_config_path
-        else:
+        elif cwd_config_path.exists():
+            _config = Config.from_yaml(cwd_config_path)
+            config_path = cwd_config_path
+        elif _config is None:
             # Use defaults only if not already configured
             _config = Config()
 
@@ -332,6 +343,7 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
     logger.info(
         "fuzzbin_configured",
         version=__version__,
+        config_path=str(config_path) if config_path else None,
         config_dir=str(_config.config_dir),
         library_dir=str(_config.library_dir),
         database_path=str(_config.get_database_path()),

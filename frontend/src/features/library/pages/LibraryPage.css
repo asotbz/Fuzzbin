@@ -28,7 +28,7 @@
 
 @media (min-width: 900px) {
   .libraryControls {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
     align-items: center;
   }
 }
