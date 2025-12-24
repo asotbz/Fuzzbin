@@ -170,3 +170,95 @@ def normalize_spotify_playlist_id(value: str) -> str:
     raw = raw.split("?")[0].split("#")[0]
 
     return raw
+
+
+class AddSearchSource(str, Enum):
+    """Single-video search/preview source."""
+
+    IMVDB = "imvdb"
+    DISCOGS_MASTER = "discogs_master"
+    DISCOGS_RELEASE = "discogs_release"
+    YOUTUBE = "youtube"
+
+
+class AddSearchRequest(BaseModel):
+    """Request to search across supported sources for a single video."""
+
+    artist: str = Field(min_length=1, max_length=200, description="Artist name")
+    track_title: str = Field(min_length=1, max_length=200, description="Track/song title")
+
+    include_sources: Optional[list[AddSearchSource]] = Field(
+        default=None,
+        description="Optional allowlist of sources to search. If omitted, searches all available sources.",
+    )
+
+    imvdb_per_page: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max IMVDb results to return",
+    )
+    discogs_per_page: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max Discogs results to return",
+    )
+    youtube_max_results: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Max YouTube (yt-dlp) results to return",
+    )
+
+
+class AddSearchResultItem(BaseModel):
+    """Normalized search result across sources."""
+
+    source: AddSearchSource = Field(description="Where this result came from")
+    id: str = Field(description="Source-specific identifier (IMVDb id, Discogs master/release id, YouTube id)")
+
+    title: str = Field(description="Best-effort title")
+    artist: Optional[str] = Field(default=None, description="Best-effort primary artist")
+    year: Optional[int] = Field(default=None, description="Release year if known")
+    url: Optional[str] = Field(default=None, description="Upstream URL if available")
+    thumbnail: Optional[str] = Field(default=None, description="Thumbnail URL if available")
+
+    extra: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional source-specific fields (kept minimal)",
+    )
+
+
+class AddSearchSkippedSource(BaseModel):
+    source: AddSearchSource = Field(description="Source that was skipped")
+    reason: str = Field(description="Why it was skipped")
+
+
+class AddSearchResponse(BaseModel):
+    """Aggregated search response."""
+
+    artist: str = Field(description="Artist search term")
+    track_title: str = Field(description="Track/title search term")
+    results: list[AddSearchResultItem] = Field(default_factory=list, description="Flattened results")
+    skipped: list[AddSearchSkippedSource] = Field(
+        default_factory=list,
+        description="Sources that were unavailable or failed",
+    )
+
+    counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Counts per source (keys match AddSearchSource values)",
+    )
+
+
+class AddPreviewResponse(BaseModel):
+    """Preview payload for a selected result."""
+
+    source: AddSearchSource = Field(description="Preview source")
+    id: str = Field(description="Source-specific identifier")
+    data: dict[str, Any] = Field(description="Upstream-shaped data for rendering a preview")
+    extra: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra cross-reference hints (kept minimal)",
+    )
