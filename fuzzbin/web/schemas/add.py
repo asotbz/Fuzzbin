@@ -216,7 +216,9 @@ class AddSearchResultItem(BaseModel):
     """Normalized search result across sources."""
 
     source: AddSearchSource = Field(description="Where this result came from")
-    id: str = Field(description="Source-specific identifier (IMVDb id, Discogs master/release id, YouTube id)")
+    id: str = Field(
+        description="Source-specific identifier (IMVDb id, Discogs master/release id, YouTube id)"
+    )
 
     title: str = Field(description="Best-effort title")
     artist: Optional[str] = Field(default=None, description="Best-effort primary artist")
@@ -240,7 +242,9 @@ class AddSearchResponse(BaseModel):
 
     artist: str = Field(description="Artist search term")
     track_title: str = Field(description="Track/title search term")
-    results: list[AddSearchResultItem] = Field(default_factory=list, description="Flattened results")
+    results: list[AddSearchResultItem] = Field(
+        default_factory=list, description="Flattened results"
+    )
     skipped: list[AddSearchSkippedSource] = Field(
         default_factory=list,
         description="Sources that were unavailable or failed",
@@ -262,3 +266,39 @@ class AddPreviewResponse(BaseModel):
         default_factory=dict,
         description="Extra cross-reference hints (kept minimal)",
     )
+
+
+class AddSingleImportRequest(BaseModel):
+    """Submit a single-video import job based on a selected search result."""
+
+    source: AddSearchSource = Field(description="Selected source")
+    id: str = Field(description="Selected item id (source-specific)")
+
+    # Optional hints
+    youtube_id: Optional[str] = Field(
+        default=None,
+        description="Optional YouTube video id to associate with the record (takes precedence over inferred ids)",
+    )
+    youtube_url: Optional[str] = Field(
+        default=None,
+        description="Optional YouTube URL to resolve via yt-dlp (used when source=youtube or to pin a specific video)",
+    )
+
+    initial_status: str = Field(
+        default="discovered",
+        description="Initial status for the created/updated video record",
+        examples=["discovered", "imported"],
+    )
+    skip_existing: bool = Field(
+        default=True,
+        description="Skip creating a new record if a matching record already exists",
+    )
+
+
+class AddSingleImportResponse(BaseModel):
+    """Response after submitting a single-video import job."""
+
+    job_id: str = Field(description="Background job id")
+    source: AddSearchSource = Field(description="Selected source")
+    id: str = Field(description="Selected item id")
+    status: str = Field(default="pending", description="Initial job status")

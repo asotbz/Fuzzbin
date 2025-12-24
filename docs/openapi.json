@@ -4704,6 +4704,497 @@
         }
       }
     },
+    "/add/preview-batch": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Preview a batch import",
+        "description": "Preview what would be imported for Spotify playlists or NFO directory scans.",
+        "operationId": "preview_batch_add_preview_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/spotify": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Submit a Spotify playlist import job",
+        "description": "Submit a background job that imports playlist tracks into the DB.",
+        "operationId": "submit_spotify_import_add_spotify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/nfo-scan": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Submit an NFO directory scan/import job",
+        "description": "Alias of POST /scan for UI cohesion under /add.",
+        "operationId": "submit_nfo_scan_add_nfo_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NFOScanResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/search": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Search for a single video across sources",
+        "description": "Aggregates IMVDb, Discogs, and YouTube (yt-dlp) search results into a single UI-friendly list.",
+        "operationId": "search_single_video_add_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/preview/{source}/{item_id}": {
+      "get": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Preview a selected search result",
+        "description": "Fetches a detail payload suitable for a UI preview for one of the supported sources.",
+        "operationId": "preview_single_video_add_preview__source___item_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/AddSearchSource"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/add/import": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Submit a single-video import job",
+        "description": "Creates/updates a video record based on a selected search result (IMVDb/Discogs/YouTube).",
+        "operationId": "submit_single_import_add_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSingleImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSingleImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/videos/bulk/update": {
       "post": {
         "tags": [
@@ -7701,6 +8192,359 @@
   },
   "components": {
     "schemas": {
+      "AddBatchMode": {
+        "type": "string",
+        "enum": [
+          "spotify",
+          "nfo"
+        ],
+        "title": "AddBatchMode",
+        "description": "Batch preview mode."
+      },
+      "AddPreviewResponse": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/AddSearchSource",
+            "description": "Preview source"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Source-specific identifier"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "Upstream-shaped data for rendering a preview"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra",
+            "description": "Extra cross-reference hints (kept minimal)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "id",
+          "data"
+        ],
+        "title": "AddPreviewResponse",
+        "description": "Preview payload for a selected result."
+      },
+      "AddSearchRequest": {
+        "properties": {
+          "artist": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Artist",
+            "description": "Artist name"
+          },
+          "track_title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Track Title",
+            "description": "Track/song title"
+          },
+          "include_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AddSearchSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Sources",
+            "description": "Optional allowlist of sources to search. If omitted, searches all available sources."
+          },
+          "imvdb_per_page": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Imvdb Per Page",
+            "description": "Max IMVDb results to return",
+            "default": 10
+          },
+          "discogs_per_page": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Discogs Per Page",
+            "description": "Max Discogs results to return",
+            "default": 10
+          },
+          "youtube_max_results": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Youtube Max Results",
+            "description": "Max YouTube (yt-dlp) results to return",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "artist",
+          "track_title"
+        ],
+        "title": "AddSearchRequest",
+        "description": "Request to search across supported sources for a single video."
+      },
+      "AddSearchResponse": {
+        "properties": {
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "description": "Artist search term"
+          },
+          "track_title": {
+            "type": "string",
+            "title": "Track Title",
+            "description": "Track/title search term"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AddSearchResultItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Flattened results"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/AddSearchSkippedSource"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "description": "Sources that were unavailable or failed"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts",
+            "description": "Counts per source (keys match AddSearchSource values)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artist",
+          "track_title"
+        ],
+        "title": "AddSearchResponse",
+        "description": "Aggregated search response."
+      },
+      "AddSearchResultItem": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/AddSearchSource",
+            "description": "Where this result came from"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Source-specific identifier (IMVDb id, Discogs master/release id, YouTube id)"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Best-effort title"
+          },
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist",
+            "description": "Best-effort primary artist"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year if known"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "Upstream URL if available"
+          },
+          "thumbnail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail",
+            "description": "Thumbnail URL if available"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra",
+            "description": "Additional source-specific fields (kept minimal)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "id",
+          "title"
+        ],
+        "title": "AddSearchResultItem",
+        "description": "Normalized search result across sources."
+      },
+      "AddSearchSkippedSource": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/AddSearchSource",
+            "description": "Source that was skipped"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Why it was skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "reason"
+        ],
+        "title": "AddSearchSkippedSource"
+      },
+      "AddSearchSource": {
+        "type": "string",
+        "enum": [
+          "imvdb",
+          "discogs_master",
+          "discogs_release",
+          "youtube"
+        ],
+        "title": "AddSearchSource",
+        "description": "Single-video search/preview source."
+      },
+      "AddSingleImportRequest": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/AddSearchSource",
+            "description": "Selected source"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Selected item id (source-specific)"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id",
+            "description": "Optional YouTube video id to associate with the record (takes precedence over inferred ids)"
+          },
+          "youtube_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Url",
+            "description": "Optional YouTube URL to resolve via yt-dlp (used when source=youtube or to pin a specific video)"
+          },
+          "initial_status": {
+            "type": "string",
+            "title": "Initial Status",
+            "description": "Initial status for the created/updated video record",
+            "default": "discovered",
+            "examples": [
+              "discovered",
+              "imported"
+            ]
+          },
+          "skip_existing": {
+            "type": "boolean",
+            "title": "Skip Existing",
+            "description": "Skip creating a new record if a matching record already exists",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "id"
+        ],
+        "title": "AddSingleImportRequest",
+        "description": "Submit a single-video import job based on a selected search result."
+      },
+      "AddSingleImportResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Background job id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AddSearchSource",
+            "description": "Selected source"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Selected item id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Initial job status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "source",
+          "id"
+        ],
+        "title": "AddSingleImportResponse",
+        "description": "Response after submitting a single-video import job."
+      },
       "ArtistCreate": {
         "properties": {
           "name": {
@@ -8123,6 +8967,227 @@
         ],
         "title": "BackupVerifyResponse",
         "description": "Response from backup verification."
+      },
+      "BatchPreviewItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "Item kind: spotify_track or nfo"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Track/video title"
+          },
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "description": "Primary artist"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album",
+            "description": "Album name"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year if known"
+          },
+          "already_exists": {
+            "type": "boolean",
+            "title": "Already Exists",
+            "description": "Whether item already exists",
+            "default": false
+          },
+          "spotify_track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
+          "spotify_playlist_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Playlist Id",
+            "description": "Spotify playlist ID"
+          },
+          "nfo_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nfo Path",
+            "description": "NFO file path (nfo mode)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "artist"
+        ],
+        "title": "BatchPreviewItem",
+        "description": "Single row in a batch preview response."
+      },
+      "BatchPreviewRequest": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AddBatchMode",
+            "description": "Batch mode: spotify or nfo"
+          },
+          "spotify_playlist_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Playlist Id",
+            "description": "Spotify playlist ID, URI, or URL",
+            "examples": [
+              "37i9dQZF1DXcBWIGoYBM5M",
+              "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+              "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+            ]
+          },
+          "nfo_directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nfo Directory",
+            "description": "Directory path containing .nfo files",
+            "examples": [
+              "/media/old_library/Music Videos"
+            ]
+          },
+          "recursive": {
+            "type": "boolean",
+            "title": "Recursive",
+            "description": "Recursive scan (nfo mode only)",
+            "default": true
+          },
+          "skip_existing": {
+            "type": "boolean",
+            "title": "Skip Existing",
+            "description": "Skip items already in the library (applies to both modes)",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "BatchPreviewRequest",
+        "description": "Request to preview a batch import before submitting a job."
+      },
+      "BatchPreviewResponse": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AddBatchMode",
+            "description": "Batch mode"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchPreviewItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Preview items"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total items found"
+          },
+          "existing_count": {
+            "type": "integer",
+            "title": "Existing Count",
+            "description": "Items already in the library"
+          },
+          "new_count": {
+            "type": "integer",
+            "title": "New Count",
+            "description": "Items not yet in the library"
+          },
+          "playlist_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playlist Name",
+            "description": "Spotify playlist name"
+          },
+          "directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directory",
+            "description": "NFO directory scanned"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra",
+            "description": "Extra mode-specific data (kept minimal)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "total_count",
+          "existing_count",
+          "new_count"
+        ],
+        "title": "BatchPreviewResponse",
+        "description": "Unified batch preview response for spotify/nfo."
       },
       "BulkCollectionRequest": {
         "properties": {
@@ -11734,6 +12799,7 @@
         "enum": [
           "import_nfo",
           "import_spotify",
+          "import_add_single",
           "download_youtube",
           "file_organize",
           "file_duplicate_resolve",
@@ -11967,6 +13033,45 @@
         ],
         "title": "NFOExportResult",
         "description": "Result of NFO export operation."
+      },
+      "NFOScanResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Background job ID"
+          },
+          "directory": {
+            "type": "string",
+            "title": "Directory",
+            "description": "Directory being scanned"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "Import mode"
+          },
+          "initial_status": {
+            "type": "string",
+            "title": "Initial Status",
+            "description": "Initial status for created video records"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Initial job status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "directory",
+          "mode",
+          "initial_status"
+        ],
+        "title": "NFOScanResponse",
+        "description": "Response after submitting an NFO scan job via /add.\n\nThis mirrors the /scan endpoint behavior but lives under /add for UI cohesion."
       },
       "OrganizeRequest": {
         "properties": {
@@ -12876,7 +13981,7 @@
           "directory"
         ],
         "title": "ScanRequest",
-        "description": "Request to scan a directory for music videos.\n\nSupports two modes:\n- `full`: Import all metadata from NFO files, set status to 'imported'\n- `discovery`: Only capture title/artist, set status to 'discovered'\n\nExample:\n    >>> # Full import\n    >>> request = ScanRequest(\n    ...     directory=\"/media/music_videos\",\n    ...     mode=ImportMode.FULL,\n    ...     recursive=True\n    ... )\n    \n    >>> # Discovery for workflow\n    >>> request = ScanRequest(\n    ...     directory=\"/media/unsorted\",\n    ...     mode=ImportMode.DISCOVERY,\n    ...     skip_existing=True\n    ... )"
+        "description": "Request to scan a directory for music videos.\n\nSupports two modes:\n- `full`: Import all metadata from NFO files, set status to 'imported'\n- `discovery`: Only capture title/artist, set status to 'discovered'\n\nExample:\n    >>> # Full import\n    >>> request = ScanRequest(\n    ...     directory=\"/media/music_videos\",\n    ...     mode=ImportMode.FULL,\n    ...     recursive=True\n    ... )\n\n    >>> # Discovery for workflow\n    >>> request = ScanRequest(\n    ...     directory=\"/media/unsorted\",\n    ...     mode=ImportMode.DISCOVERY,\n    ...     skip_existing=True\n    ... )"
       },
       "ScheduledTaskCreate": {
         "properties": {
@@ -13303,6 +14408,69 @@
         ],
         "title": "SpotifyArtistSchema",
         "description": "Spotify artist information (simplified)."
+      },
+      "SpotifyImportRequest": {
+        "properties": {
+          "playlist_id": {
+            "type": "string",
+            "title": "Playlist Id",
+            "description": "Spotify playlist ID, URI, or URL",
+            "examples": [
+              "37i9dQZF1DXcBWIGoYBM5M",
+              "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+              "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+            ]
+          },
+          "skip_existing": {
+            "type": "boolean",
+            "title": "Skip Existing",
+            "description": "Skip tracks already in DB",
+            "default": true
+          },
+          "initial_status": {
+            "type": "string",
+            "title": "Initial Status",
+            "description": "Initial status for created video records",
+            "default": "discovered",
+            "examples": [
+              "discovered",
+              "imported"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "playlist_id"
+        ],
+        "title": "SpotifyImportRequest",
+        "description": "Request to submit a Spotify playlist import job.\n\nNote: Current backend workflow imports playlist tracks into the DB (discovery-style).\nDownload/search per-track is intentionally out of scope for the first iteration."
+      },
+      "SpotifyImportResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Background job ID"
+          },
+          "playlist_id": {
+            "type": "string",
+            "title": "Playlist Id",
+            "description": "Normalized Spotify playlist ID"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Initial job status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "playlist_id"
+        ],
+        "title": "SpotifyImportResponse",
+        "description": "Response after submitting a Spotify import job."
       },
       "SpotifyPlaylistSchema": {
         "properties": {
@@ -15004,6 +16172,10 @@
     {
       "name": "Library Scan",
       "description": "Scan directories for music videos and import into library with full or discovery mode"
+    },
+    {
+      "name": "Add",
+      "description": "Import hub endpoints: batch preview and import job submission"
     }
   ]
 }

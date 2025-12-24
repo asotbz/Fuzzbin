@@ -13,6 +13,7 @@ class JobType(str, Enum):
 
     IMPORT_NFO = "import_nfo"
     IMPORT_SPOTIFY = "import_spotify"
+    IMPORT_ADD_SINGLE = "import_add_single"
     DOWNLOAD_YOUTUBE = "download_youtube"
     FILE_ORGANIZE = "file_organize"
     FILE_DUPLICATE_RESOLVE = "file_duplicate_resolve"

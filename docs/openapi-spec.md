@@ -530,3 +530,19 @@ The scan runs as a background job. Track progress via:
 - `WebSocket /ws/jobs/{job_id}` for real-time updates
 - `GET` `/scan/statuses` — Get video status definitions
   - Get the list of video statuses and their meanings for workflow planning.
+
+## Add
+Import hub endpoints: batch preview and import job submission
+
+- `POST` `/add/preview-batch` — Preview a batch import
+  - Preview what would be imported for Spotify playlists or NFO directory scans.
+- `POST` `/add/spotify` — Submit a Spotify playlist import job
+  - Submit a background job that imports playlist tracks into the DB.
+- `POST` `/add/nfo-scan` — Submit an NFO directory scan/import job
+  - Alias of POST /scan for UI cohesion under /add.
+- `POST` `/add/search` — Search for a single video across sources
+  - Aggregates IMVDb, Discogs, and YouTube (yt-dlp) search results into a single UI-friendly list.
+- `GET` `/add/preview/{source}/{item_id}` — Preview a selected search result
+  - Fetches a detail payload suitable for a UI preview for one of the supported sources.
+- `POST` `/add/import` — Submit a single-video import job
+  - Creates/updates a video record based on a selected search result (IMVDb/Discogs/YouTube).

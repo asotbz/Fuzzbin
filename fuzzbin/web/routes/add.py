@@ -30,6 +30,8 @@ from fuzzbin.tasks import Job, JobType, get_job_queue
 from fuzzbin.web.dependencies import get_current_user
 from fuzzbin.web.schemas.add import (
     AddPreviewResponse,
+    AddSingleImportRequest,
+    AddSingleImportResponse,
     AddSearchRequest,
     AddSearchResponse,
     AddSearchResultItem,
@@ -199,7 +201,7 @@ async def preview_batch(
     for idx, track in enumerate(tracks):
         title = (track.name or "").strip()
         primary_artist = (track.artists[0].name if track.artists else "").strip()
-        album = (track.album.name if track.album else None)
+        album = track.album.name if track.album else None
 
         year: Optional[int] = None
         if track.album and track.album.release_date:
@@ -650,7 +652,7 @@ async def preview_single_video(
         )
 
         youtube_ids: list[str] = []
-        for s in (video.sources or []):
+        for s in video.sources or []:
             if getattr(s, "source_slug", None) != "youtube":
                 continue
             sd = getattr(s, "source_data", None)
@@ -720,3 +722,42 @@ async def preview_single_video(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"Unsupported source: {source}",
     )
+
+
+@router.post(
+    "/import",
+    response_model=AddSingleImportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Submit a single-video import job",
+    description="Creates/updates a video record based on a selected search result (IMVDb/Discogs/YouTube).",
+)
+async def submit_single_import(
+    request: AddSingleImportRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> AddSingleImportResponse:
+    logger.info(
+        "add_single_import_job_submitting",
+        source=request.source.value,
+        item_id=request.id,
+        skip_existing=request.skip_existing,
+        initial_status=request.initial_status,
+        user=current_user.username if current_user else "anonymous",
+    )
+
+    job = Job(
+        type=JobType.IMPORT_ADD_SINGLE,
+        metadata={
+            "source": request.source.value,
+            "id": request.id,
+            "youtube_id": request.youtube_id,
+            "youtube_url": request.youtube_url,
+            "skip_existing": request.skip_existing,
+            "initial_status": request.initial_status,
+        },
+    )
+
+    queue = get_job_queue()
+    await queue.submit(job)
+
+    return AddSingleImportResponse(job_id=job.id, source=request.source, id=request.id)
