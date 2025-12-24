@@ -243,9 +243,10 @@ Detailed design system created at:
 
 ---
 
-### YouTube Import (Magenta Channel) `/import`
+### IMVDb add to library (Magenta Channel) `/add`
 **Features:**
-- Search YouTube by artist + track title
+- Search IMVDb by artist + track title
+- Get YouTube metadata for sources
 - Preview results with thumbnails, metadata
 - Download button starts background job
 - Real-time progress via WebSocket
