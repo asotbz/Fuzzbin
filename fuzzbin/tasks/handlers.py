@@ -17,7 +17,7 @@ import structlog
 
 import fuzzbin
 from fuzzbin.tasks.models import Job, JobStatus, JobType
-from fuzzbin.tasks.queue import JobQueue
+from fuzzbin.tasks.queue import JobQueue, get_job_queue
 from fuzzbin.workflows.nfo_importer import NFOImporter
 
 logger = structlog.get_logger(__name__)
@@ -1663,6 +1663,36 @@ async def handle_add_single_import(job: Job) -> None:
         return
 
     job.update_progress(3, 3, "Import complete")
+    
+    # If youtube_id exists and video was created, queue download job
+    download_job_id: str | None = None
+    if created and youtube_id:
+        logger.info(
+            "queueing_download_job",
+            job_id=job.id,
+            video_id=video_id,
+            youtube_id=youtube_id,
+        )
+        
+        # Update video status to pending_download
+        await repository.update_video(video_id, status="pending_download")
+        
+        # Queue download job with parent relationship
+        queue = get_job_queue()
+        download_job = Job(
+            type=JobType.IMPORT_DOWNLOAD,
+            metadata={
+                "video_id": video_id,
+                "youtube_id": youtube_id,
+            },
+            parent_job_id=job.id,
+        )
+        await queue.submit(download_job)
+        download_job_id = download_job.id
+    elif created and not youtube_id:
+        # No YouTube ID, mark as discovered for manual download later
+        await repository.update_video(video_id, status="discovered")
+    
     job.mark_completed(
         {
             "created": created,
@@ -1673,6 +1703,7 @@ async def handle_add_single_import(job: Job) -> None:
             "imvdb_video_id": imvdb_video_id,
             "youtube_id": youtube_id,
             "initial_status": initial_status,
+            "download_job_id": download_job_id,
         }
     )
 
@@ -1684,6 +1715,372 @@ async def handle_add_single_import(job: Job) -> None:
         created=created,
         skipped=skipped,
         video_id=video_id,
+        download_job_queued=download_job_id is not None,
+    )
+
+
+async def handle_import_download(job: Job) -> None:
+    """Handle video download job for imported videos.
+
+    Downloads video from YouTube using yt-dlp to a temporary location,
+    updates video status, then queues organize job.
+
+    Job metadata parameters:
+        video_id (int, required): Video database ID
+        youtube_id (str, required): YouTube video ID to download
+
+    Job result on completion:
+        video_id: Database video ID
+        youtube_id: YouTube video ID
+        temp_path: Temporary file path where video was downloaded
+        file_size: Downloaded file size in bytes
+
+    Args:
+        job: Job instance with metadata containing download parameters
+
+    Raises:
+        ValueError: If required parameters missing
+        YTDLPError: If download fails
+    """
+    video_id = job.metadata.get("video_id")
+    youtube_id = job.metadata.get("youtube_id")
+
+    if not video_id or not youtube_id:
+        raise ValueError("Missing required parameters: video_id, youtube_id")
+
+    logger.info(
+        "import_download_job_starting",
+        job_id=job.id,
+        video_id=video_id,
+        youtube_id=youtube_id,
+    )
+
+    import fuzzbin
+    from fuzzbin.clients.ytdlp_client import YTDLPClient
+    from fuzzbin.common.config import YTDLPConfig
+    from fuzzbin.core.exceptions import YTDLPError
+
+    job.update_progress(0, 3, "Initializing download...")
+    
+    repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
+    ytdlp_config = config.ytdlp or YTDLPConfig()
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Update video status to downloading
+    await repository.update_video(video_id, status="downloading")
+
+    # Create temp directory for download
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp(prefix="fuzzbin_download_"))
+    temp_file = temp_dir / f"{youtube_id}.mp4"
+
+    try:
+        job.update_progress(1, 3, f"Downloading video {youtube_id}...")
+        
+        async with YTDLPClient.from_config(ytdlp_config) as client:
+            result = await client.download(
+                url=f"https://www.youtube.com/watch?v={youtube_id}",
+                output_path=temp_file,
+            )
+
+        if job.status == JobStatus.CANCELLED:
+            # Clean up temp file
+            if temp_file.exists():
+                temp_file.unlink()
+            if temp_dir.exists():
+                temp_dir.rmdir()
+            return
+
+        # Update video status to downloaded
+        await repository.update_video(video_id, status="downloaded")
+
+        job.update_progress(2, 3, "Queuing organize job...")
+
+        # Queue organize job with parent relationship
+        queue = get_job_queue()
+        organize_job = Job(
+            type=JobType.IMPORT_ORGANIZE,
+            metadata={
+                "video_id": video_id,
+                "temp_path": str(temp_file),
+            },
+            parent_job_id=job.id,
+        )
+        await queue.submit(organize_job)
+
+        job.update_progress(3, 3, "Download complete")
+        job.mark_completed(
+            {
+                "video_id": video_id,
+                "youtube_id": youtube_id,
+                "temp_path": str(temp_file),
+                "file_size": result.file_size,
+                "organize_job_id": organize_job.id,
+            }
+        )
+
+        logger.info(
+            "import_download_job_completed",
+            job_id=job.id,
+            video_id=video_id,
+            file_size=result.file_size,
+        )
+
+    except (YTDLPError, Exception) as e:
+        # Clean up temp file on error
+        if temp_file.exists():
+            temp_file.unlink()
+        if temp_dir.exists():
+            temp_dir.rmdir()
+        
+        # Update video status to download_failed
+        await repository.update_video(video_id, status="download_failed")
+        
+        # Extract stderr if it's a YTDLPExecutionError
+        error_details = {"error": str(e)}
+        if hasattr(e, "stderr") and e.stderr:
+            error_details["stderr"] = e.stderr[:1000]  # First 1000 chars
+        if hasattr(e, "returncode"):
+            error_details["returncode"] = e.returncode
+        
+        logger.error(
+            "import_download_job_failed",
+            job_id=job.id,
+            video_id=video_id,
+            **error_details,
+        )
+        raise
+
+
+async def handle_import_organize(job: Job) -> None:
+    """Handle video file organization for imported videos.
+
+    Moves video from temp location to final organized path using configured
+    pattern, updates database, then queues NFO generation job.
+
+    Job metadata parameters:
+        video_id (int, required): Video database ID
+        temp_path (str, required): Temporary file path from download
+
+    Job result on completion:
+        video_id: Database video ID
+        video_path: Final organized video file path
+        nfo_path: Path where NFO file will be created
+
+    Args:
+        job: Job instance with metadata containing organize parameters
+
+    Raises:
+        ValueError: If required parameters missing or video not found
+        FileNotFoundError: If temp file doesn't exist
+    """
+    video_id = job.metadata.get("video_id")
+    temp_path_str = job.metadata.get("temp_path")
+
+    if not video_id or not temp_path_str:
+        raise ValueError("Missing required parameters: video_id, temp_path")
+
+    temp_path = Path(temp_path_str)
+    if not temp_path.exists():
+        raise FileNotFoundError(f"Temp file not found: {temp_path}")
+
+    logger.info(
+        "import_organize_job_starting",
+        job_id=job.id,
+        video_id=video_id,
+        temp_path=temp_path_str,
+    )
+
+    import fuzzbin
+    from fuzzbin.core.organizer import build_media_paths
+    from fuzzbin.parsers.models import MusicVideoNFO
+    import shutil
+
+    job.update_progress(0, 4, "Initializing organization...")
+    
+    repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        # Clean up temp file
+        if temp_path.exists():
+            temp_path.unlink()
+            temp_path.parent.rmdir()
+        return
+
+    # Get video record
+    video = await repository.get_video_by_id(video_id)
+    
+    # Update status to organizing
+    await repository.update_video(video_id, status="organizing")
+
+    try:
+        job.update_progress(1, 4, "Building target paths...")
+
+        # Build NFO data from video metadata
+        nfo_data = MusicVideoNFO(
+            title=video["title"],
+            artist=video.get("artist"),
+            album=video.get("album"),
+            year=video.get("year"),
+            director=video.get("director"),
+            genre=video.get("genre"),
+            studio=video.get("studio"),
+        )
+
+        # Build target paths using organizer config
+        # Get library_dir from config (falls back to default if not set)
+        library_dir = config.library_dir
+        if library_dir is None:
+            from fuzzbin.common.config import _get_default_library_dir
+            library_dir = _get_default_library_dir()
+        
+        media_paths = build_media_paths(
+            root_path=library_dir,
+            nfo_data=nfo_data,
+            config=config.organizer,
+        )
+
+        job.update_progress(2, 4, "Moving file to organized location...")
+
+        # Create parent directory if needed
+        media_paths.video_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Move file from temp to final location
+        shutil.move(str(temp_path), str(media_paths.video_path))
+
+        # Clean up temp directory
+        if temp_path.parent.exists():
+            temp_path.parent.rmdir()
+
+        # Update video record with file paths
+        await repository.update_video(
+            video_id,
+            video_file_path=str(media_paths.video_path),
+            nfo_file_path=str(media_paths.nfo_path),
+            status="organized",
+        )
+
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        job.update_progress(3, 4, "Queuing NFO generation job...")
+
+        # Queue NFO generation job with parent relationship
+        queue = get_job_queue()
+        nfo_job = Job(
+            type=JobType.IMPORT_NFO_GENERATE,
+            metadata={
+                "video_id": video_id,
+            },
+            parent_job_id=job.id,
+        )
+        await queue.submit(nfo_job)
+
+        job.update_progress(4, 4, "Organization complete")
+        job.mark_completed(
+            {
+                "video_id": video_id,
+                "video_path": str(media_paths.video_path),
+                "nfo_path": str(media_paths.nfo_path),
+                "nfo_job_id": nfo_job.id,
+            }
+        )
+
+        logger.info(
+            "import_organize_job_completed",
+            job_id=job.id,
+            video_id=video_id,
+            video_path=str(media_paths.video_path),
+        )
+
+    except Exception as e:
+        # Clean up temp file on error
+        if temp_path.exists():
+            temp_path.unlink()
+            if temp_path.parent.exists():
+                temp_path.parent.rmdir()
+        
+        # Update video status to download_failed (allow retry)
+        await repository.update_video(video_id, status="download_failed")
+        
+        logger.error(
+            "import_organize_job_failed",
+            job_id=job.id,
+            video_id=video_id,
+            error=str(e),
+        )
+        raise
+
+
+async def handle_import_nfo_generate(job: Job) -> None:
+    """Handle NFO file generation for imported videos.
+
+    Generates musicvideo.nfo file at the configured location and updates
+    video status to complete.
+
+    Job metadata parameters:
+        video_id (int, required): Video database ID
+
+    Job result on completion:
+        video_id: Database video ID
+        nfo_path: Path to generated NFO file
+
+    Args:
+        job: Job instance with metadata containing NFO parameters
+
+    Raises:
+        ValueError: If required parameters missing or video not found
+    """
+    video_id = job.metadata.get("video_id")
+
+    if not video_id:
+        raise ValueError("Missing required parameter: video_id")
+
+    logger.info(
+        "import_nfo_generate_job_starting",
+        job_id=job.id,
+        video_id=video_id,
+    )
+
+    import fuzzbin
+    from fuzzbin.core.db.exporter import NFOExporter
+
+    job.update_progress(0, 2, "Initializing NFO generation...")
+    
+    repository = await fuzzbin.get_repository()
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    job.update_progress(1, 2, "Generating NFO file...")
+
+    # Create NFO exporter and export
+    exporter = NFOExporter(repository)
+    nfo_path = await exporter.export_video_to_nfo(video_id)
+
+    # Update video status to complete
+    await repository.update_video(video_id, status="complete")
+
+    job.update_progress(2, 2, "NFO generation complete")
+    job.mark_completed(
+        {
+            "video_id": video_id,
+            "nfo_path": str(nfo_path),
+        }
+    )
+
+    logger.info(
+        "import_nfo_generate_job_completed",
+        job_id=job.id,
+        video_id=video_id,
+        nfo_path=str(nfo_path),
     )
 
 
@@ -1780,6 +2177,10 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.LIBRARY_SCAN, handle_library_scan)
     queue.register_handler(JobType.IMPORT, handle_import)
     queue.register_handler(JobType.IMPORT_ADD_SINGLE, handle_add_single_import)
+    # Import workflow handlers
+    queue.register_handler(JobType.IMPORT_DOWNLOAD, handle_import_download)
+    queue.register_handler(JobType.IMPORT_ORGANIZE, handle_import_organize)
+    queue.register_handler(JobType.IMPORT_NFO_GENERATE, handle_import_nfo_generate)
     queue.register_handler(JobType.BACKUP, handle_backup)
 
     logger.info(
@@ -1795,6 +2196,9 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.METADATA_REFRESH.value,
             JobType.LIBRARY_SCAN.value,
             JobType.IMPORT.value,
+            JobType.IMPORT_DOWNLOAD.value,
+            JobType.IMPORT_ORGANIZE.value,
+            JobType.IMPORT_NFO_GENERATE.value,
             JobType.BACKUP.value,
         ],
     )

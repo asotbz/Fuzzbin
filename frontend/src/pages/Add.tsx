@@ -56,6 +56,7 @@ export default function AddPage() {
   const [nfoPreview, setNfoPreview] = useState<BatchPreviewResponse | null>(null)
 
   const [jobId, setJobId] = useState<string | null>(null)
+  const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set())
 
   const jobWs = useJobWebSocket(jobId, tokens.accessToken)
 
@@ -198,9 +199,16 @@ export default function AddPage() {
         const artistName = safeString(r.artist)
         const year = safeNumber(r.year)
         const url = safeString(r.url)
-        return source && id ? { source, id, title, artist: artistName, year, url } : null
+        const thumbnail = safeString(r.thumbnail)
+        return source && id ? { source, id, title, artist: artistName, year, url, thumbnail, rawData: r } : null
       })
-      .filter((x): x is { source: string; id: string; title: string; artist: string; year: number | null; url: string } => Boolean(x))
+      .filter((x): x is { source: string; id: string; title: string; artist: string; year: number | null; url: string; thumbnail: string; rawData: Record<string, unknown> } => Boolean(x))
+      .sort((a, b) => {
+        // IMVDb first, then others
+        if (a.source === 'imvdb' && b.source !== 'imvdb') return -1
+        if (a.source !== 'imvdb' && b.source === 'imvdb') return 1
+        return 0
+      })
   }, [searchData])
 
   const skipped = useMemo(() => {
@@ -493,31 +501,62 @@ export default function AddPage() {
             <div className="addResults">
               {results.map((r) => {
                 const isSelected = selected?.source === r.source && selected?.id === r.id
+                const resultKey = `${r.source}:${r.id}`
+                const isExpanded = expandedResults.has(resultKey)
                 return (
-                  <button
-                    key={`${r.source}:${r.id}`}
-                    type="button"
-                    className={`addResultItem ${isSelected ? 'addResultItemActive' : ''}`}
-                    onClick={() => {
-                      setSelected({ source: r.source, id: r.id })
-                      setJobId(null)
-                      setYoutubeId('')
-                    }}
-                  >
-                    <div className="addResultTop">
-                      <div className="addResultTitle">{r.title || r.id}</div>
-                      <div className="addBadge">{r.source}</div>
-                    </div>
-                    <div className="addResultMeta">
-                      <span>{r.artist || '—'}</span>
-                      {r.year ? <span>· {r.year}</span> : null}
-                      {r.url ? (
-                        <span className="addResultUrl" title={r.url}>
-                          · {r.url}
-                        </span>
+                  <div key={resultKey} className="addResultWrapper">
+                    <button
+                      type="button"
+                      className={`addResultItem ${isSelected ? 'addResultItemActive' : ''}`}
+                      onClick={() => {
+                        setSelected({ source: r.source, id: r.id })
+                        setJobId(null)
+                        setYoutubeId('')
+                      }}
+                    >
+                      {r.thumbnail ? (
+                        <div className="addResultThumbnail">
+                          <img src={r.thumbnail} alt={r.title} loading="lazy" />
+                        </div>
                       ) : null}
-                    </div>
-                  </button>
+                      <div className="addResultContent">
+                        <div className="addResultTop">
+                          <div className="addResultTitle">{r.title || r.id}</div>
+                          <div className="addBadge">{r.source}</div>
+                        </div>
+                        <div className="addResultMeta">
+                          <span>{r.artist || '—'}</span>
+                          {r.year ? <span>· {r.year}</span> : null}
+                          {r.url ? (
+                            <span className="addResultUrl" title={r.url}>
+                              · {r.url}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="addExpandButton"
+                      onClick={() => {
+                        setExpandedResults((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(resultKey)) {
+                            next.delete(resultKey)
+                          } else {
+                            next.add(resultKey)
+                          }
+                          return next
+                        })
+                      }}
+                      aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                    >
+                      {isExpanded ? '▼' : '▶'}
+                    </button>
+                    {isExpanded ? (
+                      <pre className="addResultJson">{JSON.stringify(r.rawData, null, 2)}</pre>
+                    ) : null}
+                  </div>
                 )
               })}
             </div>
@@ -545,6 +584,16 @@ export default function AddPage() {
 
           {selected && previewQuery.data ? (
             <>
+              {(() => {
+                const extra = previewQuery.data?.extra as unknown
+                const thumbnail = extra && typeof extra === 'object' ? (extra as Record<string, unknown>).thumbnail : null
+                return thumbnail && typeof thumbnail === 'string' ? (
+                  <div className="addPreviewThumbnail">
+                    <img src={thumbnail} alt="Preview thumbnail" />
+                  </div>
+                ) : null
+              })()}
+
               <div className="addFormRow">
                 <label className="addLabel">
                   YouTube ID (optional)
@@ -608,8 +657,49 @@ export default function AddPage() {
           {jobId && (jobWs.lastUpdate || jobQuery.data) ? (
             <>
               <div className="addStatus">Job ID: {jobId}</div>
-              <div className="addStatus">Status: {String(jobWs.lastUpdate?.status ?? jobQuery.data?.status)}</div>
-              {jobWs.lastUpdate?.current_step ? <div className="addStatus">{jobWs.lastUpdate.current_step}</div> : null}
+              <div className="addStatus">
+                Status: <strong>{String(jobWs.lastUpdate?.status ?? jobQuery.data?.status)}</strong>
+              </div>
+              {jobWs.lastUpdate?.current_step || jobQuery.data?.current_step ? (
+                <div className="addStatus">{jobWs.lastUpdate?.current_step ?? jobQuery.data?.current_step}</div>
+              ) : null}
+
+              {(() => {
+                const result = (jobWs.lastUpdate?.result ?? jobQuery.data?.result) as unknown
+                if (!result || typeof result !== 'object') return null
+                const resultObj = result as Record<string, unknown>
+                const downloadJobId = resultObj.download_job_id
+                const organizeJobId = resultObj.organize_job_id
+                const nfoJobId = resultObj.nfo_job_id
+
+                return (downloadJobId || organizeJobId || nfoJobId) ? (
+                  <div className="addWorkflowProgress">
+                    <div className="addStatus">
+                      <strong>Workflow Progress:</strong>
+                    </div>
+                    <div className="addWorkflowSteps">
+                      <div className="addWorkflowStep">
+                        ✓ Import metadata
+                      </div>
+                      {downloadJobId ? (
+                        <div className="addWorkflowStep">
+                          → Download video
+                        </div>
+                      ) : null}
+                      {organizeJobId ? (
+                        <div className="addWorkflowStep">
+                          → Organize files
+                        </div>
+                      ) : null}
+                      {nfoJobId ? (
+                        <div className="addWorkflowStep">
+                          → Generate NFO
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null
+              })()}
 
               {canViewInLibrary ? (
                 <div style={{ marginTop: 'var(--space-3)' }}>

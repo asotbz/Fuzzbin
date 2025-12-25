@@ -110,3 +110,36 @@
 .badgeTilt:nth-child(even) {
   transform: rotate(2deg);
 }
+
+.videoCardRetryButton {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: linear-gradient(135deg, var(--channel-download) 0%, var(--accent-purple) 100%);
+  border: 2px solid var(--channel-download);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.videoCardRetryButton:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-glow-purple);
+}
+
+.videoCardRetryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.videoCardRetryButton:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}

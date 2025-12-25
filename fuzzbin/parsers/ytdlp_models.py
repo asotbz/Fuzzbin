@@ -21,6 +21,7 @@ class YTDLPSearchResult(BaseModel):
         channel_follower_count: Channel subscriber count
         view_count: Video view count
         duration: Video duration in seconds
+        thumbnail: URL to video thumbnail image
     """
 
     id: str = Field(description="YouTube video ID")
@@ -32,6 +33,7 @@ class YTDLPSearchResult(BaseModel):
     )
     view_count: Optional[int] = Field(default=None, description="Video view count")
     duration: Optional[int] = Field(default=None, description="Video duration in seconds")
+    thumbnail: Optional[str] = Field(default=None, description="URL to video thumbnail image")
 
     model_config = {
         "extra": "ignore",
@@ -70,6 +72,7 @@ class YTDLPSearchResult(BaseModel):
             channel_follower_count=data.get("channel_follower_count"),
             view_count=data.get("view_count"),
             duration=data.get("duration"),
+            thumbnail=data.get("thumbnail"),
         )
 
 

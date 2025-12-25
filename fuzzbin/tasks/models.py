@@ -14,6 +14,9 @@ class JobType(str, Enum):
     IMPORT_NFO = "import_nfo"
     IMPORT_SPOTIFY = "import_spotify"
     IMPORT_ADD_SINGLE = "import_add_single"
+    IMPORT_DOWNLOAD = "import_download"  # Download video from YouTube
+    IMPORT_ORGANIZE = "import_organize"  # Organize video file to library structure
+    IMPORT_NFO_GENERATE = "import_nfo_generate"  # Generate NFO file for imported video
     DOWNLOAD_YOUTUBE = "download_youtube"
     FILE_ORGANIZE = "file_organize"
     FILE_DUPLICATE_RESOLVE = "file_duplicate_resolve"
@@ -95,6 +98,9 @@ class Job(BaseModel):
     )
     depends_on: list[str] = Field(
         default_factory=list, description="Job IDs that must complete first"
+    )
+    parent_job_id: str | None = Field(
+        default=None, description="ID of parent job if this is a child job in a workflow"
     )
     schedule: str | None = Field(
         default=None, description="Cron expression for scheduled execution"

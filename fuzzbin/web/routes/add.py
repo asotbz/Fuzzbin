@@ -547,7 +547,7 @@ async def search_single_video(
                     artist=None,
                     year=None,
                     url=r.url,
-                    thumbnail=None,
+                    thumbnail=getattr(r, "thumbnail", None),
                     extra={
                         "channel": getattr(r, "channel", None),
                         "duration": getattr(r, "duration", None),
@@ -689,11 +689,30 @@ async def preview_single_video(
                 if isinstance(candidate, str) and candidate:
                     youtube_ids.append(candidate)
 
+        # Fetch thumbnail from yt-dlp if we have a YouTube ID
+        thumbnail_url: Optional[str] = None
+        if youtube_ids:
+            try:
+                ytdlp_config = _get_ytdlp_config()
+                async with YTDLPClient.from_config(ytdlp_config) as ytdlp_client:
+                    yt_info = await ytdlp_client.get_video_info(youtube_ids[0])
+                    thumbnail_url = getattr(yt_info, "thumbnail", None)
+            except Exception as e:
+                logger.warning(
+                    "add_preview_ytdlp_thumbnail_failed",
+                    youtube_id=youtube_ids[0],
+                    error=str(e),
+                    user=user_label,
+                )
+
         return AddPreviewResponse(
             source=source,
             id=str(video.id),
             data=data_model.model_dump(),
-            extra={"youtube_ids": list(dict.fromkeys(youtube_ids))},
+            extra={
+                "youtube_ids": list(dict.fromkeys(youtube_ids)),
+                "thumbnail": thumbnail_url,
+            },
         )
 
     if source in (AddSearchSource.DISCOGS_MASTER, AddSearchSource.DISCOGS_RELEASE):
@@ -742,7 +761,12 @@ async def preview_single_video(
         )
 
         data = YTDLPVideoInfoResponse(video=video_info).model_dump()
-        return AddPreviewResponse(source=source, id=str(video_info.id), data=data, extra={})
+        return AddPreviewResponse(
+            source=source,
+            id=str(video_info.id),
+            data=data,
+            extra={"thumbnail": getattr(yt, "thumbnail", None)},
+        )
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
