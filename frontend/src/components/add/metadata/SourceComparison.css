@@ -1,0 +1,236 @@
+.sourceComparison {
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  margin: var(--space-6) 0;
+}
+
+.sourceComparisonHeader {
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.sourceComparisonTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.sourceComparisonSubtitle {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.sourceComparisonGrid {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  gap: var(--space-1);
+}
+
+@media (max-width: 768px) {
+  .sourceComparisonGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sourceComparisonHeaderRow {
+  display: contents;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sourceComparisonSource {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.sourceComparisonSource svg {
+  width: 20px;
+  height: 20px;
+}
+
+.sourceComparisonSourceImvdb {
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+  border: 2px solid rgba(0, 240, 255, 0.3);
+}
+
+.sourceComparisonSourceDiscogs {
+  color: var(--channel-import);
+  background: rgba(255, 0, 110, 0.1);
+  border: 2px solid rgba(255, 0, 110, 0.3);
+}
+
+@media (max-width: 768px) {
+  .sourceComparisonHeaderRow {
+    display: none;
+  }
+}
+
+.sourceComparisonRow {
+  display: contents;
+  transition: all 0.3s;
+}
+
+.sourceComparisonRow > * {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--bg-surface-light);
+}
+
+.sourceComparisonRowDifferent .sourceComparisonFieldLabel {
+  background: rgba(255, 214, 10, 0.05);
+  border-left: 3px solid var(--warning);
+}
+
+.sourceComparisonFieldLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .sourceComparisonRow {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 2px solid var(--bg-surface-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-3);
+  }
+
+  .sourceComparisonRow > * {
+    border-bottom: none;
+    padding: 0;
+  }
+
+  .sourceComparisonFieldLabel {
+    padding-left: 0;
+    margin-bottom: var(--space-2);
+  }
+}
+
+.sourceComparisonDiffBadge {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  background: var(--warning);
+  color: var(--bg-base);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+.sourceComparisonOption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--bg-base);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sourceComparisonOption:hover {
+  background: var(--bg-surface-light);
+  border-color: var(--channel-import);
+}
+
+.sourceComparisonOption input[type="radio"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--bg-surface-light);
+  border-radius: 50%;
+  background: var(--bg-base);
+  cursor: pointer;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.sourceComparisonOption input[type="radio"]::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--channel-import);
+  box-shadow: 0 0 10px var(--channel-import);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sourceComparisonOption input[type="radio"]:checked::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.sourceComparisonOption input[type="radio"]:checked {
+  border-color: var(--channel-import);
+}
+
+.sourceComparisonOptionSelected {
+  background: rgba(255, 0, 110, 0.1);
+  border-color: var(--channel-import);
+  box-shadow: 0 0 0 1px rgba(255, 0, 110, 0.2);
+}
+
+.sourceComparisonOptionSelected::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--channel-import);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.sourceComparisonOptionValue {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.sourceComparisonOptionValue em {
+  color: var(--text-tertiary);
+  font-style: normal;
+  opacity: 0.6;
+}
+
+.sourceComparisonOptionEmpty {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sourceComparisonOptionEmpty:hover {
+  background: var(--bg-base);
+  border-color: transparent;
+}

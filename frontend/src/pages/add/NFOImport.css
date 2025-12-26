@@ -1,0 +1,369 @@
+/* This file reuses styles from SpotifyImport.css but with nfo prefix */
+.nfoImport {
+  min-height: 100vh;
+  background: var(--bg-base);
+  padding: var(--space-6);
+}
+
+.nfoImportHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto var(--space-8);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.nfoImportTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0;
+}
+
+.nfoImportBackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  transition: all 0.3s;
+}
+
+.nfoImportBackLink svg {
+  width: 16px;
+  height: 16px;
+}
+
+.nfoImportBackLink:hover {
+  color: var(--channel-import);
+  border-color: var(--channel-import);
+  transform: translateX(-4px);
+}
+
+.nfoImportContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.nfoImportCard {
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+
+.nfoImportCardTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-5) 0;
+}
+
+.nfoImportForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.nfoImportFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nfoImportLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.nfoImportInput,
+.nfoImportSelect {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 3px solid var(--bg-surface-light);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  padding: var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all 0.3s;
+}
+
+.nfoImportInput:focus,
+.nfoImportSelect:focus {
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-glow-magenta);
+}
+
+.nfoImportHint {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.nfoImportCheckbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.nfoImportCheckbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.nfoImportActions {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.nfoImportButton {
+  padding: var(--space-4) var(--space-6);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--text-base);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.nfoImportButton:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.nfoImportButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.nfoImportButtonPrimary {
+  padding: var(--space-4) var(--space-6);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--text-base);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--channel-import);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nfoImportButtonPrimary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-xl), var(--shadow-glow-magenta);
+}
+
+.nfoImportButtonPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.nfoImportStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.nfoImportStat {
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.nfoImportStatValue {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  color: var(--channel-import);
+}
+
+.nfoImportStatLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+}
+
+.nfoImportPreviewTitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.nfoImportPreviewList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.nfoImportPreviewItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+}
+
+.nfoImportPreviewItemExists {
+  opacity: 0.6;
+}
+
+.nfoImportPreviewItemInfo {
+  flex: 1;
+}
+
+.nfoImportPreviewItemTitle {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.nfoImportPreviewItemArtist {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.nfoImportPreviewItemPath {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.nfoImportPreviewItemBadge {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-3);
+  background: rgba(255, 214, 10, 0.1);
+  border: 1px solid rgba(255, 214, 10, 0.3);
+  border-radius: var(--radius-full);
+  color: var(--warning);
+}
+
+.nfoImportJobStatus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.nfoImportJobStatusHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nfoImportJobStatusBadge {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+}
+
+.nfoImportJobStatusBadgepending,
+.nfoImportJobStatusBadgerunning {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--info);
+}
+
+.nfoImportJobStatusBadgecompleted {
+  background: rgba(57, 255, 20, 0.1);
+  border: 1px solid rgba(57, 255, 20, 0.3);
+  color: var(--success);
+}
+
+.nfoImportJobStatusBadgefailed {
+  background: rgba(255, 0, 110, 0.1);
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  color: var(--error);
+}
+
+.nfoImportJobId {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.nfoImportJobStep {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.nfoImportJobProgress {
+  height: 8px;
+  background: var(--bg-surface-light);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.nfoImportJobProgressBar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--channel-import) 0%, #ff4db8 100%);
+  box-shadow: 0 0 20px var(--channel-import);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nfoImportJobLive {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--success);
+}

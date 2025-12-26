@@ -2,7 +2,10 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthTokens } from '../auth/useAuthTokens'
 import LibraryPage from '../features/library/pages/LibraryPage'
-import AddPage from '../pages/Add'
+import ImportHub from '../pages/add/ImportHub'
+import SearchWizard from '../pages/add/SearchWizard'
+import SpotifyImport from '../pages/add/SpotifyImport'
+import NFOImport from '../pages/add/NFOImport'
 import LoginPage from '../pages/Login'
 import SetInitialPasswordPage from '../pages/SetInitialPassword'
 
@@ -31,7 +34,34 @@ export default function AppRoutes() {
         path="/add"
         element={
           <RequireAuth>
-            <AddPage />
+            <ImportHub />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/add/search"
+        element={
+          <RequireAuth>
+            <SearchWizard />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/add/spotify"
+        element={
+          <RequireAuth>
+            <SpotifyImport />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/add/nfo"
+        element={
+          <RequireAuth>
+            <NFOImport />
           </RequireAuth>
         }
       />

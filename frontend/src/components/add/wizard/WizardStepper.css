@@ -1,0 +1,198 @@
+.wizardStepper {
+  position: relative;
+  padding: var(--space-8) var(--space-6);
+  background: var(--bg-surface);
+  border-bottom: 3px solid var(--bg-surface-light);
+}
+
+.wizardStepperProgress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--bg-surface-light);
+  overflow: hidden;
+}
+
+.wizardStepperProgressBar {
+  height: 100%;
+  background: linear-gradient(90deg,
+    var(--channel-import) 0%,
+    #ff4db8 100%);
+  box-shadow: 0 0 20px var(--channel-import);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wizardStepperSteps {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Connection line between steps */
+.wizardStepperSteps::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 40px;
+  right: 40px;
+  height: 2px;
+  background: var(--bg-surface-light);
+  z-index: 0;
+}
+
+.wizardStep {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  z-index: 1;
+  transition: all 0.3s;
+}
+
+.wizardStep:disabled {
+  cursor: not-allowed;
+}
+
+.wizardStep:not(:disabled):hover .wizardStepNumber {
+  transform: scale(1.1);
+}
+
+.wizardStepNumber {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 700;
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-surface-light);
+  color: var(--text-tertiary);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.wizardStepNumber svg {
+  width: 20px;
+  height: 20px;
+}
+
+.wizardStepLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  text-align: center;
+  transition: color 0.3s;
+  max-width: 120px;
+}
+
+.wizardStepGlow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(255, 0, 110, 0.6) 0%, transparent 70%);
+  filter: blur(20px);
+  animation: stepGlowPulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes stepGlowPulse {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+}
+
+/* Completed step */
+.wizardStepCompleted .wizardStepNumber {
+  background: var(--channel-import);
+  border-color: var(--channel-import);
+  color: var(--bg-base);
+  box-shadow: 0 0 20px rgba(255, 0, 110, 0.5);
+}
+
+.wizardStepCompleted .wizardStepLabel {
+  color: var(--text-secondary);
+}
+
+/* Current step */
+.wizardStepCurrent .wizardStepNumber {
+  background: var(--bg-surface);
+  border-color: var(--channel-import);
+  color: var(--channel-import);
+  box-shadow:
+    0 0 0 4px rgba(255, 0, 110, 0.2),
+    0 0 20px rgba(255, 0, 110, 0.4);
+  animation: currentStepPulse 2s ease-in-out infinite;
+}
+
+@keyframes currentStepPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 4px rgba(255, 0, 110, 0.2),
+      0 0 20px rgba(255, 0, 110, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(255, 0, 110, 0.1),
+      0 0 30px rgba(255, 0, 110, 0.6);
+  }
+}
+
+.wizardStepCurrent .wizardStepLabel {
+  color: var(--channel-import);
+  font-weight: 700;
+}
+
+/* Pending step */
+.wizardStepPending .wizardStepNumber {
+  opacity: 0.5;
+}
+
+.wizardStepPending .wizardStepLabel {
+  opacity: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .wizardStepperSteps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wizardStepperSteps::before {
+    top: 20px;
+    bottom: 20px;
+    left: 20px;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+
+  .wizardStep {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .wizardStepLabel {
+    text-align: left;
+    max-width: none;
+  }
+}

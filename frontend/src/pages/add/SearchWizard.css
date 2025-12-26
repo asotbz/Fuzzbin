@@ -1,0 +1,771 @@
+.searchWizard {
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+.searchWizardContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+
+.searchWizardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.searchWizardTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0;
+}
+
+.searchWizardBackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  transition: all 0.3s;
+}
+
+.searchWizardBackLink svg {
+  width: 16px;
+  height: 16px;
+}
+
+.searchWizardBackLink:hover {
+  color: var(--channel-import);
+  border-color: var(--channel-import);
+  transform: translateX(-4px);
+}
+
+.searchWizardStep {
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+}
+
+.searchWizardStepTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.searchWizardStepDescription {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-6) 0;
+}
+
+.searchWizardForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 600px;
+}
+
+.searchWizardFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.searchWizardLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.searchWizardInput {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 3px solid var(--bg-surface-light);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  padding: var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all 0.3s;
+}
+
+.searchWizardInput:focus {
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-glow-magenta);
+}
+
+.searchWizardButton {
+  padding: var(--space-4) var(--space-6);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--text-base);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--channel-import);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.searchWizardButton:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-xl), var(--shadow-glow-magenta);
+}
+
+.searchWizardButton:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.searchWizardButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.searchWizardButtonSecondary {
+  padding: var(--space-4) var(--space-6);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--text-base);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.searchWizardButtonSecondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.searchWizardActions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 2px solid var(--bg-surface-light);
+}
+
+.searchWizardLoading {
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  text-align: center;
+  padding: var(--space-8);
+}
+
+/* Search Results */
+.searchResultsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.searchResultCard {
+  background: var(--bg-base);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.searchResultCard:hover {
+  border-color: var(--channel-import);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl), var(--shadow-glow-magenta);
+}
+
+.searchResultCardHeader {
+  margin-bottom: var(--space-3);
+}
+
+.searchResultBadge {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+}
+
+.searchResultBadgeImvdb {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: #00f0ff;
+}
+
+.searchResultBadgeDiscogs {
+  background: rgba(255, 0, 110, 0.1);
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  color: var(--channel-import);
+}
+
+.searchResultBadgeYoutube {
+  background: rgba(255, 214, 10, 0.1);
+  border: 1px solid rgba(255, 214, 10, 0.3);
+  color: var(--channel-player);
+}
+
+.searchResultThumbnail {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.searchResultInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.searchResultTitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.searchResultArtist {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.searchResultYear {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* Metadata Editor */
+.metadataEditor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.metadataEditorSection {
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.metadataEditorSectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.metadataEditorSectionDescription {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.metadataEditorFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.metadataEditorFormGroup:last-child {
+  margin-bottom: 0;
+}
+
+.metadataEditorLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.metadataEditorInput {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 3px solid var(--bg-surface-light);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all 0.3s;
+}
+
+.metadataEditorInput:focus {
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-glow-magenta);
+}
+
+.metadataEditorCheckbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.metadataEditorCheckbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* Video Sources */
+.videoSourcesList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.videoSourceOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.videoSourceOption:hover {
+  border-color: var(--channel-import);
+}
+
+.videoSourceOption input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.videoSourceId {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.videoSourcePreview {
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 2px solid var(--channel-import);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--channel-import);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.videoSourcePreview:hover {
+  background: var(--channel-import);
+  color: var(--bg-base);
+}
+
+/* Configure Form */
+.configureForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 600px;
+}
+
+.configureFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.configureLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.configureInput {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 3px solid var(--bg-surface-light);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  padding: var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all 0.3s;
+}
+
+.configureInput:focus {
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-glow-magenta);
+}
+
+.configureSelect {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 3px solid var(--bg-surface-light);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  padding: var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.configureCheckbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.configureCheckbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.configureHint {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* Review Summary */
+.reviewSummary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+@media (min-width: 768px) {
+  .reviewSummary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.reviewSummarySection {
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.reviewSummaryTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.reviewSummaryList {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.reviewSummaryList dt {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+
+.reviewSummaryList dd {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* YouTube ID Input Group */
+.youtubeIdInputGroup {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.youtubeIdInputGroup .configureInput {
+  flex: 1;
+}
+
+.youtubeIdInputGroup .youtubeSearchButton {
+  white-space: nowrap;
+  min-width: 150px;
+}
+
+/* YouTube Search Modal */
+.youtubeSearchModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.youtubeSearchModalOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.youtubeSearchModalContent {
+  position: relative;
+  background: var(--bg-surface);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-xl);
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow:
+    var(--shadow-xl),
+    0 0 0 1px var(--channel-import),
+    var(--shadow-glow-magenta);
+}
+
+.youtubeSearchModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-6);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.youtubeSearchModalTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0;
+}
+
+.youtubeSearchModalClose {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: var(--space-2);
+  transition: color 0.2s;
+}
+
+.youtubeSearchModalClose:hover {
+  color: var(--channel-import);
+}
+
+.youtubeSearchModalClose svg {
+  width: 24px;
+  height: 24px;
+}
+
+.youtubeSearchModalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.youtubeSearchResults {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.youtubeSearchResultCard {
+  display: flex;
+  gap: var(--space-4);
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: all 0.3s;
+}
+
+.youtubeSearchResultCard:hover {
+  border-color: var(--channel-import);
+  box-shadow: 0 0 20px rgba(255, 0, 110, 0.2);
+}
+
+.youtubeSearchResultThumbnail {
+  width: 200px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.youtubeSearchResultInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.youtubeSearchResultTitle {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.youtubeSearchResultId,
+.youtubeSearchResultChannel,
+.youtubeSearchResultDuration {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.youtubeSearchResultActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.youtubeSearchResultPreview,
+.youtubeSearchResultSelect {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 2px solid;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.youtubeSearchResultPreview {
+  background: transparent;
+  border-color: var(--bg-surface-light);
+  color: var(--text-secondary);
+}
+
+.youtubeSearchResultPreview:hover {
+  border-color: var(--channel-import);
+  color: var(--channel-import);
+}
+
+.youtubeSearchResultSelect {
+  background: var(--channel-import);
+  border-color: var(--channel-import);
+  color: var(--text-primary);
+}
+
+.youtubeSearchResultSelect:hover {
+  background: #ff4db8;
+  border-color: #ff4db8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
+}
+
+.youtubeSearchNoResults {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-secondary);
+}
+
+.youtubeSearchModalFooter {
+  padding: var(--space-6);
+  border-top: 2px solid var(--bg-surface-light);
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .youtubeSearchResultCard {
+    flex-direction: column;
+  }
+
+  .youtubeSearchResultThumbnail {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+
+  .youtubeSearchResultActions {
+    flex-direction: row;
+  }
+}

@@ -1,0 +1,341 @@
+.importHub {
+  min-height: 100vh;
+  background: var(--bg-base);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated gradient mesh background */
+.importHub::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(157, 78, 221, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 100% 0%, rgba(0, 240, 255, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(255, 0, 110, 0.35) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(255, 214, 10, 0.2) 0%, transparent 50%);
+  opacity: 0.8;
+  animation: meshPulse 20s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes meshPulse {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.importHubHeader {
+  position: relative;
+  padding: var(--space-10) var(--space-6) var(--space-8);
+  text-align: center;
+  z-index: 1;
+}
+
+.importHubHeaderGlow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(255, 0, 110, 0.4) 0%, transparent 70%);
+  filter: blur(80px);
+  opacity: 0;
+  animation: headerGlowPulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes headerGlowPulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.importHubTitle {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 12vw, 8rem);
+  font-weight: 900;
+  line-height: 0.85;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  position: relative;
+}
+
+.importHubTitleLine {
+  display: block;
+  background: linear-gradient(135deg, var(--channel-import) 0%, #ff4db8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 80px rgba(255, 0, 110, 0.5);
+  animation: titleSlideIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.importHubTitleLine:nth-child(1) { animation-delay: 0.1s; }
+.importHubTitleLine:nth-child(2) { animation-delay: 0.2s; }
+
+@keyframes titleSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.importHubSubtitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  margin: var(--space-5) 0 0;
+  opacity: 0;
+  animation: subtitleFadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+}
+
+@keyframes subtitleFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.importHubGrid {
+  position: relative;
+  z-index: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-6) var(--space-10);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .importHubGrid {
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  }
+}
+
+/* Import Card */
+.importCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  animation: cardSlideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.importCard:nth-child(1) { animation-delay: 0.5s; }
+.importCard:nth-child(2) { animation-delay: 0.6s; }
+.importCard:nth-child(3) { animation-delay: 0.7s; }
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.importCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--channel-import) 50%,
+    transparent 100%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.importCardGlow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(255, 0, 110, 0.3) 0%, transparent 70%);
+  filter: blur(40px);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+.importCard:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: var(--channel-import);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 0 1px var(--channel-import),
+    var(--shadow-glow-magenta);
+}
+
+.importCard:hover::before {
+  opacity: 1;
+}
+
+.importCard:hover .importCardGlow {
+  opacity: 1;
+}
+
+.importCard:hover .importCardIcon {
+  transform: scale(1.1) rotate(5deg);
+  color: var(--channel-import);
+}
+
+.importCard:hover .importCardCta {
+  transform: translateX(4px);
+}
+
+.importCard:active {
+  transform: translateY(-4px) scale(1.01);
+}
+
+/* Primary card (Artist/Title Search) - more prominent */
+.importCardPrimary {
+  border-color: rgba(255, 0, 110, 0.3);
+}
+
+.importCardPrimary .importCardGlow {
+  opacity: 0.3;
+}
+
+.importCardIcon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-5);
+  color: var(--text-secondary);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: drop-shadow(0 0 20px currentColor);
+}
+
+.importCardIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.importCardContent {
+  flex: 1;
+  margin-bottom: var(--space-5);
+}
+
+.importCardTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  margin: 0 0 var(--space-3) 0;
+  color: var(--text-primary);
+}
+
+.importCardDescription {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.importCardFeatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.importCardFeature {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-3);
+  background: rgba(255, 0, 110, 0.1);
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  border-radius: var(--radius-full);
+  color: var(--channel-import);
+}
+
+.importCardCta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--channel-import);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--bg-surface-light);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.importCardCta svg {
+  width: 20px;
+  height: 20px;
+}
+
+.importHubFooter {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.importHubBackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  padding: var(--space-3) var(--space-5);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  transition: all 0.3s;
+}
+
+.importHubBackLink svg {
+  width: 16px;
+  height: 16px;
+}
+
+.importHubBackLink:hover {
+  color: var(--channel-import);
+  border-color: var(--channel-import);
+  transform: translateX(-4px);
+}
