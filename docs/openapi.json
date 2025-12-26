@@ -5118,6 +5118,109 @@
         }
       }
     },
+    "/add/check-exists": {
+      "get": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Check if video already exists in library",
+        "description": "Check if a video with the given IMVDb ID or YouTube ID already exists in the library.",
+        "operationId": "check_video_exists_add_check_exists_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "imvdb_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Imvdb Id"
+            }
+          },
+          {
+            "name": "youtube_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Youtube Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Check Video Exists Add Check Exists Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/add/import": {
       "post": {
         "tags": [
@@ -5143,6 +5246,237 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AddSingleImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/spotify/enrich-track": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Enrich a Spotify track with IMVDb metadata",
+        "description": "Search IMVDb for a track and return matched metadata including YouTube IDs.",
+        "operationId": "enrich_spotify_track_add_spotify_enrich_track_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyTrackEnrichRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyTrackEnrichResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/youtube/search": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Search YouTube for videos",
+        "description": "Search YouTube using yt-dlp for video results. Returns results in the same format as /add/search.",
+        "operationId": "search_youtube_add_youtube_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YouTubeSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/spotify/import-selected": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Import selected tracks from Spotify playlist",
+        "description": "Submit a job to import only the selected tracks from a Spotify playlist with optional metadata overrides and auto-download.",
+        "operationId": "import_selected_spotify_tracks_add_spotify_import_selected_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyBatchImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyBatchImportResponse"
                 }
               }
             }
@@ -9009,6 +9343,18 @@
             "title": "Year",
             "description": "Release year if known"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Record label"
+          },
           "already_exists": {
             "type": "boolean",
             "title": "Already Exists",
@@ -12799,6 +13145,7 @@
         "enum": [
           "import_nfo",
           "import_spotify",
+          "import_spotify_batch",
           "import_add_single",
           "import_download",
           "import_organize",
@@ -14254,6 +14601,64 @@
         "title": "SearchSuggestionsResponse",
         "description": "Search suggestions response for autocomplete."
       },
+      "SelectedTrackImport": {
+        "properties": {
+          "spotify_track_id": {
+            "type": "string",
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Track metadata (title, artist, year, album, directors)"
+          },
+          "imvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Id",
+            "description": "IMVDb video ID if matched"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id",
+            "description": "YouTube video ID"
+          },
+          "youtube_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Url",
+            "description": "YouTube URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spotify_track_id",
+          "metadata"
+        ],
+        "title": "SelectedTrackImport",
+        "description": "Single track to import with optional metadata overrides."
+      },
       "SetInitialPasswordRequest": {
         "properties": {
           "username": {
@@ -14411,6 +14816,90 @@
         ],
         "title": "SpotifyArtistSchema",
         "description": "Spotify artist information (simplified)."
+      },
+      "SpotifyBatchImportRequest": {
+        "properties": {
+          "playlist_id": {
+            "type": "string",
+            "title": "Playlist Id",
+            "description": "Spotify playlist ID, URI, or URL",
+            "examples": [
+              "37i9dQZF1DXcBWIGoYBM5M",
+              "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+              "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+            ]
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SelectedTrackImport"
+            },
+            "type": "array",
+            "title": "Tracks",
+            "description": "Selected tracks to import"
+          },
+          "initial_status": {
+            "type": "string",
+            "title": "Initial Status",
+            "description": "Initial status for created video records",
+            "default": "discovered",
+            "examples": [
+              "discovered",
+              "imported"
+            ]
+          },
+          "auto_download": {
+            "type": "boolean",
+            "title": "Auto Download",
+            "description": "Automatically queue download jobs for tracks with YouTube IDs",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "playlist_id",
+          "tracks"
+        ],
+        "title": "SpotifyBatchImportRequest",
+        "description": "Request to import selected tracks from a Spotify playlist."
+      },
+      "SpotifyBatchImportResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Background job ID"
+          },
+          "playlist_id": {
+            "type": "string",
+            "title": "Playlist Id",
+            "description": "Normalized Spotify playlist ID"
+          },
+          "track_count": {
+            "type": "integer",
+            "title": "Track Count",
+            "description": "Number of tracks being imported"
+          },
+          "auto_download": {
+            "type": "boolean",
+            "title": "Auto Download",
+            "description": "Whether auto-download is enabled"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Initial job status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "playlist_id",
+          "track_count",
+          "auto_download"
+        ],
+        "title": "SpotifyBatchImportResponse",
+        "description": "Response after submitting a batch Spotify import job."
       },
       "SpotifyImportRequest": {
         "properties": {
@@ -14665,6 +15154,150 @@
         ],
         "title": "SpotifyPlaylistTracksResponseSchema",
         "description": "Response from /playlists/{id}/tracks endpoint."
+      },
+      "SpotifyTrackEnrichRequest": {
+        "properties": {
+          "artist": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Artist",
+            "description": "Track artist name"
+          },
+          "track_title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Track Title",
+            "description": "Track title"
+          },
+          "spotify_track_id": {
+            "type": "string",
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album",
+            "description": "Album name"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Record label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artist",
+          "track_title",
+          "spotify_track_id"
+        ],
+        "title": "SpotifyTrackEnrichRequest",
+        "description": "Request to enrich a single Spotify track with IMVDb metadata."
+      },
+      "SpotifyTrackEnrichResponse": {
+        "properties": {
+          "spotify_track_id": {
+            "type": "string",
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
+          "match_found": {
+            "type": "boolean",
+            "title": "Match Found",
+            "description": "Whether an IMVDb match was found"
+          },
+          "match_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Type",
+            "description": "Match type: 'exact' or 'fuzzy'"
+          },
+          "imvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Id",
+            "description": "IMVDb video ID if match found"
+          },
+          "youtube_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Youtube Ids",
+            "description": "YouTube video IDs extracted from IMVDb sources"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Enriched metadata (title, artist, year, album, directors, sources)"
+          },
+          "already_exists": {
+            "type": "boolean",
+            "title": "Already Exists",
+            "description": "Whether this track already exists in the library",
+            "default": false
+          },
+          "existing_video_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Video Id",
+            "description": "Video ID if track already exists"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spotify_track_id",
+          "match_found"
+        ],
+        "title": "SpotifyTrackEnrichResponse",
+        "description": "Response after enriching a Spotify track with IMVDb metadata."
       },
       "SpotifyTrackSchema": {
         "properties": {
@@ -16088,6 +16721,39 @@
         ],
         "title": "YTDLPVideoInfoResponse",
         "description": "Response containing single video metadata.\n\nAttributes:\n    video: Video metadata"
+      },
+      "YouTubeSearchRequest": {
+        "properties": {
+          "artist": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Artist",
+            "description": "Artist name"
+          },
+          "track_title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Track Title",
+            "description": "Track title"
+          },
+          "max_results": {
+            "type": "integer",
+            "maximum": 25.0,
+            "minimum": 1.0,
+            "title": "Max Results",
+            "description": "Maximum number of results to return",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "artist",
+          "track_title"
+        ],
+        "title": "YouTubeSearchRequest",
+        "description": "Request to search YouTube for videos."
       }
     },
     "securitySchemes": {
