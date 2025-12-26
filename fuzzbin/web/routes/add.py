@@ -394,7 +394,7 @@ async def search_single_video(
                     thumb = None
                     image = getattr(v, "image", None)
                     if isinstance(image, dict):
-                        thumb = image.get("t") or image.get("s") or image.get("b")
+                        thumb = image.get("o") or image.get("l") or image.get("b")
 
                     imvdb_items.append(
                         AddSearchResultItem(
