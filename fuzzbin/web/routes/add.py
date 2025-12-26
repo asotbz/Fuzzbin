@@ -41,10 +41,17 @@ from fuzzbin.web.schemas.add import (
     BatchPreviewRequest,
     BatchPreviewResponse,
     NFOScanResponse,
+    SelectedTrackImport,
+    SpotifyBatchImportRequest,
+    SpotifyBatchImportResponse,
     SpotifyImportRequest,
     SpotifyImportResponse,
+    SpotifyTrackEnrichRequest,
+    SpotifyTrackEnrichResponse,
+    YouTubeSearchRequest,
     normalize_spotify_playlist_id,
 )
+from fuzzbin.parsers.imvdb_parser import IMVDbParser
 from fuzzbin.web.schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from fuzzbin.web.schemas.imvdb import IMVDbVideoDetail
 from fuzzbin.web.schemas.scan import ImportMode, ScanJobResponse, ScanRequest
@@ -202,6 +209,7 @@ async def preview_batch(
         title = (track.name or "").strip()
         primary_artist = (track.artists[0].name if track.artists else "").strip()
         album = track.album.name if track.album else None
+        label = track.album.label if track.album else None
 
         year: Optional[int] = None
         if track.album and track.album.release_date:
@@ -231,6 +239,7 @@ async def preview_batch(
                     artist=primary_artist or "Unknown",
                     album=album,
                     year=year,
+                    label=label,
                     already_exists=already_exists,
                     spotify_track_id=track.id,
                     spotify_playlist_id=playlist_id,
@@ -782,6 +791,61 @@ async def preview_single_video(
     )
 
 
+@router.get(
+    "/check-exists",
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Check if video already exists in library",
+    description="Check if a video with the given IMVDb ID or YouTube ID already exists in the library.",
+)
+async def check_video_exists(
+    imvdb_id: Optional[str] = None,
+    youtube_id: Optional[str] = None,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)] = None,
+) -> dict[str, Any]:
+    """
+    Check if a video already exists in the library.
+
+    Returns:
+        {"exists": bool, "video_id": int | null, "title": str | null, "artist": str | null}
+    """
+    fuzzbin_module = await get_fuzzbin_module()
+    repository = await fuzzbin_module.get_repository()
+
+    result = {
+        "exists": False,
+        "video_id": None,
+        "title": None,
+        "artist": None,
+    }
+
+    try:
+        video = None
+
+        if imvdb_id:
+            try:
+                video = await repository.get_video_by_imvdb_id(imvdb_id, include_deleted=False)
+            except Exception:
+                pass  # Video not found
+
+        if not video and youtube_id:
+            try:
+                video = await repository.get_video_by_youtube_id(youtube_id, include_deleted=False)
+            except Exception:
+                pass  # Video not found
+
+        if video:
+            result["exists"] = True
+            result["video_id"] = video.get("id")
+            result["title"] = video.get("title")
+            result["artist"] = video.get("artist")
+
+    except Exception as e:
+        logger.error("check_exists_failed", error=str(e))
+        # Don't fail the request, just return exists=False
+
+    return result
+
+
 @router.post(
     "/import",
     response_model=AddSingleImportResponse,
@@ -819,3 +883,439 @@ async def submit_single_import(
     await queue.submit(job)
 
     return AddSingleImportResponse(job_id=job.id, source=request.source, id=request.id)
+
+
+# Enhanced Spotify import endpoints (interactive workflow)
+
+
+@router.post(
+    "/spotify/enrich-track",
+    response_model=SpotifyTrackEnrichResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Enrich a Spotify track with IMVDb metadata",
+    description="Search IMVDb for a track and return matched metadata including YouTube IDs.",
+)
+async def enrich_spotify_track(
+    request: SpotifyTrackEnrichRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> SpotifyTrackEnrichResponse:
+    """
+    Enrich a single Spotify track with IMVDb metadata.
+
+    This endpoint:
+    1. Searches IMVDb for the track
+    2. Applies fuzzy matching (threshold 0.8)
+    3. Extracts YouTube IDs from IMVDb sources
+    4. Checks if track already exists in library
+
+    Returns enrichment data including match status, IMVDb ID, YouTube IDs, and metadata.
+    """
+    user_label = current_user.username if current_user else "anonymous"
+    logger.info(
+        "spotify_enrich_track_start",
+        artist=request.artist,
+        track_title=request.track_title,
+        spotify_track_id=request.spotify_track_id,
+        user=user_label,
+    )
+
+    # Initialize response with defaults
+    response = SpotifyTrackEnrichResponse(
+        spotify_track_id=request.spotify_track_id,
+        match_found=False,
+    )
+
+    # Search IMVDb
+    api_config = _get_api_config("imvdb")
+    if not api_config:
+        logger.warning(
+            "spotify_enrich_track_skipped",
+            reason="IMVDb API is not configured",
+            user=user_label,
+        )
+        return response
+
+    try:
+        async with IMVDbClient.from_config(api_config) as imvdb_client:
+            search_result = await imvdb_client.search_videos(
+                artist=request.artist,
+                track_title=request.track_title,
+                page=1,
+                per_page=20,  # Get more results for better matching
+            )
+
+            # If no results, return no match
+            if not search_result.results:
+                logger.info(
+                    "spotify_enrich_track_no_results",
+                    artist=request.artist,
+                    track_title=request.track_title,
+                    user=user_label,
+                )
+                return response
+
+            # Try to find best match using fuzzy matching
+            try:
+                matched_video = IMVDbParser.find_best_video_match(
+                    results=search_result.results,
+                    artist=request.artist,
+                    title=request.track_title,
+                    threshold=0.8,
+                )
+            except Exception as e:
+                logger.info(
+                    "spotify_enrich_track_no_match",
+                    artist=request.artist,
+                    track_title=request.track_title,
+                    error=str(e),
+                    user=user_label,
+                )
+                return response
+
+            # Match found! Get full video details
+            try:
+                video = await imvdb_client.get_video(matched_video.id)
+                logger.debug(
+                    "imvdb_video_details_retrieved",
+                    video_id=matched_video.id,
+                    has_sources=bool(video.sources),
+                    has_artists=bool(video.artists),
+                    has_directors=bool(video.directors),
+                )
+            except Exception as e:
+                logger.error(
+                    "failed_to_get_imvdb_video_details",
+                    video_id=matched_video.id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
+
+            # Extract YouTube IDs from sources
+            try:
+                youtube_ids: list[str] = []
+                for s in video.sources or []:
+                    if getattr(s, "source_slug", None) != "youtube":
+                        continue
+                    sd = getattr(s, "source_data", None)
+                    if isinstance(sd, str) and sd:
+                        youtube_ids.append(sd)
+                    elif isinstance(sd, dict):
+                        candidate = sd.get("id") or sd.get("video_id") or sd.get("youtube_id")
+                        if isinstance(candidate, str) and candidate:
+                            youtube_ids.append(candidate)
+
+                # Remove duplicates while preserving order
+                youtube_ids = list(dict.fromkeys(youtube_ids))
+                logger.debug(
+                    "youtube_ids_extracted",
+                    video_id=matched_video.id,
+                    youtube_id_count=len(youtube_ids),
+                    youtube_ids=youtube_ids,
+                )
+            except Exception as e:
+                logger.error(
+                    "failed_to_extract_youtube_ids",
+                    video_id=matched_video.id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
+
+            # Build metadata dict
+            try:
+                primary_artist = None
+                if video.artists and len(video.artists) > 0:
+                    primary_artist = video.artists[0].name
+
+                directors_list = []
+                for d in video.directors or []:
+                    if d.entity_name:
+                        directors_list.append(d.entity_name)
+                directors_str = ", ".join(directors_list) if directors_list else None
+
+                metadata = {
+                    "title": video.song_title,
+                    "artist": primary_artist,
+                    "year": video.year,
+                    "album": request.album,  # Keep original album from Spotify
+                    "label": request.label,  # Keep original label from Spotify
+                    "directors": directors_str,
+                    "sources": [
+                        {
+                            "source": s.source,
+                            "source_slug": s.source_slug,
+                            "source_data": s.source_data,
+                            "is_primary": s.is_primary,
+                        }
+                        for s in (video.sources or [])
+                    ],
+                }
+                logger.debug(
+                    "metadata_built",
+                    video_id=matched_video.id,
+                    has_title=bool(metadata.get("title")),
+                    has_artist=bool(metadata.get("artist")),
+                    sources_count=len(metadata.get("sources", [])),
+                )
+            except Exception as e:
+                logger.error(
+                    "failed_to_build_metadata",
+                    video_id=matched_video.id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
+
+            # Check if video already exists in library
+            try:
+                repository = await fuzzbin_module.get_repository()
+                existing_video = None
+                existing_video_id = None
+
+                try:
+                    existing_video = await repository.get_video_by_imvdb_id(
+                        str(matched_video.id),
+                        include_deleted=False
+                    )
+                    if existing_video:
+                        existing_video_id = existing_video.get("id")
+                        logger.debug(
+                            "found_existing_video_by_imvdb_id",
+                            video_id=matched_video.id,
+                            existing_video_id=existing_video_id,
+                        )
+                except Exception:
+                    pass  # Video not found
+
+                if not existing_video and youtube_ids:
+                    try:
+                        existing_video = await repository.get_video_by_youtube_id(
+                            youtube_ids[0],
+                            include_deleted=False
+                        )
+                        if existing_video:
+                            existing_video_id = existing_video.get("id")
+                            logger.debug(
+                                "found_existing_video_by_youtube_id",
+                                youtube_id=youtube_ids[0],
+                                existing_video_id=existing_video_id,
+                            )
+                    except Exception:
+                        pass  # Video not found
+
+                logger.debug(
+                    "existence_check_complete",
+                    video_id=matched_video.id,
+                    already_exists=existing_video is not None,
+                )
+            except Exception as e:
+                logger.error(
+                    "failed_existence_check",
+                    video_id=matched_video.id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
+
+            # Build response
+            try:
+                match_type = "exact" if getattr(matched_video, "is_exact_match", False) else "fuzzy"
+
+                response = SpotifyTrackEnrichResponse(
+                    spotify_track_id=request.spotify_track_id,
+                    match_found=True,
+                    match_type=match_type,
+                    imvdb_id=matched_video.id,
+                    youtube_ids=youtube_ids,
+                    metadata=metadata,
+                    already_exists=existing_video is not None,
+                    existing_video_id=existing_video_id,
+                )
+
+                logger.info(
+                    "spotify_enrich_track_success",
+                    spotify_track_id=request.spotify_track_id,
+                    imvdb_id=matched_video.id,
+                    match_type=match_type,
+                    youtube_id_count=len(youtube_ids),
+                    already_exists=response.already_exists,
+                    user=user_label,
+                )
+
+                return response
+            except Exception as e:
+                logger.error(
+                    "failed_to_build_response",
+                    video_id=matched_video.id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
+
+    except Exception as e:
+        logger.error(
+            "spotify_enrich_track_failed",
+            artist=request.artist,
+            track_title=request.track_title,
+            error=str(e),
+            user=user_label,
+            exc_info=True,
+        )
+        # Return no match on error
+        return SpotifyTrackEnrichResponse(
+            spotify_track_id=request.spotify_track_id,
+            match_found=False,
+        )
+
+
+@router.post(
+    "/youtube/search",
+    response_model=AddSearchResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Search YouTube for videos",
+    description="Search YouTube using yt-dlp for video results. Returns results in the same format as /add/search.",
+)
+async def search_youtube(
+    request: YouTubeSearchRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> AddSearchResponse:
+    """
+    Search YouTube for videos matching artist and track title.
+
+    This is a thin wrapper around the existing YouTube search functionality,
+    used when IMVDb doesn't have a match and the user wants to manually select a video.
+    """
+    user_label = current_user.username if current_user else "anonymous"
+    logger.info(
+        "youtube_search_start",
+        artist=request.artist,
+        track_title=request.track_title,
+        max_results=request.max_results,
+        user=user_label,
+    )
+
+    results: list[AddSearchResultItem] = []
+    skipped: list[AddSearchSkippedSource] = []
+
+    try:
+        ytdlp_config = _get_ytdlp_config()
+        async with YTDLPClient.from_config(ytdlp_config) as ytdlp_client:
+            yt_results = await ytdlp_client.search(
+                artist=request.artist,
+                track_title=request.track_title,
+                max_results=request.max_results,
+            )
+
+        yt_items = [
+            AddSearchResultItem(
+                source=AddSearchSource.YOUTUBE,
+                id=str(r.id),
+                title=r.title,
+                artist=None,
+                year=None,
+                url=r.url,
+                thumbnail=getattr(r, "thumbnail", None),
+                extra={
+                    "channel": getattr(r, "channel", None),
+                    "duration": getattr(r, "duration", None),
+                    "view_count": getattr(r, "view_count", None),
+                },
+            )
+            for r in yt_results
+        ]
+
+        results.extend(yt_items)
+
+        logger.info(
+            "youtube_search_success",
+            result_count=len(yt_items),
+            user=user_label,
+        )
+    except Exception as e:
+        logger.warning(
+            "youtube_search_failed",
+            error=str(e),
+            user=user_label,
+        )
+        skipped.append(
+            AddSearchSkippedSource(
+                source=AddSearchSource.YOUTUBE,
+                reason=f"YouTube search failed: {e}",
+            )
+        )
+
+    return AddSearchResponse(
+        artist=request.artist,
+        track_title=request.track_title,
+        results=results,
+        skipped=skipped,
+        counts={AddSearchSource.YOUTUBE.value: len(results)},
+    )
+
+
+@router.post(
+    "/spotify/import-selected",
+    response_model=SpotifyBatchImportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Import selected tracks from Spotify playlist",
+    description="Submit a job to import only the selected tracks from a Spotify playlist with optional metadata overrides and auto-download.",
+)
+async def import_selected_spotify_tracks(
+    request: SpotifyBatchImportRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> SpotifyBatchImportResponse:
+    """
+    Import selected tracks from a Spotify playlist.
+
+    This endpoint creates a background job that:
+    1. Creates/updates video records for each selected track
+    2. Applies user metadata overrides
+    3. Associates IMVDb IDs and YouTube IDs if provided
+    4. Optionally queues download jobs for tracks with YouTube IDs
+
+    This is used by the enhanced Spotify import workflow where users can:
+    - Select specific tracks to import
+    - Edit metadata before import
+    - Choose YouTube videos for each track
+    """
+    user_label = current_user.username if current_user else "anonymous"
+
+    # Normalize playlist ID
+    normalized_playlist_id = normalize_spotify_playlist_id(request.playlist_id)
+    if not normalized_playlist_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Spotify playlist ID",
+        )
+
+    logger.info(
+        "spotify_batch_import_job_submitting",
+        playlist_id=normalized_playlist_id,
+        track_count=len(request.tracks),
+        initial_status=request.initial_status,
+        auto_download=request.auto_download,
+        user=user_label,
+    )
+
+    # Create job
+    job = Job(
+        type=JobType.IMPORT_SPOTIFY_BATCH,
+        metadata={
+            "playlist_id": normalized_playlist_id,
+            "tracks": [t.model_dump() for t in request.tracks],
+            "initial_status": request.initial_status,
+            "auto_download": request.auto_download,
+        },
+    )
+
+    queue = get_job_queue()
+    await queue.submit(job)
+
+    return SpotifyBatchImportResponse(
+        job_id=job.id,
+        playlist_id=normalized_playlist_id,
+        track_count=len(request.tracks),
+        auto_download=request.auto_download,
+    )

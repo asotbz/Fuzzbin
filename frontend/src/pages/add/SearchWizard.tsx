@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { addSearch, addPreview, addImport } from '../../lib/api/endpoints/add'
+import { addSearch, addPreview, addImport, checkVideoExists } from '../../lib/api/endpoints/add'
 import { addKeys } from '../../lib/api/queryKeys'
 import { useSearchWizard } from '../../hooks/add/useSearchWizard'
 import WizardStepper from '../../components/add/wizard/WizardStepper'
@@ -297,7 +297,33 @@ export default function SearchWizard() {
     searchMutation.mutate()
   }
 
-  const handleSelectResult = (source: string, id: string) => {
+  const handleSelectResult = async (source: string, id: string) => {
+    // Check if video already exists in library
+    try {
+      const checkParams: { imvdb_id?: string; youtube_id?: string } = {}
+
+      if (source === 'imvdb') {
+        checkParams.imvdb_id = id
+      } else if (source === 'youtube') {
+        checkParams.youtube_id = id
+      }
+
+      // Only check for IMVDb and YouTube sources
+      if (checkParams.imvdb_id || checkParams.youtube_id) {
+        const existsResult = await checkVideoExists(checkParams)
+
+        if (existsResult.exists) {
+          toast.warning('Video already exists in library', {
+            description: `${existsResult.title || 'Unknown title'} by ${existsResult.artist || 'Unknown artist'}`,
+            duration: 8000,
+          })
+        }
+      }
+    } catch (error) {
+      // Don't block selection if check fails
+      console.error('Failed to check if video exists:', error)
+    }
+
     wizard.selectSource(source, id)
     wizard.nextStep()
   }

@@ -1,0 +1,225 @@
+import { useState } from 'react'
+import type { BatchPreviewItem } from '../../../lib/api/types'
+import type { TrackRowState } from './TrackRow'
+
+export interface EditedMetadata {
+  title: string
+  artist: string
+  year: number | null
+  album: string | null
+  label: string | null
+  directors: string | null
+  youtubeUrl: string | null
+}
+
+interface MetadataEditorProps {
+  track: BatchPreviewItem
+  state: TrackRowState
+  onSave: (metadata: EditedMetadata) => void
+  onCancel: () => void
+}
+
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null
+
+  // Extract ID from various YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/, // Direct ID
+  ]
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match) return match[1]
+  }
+
+  return null
+}
+
+export default function MetadataEditor({ track, state, onSave, onCancel }: MetadataEditorProps) {
+  const enrichmentData = state.enrichmentData
+
+  // Initialize form with track data or enrichment data
+  const [title, setTitle] = useState(enrichmentData?.metadata?.title || track.title)
+  const [artist, setArtist] = useState(enrichmentData?.metadata?.artist || track.artist)
+  const [year, setYear] = useState<string>(
+    String(enrichmentData?.metadata?.year || track.year || '')
+  )
+  const [album, setAlbum] = useState(enrichmentData?.metadata?.album || track.album || '')
+  const [label, setLabel] = useState(enrichmentData?.metadata?.label || track.label || '')
+  const [directors, setDirectors] = useState(enrichmentData?.metadata?.directors || '')
+  const [youtubeUrl, setYoutubeUrl] = useState(
+    enrichmentData?.youtube_ids && enrichmentData.youtube_ids.length > 0
+      ? `https://youtube.com/watch?v=${enrichmentData.youtube_ids[0]}`
+      : ''
+  )
+
+  const [youtubeUrlError, setYoutubeUrlError] = useState<string | null>(null)
+
+  const handleYouTubeUrlChange = (value: string) => {
+    setYoutubeUrl(value)
+    if (value && !extractYouTubeId(value)) {
+      setYoutubeUrlError('Invalid YouTube URL or ID')
+    } else {
+      setYoutubeUrlError(null)
+    }
+  }
+
+  const handleSave = () => {
+    if (!title.trim() || !artist.trim()) {
+      return
+    }
+
+    const metadata: EditedMetadata = {
+      title: title.trim(),
+      artist: artist.trim(),
+      year: year ? parseInt(year, 10) : null,
+      album: album.trim() || null,
+      label: label.trim() || null,
+      directors: directors.trim() || null,
+      youtubeUrl: youtubeUrl.trim() || null,
+    }
+
+    onSave(metadata)
+  }
+
+  return (
+    <div className="metadataEditorOverlay" onClick={onCancel}>
+      <div className="metadataEditorModal" onClick={(e) => e.stopPropagation()}>
+        <div className="metadataEditorHeader">
+          <h2 className="metadataEditorTitle">Edit Metadata</h2>
+          <button type="button" className="metadataEditorClose" onClick={onCancel}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="metadataEditorBody">
+          {/* Show comparison if we have IMVDb data */}
+          {enrichmentData?.match_found && (
+            <div className="metadataEditorComparison">
+              <div className="metadataEditorComparisonHeader">
+                <div className="metadataEditorComparisonLabel">Spotify</div>
+                <div className="metadataEditorComparisonLabel">IMVDb</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div>{track.title}</div>
+                <div>{enrichmentData.metadata?.title || '-'}</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div>{track.artist}</div>
+                <div>{enrichmentData.metadata?.artist || '-'}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Form fields */}
+          <div className="metadataEditorForm">
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">
+                Title <span className="metadataEditorRequired">*</span>
+              </label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">
+                Artist <span className="metadataEditorRequired">*</span>
+              </label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={artist}
+                onChange={(e) => setArtist(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">Year</label>
+              <input
+                type="number"
+                className="metadataEditorInput"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                placeholder="YYYY"
+                min="1900"
+                max="2100"
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">Album</label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={album}
+                onChange={(e) => setAlbum(e.target.value)}
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">Record Label</label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g., Columbia, Warner Records"
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">Directors</label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={directors}
+                onChange={(e) => setDirectors(e.target.value)}
+                placeholder="Comma-separated"
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">YouTube URL or ID</label>
+              <input
+                type="text"
+                className={`metadataEditorInput ${youtubeUrlError ? 'metadataEditorInputError' : ''}`}
+                value={youtubeUrl}
+                onChange={(e) => handleYouTubeUrlChange(e.target.value)}
+                placeholder="https://youtube.com/watch?v=... or video ID"
+              />
+              {youtubeUrlError && (
+                <span className="metadataEditorError">{youtubeUrlError}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="metadataEditorFooter">
+          <button type="button" className="metadataEditorButton" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="metadataEditorButtonPrimary"
+            onClick={handleSave}
+            disabled={!title.trim() || !artist.trim() || !!youtubeUrlError}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export { extractYouTubeId }

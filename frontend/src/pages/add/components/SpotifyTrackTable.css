@@ -1,0 +1,770 @@
+/* Spotify Track Table Container */
+.spotifyTrackTable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+
+/* Progress indicator */
+.spotifyTrackTableProgress {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--channel-import);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-2) var(--space-4);
+  background: rgba(255, 0, 110, 0.1);
+  border: 2px solid rgba(255, 0, 110, 0.3);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+/* Table Header */
+.spotifyTrackTableHeader {
+  display: grid;
+  grid-template-columns: 40px 2fr 1.5fr 1fr 120px;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-base);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.spotifyTrackTableHeaderCheckbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spotifyTrackTableHeaderLabel {
+  display: flex;
+  align-items: center;
+}
+
+/* Table Body */
+.spotifyTrackTableBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Table Footer */
+.spotifyTrackTableFooter {
+  padding: var(--space-4);
+  background: var(--bg-base);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.spotifyTrackTableSelection {
+  color: var(--channel-import);
+}
+
+/* Track Row */
+.trackRow {
+  display: grid;
+  grid-template-columns: 40px 2fr 1.5fr 1fr 120px;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  transition: all 0.3s;
+  align-items: center;
+}
+
+.trackRow:hover {
+  border-color: rgba(255, 0, 110, 0.3);
+  transform: translateY(-1px);
+}
+
+.trackRowPending {
+  opacity: 0.5;
+}
+
+.trackRowLoading {
+  border-color: var(--channel-import);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.trackRowSuccess {
+  border-color: rgba(57, 255, 20, 0.3);
+}
+
+.trackRowNoMatch {
+  border-color: rgba(255, 214, 10, 0.3);
+}
+
+.trackRowError {
+  border-color: rgba(255, 0, 110, 0.5);
+}
+
+.trackRowSelected {
+  border-color: var(--channel-import);
+  background: rgba(255, 0, 110, 0.05);
+}
+
+.trackRowExists {
+  opacity: 0.7;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    border-color: var(--channel-import);
+    box-shadow: 0 0 10px rgba(255, 0, 110, 0.3);
+  }
+  50% {
+    border-color: rgba(255, 0, 110, 0.5);
+    box-shadow: 0 0 20px rgba(255, 0, 110, 0.5);
+  }
+}
+
+/* Track Row Elements */
+.trackRowCheckbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trackRowCheckbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.trackRowInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trackRowTitle {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trackRowArtist {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.trackRowAlbum {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.trackRowMatch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.trackRowStatusText {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Loading Spinner */
+.trackRowSpinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--bg-surface-light);
+  border-top-color: var(--channel-import);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Icons */
+.trackRowIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.trackRowIconSuccess {
+  color: var(--success, #39ff14);
+}
+
+.trackRowIconWarning {
+  color: var(--warning, #ffd60a);
+}
+
+.trackRowIconError {
+  color: var(--error, #ff006e);
+}
+
+/* Badges */
+.trackRowBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.trackRowBadgeExact {
+  background: rgba(57, 255, 20, 0.1);
+  border: 1px solid rgba(57, 255, 20, 0.3);
+  color: var(--success, #39ff14);
+}
+
+.trackRowBadgeFuzzy {
+  background: rgba(255, 214, 10, 0.1);
+  border: 1px solid rgba(255, 214, 10, 0.3);
+  color: var(--warning, #ffd60a);
+}
+
+.trackRowBadgeExists {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--channel-library, #00f0ff);
+}
+
+.trackRowYoutube {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trackRowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.trackRowActionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.trackRowActionButton:hover:not(:disabled) {
+  border-color: var(--channel-import);
+  color: var(--channel-import);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
+}
+
+.trackRowActionButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.trackRowActionButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Metadata Editor Modal */
+.metadataEditorOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-6);
+}
+
+.metadataEditorModal {
+  background: var(--bg-surface);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(255, 0, 110, 0.4);
+}
+
+.metadataEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-6);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.metadataEditorTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0;
+}
+
+.metadataEditorClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.metadataEditorClose:hover {
+  color: var(--channel-import);
+  transform: scale(1.1);
+}
+
+.metadataEditorClose svg {
+  width: 24px;
+  height: 24px;
+}
+
+.metadataEditorBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.metadataEditorComparison {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+}
+
+.metadataEditorComparisonHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--bg-surface-light);
+}
+
+.metadataEditorComparisonLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.metadataEditorComparisonRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.metadataEditorForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.metadataEditorFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.metadataEditorLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metadataEditorRequired {
+  color: var(--channel-import);
+}
+
+.metadataEditorInput {
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.metadataEditorInput:focus {
+  outline: none;
+  border-color: var(--channel-import);
+  box-shadow: 0 0 0 3px rgba(255, 0, 110, 0.1);
+}
+
+.metadataEditorInputError {
+  border-color: var(--error, #ff006e);
+}
+
+.metadataEditorError {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--error, #ff006e);
+}
+
+.metadataEditorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-top: 2px solid var(--bg-surface-light);
+}
+
+.metadataEditorButton {
+  padding: var(--space-3) var(--space-6);
+  background: transparent;
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.metadataEditorButton:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.metadataEditorButtonPrimary {
+  padding: var(--space-3) var(--space-6);
+  background: var(--channel-import);
+  border: 2px solid var(--channel-import);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bg-base);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.metadataEditorButtonPrimary:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
+}
+
+.metadataEditorButtonPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* YouTube Search Modal */
+.youtubeSearchModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-6);
+}
+
+.youtubeSearchModal {
+  background: var(--bg-surface);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(255, 0, 110, 0.4);
+}
+
+.youtubeSearchModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-6);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.youtubeSearchModalTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0;
+}
+
+.youtubeSearchModalClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.youtubeSearchModalClose:hover {
+  color: var(--channel-import);
+  transform: scale(1.1);
+}
+
+.youtubeSearchModalClose svg {
+  width: 24px;
+  height: 24px;
+}
+
+.youtubeSearchModalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.youtubeSearchModalSearch {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.youtubeSearchModalInput {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.youtubeSearchModalInput:focus {
+  outline: none;
+  border-color: var(--channel-import);
+  box-shadow: 0 0 0 3px rgba(255, 0, 110, 0.1);
+}
+
+.youtubeSearchModalSearchButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  background: var(--channel-import);
+  border: 2px solid var(--channel-import);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--bg-base);
+  transition: all 0.2s;
+}
+
+.youtubeSearchModalSearchButton:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
+}
+
+.youtubeSearchModalSearchButton svg {
+  width: 24px;
+  height: 24px;
+}
+
+.youtubeSearchModalLoading,
+.youtubeSearchModalError,
+.youtubeSearchModalEmpty {
+  padding: var(--space-8);
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.youtubeSearchModalResults {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.youtubeSearchModalResult {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-base);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.youtubeSearchModalResult:hover {
+  border-color: var(--channel-import);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
+}
+
+.youtubeSearchModalThumbnail {
+  position: relative;
+  width: 160px;
+  height: 90px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.youtubeSearchModalThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.youtubeSearchModalPlayIcon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 0, 110, 0.9);
+  border-radius: 50%;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.youtubeSearchModalResult:hover .youtubeSearchModalPlayIcon {
+  opacity: 1;
+}
+
+.youtubeSearchModalPlayIcon svg {
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+}
+
+.youtubeSearchModalInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.youtubeSearchModalResultTitle {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.youtubeSearchModalMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.youtubeSearchModalChannel,
+.youtubeSearchModalViews,
+.youtubeSearchModalDuration {
+  display: inline-flex;
+  align-items: center;
+}
+
+.youtubeSearchModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-top: 2px solid var(--bg-surface-light);
+}
+
+.youtubeSearchModalButton {
+  padding: var(--space-3) var(--space-6);
+  background: transparent;
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.youtubeSearchModalButton:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}

@@ -229,6 +229,194 @@ async def handle_spotify_import(job: Job) -> None:
     )
 
 
+async def handle_spotify_batch_import(job: Job) -> None:
+    """Handle enhanced Spotify batch import job (selected tracks).
+
+    This handler imports only the selected tracks from a Spotify playlist
+    with optional metadata overrides and auto-download capability.
+
+    Job metadata parameters:
+        playlist_id (str, required): Spotify playlist ID
+        tracks (list[dict], required): Selected tracks with metadata
+        initial_status (str, optional): Status for new tracks (default: "discovered")
+        auto_download (bool, optional): Queue download jobs for tracks with YouTube IDs
+
+    Job result on completion:
+        imported: Number of tracks imported
+        download_jobs: Number of download jobs queued
+        total_tracks: Total tracks selected for import
+
+    Args:
+        job: Job instance with metadata containing import parameters
+
+    Raises:
+        ValueError: If required parameters are missing
+    """
+    import fuzzbin
+
+    # Extract parameters
+    playlist_id = job.metadata.get("playlist_id")
+    tracks = job.metadata.get("tracks")
+    if not playlist_id:
+        raise ValueError("Missing required parameter: playlist_id")
+    if not tracks or not isinstance(tracks, list):
+        raise ValueError("Missing or invalid required parameter: tracks")
+
+    initial_status = job.metadata.get("initial_status", "discovered")
+    auto_download = job.metadata.get("auto_download", False)
+
+    logger.info(
+        "spotify_batch_import_job_starting",
+        job_id=job.id,
+        playlist_id=playlist_id,
+        track_count=len(tracks),
+        initial_status=initial_status,
+        auto_download=auto_download,
+    )
+
+    job.update_progress(0, len(tracks), "Starting import...")
+
+    # Get repository
+    repository = await fuzzbin.get_repository()
+
+    # Import each track
+    imported_count = 0
+    download_jobs = []
+
+    for idx, track_data in enumerate(tracks):
+        if job.status == JobStatus.CANCELLED:
+            logger.info("spotify_batch_import_cancelled", job_id=job.id)
+            return
+
+        spotify_track_id = track_data.get("spotify_track_id")
+        metadata = track_data.get("metadata", {})
+        imvdb_id = track_data.get("imvdb_id")
+        youtube_id = track_data.get("youtube_id")
+        youtube_url = track_data.get("youtube_url")
+
+        track_title = metadata.get("title", "Unknown")
+        track_artist = metadata.get("artist", "Unknown")
+
+        job.update_progress(
+            idx,
+            len(tracks),
+            f"Importing {track_artist} - {track_title}...",
+        )
+
+        try:
+            # Prepare video data
+            video_data = {
+                "title": track_title,
+                "artist": track_artist,
+                "album": metadata.get("album"),
+                "year": metadata.get("year"),
+                "label": metadata.get("label"),
+                "director": metadata.get("directors"),
+                "status": initial_status,
+                "download_source": "spotify",
+            }
+
+            # Add external IDs if available
+            if imvdb_id:
+                video_data["imvdb_video_id"] = str(imvdb_id)
+            if youtube_id:
+                video_data["youtube_id"] = youtube_id
+
+            # Create or update video record
+            # Check if video exists by IMVDb ID or YouTube ID
+            existing_video = None
+            if imvdb_id:
+                try:
+                    existing_video = await repository.get_video_by_imvdb_id(
+                        str(imvdb_id),
+                        include_deleted=False
+                    )
+                except Exception:
+                    pass
+
+            if not existing_video and youtube_id:
+                try:
+                    existing_video = await repository.get_video_by_youtube_id(
+                        youtube_id,
+                        include_deleted=False
+                    )
+                except Exception:
+                    pass
+
+            if existing_video:
+                # Update existing video
+                video_id = existing_video.get("id")
+                await repository.update_video(video_id, video_data)
+                logger.info(
+                    "spotify_batch_import_track_updated",
+                    video_id=video_id,
+                    title=track_title,
+                    artist=track_artist,
+                )
+            else:
+                # Create new video
+                video = await repository.create_video(video_data)
+                video_id = video.get("id")
+                logger.info(
+                    "spotify_batch_import_track_created",
+                    video_id=video_id,
+                    title=track_title,
+                    artist=track_artist,
+                )
+
+            imported_count += 1
+
+            # Queue download job if auto_download enabled and YouTube ID available
+            if auto_download and youtube_id:
+                download_job = Job(
+                    type=JobType.DOWNLOAD_YOUTUBE,
+                    priority=JobPriority.NORMAL,
+                    metadata={
+                        "video_ids": [video_id],
+                        "youtube_url": f"https://youtube.com/watch?v={youtube_id}",
+                    },
+                )
+                download_jobs.append(download_job)
+
+        except Exception as e:
+            logger.error(
+                "spotify_batch_import_track_failed",
+                spotify_track_id=spotify_track_id,
+                title=track_title,
+                artist=track_artist,
+                error=str(e),
+            )
+            # Continue with next track on error
+
+    # Submit download jobs if any
+    if download_jobs:
+        queue = get_job_queue()
+        for dj in download_jobs:
+            await queue.submit(dj)
+        logger.info(
+            "spotify_batch_import_downloads_queued",
+            job_id=job.id,
+            download_job_count=len(download_jobs),
+        )
+
+    # Mark completed
+    job.mark_completed(
+        {
+            "imported": imported_count,
+            "download_jobs": len(download_jobs),
+            "total_tracks": len(tracks),
+        }
+    )
+
+    logger.info(
+        "spotify_batch_import_job_completed",
+        job_id=job.id,
+        playlist_id=playlist_id,
+        imported=imported_count,
+        download_jobs=len(download_jobs),
+    )
+
+
 async def handle_file_organize(job: Job) -> None:
     """Handle batch file organization job.
 
@@ -2170,6 +2358,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     """
     queue.register_handler(JobType.IMPORT_NFO, handle_nfo_import)
     queue.register_handler(JobType.IMPORT_SPOTIFY, handle_spotify_import)
+    queue.register_handler(JobType.IMPORT_SPOTIFY_BATCH, handle_spotify_batch_import)
     queue.register_handler(JobType.DOWNLOAD_YOUTUBE, handle_youtube_download)
     queue.register_handler(JobType.FILE_ORGANIZE, handle_file_organize)
     queue.register_handler(JobType.FILE_DUPLICATE_RESOLVE, handle_duplicate_resolution)
@@ -2190,6 +2379,7 @@ def register_all_handlers(queue: JobQueue) -> None:
         handlers=[
             JobType.IMPORT_NFO.value,
             JobType.IMPORT_SPOTIFY.value,
+            JobType.IMPORT_SPOTIFY_BATCH.value,
             JobType.IMPORT_ADD_SINGLE.value,
             JobType.DOWNLOAD_YOUTUBE.value,
             JobType.FILE_ORGANIZE.value,

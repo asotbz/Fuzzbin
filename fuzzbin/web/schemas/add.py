@@ -69,6 +69,7 @@ class BatchPreviewItem(BaseModel):
 
     album: Optional[str] = Field(default=None, description="Album name")
     year: Optional[int] = Field(default=None, description="Release year if known")
+    label: Optional[str] = Field(default=None, description="Record label")
 
     already_exists: bool = Field(default=False, description="Whether item already exists")
 
@@ -302,3 +303,103 @@ class AddSingleImportResponse(BaseModel):
     source: AddSearchSource = Field(description="Selected source")
     id: str = Field(description="Selected item id")
     status: str = Field(default="pending", description="Initial job status")
+
+
+# Enhanced Spotify import schemas (interactive workflow)
+
+
+class SpotifyTrackEnrichRequest(BaseModel):
+    """Request to enrich a single Spotify track with IMVDb metadata."""
+
+    artist: str = Field(min_length=1, max_length=200, description="Track artist name")
+    track_title: str = Field(min_length=1, max_length=200, description="Track title")
+    spotify_track_id: str = Field(description="Spotify track ID")
+    album: Optional[str] = Field(default=None, description="Album name")
+    year: Optional[int] = Field(default=None, description="Release year")
+    label: Optional[str] = Field(default=None, description="Record label")
+
+
+class SpotifyTrackEnrichResponse(BaseModel):
+    """Response after enriching a Spotify track with IMVDb metadata."""
+
+    spotify_track_id: str = Field(description="Spotify track ID")
+    match_found: bool = Field(description="Whether an IMVDb match was found")
+    match_type: Optional[str] = Field(
+        default=None,
+        description="Match type: 'exact' or 'fuzzy'",
+    )
+    imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if match found")
+    youtube_ids: list[str] = Field(
+        default_factory=list,
+        description="YouTube video IDs extracted from IMVDb sources",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Enriched metadata (title, artist, year, album, directors, sources)",
+    )
+    already_exists: bool = Field(
+        default=False,
+        description="Whether this track already exists in the library",
+    )
+    existing_video_id: Optional[int] = Field(
+        default=None,
+        description="Video ID if track already exists",
+    )
+
+
+class SelectedTrackImport(BaseModel):
+    """Single track to import with optional metadata overrides."""
+
+    spotify_track_id: str = Field(description="Spotify track ID")
+    metadata: dict[str, Any] = Field(
+        description="Track metadata (title, artist, year, album, directors)"
+    )
+    imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if matched")
+    youtube_id: Optional[str] = Field(default=None, description="YouTube video ID")
+    youtube_url: Optional[str] = Field(default=None, description="YouTube URL")
+
+
+class SpotifyBatchImportRequest(BaseModel):
+    """Request to import selected tracks from a Spotify playlist."""
+
+    playlist_id: str = Field(
+        description="Spotify playlist ID, URI, or URL",
+        examples=[
+            "37i9dQZF1DXcBWIGoYBM5M",
+            "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+            "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
+        ],
+    )
+    tracks: list[SelectedTrackImport] = Field(description="Selected tracks to import")
+    initial_status: str = Field(
+        default="discovered",
+        description="Initial status for created video records",
+        examples=["discovered", "imported"],
+    )
+    auto_download: bool = Field(
+        default=False,
+        description="Automatically queue download jobs for tracks with YouTube IDs",
+    )
+
+
+class SpotifyBatchImportResponse(BaseModel):
+    """Response after submitting a batch Spotify import job."""
+
+    job_id: str = Field(description="Background job ID")
+    playlist_id: str = Field(description="Normalized Spotify playlist ID")
+    track_count: int = Field(description="Number of tracks being imported")
+    auto_download: bool = Field(description="Whether auto-download is enabled")
+    status: str = Field(default="pending", description="Initial job status")
+
+
+class YouTubeSearchRequest(BaseModel):
+    """Request to search YouTube for videos."""
+
+    artist: str = Field(min_length=1, max_length=200, description="Artist name")
+    track_title: str = Field(min_length=1, max_length=200, description="Track title")
+    max_results: int = Field(
+        default=10,
+        ge=1,
+        le=25,
+        description="Maximum number of results to return",
+    )

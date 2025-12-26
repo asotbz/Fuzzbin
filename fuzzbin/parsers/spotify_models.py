@@ -30,6 +30,7 @@ class SpotifyAlbum(BaseModel):
     release_date_precision: Optional[str] = Field(
         default=None, description="Precision: year, month, day"
     )
+    label: Optional[str] = Field(default=None, description="Record label")
     uri: str = Field(description="Spotify URI")
     images: List[Dict[str, Any]] = Field(default_factory=list, description="Album artwork images")
 
