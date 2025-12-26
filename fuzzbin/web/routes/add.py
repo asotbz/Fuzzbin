@@ -476,6 +476,14 @@ async def search_single_video(
                     if source not in sources:
                         continue
 
+                    # Filter master releases: require community engagement (want > 0 and have > 0)
+                    if r_type == "master":
+                        community = r.get("community", {})
+                        want = community.get("want", 0)
+                        have = community.get("have", 0)
+                        if want == 0 or have == 0:
+                            continue
+
                     title = r.get("title") or ""
                     artist = None
                     if " - " in title:
