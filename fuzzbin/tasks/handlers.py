@@ -1663,7 +1663,7 @@ async def handle_add_single_import(job: Job) -> None:
         return
 
     job.update_progress(3, 3, "Import complete")
-    
+
     # If youtube_id exists and video was created, queue download job
     download_job_id: str | None = None
     if created and youtube_id:
@@ -1673,10 +1673,10 @@ async def handle_add_single_import(job: Job) -> None:
             video_id=video_id,
             youtube_id=youtube_id,
         )
-        
+
         # Update video status to pending_download
         await repository.update_video(video_id, status="pending_download")
-        
+
         # Queue download job with parent relationship
         queue = get_job_queue()
         download_job = Job(
@@ -1692,7 +1692,7 @@ async def handle_add_single_import(job: Job) -> None:
     elif created and not youtube_id:
         # No YouTube ID, mark as discovered for manual download later
         await repository.update_video(video_id, status="discovered")
-    
+
     job.mark_completed(
         {
             "created": created,
@@ -1761,7 +1761,7 @@ async def handle_import_download(job: Job) -> None:
     from fuzzbin.core.exceptions import YTDLPError
 
     job.update_progress(0, 3, "Initializing download...")
-    
+
     repository = await fuzzbin.get_repository()
     config = fuzzbin.get_config()
     ytdlp_config = config.ytdlp or YTDLPConfig()
@@ -1775,12 +1775,13 @@ async def handle_import_download(job: Job) -> None:
 
     # Create temp directory for download
     import tempfile
+
     temp_dir = Path(tempfile.mkdtemp(prefix="fuzzbin_download_"))
     temp_file = temp_dir / f"{youtube_id}.mp4"
 
     try:
         job.update_progress(1, 3, f"Downloading video {youtube_id}...")
-        
+
         async with YTDLPClient.from_config(ytdlp_config) as client:
             result = await client.download(
                 url=f"https://www.youtube.com/watch?v={youtube_id}",
@@ -1836,17 +1837,17 @@ async def handle_import_download(job: Job) -> None:
             temp_file.unlink()
         if temp_dir.exists():
             temp_dir.rmdir()
-        
+
         # Update video status to download_failed
         await repository.update_video(video_id, status="download_failed")
-        
+
         # Extract stderr if it's a YTDLPExecutionError
         error_details = {"error": str(e)}
         if hasattr(e, "stderr") and e.stderr:
             error_details["stderr"] = e.stderr[:1000]  # First 1000 chars
         if hasattr(e, "returncode"):
             error_details["returncode"] = e.returncode
-        
+
         logger.error(
             "import_download_job_failed",
             job_id=job.id,
@@ -1901,7 +1902,7 @@ async def handle_import_organize(job: Job) -> None:
     import shutil
 
     job.update_progress(0, 4, "Initializing organization...")
-    
+
     repository = await fuzzbin.get_repository()
     config = fuzzbin.get_config()
 
@@ -1915,7 +1916,7 @@ async def handle_import_organize(job: Job) -> None:
 
     # Get video record
     video = await repository.get_video_by_id(video_id)
-    
+
     # Update status to organizing
     await repository.update_video(video_id, status="organizing")
 
@@ -1938,8 +1939,9 @@ async def handle_import_organize(job: Job) -> None:
         library_dir = config.library_dir
         if library_dir is None:
             from fuzzbin.common.config import _get_default_library_dir
+
             library_dir = _get_default_library_dir()
-        
+
         media_paths = build_media_paths(
             root_path=library_dir,
             nfo_data=nfo_data,
@@ -2005,10 +2007,10 @@ async def handle_import_organize(job: Job) -> None:
             temp_path.unlink()
             if temp_path.parent.exists():
                 temp_path.parent.rmdir()
-        
+
         # Update video status to download_failed (allow retry)
         await repository.update_video(video_id, status="download_failed")
-        
+
         logger.error(
             "import_organize_job_failed",
             job_id=job.id,
@@ -2052,7 +2054,7 @@ async def handle_import_nfo_generate(job: Job) -> None:
     from fuzzbin.core.db.exporter import NFOExporter
 
     job.update_progress(0, 2, "Initializing NFO generation...")
-    
+
     repository = await fuzzbin.get_repository()
 
     # Check for cancellation
