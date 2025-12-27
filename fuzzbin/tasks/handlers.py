@@ -328,8 +328,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
             if imvdb_id:
                 try:
                     existing_video = await repository.get_video_by_imvdb_id(
-                        str(imvdb_id),
-                        include_deleted=False
+                        str(imvdb_id), include_deleted=False
                     )
                 except Exception:
                     pass
@@ -337,8 +336,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
             if not existing_video and youtube_id:
                 try:
                     existing_video = await repository.get_video_by_youtube_id(
-                        youtube_id,
-                        include_deleted=False
+                        youtube_id, include_deleted=False
                     )
                 except Exception:
                     pass

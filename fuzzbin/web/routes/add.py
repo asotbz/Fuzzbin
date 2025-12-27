@@ -1075,8 +1075,7 @@ async def enrich_spotify_track(
 
                 try:
                     existing_video = await repository.get_video_by_imvdb_id(
-                        str(matched_video.id),
-                        include_deleted=False
+                        str(matched_video.id), include_deleted=False
                     )
                     if existing_video:
                         existing_video_id = existing_video.get("id")
@@ -1091,8 +1090,7 @@ async def enrich_spotify_track(
                 if not existing_video and youtube_ids:
                     try:
                         existing_video = await repository.get_video_by_youtube_id(
-                            youtube_ids[0],
-                            include_deleted=False
+                            youtube_ids[0], include_deleted=False
                         )
                         if existing_video:
                             existing_video_id = existing_video.get("id")
