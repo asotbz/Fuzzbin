@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 import structlog
 
 from .spotify_models import (
+    SpotifyAlbum,
     SpotifyPlaylist,
     SpotifyPlaylistTracksResponse,
     SpotifyTrack,
@@ -54,6 +55,19 @@ class SpotifyParser:
             Validated SpotifyTrack model
         """
         return SpotifyTrack.model_validate(data)
+
+    @staticmethod
+    def parse_album(data: Dict[str, Any]) -> SpotifyAlbum:
+        """
+        Parse Spotify album response.
+
+        Args:
+            data: Raw album response from Spotify API
+
+        Returns:
+            Validated SpotifyAlbum model
+        """
+        return SpotifyAlbum.model_validate(data)
 
     @staticmethod
     def extract_year_from_release_date(release_date: Optional[str]) -> Optional[int]:

@@ -435,3 +435,69 @@ class SpotifyClient(RateLimitedAPIClient):
         response = await self.get(f"/tracks/{track_id}")
         response.raise_for_status()
         return SpotifyParser.parse_track(response.json())
+
+    async def get_albums(self, album_ids: List[str]) -> List[SpotifyAlbum]:
+        """
+        Get detailed information about multiple albums.
+
+        Fetches album metadata including label information for up to 20 albums
+        per request. Automatically batches larger requests.
+
+        Args:
+            album_ids: List of Spotify album IDs (max 20 per API call)
+
+        Returns:
+            List of SpotifyAlbum objects containing:
+            - id: Album ID
+            - name: Album name
+            - label: Record label (if available)
+            - release_date: Release date
+            - artists: Album artists
+            - images: Album artwork
+
+        Raises:
+            httpx.HTTPStatusError: If the API returns an error status
+            - 401: Invalid or expired access token
+            - 404: One or more albums not found
+
+        Example:
+            >>> album_ids = ["6dVIqQ8qmQ5GBnJ9shOYGE", "3a0UOgDWw2pTajw85QPMiz"]
+            >>> albums = await client.get_albums(album_ids)
+            >>> for album in albums:
+            ...     print(f"{album.name} - {album.label or 'Unknown Label'}")
+        """
+        if not album_ids:
+            return []
+
+        # Spotify allows up to 20 album IDs per request
+        MAX_IDS_PER_REQUEST = 20
+        all_albums = []
+
+        # Batch into groups of 20
+        for i in range(0, len(album_ids), MAX_IDS_PER_REQUEST):
+            batch = album_ids[i:i+MAX_IDS_PER_REQUEST]
+            ids_param = ",".join(batch)
+
+            self.logger.info(
+                "spotify_get_albums",
+                album_count=len(batch),
+                batch_index=i // MAX_IDS_PER_REQUEST,
+            )
+
+            response = await self.get(f"/albums", params={"ids": ids_param})
+            response.raise_for_status()
+
+            data = response.json()
+            albums = data.get("albums", [])
+
+            for album_data in albums:
+                if album_data:  # API returns null for invalid IDs
+                    all_albums.append(SpotifyParser.parse_album(album_data))
+
+        self.logger.info(
+            "spotify_get_albums_complete",
+            requested=len(album_ids),
+            fetched=len(all_albums),
+        )
+
+        return all_albums
