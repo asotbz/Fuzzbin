@@ -1,7 +1,7 @@
 """Pydantic models for IMVDb API responses."""
 
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional, Union
+from pydantic import BaseModel, Field, field_validator
 
 
 # Custom Exceptions
@@ -57,6 +57,14 @@ class IMVDbArtist(BaseModel):
     name: str = Field(description="Artist name")
     slug: Optional[str] = Field(default=None, description="URL-friendly slug")
     url: Optional[str] = Field(default=None, description="IMVDb profile URL")
+
+    @field_validator('name', 'slug', mode='before')
+    @classmethod
+    def coerce_to_string(cls, v: Any) -> Optional[str]:
+        """Coerce integers and other types to strings (handles malformed IMVDb data)."""
+        if v is None:
+            return None
+        return str(v)
 
     model_config = {
         "extra": "ignore",
@@ -162,6 +170,14 @@ class IMVDbVideo(BaseModel):
     release_date_string: Optional[str] = Field(default=None, description="Release date string")
     is_exact_match: bool = Field(default=True, description="Whether this was an exact search match")
 
+    @field_validator('song_title', 'song_slug', mode='before')
+    @classmethod
+    def coerce_to_string(cls, v: Any) -> Optional[str]:
+        """Coerce integers and other types to strings (handles malformed IMVDb data)."""
+        if v is None:
+            return None
+        return str(v)
+
     model_config = {
         "extra": "ignore",
         "validate_assignment": True,
@@ -191,6 +207,14 @@ class IMVDbEntityVideo(BaseModel):
     image: Optional[Any] = Field(
         default=None, description="Image URLs (can be dict, list, or null)"
     )
+
+    @field_validator('song_title', 'song_slug', mode='before')
+    @classmethod
+    def coerce_to_string(cls, v: Any) -> Optional[str]:
+        """Coerce integers and other types to strings (handles malformed IMVDb data)."""
+        if v is None:
+            return None
+        return str(v)
 
     model_config = {
         "extra": "ignore",
