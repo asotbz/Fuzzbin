@@ -46,6 +46,7 @@ def mock_repository():
     repository.get_video_artists = AsyncMock(return_value=[{"id": 1, "name": "Test Artist"}])
     repository.get_video_collections = AsyncMock(return_value=[])
     repository.get_video_tags = AsyncMock(return_value=[{"id": 1, "name": "rock"}])
+    repository.get_collection_videos = AsyncMock(return_value=[{"id": 1}])
 
     # Stats - these need to return proper values
     repository.get_video_count = AsyncMock(return_value=100)
@@ -231,9 +232,6 @@ class TestSearchServiceCached:
     @pytest.mark.asyncio
     async def test_get_top_collections(self, search_service, mock_repository):
         """Test getting top collections."""
-        # Mock get_collection_videos
-        mock_repository.get_collection_videos = AsyncMock(return_value=[{"id": 1}])
-
         collections = await search_service.get_top_collections(limit=10)
 
         assert isinstance(collections, list)

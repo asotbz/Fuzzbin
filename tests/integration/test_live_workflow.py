@@ -115,28 +115,53 @@ def test_cache_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def clean_test_config(test_cache_dir: Path) -> Config:
     """
-    Load config.yaml and modify it for clean test environment.
+    Create test config with default values and temporary cache.
     
+    - Uses default config values (no config.yaml required)
     - Sets logging level to DEBUG for verbose output
     - Redirects cache databases to temporary directory
     - Environment variables still override API credentials
     """
-    # Load base config from project root
-    config_path = Path(__file__).parent.parent.parent / "config.yaml"
-    config = Config.from_yaml(config_path)
+    from fuzzbin.common.config import (
+        APIClientConfig,
+        CacheConfig,
+        HTTPConfig,
+        LoggingConfig,
+        RateLimitConfig,
+    )
     
-    # Enable DEBUG logging
-    config.logging.level = "DEBUG"
+    # Create minimal config with defaults
+    config = Config(
+        http=HTTPConfig(timeout=30, max_redirects=5, verify_ssl=True),
+        logging=LoggingConfig(level="DEBUG", format="text", handlers=["console"]),
+    )
     
-    # Redirect cache databases to temporary directory
-    if "imvdb" in config.apis:
-        config.apis["imvdb"].cache.storage_path = str(
-            test_cache_dir / "imvdb_test.db"
-        )
-    if "discogs" in config.apis:
-        config.apis["discogs"].cache.storage_path = str(
-            test_cache_dir / "discogs_test.db"
-        )
+    # Configure IMVDb API with temp cache
+    config.apis = config.apis or {}
+    config.apis["imvdb"] = APIClientConfig(
+        name="imvdb",
+        base_url="https://imvdb.com/api/v1",
+        http=HTTPConfig(timeout=30),
+        rate_limit=RateLimitConfig(requests_per_second=1.0),
+        cache=CacheConfig(
+            enabled=True,
+            storage_path=str(test_cache_dir / "imvdb_test.db"),
+            ttl=3600,
+        ),
+    )
+    
+    # Configure Discogs API with temp cache
+    config.apis["discogs"] = APIClientConfig(
+        name="discogs",
+        base_url="https://api.discogs.com",
+        http=HTTPConfig(timeout=30),
+        rate_limit=RateLimitConfig(requests_per_minute=30),  # 30/min = 0.5/sec
+        cache=CacheConfig(
+            enabled=True,
+            storage_path=str(test_cache_dir / "discogs_test.db"),
+            ttl=3600,
+        ),
+    )
     
     return config
 
@@ -172,7 +197,7 @@ async def test_repository(tmp_path: Path):
 
 
 @pytest_asyncio.fixture
-async def ytdlp_client(clean_test_config: Config):
+async def ytdlp_client():
     """Provide configured YT-DLP client with minimal download settings."""
     ytdlp_config = YTDLPConfig(
         ytdlp_path="yt-dlp",

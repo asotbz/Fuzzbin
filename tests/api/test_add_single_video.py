@@ -63,6 +63,7 @@ class TestAddSearch:
                     "year": "1991",
                     "uri": "https://www.discogs.com/master/100",
                     "thumb": "https://discogs.example/thumb.jpg",
+                    "community": {"want": 100, "have": 50},
                 },
                 {
                     "id": 200,
