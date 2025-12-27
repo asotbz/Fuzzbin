@@ -48,6 +48,8 @@ from fuzzbin.web.schemas.add import (
     SpotifyImportResponse,
     SpotifyTrackEnrichRequest,
     SpotifyTrackEnrichResponse,
+    YouTubeMetadataRequest,
+    YouTubeMetadataResponse,
     YouTubeSearchRequest,
     normalize_spotify_playlist_id,
 )
@@ -184,6 +186,26 @@ async def preview_batch(
         async with SpotifyClient.from_config(api_config) as spotify_client:
             playlist = await spotify_client.get_playlist(playlist_id)
             tracks = await spotify_client.get_all_playlist_tracks(playlist_id)
+
+            # Collect unique album IDs to fetch label information
+            album_ids = list({track.album.id for track in tracks if track.album})
+
+            # Fetch album details including labels (batched up to 20 per request)
+            album_labels: dict[str, Optional[str]] = {}
+            if album_ids:
+                logger.info(
+                    "spotify_fetching_album_labels",
+                    playlist_id=playlist_id,
+                    unique_albums=len(album_ids),
+                )
+                albums = await spotify_client.get_albums(album_ids)
+                album_labels = {album.id: album.label for album in albums}
+                logger.info(
+                    "spotify_album_labels_fetched",
+                    playlist_id=playlist_id,
+                    albums_with_labels=sum(1 for label in album_labels.values() if label),
+                )
+
     except HTTPException:
         raise
     except Exception as e:
@@ -209,7 +231,8 @@ async def preview_batch(
         title = (track.name or "").strip()
         primary_artist = (track.artists[0].name if track.artists else "").strip()
         album = track.album.name if track.album else None
-        label = track.album.label if track.album else None
+        # Get label from album_labels mapping (fetched separately)
+        label = album_labels.get(track.album.id) if track.album else None
 
         year: Optional[int] = None
         if track.album and track.album.release_date:
@@ -1317,3 +1340,74 @@ async def import_selected_spotify_tracks(
         track_count=len(request.tracks),
         auto_download=request.auto_download,
     )
+
+
+@router.post(
+    "/youtube/metadata",
+    response_model=YouTubeMetadataResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Get YouTube video metadata",
+    description="Fetch YouTube video metadata (view count, duration, channel) using yt-dlp.",
+)
+async def get_youtube_metadata(
+    request: YouTubeMetadataRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> YouTubeMetadataResponse:
+    """
+    Get YouTube video metadata using yt-dlp.
+
+    This endpoint:
+    1. Calls yt-dlp to fetch video metadata
+    2. Returns view count, duration, and channel name
+    3. Handles errors gracefully (e.g., video unavailable)
+    """
+    user_label = current_user.username if current_user else "anonymous"
+    logger.info(
+        "youtube_metadata_fetching",
+        youtube_id=request.youtube_id,
+        user=user_label,
+    )
+
+    try:
+        # Create YTDLPClient instance
+        ytdlp_config = _get_ytdlp_config()
+        async with YTDLPClient.from_config(ytdlp_config) as client:
+            # Fetch video info
+            video_info = await client.get_video_info(request.youtube_id)
+
+            logger.info(
+                "youtube_metadata_fetched",
+                youtube_id=request.youtube_id,
+                view_count=video_info.view_count,
+                duration=video_info.duration,
+                channel=video_info.channel,
+            )
+
+            return YouTubeMetadataResponse(
+                youtube_id=request.youtube_id,
+                available=True,
+                view_count=video_info.view_count,
+                duration=video_info.duration,
+                channel=video_info.channel,
+                title=video_info.title,
+                error=None,
+            )
+
+    except Exception as e:
+        # Handle errors (video unavailable, network errors, etc.)
+        error_msg = str(e)
+        logger.warning(
+            "youtube_metadata_error",
+            youtube_id=request.youtube_id,
+            error=error_msg,
+        )
+
+        return YouTubeMetadataResponse(
+            youtube_id=request.youtube_id,
+            available=False,
+            view_count=None,
+            duration=None,
+            channel=None,
+            title=None,
+            error=error_msg,
+        )

@@ -403,3 +403,21 @@ class YouTubeSearchRequest(BaseModel):
         le=25,
         description="Maximum number of results to return",
     )
+
+
+class YouTubeMetadataRequest(BaseModel):
+    """Request to fetch YouTube video metadata using yt-dlp."""
+
+    youtube_id: str = Field(description="YouTube video ID")
+
+
+class YouTubeMetadataResponse(BaseModel):
+    """Response with YouTube video metadata from yt-dlp."""
+
+    youtube_id: str = Field(description="YouTube video ID")
+    available: bool = Field(description="Whether the video is available")
+    view_count: Optional[int] = Field(default=None, description="View count")
+    duration: Optional[int] = Field(default=None, description="Duration in seconds")
+    channel: Optional[str] = Field(default=None, description="Channel name")
+    title: Optional[str] = Field(default=None, description="Video title")
+    error: Optional[str] = Field(default=None, description="Error message if unavailable")
