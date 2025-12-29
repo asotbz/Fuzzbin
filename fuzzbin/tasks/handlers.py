@@ -362,6 +362,22 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     artist=track_artist,
                 )
 
+            # Handle featured artists if present
+            featured_artists_str = metadata.get("featured_artists")
+            if featured_artists_str:
+                # Parse comma-separated featured artists
+                featured_artists = [fa.strip() for fa in featured_artists_str.split(",") if fa.strip()]
+
+                # Upsert featured artists and link them to the video
+                for position, featured_artist in enumerate(featured_artists, start=1):
+                    artist_id = await repository.upsert_artist(name=featured_artist)
+                    await repository.link_video_artist(
+                        video_id=video_id,
+                        artist_id=artist_id,
+                        role="featured",
+                        position=position,
+                    )
+
             imported_count += 1
 
             # Queue download job if auto_download enabled and YouTube ID available
@@ -1028,6 +1044,7 @@ async def handle_metadata_enrich(job: Job) -> None:
                 # Track if any enrichment happened
                 was_enriched = False
                 updates: dict[str, Any] = {}
+                imvdb_video_data = None  # Track for artist linking
 
                 # Try IMVDb
                 if imvdb_client and video.title and video.artist:
@@ -1043,6 +1060,7 @@ async def handle_metadata_enrich(job: Job) -> None:
 
                             # Map IMVDb fields to our model
                             if video_data:
+                                imvdb_video_data = video_data  # Save for artist linking
                                 if (overwrite or not video.director) and video_data.directors:
                                     updates["director"] = video_data.directors[0].name
                                 if (overwrite or not video.year) and video_data.year:
@@ -1107,6 +1125,46 @@ async def handle_metadata_enrich(job: Job) -> None:
                     skipped += 1  # Had data but nothing new
                 else:
                     skipped += 1
+
+                # Link artists from IMVDb if we have video data
+                # Delete existing artist links and re-link from fresh IMVDb data
+                if imvdb_video_data and (
+                    imvdb_video_data.artists or imvdb_video_data.featured_artists
+                ):
+                    await repository.unlink_all_video_artists(video_id)
+
+                    # Link primary artists
+                    if imvdb_video_data.artists:
+                        for position, art in enumerate(imvdb_video_data.artists):
+                            artist_id = await repository.upsert_artist(name=art.name)
+                            await repository.link_video_artist(
+                                video_id=video_id,
+                                artist_id=artist_id,
+                                role="primary",
+                                position=position,
+                            )
+
+                    # Link featured artists
+                    if imvdb_video_data.featured_artists:
+                        for position, featured_art in enumerate(
+                            imvdb_video_data.featured_artists
+                        ):
+                            artist_id = await repository.upsert_artist(
+                                name=featured_art.name
+                            )
+                            await repository.link_video_artist(
+                                video_id=video_id,
+                                artist_id=artist_id,
+                                role="featured",
+                                position=position,
+                            )
+
+                    logger.info(
+                        "video_artists_linked_from_imvdb",
+                        video_id=video_id,
+                        primary_count=len(imvdb_video_data.artists or []),
+                        featured_count=len(imvdb_video_data.featured_artists or []),
+                    )
 
             except Exception as e:
                 failed += 1
@@ -1745,6 +1803,28 @@ async def handle_add_single_import(job: Job) -> None:
                 status=initial_status,
             )
             created = True
+
+            # Link primary artists to video_artists table
+            if video.artists:
+                for position, art in enumerate(video.artists):
+                    artist_id = await repository.upsert_artist(name=art.name)
+                    await repository.link_video_artist(
+                        video_id=video_id,
+                        artist_id=artist_id,
+                        role="primary",
+                        position=position,
+                    )
+
+            # Link featured artists to video_artists table
+            if video.featured_artists:
+                for position, featured_art in enumerate(video.featured_artists):
+                    artist_id = await repository.upsert_artist(name=featured_art.name)
+                    await repository.link_video_artist(
+                        video_id=video_id,
+                        artist_id=artist_id,
+                        role="featured",
+                        position=position,
+                    )
 
     elif source in ("discogs_master", "discogs_release"):
         discogs_config = (config.apis or {}).get("discogs")

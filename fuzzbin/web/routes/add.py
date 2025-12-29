@@ -1115,6 +1115,13 @@ async def enrich_spotify_track(
                     # Capitalize first letter of each word for better display
                     normalized_album = normalized_album.title()
 
+                # Extract featured artists
+                featured_artists_list = []
+                for fa in video.featured_artists or []:
+                    if fa.name:
+                        featured_artists_list.append(fa.name)
+                featured_artists_str = ", ".join(featured_artists_list) if featured_artists_list else None
+
                 metadata = {
                     "title": video.song_title,  # Use IMVDb's clean title
                     "artist": primary_artist,
@@ -1122,6 +1129,7 @@ async def enrich_spotify_track(
                     "album": normalized_album or request.album,  # Use normalized album if available
                     "label": request.label,  # Keep original label from Spotify
                     "directors": directors_str,
+                    "featured_artists": featured_artists_str,
                     "sources": [
                         {
                             "source": s.source,

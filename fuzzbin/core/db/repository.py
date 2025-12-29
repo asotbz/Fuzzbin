@@ -969,6 +969,49 @@ class VideoRepository:
             count=len(artist_links),
         )
 
+    async def unlink_all_video_artists(self, video_id: int) -> int:
+        """
+        Remove all artist links for a video.
+
+        Used for re-enrichment to clear existing links before re-linking.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            Number of links deleted
+
+        Raises:
+            QueryError: If operation fails
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        try:
+            cursor = await self._connection.execute(
+                "DELETE FROM video_artists WHERE video_id = ?",
+                (video_id,),
+            )
+            await self._connection.commit()
+
+            deleted_count = cursor.rowcount
+            logger.info(
+                "video_artists_unlinked",
+                video_id=video_id,
+                deleted_count=deleted_count,
+            )
+
+            return deleted_count
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error(
+                "unlink_video_artists_failed",
+                video_id=video_id,
+                error=str(e),
+            )
+            raise QueryError(f"Failed to unlink video artists: {e}") from e
+
     async def get_video_artists(
         self, video_id: int, role: Optional[str] = None
     ) -> List[Dict[str, Any]]:
