@@ -178,6 +178,17 @@ class IMVDbVideo(BaseModel):
             return None
         return str(v)
 
+    @field_validator('year', mode='before')
+    @classmethod
+    def coerce_year(cls, v: Any) -> Optional[int]:
+        """Coerce empty strings and invalid values to None for year field."""
+        if v is None or v == '':
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+
     model_config = {
         "extra": "ignore",
         "validate_assignment": True,
@@ -215,6 +226,17 @@ class IMVDbEntityVideo(BaseModel):
         if v is None:
             return None
         return str(v)
+
+    @field_validator('year', mode='before')
+    @classmethod
+    def coerce_year(cls, v: Any) -> Optional[int]:
+        """Coerce empty strings and invalid values to None for year field."""
+        if v is None or v == '':
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
 
     model_config = {
         "extra": "ignore",
