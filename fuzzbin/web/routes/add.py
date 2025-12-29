@@ -26,6 +26,7 @@ from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.clients.ytdlp_client import YTDLPClient
 from fuzzbin.common.config import YTDLPConfig
+from fuzzbin.common.string_utils import normalize_spotify_title
 from fuzzbin.tasks import Job, JobType, get_job_queue
 from fuzzbin.web.dependencies import get_current_user
 from fuzzbin.web.schemas.add import (
@@ -244,9 +245,33 @@ async def preview_batch(
 
         already_exists = False
         if title and primary_artist:
-            query = repository.query().where_title(title).where_artist(primary_artist)
+            # Normalize titles for duplicate detection
+            normalized_title = normalize_spotify_title(
+                title,
+                remove_version_qualifiers_flag=True,
+                remove_featured=True,
+            )
+            normalized_artist = normalize_spotify_title(
+                primary_artist,
+                remove_version_qualifiers_flag=False,
+                remove_featured=True,
+            )
+            
+            # Query by artist first, then compare normalized titles
+            query = repository.query().where_artist(primary_artist)
             results = await query.execute()
-            already_exists = len(results) > 0
+            
+            # Check if any result matches normalized title
+            for result in results:
+                db_title = result.get("title", "")
+                db_normalized = normalize_spotify_title(
+                    db_title,
+                    remove_version_qualifiers_flag=True,
+                    remove_featured=True,
+                )
+                if db_normalized == normalized_title:
+                    already_exists = True
+                    break
 
         if already_exists:
             existing_count += 1
@@ -959,10 +984,32 @@ async def enrich_spotify_track(
         return response
 
     try:
+        # Normalize Spotify titles before IMVDb search to improve matching
+        # For artist: remove featured artists but keep version qualifiers (if any)
+        # For track: remove both version qualifiers and featured artists
+        normalized_artist = normalize_spotify_title(
+            request.artist,
+            remove_version_qualifiers_flag=False,
+            remove_featured=True,
+        )
+        normalized_title = normalize_spotify_title(
+            request.track_title,
+            remove_version_qualifiers_flag=True,
+            remove_featured=True,
+        )
+        
+        logger.debug(
+            "spotify_titles_normalized",
+            original_artist=request.artist,
+            normalized_artist=normalized_artist,
+            original_title=request.track_title,
+            normalized_title=normalized_title,
+        )
+        
         async with IMVDbClient.from_config(api_config) as imvdb_client:
             search_result = await imvdb_client.search_videos(
-                artist=request.artist,
-                track_title=request.track_title,
+                artist=normalized_artist,
+                track_title=normalized_title,
                 page=1,
                 per_page=20,  # Get more results for better matching
             )
@@ -1056,12 +1103,23 @@ async def enrich_spotify_track(
                     if d.entity_name:
                         directors_list.append(d.entity_name)
                 directors_str = ", ".join(directors_list) if directors_list else None
+                
+                # Normalize album name from Spotify (remove version qualifiers)
+                normalized_album = None
+                if request.album:
+                    normalized_album = normalize_spotify_title(
+                        request.album,
+                        remove_version_qualifiers_flag=True,
+                        remove_featured=False,
+                    )
+                    # Capitalize first letter of each word for better display
+                    normalized_album = normalized_album.title()
 
                 metadata = {
-                    "title": video.song_title,
+                    "title": video.song_title,  # Use IMVDb's clean title
                     "artist": primary_artist,
                     "year": video.year,
-                    "album": request.album,  # Keep original album from Spotify
+                    "album": normalized_album or request.album,  # Use normalized album if available
                     "label": request.label,  # Keep original label from Spotify
                     "directors": directors_str,
                     "sources": [

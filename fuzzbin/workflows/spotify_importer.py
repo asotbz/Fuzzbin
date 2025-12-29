@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 import structlog
 
 from ..api.spotify_client import SpotifyClient
+from ..common.string_utils import normalize_spotify_title
 from ..core.db.repository import VideoRepository
 from ..parsers.spotify_models import SpotifyTrack
 from ..parsers.spotify_parser import SpotifyParser
@@ -313,13 +314,42 @@ class SpotifyPlaylistImporter:
             return False
 
         try:
-            # Query by title and artist
+            # Normalize incoming Spotify titles for comparison
+            normalized_title = normalize_spotify_title(
+                track.name,
+                remove_version_qualifiers_flag=True,
+                remove_featured=True,
+            )
+            normalized_artist = normalize_spotify_title(
+                track.artists[0].name,
+                remove_version_qualifiers_flag=False,
+                remove_featured=True,
+            )
+            
+            # Query by artist first (more selective)
             query = self.repository.query()
-            query = query.where_title(track.name)
             query = query.where_artist(track.artists[0].name)
-
             results = await query.execute()
-            return len(results) > 0
+            
+            # Compare normalized titles to avoid false negatives
+            # (e.g., "Jump" vs "Jump - 2015 Remaster")
+            for result in results:
+                db_title = result.get("title", "")
+                db_normalized = normalize_spotify_title(
+                    db_title,
+                    remove_version_qualifiers_flag=True,
+                    remove_featured=True,
+                )
+                if db_normalized == normalized_title:
+                    self.logger.debug(
+                        "duplicate_found",
+                        spotify_title=track.name,
+                        db_title=db_title,
+                        normalized_title=normalized_title,
+                    )
+                    return True
+            
+            return False
 
         except Exception as e:
             # If query fails, assume doesn't exist

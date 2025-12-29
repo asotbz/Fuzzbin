@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
-from ..common.string_utils import normalize_for_matching
+from ..common.string_utils import normalize_for_matching, normalize_spotify_title
 from .imvdb_models import (
     EmptySearchResultsError,
     IMVDbEntity,
@@ -186,7 +186,9 @@ class IMVDbParser:
 
         # Normalize search criteria
         normalized_artist = normalize_for_matching(artist)
-        normalized_title = normalize_for_matching(title)
+        normalized_title = normalize_spotify_title(
+            title, remove_version_qualifiers_flag=True, remove_featured=True
+        )
 
         logger.debug(
             "searching_for_video_match",
@@ -199,7 +201,9 @@ class IMVDbParser:
 
         # First attempt: exact normalized match on primary artists only
         for video in results:
-            video_title = normalize_for_matching(video.song_title or "")
+            video_title = normalize_spotify_title(
+                video.song_title or "", remove_version_qualifiers_flag=True, remove_featured=True
+            )
 
             # Check if any primary artist matches
             for video_artist in video.artists:
@@ -225,7 +229,9 @@ class IMVDbParser:
         candidates: List[tuple[IMVDbEntityVideo, float, str]] = []
 
         for video in results:
-            video_title = normalize_for_matching(video.song_title or "")
+            video_title = normalize_spotify_title(
+                video.song_title or "", remove_version_qualifiers_flag=True, remove_featured=True
+            )
 
             # Check each primary artist
             for video_artist in video.artists:

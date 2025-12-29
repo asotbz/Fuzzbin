@@ -8,6 +8,8 @@ from fuzzbin.common.string_utils import (
     normalize_for_matching,
     normalize_filename,
     format_featured_artists,
+    remove_version_qualifiers,
+    normalize_spotify_title,
 )
 
 
@@ -288,3 +290,237 @@ class TestFormatFeaturedArtists:
         """Test formatting with four featured artists."""
         result = format_featured_artists(["A", "B", "C", "D"])
         assert result == "ft. A, B, C, D"
+
+
+class TestRemoveVersionQualifiers:
+    """Tests for remove_version_qualifiers function."""
+
+    def test_parenthetical_remastered(self):
+        """Test removing (Remastered) qualifier."""
+        assert remove_version_qualifiers("1984 (Remastered)") == "1984"
+        assert remove_version_qualifiers("Nevermind (Remastered)") == "Nevermind"
+        assert remove_version_qualifiers("Album (Remaster)") == "Album"
+
+    def test_parenthetical_with_year(self):
+        """Test removing remaster qualifiers with years."""
+        assert remove_version_qualifiers("Jump (2015 Remaster)") == "Jump"
+        assert remove_version_qualifiers("Song (1999 Remastered)") == "Song"
+        assert remove_version_qualifiers("Track (2020 Remaster)") == "Track"
+
+    def test_parenthetical_deluxe_edition(self):
+        """Test removing deluxe edition qualifiers."""
+        assert remove_version_qualifiers("Purple Rain (Deluxe)") == "Purple Rain"
+        assert remove_version_qualifiers("Album (Deluxe Edition)") == "Album"
+        assert remove_version_qualifiers("Songs (Deluxe Version)") == "Songs"
+
+    def test_parenthetical_anniversary_edition(self):
+        """Test removing anniversary edition qualifiers."""
+        assert remove_version_qualifiers("Footloose (15th Anniversary Collectors' Edition)") == "Footloose"
+        assert remove_version_qualifiers("Album (10th Anniversary Edition)") == "Album"
+        assert remove_version_qualifiers("Songs (25th Anniversary)") == "Songs"
+
+    def test_parenthetical_expanded_edition(self):
+        """Test removing expanded edition qualifiers."""
+        assert remove_version_qualifiers("Heartbeat City (Expanded Edition)") == "Heartbeat City"
+        assert remove_version_qualifiers("Album (Expanded)") == "Album"
+
+    def test_parenthetical_radio_edit(self):
+        """Test removing radio edit qualifiers."""
+        assert remove_version_qualifiers("Song (Radio Edit)") == "Song"
+        assert remove_version_qualifiers("Track (Radio Version)") == "Track"
+        assert remove_version_qualifiers("Single (Radio)") == "Single"
+
+    def test_parenthetical_other_versions(self):
+        """Test removing various version qualifiers."""
+        assert remove_version_qualifiers("Track (Live)") == "Track"
+        assert remove_version_qualifiers("Song (Acoustic)") == "Song"
+        assert remove_version_qualifiers("Track (Explicit)") == "Track"
+        assert remove_version_qualifiers("Song (Clean)") == "Song"
+        assert remove_version_qualifiers("Track (Instrumental)") == "Track"
+        assert remove_version_qualifiers("Song (Album Version)") == "Song"
+        assert remove_version_qualifiers("Track (Single Version)") == "Track"
+
+    def test_hyphenated_remaster(self):
+        """Test removing hyphenated remaster qualifiers."""
+        assert remove_version_qualifiers("Jump - 2015 Remaster") == "Jump"
+        assert remove_version_qualifiers("Song - Remastered") == "Song"
+        assert remove_version_qualifiers("Track - Remaster") == "Track"
+
+    def test_hyphenated_soundtrack(self):
+        """Test removing soundtrack qualifiers."""
+        assert remove_version_qualifiers('Footloose - From "Footloose" Soundtrack') == "Footloose"
+        assert remove_version_qualifiers("Song - From 'Movie' Soundtrack") == "Song"
+        assert remove_version_qualifiers('Track - From "Film" OST') == "Track"
+
+    def test_hyphenated_versions(self):
+        """Test removing hyphenated version qualifiers."""
+        assert remove_version_qualifiers("Song - Radio Edit") == "Song"
+        assert remove_version_qualifiers("Track - Single Version") == "Track"
+        assert remove_version_qualifiers("Song - Album Version") == "Song"
+        assert remove_version_qualifiers("Track - Live") == "Track"
+        assert remove_version_qualifiers("Song - Acoustic") == "Song"
+
+    def test_bracketed_qualifiers(self):
+        """Test removing bracketed qualifiers."""
+        assert remove_version_qualifiers("Album [Remastered]") == "Album"
+        assert remove_version_qualifiers("Song [Deluxe Edition]") == "Song"
+        assert remove_version_qualifiers("Track [Expanded]") == "Track"
+
+    def test_multiple_qualifiers(self):
+        """Test removing multiple qualifiers in sequence."""
+        assert remove_version_qualifiers("Song (Deluxe Edition) - Remastered") == "Song"
+        assert remove_version_qualifiers("Track (Expanded) (Remastered)") == "Track"
+        assert remove_version_qualifiers("Album - Remaster [Deluxe]") == "Album"
+
+    def test_preserve_title_starting_with_paren(self):
+        """Test that titles starting with parentheses are preserved."""
+        result = remove_version_qualifiers("(What's the Story) Morning Glory?")
+        assert result == "(What's the Story) Morning Glory?"
+        assert remove_version_qualifiers("(I Can't Get No) Satisfaction") == "(I Can't Get No) Satisfaction"
+
+    def test_case_insensitive(self):
+        """Test that pattern matching is case-insensitive."""
+        assert remove_version_qualifiers("Song (REMASTERED)") == "Song"
+        assert remove_version_qualifiers("Track (Deluxe EDITION)") == "Track"
+        assert remove_version_qualifiers("Album - REMASTER") == "Album"
+
+    def test_whitespace_handling(self):
+        """Test proper whitespace handling."""
+        assert remove_version_qualifiers("Song  (Remastered)") == "Song"
+        assert remove_version_qualifiers("Track(Deluxe)") == "Track"
+        assert remove_version_qualifiers("Album - Remaster  ") == "Album"
+        assert remove_version_qualifiers("  Song (Live)  ") == "Song"
+
+    def test_no_qualifiers(self):
+        """Test that strings without qualifiers pass through unchanged."""
+        assert remove_version_qualifiers("1984") == "1984"
+        assert remove_version_qualifiers("Nevermind") == "Nevermind"
+        assert remove_version_qualifiers("Purple Rain") == "Purple Rain"
+        assert remove_version_qualifiers("Jump") == "Jump"
+
+    def test_qualifier_in_middle_not_removed(self):
+        """Test that qualifiers in middle of title are preserved."""
+        assert remove_version_qualifiers("Live and Let Die") == "Live and Let Die"
+        assert remove_version_qualifiers("Acoustic Soul") == "Acoustic Soul"
+
+    def test_empty_string(self):
+        """Test handling of empty string."""
+        assert remove_version_qualifiers("") == ""
+
+    def test_only_qualifier(self):
+        """Test string that is only a qualifier."""
+        assert remove_version_qualifiers("(Remastered)") == "(Remastered)"  # Starts with paren
+
+
+class TestNormalizeSpotifyTitle:
+    """Tests for normalize_spotify_title function."""
+
+    def test_basic_version_removal(self):
+        """Test basic version qualifier removal."""
+        assert normalize_spotify_title("Jump - 2015 Remaster") == "jump"
+        assert normalize_spotify_title("1984 (Remastered)") == "1984"
+        assert normalize_spotify_title("Heartbeat City (Expanded Edition)") == "heartbeat city"
+
+    def test_soundtrack_removal(self):
+        """Test soundtrack qualifier removal."""
+        result = normalize_spotify_title('Footloose - From "Footloose" Soundtrack')
+        assert result == "footloose"
+
+    def test_with_featured_artists(self):
+        """Test combined version and featured artist removal."""
+        result = normalize_spotify_title(
+            "Blurred Lines ft. T.I. (Deluxe)",
+            remove_version_qualifiers_flag=True,
+            remove_featured=True,
+        )
+        assert result == "blurred lines"
+
+    def test_featured_only(self):
+        """Test featured artist removal without version removal."""
+        result = normalize_spotify_title(
+            "Blurred Lines ft. T.I.",
+            remove_version_qualifiers_flag=False,
+            remove_featured=True,
+        )
+        assert result == "blurred lines"
+
+    def test_version_only(self):
+        """Test version removal without featured artist removal."""
+        result = normalize_spotify_title(
+            "Song ft. Artist (Remastered)",
+            remove_version_qualifiers_flag=True,
+            remove_featured=False,
+        )
+        assert result == "song ft. artist"
+
+    def test_no_normalization(self):
+        """Test with all normalization disabled (only lowercase/strip)."""
+        result = normalize_spotify_title(
+            "Song ft. Artist (Remastered)",
+            remove_version_qualifiers_flag=False,
+            remove_featured=False,
+        )
+        assert result == "song ft. artist (remastered)"
+
+    def test_complex_case(self):
+        """Test complex case with multiple qualifiers and featured artists."""
+        result = normalize_spotify_title(
+            "Jump ft. David Lee Roth - 2015 Remaster (Deluxe Edition)",
+            remove_version_qualifiers_flag=True,
+            remove_featured=True,
+        )
+        assert result == "jump"
+
+    def test_album_normalization(self):
+        """Test album title normalization (no featured artist removal)."""
+        result = normalize_spotify_title(
+            "Footloose (15th Anniversary Collectors' Edition)",
+            remove_version_qualifiers_flag=True,
+            remove_featured=False,
+        )
+        assert result == "footloose"
+
+    def test_track_normalization(self):
+        """Test track title normalization (with featured artist removal)."""
+        result = normalize_spotify_title(
+            "Blurred Lines ft. T.I. - Radio Edit",
+            remove_version_qualifiers_flag=True,
+            remove_featured=True,
+        )
+        assert result == "blurred lines"
+
+    def test_whitespace_handling(self):
+        """Test proper whitespace handling."""
+        result = normalize_spotify_title("  Song (Remastered)  ")
+        assert result == "song"
+
+    def test_empty_string(self):
+        """Test handling of empty string."""
+        assert normalize_spotify_title("") == ""
+
+    def test_lowercase_conversion(self):
+        """Test lowercase conversion is always applied."""
+        assert normalize_spotify_title("UPPERCASE TITLE") == "uppercase title"
+        assert normalize_spotify_title("MixedCase") == "mixedcase"
+
+    def test_preserve_title_starting_with_paren(self):
+        """Test titles starting with parentheses are preserved in output."""
+        result = normalize_spotify_title("(What's the Story) Morning Glory?")
+        assert result == "(what's the story) morning glory?"
+
+    def test_real_spotify_examples(self):
+        """Test with real Spotify metadata examples."""
+        # Van Halen example
+        assert normalize_spotify_title("Jump - 2015 Remaster") == "jump"
+        
+        # Kenny Loggins example
+        result = normalize_spotify_title('Footloose - From "Footloose" Soundtrack')
+        assert result == "footloose"
+        
+        # The Cars example
+        assert normalize_spotify_title("You Might Think") == "you might think"
+        
+        # Album examples
+        assert normalize_spotify_title("1984 (Remastered)") == "1984"
+        assert normalize_spotify_title("Footloose (15th Anniversary Collectors' Edition)") == "footloose"
+        assert normalize_spotify_title("Heartbeat City (Expanded Edition)") == "heartbeat city"
