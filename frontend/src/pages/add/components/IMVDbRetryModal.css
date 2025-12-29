@@ -1,0 +1,172 @@
+.imvdbRetryModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 0, 20, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.imvdbRetryModalContent {
+  background: var(--bg-surface, #1a0f2e);
+  border: 1px solid rgba(255, 0, 110, 0.2);
+  border-radius: 8px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow:
+    0 0 0 1px rgba(255, 0, 110, 0.1),
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 48px rgba(255, 0, 110, 0.15);
+}
+
+.imvdbRetryModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255, 0, 110, 0.15);
+}
+
+.imvdbRetryModalTitle {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.imvdbRetryModalClose {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #a0a0a0);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.imvdbRetryModalClose svg {
+  width: 24px;
+  height: 24px;
+}
+
+.imvdbRetryModalClose:hover {
+  color: var(--text-primary, #ffffff);
+}
+
+.imvdbRetryModalBody {
+  padding: 1.5rem;
+}
+
+.imvdbRetryModalDescription {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a0a0a0);
+  line-height: 1.5;
+  margin: 0 0 1.5rem 0;
+}
+
+.imvdbRetryModalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.imvdbRetryModalFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.imvdbRetryModalLabel {
+  font-family: 'Barlow', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary, #ffffff);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.imvdbRetryModalInput {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  color: var(--text-primary, #ffffff);
+  background: var(--bg-base, #0a0014);
+  border: 1px solid rgba(255, 0, 110, 0.2);
+  border-radius: 4px;
+  padding: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.imvdbRetryModalInput:focus {
+  outline: none;
+  border-color: var(--channel-import, #ff006e);
+  box-shadow: 0 0 0 3px rgba(255, 0, 110, 0.1);
+}
+
+.imvdbRetryModalInput::placeholder {
+  color: var(--text-secondary, #666);
+}
+
+.imvdbRetryModalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.imvdbRetryModalButton {
+  font-family: 'Barlow', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-primary, #ffffff);
+}
+
+.imvdbRetryModalButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.imvdbRetryModalButtonPrimary {
+  font-family: 'Barlow', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--channel-import, #ff006e);
+  border: 1px solid var(--channel-import, #ff006e);
+  color: #ffffff;
+}
+
+.imvdbRetryModalButtonPrimary:hover:not(:disabled) {
+  background: #e6005f;
+  border-color: #e6005f;
+  box-shadow: 0 0 20px rgba(255, 0, 110, 0.4);
+}
+
+.imvdbRetryModalButtonPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

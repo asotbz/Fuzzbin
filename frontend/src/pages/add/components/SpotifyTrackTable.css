@@ -253,7 +253,67 @@
 .trackRowYoutube {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.trackRowYoutubeMetadata {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+}
+
+.trackRowYoutubeChannel {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.trackRowYoutubeViews {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.trackRowYoutubeDuration {
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trackRowYoutubeMetadataLoading {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.trackRowYoutubeWarning {
+  width: 18px;
+  height: 18px;
+  color: var(--warning, #ffd60a);
+  flex-shrink: 0;
+}
+
+.trackRowYoutubeError {
+  color: var(--warning, #ffd60a);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .trackRowActions {

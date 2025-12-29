@@ -340,6 +340,7 @@ export default function SpotifyImport() {
               <h2 className="spotifyImportCardTitle">Playlist Tracks</h2>
               <SpotifyTrackTable
                 tracks={preview.items}
+                metadataOverrides={metadataOverrides}
                 onEditTrack={(track, state) => setEditingTrack({ track, state })}
                 onSearchYouTube={(track) => setSearchingTrack(track)}
                 onSelectionChange={(selectedIds) => setSelectedTrackIds(selectedIds)}

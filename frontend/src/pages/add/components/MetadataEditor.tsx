@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getDisplayAlbumTitle } from '../../../lib/utils/titleUtils'
 import type { BatchPreviewItem } from '../../../lib/api/types'
 import type { TrackRowState } from './TrackRow'
 
@@ -45,7 +46,9 @@ export default function MetadataEditor({ track, state, onSave, onCancel }: Metad
   const [year, setYear] = useState<string>(
     String(enrichmentData?.metadata?.year || track.year || '')
   )
-  const [album, setAlbum] = useState(enrichmentData?.metadata?.album || track.album || '')
+  const [album, setAlbum] = useState(
+    enrichmentData?.metadata?.album || getDisplayAlbumTitle(track.album) || ''
+  )
   const [label, setLabel] = useState(enrichmentData?.metadata?.label || track.label || '')
   const [directors, setDirectors] = useState(enrichmentData?.metadata?.directors || '')
   const [youtubeUrl, setYoutubeUrl] = useState(

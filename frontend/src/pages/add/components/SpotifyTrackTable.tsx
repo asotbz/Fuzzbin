@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { enrichSpotifyTrack } from '../../../lib/api/endpoints/spotify'
 import TrackRow, { type TrackRowState } from './TrackRow'
+import IMVDbRetryModal from './IMVDbRetryModal'
 import type { BatchPreviewItem, SpotifyTrackEnrichResponse } from '../../../lib/api/types'
 import './SpotifyTrackTable.css'
 
@@ -18,6 +19,7 @@ interface TrackMetadata {
 
 interface SpotifyTrackTableProps {
   tracks: BatchPreviewItem[]
+  metadataOverrides: Map<string, TrackMetadata>
   onEnrichmentComplete?: () => void
   onEditTrack: (track: BatchPreviewItem, state: TrackRowState) => void
   onSearchYouTube: (track: BatchPreviewItem) => void
@@ -26,6 +28,7 @@ interface SpotifyTrackTableProps {
 
 export default function SpotifyTrackTable({
   tracks,
+  metadataOverrides,
   onEnrichmentComplete,
   onEditTrack,
   onSearchYouTube,
@@ -35,6 +38,7 @@ export default function SpotifyTrackTable({
   const [trackStates, setTrackStates] = useState<Map<string, TrackRowState>>(new Map())
   const [currentEnrichingIndex, setCurrentEnrichingIndex] = useState(0)
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
+  const [retryingTrack, setRetryingTrack] = useState<BatchPreviewItem | null>(null)
 
   // Initialize track states
   useEffect(() => {
@@ -105,6 +109,11 @@ export default function SpotifyTrackTable({
 
   // Sequential enrichment effect
   useEffect(() => {
+    // Wait for track states to be initialized
+    if (trackStates.size === 0) {
+      return
+    }
+
     // Don't start new enrichment if one is already in progress
     if (enrichMutation.isPending) {
       return
@@ -121,6 +130,21 @@ export default function SpotifyTrackTable({
     const track = tracks[currentEnrichingIndex]
     const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
     const state = trackStates.get(trackId)
+
+    // Skip tracks that already exist in library
+    if (track.already_exists) {
+      setTrackStates((prev) => {
+        const newStates = new Map(prev)
+        newStates.set(trackId, {
+          enrichmentStatus: 'success',
+          selected: false,
+          enrichmentData: undefined,
+        })
+        return newStates
+      })
+      setCurrentEnrichingIndex((prev) => prev + 1)
+      return
+    }
 
     if (!state || state.enrichmentStatus !== 'pending') {
       // Skip if already processed
@@ -153,7 +177,8 @@ export default function SpotifyTrackTable({
       year: track.year || undefined,
       label: track.label || undefined,
     })
-  }, [currentEnrichingIndex, tracks, trackStates, enrichMutation, onEnrichmentComplete])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEnrichingIndex, tracks, trackStates.size])
 
   // Selection handlers
   const handleSelectTrack = (trackId: string, selected: boolean) => {
@@ -204,6 +229,35 @@ export default function SpotifyTrackTable({
     window.open(`https://youtube.com/watch?v=${youtubeId}`, '_blank')
   }
 
+  const handleRetryIMVDb = (track: BatchPreviewItem, artist: string, trackTitle: string) => {
+    const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
+
+    // Mark as loading
+    setTrackStates((prev) => {
+      const newStates = new Map(prev)
+      const currentState = newStates.get(trackId)
+      if (currentState) {
+        newStates.set(trackId, {
+          ...currentState,
+          enrichmentStatus: 'loading',
+        })
+      }
+      return newStates
+    })
+
+    // Call enrichment with modified search terms
+    enrichMutation.mutate({
+      artist,
+      track_title: trackTitle,
+      spotify_track_id: track.spotify_track_id || trackId,
+      album: track.album || undefined,
+      year: track.year || undefined,
+      label: track.label || undefined,
+    })
+
+    setRetryingTrack(null)
+  }
+
   // Calculate progress
   const enrichedCount = tracks.filter((t) => {
     const trackId = t.spotify_track_id || `${t.artist}-${t.title}`
@@ -246,12 +300,14 @@ export default function SpotifyTrackTable({
             enrichmentStatus: 'pending' as const,
             selected: false,
           }
+          const override = metadataOverrides.get(trackId)
 
           return (
             <TrackRow
               key={trackId}
               track={track}
               state={state}
+              metadataOverride={override}
               onSelect={(selected) => {
                 handleSelectTrack(trackId, selected)
                 setTrackStates((prev) => {
@@ -263,6 +319,7 @@ export default function SpotifyTrackTable({
               onEdit={() => onEditTrack(track, state)}
               onSearchYouTube={() => onSearchYouTube(track)}
               onPreviewYouTube={handlePreviewYouTube}
+              onRetryIMVDb={() => setRetryingTrack(track)}
             />
           )
         })}
@@ -274,6 +331,15 @@ export default function SpotifyTrackTable({
           {selectedTracks.size} track{selectedTracks.size !== 1 ? 's' : ''} selected
         </span>
       </div>
+
+      {/* Retry Modal */}
+      {retryingTrack && (
+        <IMVDbRetryModal
+          track={retryingTrack}
+          onRetry={(artist, trackTitle) => handleRetryIMVDb(retryingTrack, artist, trackTitle)}
+          onCancel={() => setRetryingTrack(null)}
+        />
+      )}
     </div>
   )
 }
