@@ -23,6 +23,66 @@ from fuzzbin.workflows.nfo_importer import NFOImporter
 logger = structlog.get_logger(__name__)
 
 
+def _get_artist_directory_from_pattern(
+    pattern: str,
+    video_path: Path,
+    root_path: Path,
+) -> Path | None:
+    """Determine artist directory from path pattern.
+
+    Parses the path_pattern to check if it contains {artist} and
+    determines which directory level corresponds to the artist.
+
+    Args:
+        pattern: Path pattern string (e.g., "{artist}/{title}")
+        video_path: Full path to video file
+        root_path: Library root directory
+
+    Returns:
+        Path to artist directory if pattern contains {artist}, None otherwise
+
+    Examples:
+        >>> pattern = "{artist}/{title}"
+        >>> video_path = Path("/library/Nirvana/Smells Like Teen Spirit.mp4")
+        >>> root_path = Path("/library")
+        >>> _get_artist_directory_from_pattern(pattern, video_path, root_path)
+        Path('/library/Nirvana')
+    """
+    # Check if pattern contains {artist}
+    pattern_parts = pattern.split("/")
+    
+    # If pattern has no directory separator or only one part, no artist directory
+    if len(pattern_parts) == 1:
+        return None
+    
+    artist_level = None
+
+    for i, part in enumerate(pattern_parts):
+        if "{artist}" in part:
+            artist_level = i
+            break
+
+    if artist_level is None:
+        # Pattern doesn't include artist directory
+        return None
+
+    # Get relative path from root and extract artist directory
+    try:
+        relative_path = video_path.relative_to(root_path)
+        path_parts = relative_path.parts
+
+        # Artist directory is at path_parts[artist_level]
+        if artist_level < len(path_parts):
+            # Build artist directory path
+            artist_dir = root_path.joinpath(*path_parts[: artist_level + 1])
+            return artist_dir
+    except ValueError:
+        # video_path is not relative to root_path
+        pass
+
+    return None
+
+
 async def handle_nfo_import(job: Job) -> None:
     """Handle NFO import job.
 
@@ -2218,6 +2278,79 @@ async def handle_import_organize(job: Job) -> None:
 
         # Create parent directory if needed
         media_paths.video_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create or validate artist.nfo if pattern includes {artist}
+        artist_dir = _get_artist_directory_from_pattern(
+            config.organizer.path_pattern,
+            media_paths.video_path,
+            library_dir,
+        )
+
+        if artist_dir is not None:
+            # Get primary artist for this video
+            artists = await repository.get_video_artists(video_id, role="primary")
+            if not artists:
+                raise ValueError(
+                    f"Video {video_id} has no primary artist but path pattern "
+                    f"'{config.organizer.path_pattern}' requires {{artist}}"
+                )
+
+            primary_artist = artists[0]
+            primary_artist_id = primary_artist["id"]
+            primary_artist_name = primary_artist["name"]
+
+            # Check if artist.nfo exists
+            artist_nfo_path = artist_dir / "artist.nfo"
+
+            try:
+                from fuzzbin.core.db.exporter import NFOExporter
+                from fuzzbin.parsers.artist_parser import ArtistNFOParser
+
+                if artist_nfo_path.exists():
+                    # Validate existing artist.nfo
+                    artist_parser = ArtistNFOParser()
+                    existing_nfo = artist_parser.parse_file(artist_nfo_path)
+
+                    if existing_nfo.name != primary_artist_name:
+                        # Update artist.nfo if name differs
+                        logger.debug(
+                            "artist_nfo_updating",
+                            artist_nfo_path=str(artist_nfo_path),
+                            old_name=existing_nfo.name,
+                            new_name=primary_artist_name,
+                        )
+                        exporter = NFOExporter(repository)
+                        await exporter.export_artist_to_nfo(
+                            primary_artist_id, artist_nfo_path
+                        )
+                    else:
+                        # Existing artist.nfo is correct
+                        logger.debug(
+                            "artist_nfo_validated",
+                            artist_nfo_path=str(artist_nfo_path),
+                            artist_name=primary_artist_name,
+                        )
+                else:
+                    # Create new artist.nfo
+                    logger.debug(
+                        "artist_nfo_creating",
+                        artist_nfo_path=str(artist_nfo_path),
+                        artist_name=primary_artist_name,
+                    )
+                    exporter = NFOExporter(repository)
+                    await exporter.export_artist_to_nfo(
+                        primary_artist_id, artist_nfo_path
+                    )
+
+            except Exception as e:
+                # Fail the operation if artist.nfo creation/validation fails
+                logger.error(
+                    "artist_nfo_failed",
+                    artist_nfo_path=str(artist_nfo_path),
+                    artist_name=primary_artist_name,
+                    error=str(e),
+                )
+                raise
 
         # Move file from temp to final location
         shutil.move(str(temp_path), str(media_paths.video_path))

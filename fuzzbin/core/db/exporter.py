@@ -132,7 +132,7 @@ class NFOExporter:
         nfo_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write NFO file
-        self.artist_parser.write(nfo, nfo_path)
+        self.artist_parser.write_file(nfo, nfo_path)
 
         logger.info(
             "artist_nfo_exported",
