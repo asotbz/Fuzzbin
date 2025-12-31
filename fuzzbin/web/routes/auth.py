@@ -4,13 +4,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from fuzzbin.auth import (
     LoginRequest,
     TokenResponse,
+    AccessTokenResponse,
     PasswordChangeRequest,
     RefreshRequest,
     UserInfo,
@@ -23,6 +24,8 @@ from fuzzbin.auth import (
     LoginThrottle,
     revoke_token,
     revoke_all_user_tokens,
+    set_refresh_cookie,
+    clear_refresh_cookie,
 )
 from fuzzbin.core.db import VideoRepository
 
@@ -73,10 +76,10 @@ def get_client_ip(request: Request, settings: APISettings = None) -> str:
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
+    response_model=AccessTokenResponse,
     summary="Authenticate user",
     responses={
-        200: {"description": "Successful authentication"},
+        200: {"description": "Successful authentication (refresh token set as httpOnly cookie)"},
         401: {"description": "Invalid credentials"},
         403: {"description": "Password change required", "model": PasswordRotationRequiredResponse},
         429: {"description": "Too many failed attempts"},
@@ -84,16 +87,17 @@ def get_client_ip(request: Request, settings: APISettings = None) -> str:
 )
 async def login(
     request: Request,
+    response: Response,
     login_request: LoginRequest,
     repo: VideoRepository = Depends(get_repository),
     settings: APISettings = Depends(get_api_settings),
     throttle: LoginThrottle = Depends(get_login_throttle),
-) -> TokenResponse:
+) -> AccessTokenResponse:
     """
-    Authenticate a user and return JWT tokens.
+    Authenticate a user and return JWT access token.
 
-    Validates username and password, returns access and refresh tokens
-    on successful authentication.
+    Validates username and password, returns access token in response body
+    and sets refresh token as an httpOnly cookie for security.
 
     If the user's password_must_change flag is set, returns 403 with
     instructions to use /auth/set-initial-password endpoint.
@@ -182,9 +186,11 @@ async def login(
 
     logger.info("login_successful", username=username, user_id=user_id, ip=client_ip)
 
-    return TokenResponse(
+    # Set refresh token as httpOnly cookie
+    set_refresh_cookie(response, refresh_token, settings)
+
+    return AccessTokenResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_expires_minutes * 60,  # Convert to seconds
     )
@@ -192,26 +198,37 @@ async def login(
 
 @router.post(
     "/refresh",
-    response_model=TokenResponse,
+    response_model=AccessTokenResponse,
     summary="Refresh access token",
     responses={
-        200: {"description": "New tokens issued"},
+        200: {"description": "New access token issued (refresh token rotated via httpOnly cookie)"},
         401: {"description": "Invalid or expired refresh token"},
     },
 )
 async def refresh_token(
-    refresh_request: RefreshRequest,
+    response: Response,
+    refresh_token_cookie: Optional[str] = Cookie(None, alias="refresh_token"),
     repo: VideoRepository = Depends(get_repository),
     settings: APISettings = Depends(get_api_settings),
-) -> TokenResponse:
+) -> AccessTokenResponse:
     """
     Refresh an access token using a valid refresh token.
 
-    Returns new access and refresh tokens.
+    The refresh token is read from the httpOnly cookie set during login.
+    Returns new access token in response body and rotates the refresh
+    token cookie.
     """
-    # Decode refresh token
+    # Check if refresh token cookie exists
+    if not refresh_token_cookie:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token provided",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Decode refresh token from cookie
     payload = decode_token(
-        token=refresh_request.refresh_token,
+        token=refresh_token_cookie,
         secret_key=settings.jwt_secret,
         algorithm=settings.jwt_algorithm,
         expected_type="refresh",
@@ -265,9 +282,11 @@ async def refresh_token(
 
     logger.info("token_refreshed", username=username, user_id=user_id)
 
-    return TokenResponse(
+    # Rotate refresh token cookie
+    set_refresh_cookie(response, new_refresh_token, settings)
+
+    return AccessTokenResponse(
         access_token=new_access_token,
-        refresh_token=new_refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_expires_minutes * 60,
     )
@@ -356,6 +375,7 @@ async def change_password(
     },
 )
 async def logout(
+    response: Response,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     settings: APISettings = Depends(get_api_settings),
     repo: VideoRepository = Depends(get_repository),
@@ -366,10 +386,13 @@ async def logout(
     The provided Bearer token will be added to the revocation list,
     preventing it from being used again even if it hasn't expired.
 
-    Clients should also discard their refresh token after logout.
+    Also clears the httpOnly refresh token cookie.
     """
+    # Always clear the refresh token cookie
+    clear_refresh_cookie(response, settings)
+
     if not credentials:
-        # No token provided - nothing to revoke
+        # No token provided - nothing else to revoke
         return
 
     token = credentials.credentials
@@ -405,10 +428,10 @@ async def logout(
 
 @router.post(
     "/set-initial-password",
-    response_model=TokenResponse,
+    response_model=AccessTokenResponse,
     summary="Set initial password for first-time setup",
     responses={
-        200: {"description": "Password changed, tokens issued"},
+        200: {"description": "Password changed, access token issued (refresh token set as httpOnly cookie)"},
         400: {"description": "Invalid current password or new password requirements not met"},
         401: {"description": "Invalid credentials"},
         403: {"description": "Password rotation not required for this user"},
@@ -417,6 +440,7 @@ async def logout(
 )
 async def set_initial_password(
     request: Request,
+    response: Response,
     password_request: SetInitialPasswordRequest,
     repo: VideoRepository = Depends(get_repository),
     settings: APISettings = Depends(get_api_settings),
@@ -526,9 +550,11 @@ async def set_initial_password(
 
     logger.info("initial_password_set", username=username, user_id=user_id, ip=client_ip)
 
-    return TokenResponse(
+    # Set refresh token as httpOnly cookie
+    set_refresh_cookie(response, refresh_token, settings)
+
+    return AccessTokenResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_expires_minutes * 60,
     )

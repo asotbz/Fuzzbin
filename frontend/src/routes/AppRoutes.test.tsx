@@ -65,7 +65,7 @@ describe('routing', () => {
   })
 
   it('redirects / to /library when authenticated', async () => {
-    setTokens({ accessToken: 'test', refreshToken: 'test' })
+    setTokens({ accessToken: 'test' })
 
     renderWithQueryClient(
       <MemoryRouter initialEntries={['/']}>
@@ -77,7 +77,7 @@ describe('routing', () => {
   })
 
   it('renders /add when authenticated', async () => {
-    setTokens({ accessToken: 'test', refreshToken: 'test' })
+    setTokens({ accessToken: 'test' })
 
     renderWithQueryClient(
       <MemoryRouter initialEntries={['/add']}>

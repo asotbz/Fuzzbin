@@ -26,7 +26,7 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Response schema for successful authentication."""
+    """Response schema for successful authentication (internal use with both tokens)."""
 
     access_token: str = Field(
         ...,
@@ -35,6 +35,28 @@ class TokenResponse(BaseModel):
     refresh_token: str = Field(
         ...,
         description="JWT refresh token for obtaining new access tokens",
+    )
+    token_type: str = Field(
+        default="bearer",
+        description="Token type (always 'bearer')",
+    )
+    expires_in: int = Field(
+        ...,
+        description="Access token expiration time in seconds",
+    )
+
+
+class AccessTokenResponse(BaseModel):
+    """Response schema for authentication (refresh token sent via httpOnly cookie).
+
+    This response is returned by login and refresh endpoints. The refresh token
+    is set as an httpOnly cookie for security (not accessible to JavaScript),
+    so only the access token is included in the response body.
+    """
+
+    access_token: str = Field(
+        ...,
+        description="JWT access token for API authentication",
     )
     token_type: str = Field(
         default="bearer",

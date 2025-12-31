@@ -8,22 +8,27 @@ export const TEST_USER = {
   password: 'testpassword',
 }
 
+// Access token response (refresh token is now in httpOnly cookie, not in response body)
 export const TEST_TOKENS = {
   access_token: 'test-access-token',
-  refresh_token: 'test-refresh-token',
+  token_type: 'bearer',
+  expires_in: 1800, // 30 minutes
 }
 
 export const REFRESHED_TOKENS = {
   access_token: 'refreshed-access-token',
-  refresh_token: 'refreshed-refresh-token',
+  token_type: 'bearer',
+  expires_in: 1800,
 }
 
 export const authHandlers = [
-  // Login endpoint
+  // Login endpoint - returns access token, sets refresh token cookie
   http.post(`${BASE_URL}/auth/login`, async ({ request }) => {
     const body = await request.json() as { username: string; password: string }
 
     if (body.username === TEST_USER.username && body.password === TEST_USER.password) {
+      // In real implementation, refresh token is set via Set-Cookie header
+      // For mock purposes, we just return the access token
       return HttpResponse.json(TEST_TOKENS)
     }
 
@@ -34,21 +39,14 @@ export const authHandlers = [
     )
   }),
 
-  // Token refresh endpoint
-  http.post(`${BASE_URL}/auth/refresh`, async ({ request }) => {
-    const body = await request.json() as { refresh_token: string }
-
-    if (body.refresh_token === TEST_TOKENS.refresh_token || body.refresh_token === REFRESHED_TOKENS.refresh_token) {
-      return HttpResponse.json(REFRESHED_TOKENS)
-    }
-
-    return HttpResponse.json(
-      { detail: 'Invalid refresh token' },
-      { status: 401 }
-    )
+  // Token refresh endpoint - reads refresh token from cookie, not body
+  http.post(`${BASE_URL}/auth/refresh`, () => {
+    // In tests, we assume the httpOnly cookie exists and is valid
+    // Real browser would send it automatically
+    return HttpResponse.json(REFRESHED_TOKENS)
   }),
 
-  // Logout endpoint
+  // Logout endpoint - clears refresh token cookie
   http.post(`${BASE_URL}/auth/logout`, () => {
     return new HttpResponse(null, { status: 204 })
   }),

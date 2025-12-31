@@ -2,11 +2,14 @@ import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import './App.css'
 import AppRoutes from './routes/AppRoutes'
+import { AuthProvider } from './auth/AuthProvider'
 
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
       <Toaster
         position="bottom-right"
         theme="dark"

@@ -19,11 +19,18 @@ from .security import (
 from .schemas import (
     LoginRequest,
     TokenResponse,
+    AccessTokenResponse,
     PasswordChangeRequest,
     RefreshRequest,
     UserInfo,
 )
 from .throttle import LoginThrottle, get_login_throttle
+from .utils import (
+    set_refresh_cookie,
+    clear_refresh_cookie,
+    REFRESH_TOKEN_COOKIE_NAME,
+    REFRESH_TOKEN_COOKIE_PATH,
+)
 
 __all__ = [
     # Security functions
@@ -44,10 +51,16 @@ __all__ = [
     # Schemas
     "LoginRequest",
     "TokenResponse",
+    "AccessTokenResponse",
     "PasswordChangeRequest",
     "RefreshRequest",
     "UserInfo",
     # Throttle
     "LoginThrottle",
     "get_login_throttle",
+    # Cookie utilities
+    "set_refresh_cookie",
+    "clear_refresh_cookie",
+    "REFRESH_TOKEN_COOKIE_NAME",
+    "REFRESH_TOKEN_COOKIE_PATH",
 ]

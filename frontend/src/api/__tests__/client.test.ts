@@ -19,7 +19,7 @@ describe('apiJson', () => {
     })
 
     it('makes POST request with body', async () => {
-      setTokens({ accessToken: TEST_TOKENS.access_token, refreshToken: TEST_TOKENS.refresh_token })
+      setTokens({ accessToken: TEST_TOKENS.access_token })
 
       const result = await apiJson<{ results?: unknown[] }>({
         method: 'POST',
@@ -31,7 +31,7 @@ describe('apiJson', () => {
     })
 
     it('includes Authorization header when tokens exist', async () => {
-      setTokens({ accessToken: TEST_TOKENS.access_token, refreshToken: TEST_TOKENS.refresh_token })
+      setTokens({ accessToken: TEST_TOKENS.access_token })
 
       // Should not throw 401 because we have a token
       const result = await apiJson<{ username: string }>({ path: '/auth/me' })
@@ -39,7 +39,7 @@ describe('apiJson', () => {
     })
 
     it('does not include Authorization header when auth is "none"', async () => {
-      setTokens({ accessToken: TEST_TOKENS.access_token, refreshToken: TEST_TOKENS.refresh_token })
+      setTokens({ accessToken: TEST_TOKENS.access_token })
 
       // Login endpoint doesn't require auth
       const result = await apiJson<{ access_token: string }>({
@@ -101,42 +101,41 @@ describe('apiJson', () => {
 
   describe('token refresh', () => {
     it('automatically refreshes token on 401 and retries request', async () => {
-      // Start with an expired token but valid refresh token
-      setTokens({ accessToken: 'expired-token', refreshToken: TEST_TOKENS.refresh_token })
+      // Start with an expired access token
+      // The refresh token is in an httpOnly cookie (handled by browser/mock)
+      setTokens({ accessToken: 'expired-token' })
 
       // This request should:
       // 1. Fail with 401 (expired-token is rejected by /auth/me mock)
-      // 2. Call /auth/refresh with valid refresh token
+      // 2. Call /auth/refresh (browser sends httpOnly cookie)
       // 3. Retry original request with new access token
       const result = await apiJson<{ username: string }>({ path: '/auth/me' })
 
       expect(result.username).toBe('testuser')
 
-      // Verify tokens were refreshed
+      // Verify access token was refreshed
       const tokens = getTokens()
       expect(tokens.accessToken).toBe(REFRESHED_TOKENS.access_token)
-      expect(tokens.refreshToken).toBe(REFRESHED_TOKENS.refresh_token)
     })
 
     it('clears tokens and throws when refresh fails', async () => {
       server.use(expiredTokenHandler)
 
-      // Use expired token with an INVALID refresh token
-      setTokens({ accessToken: 'expired-token', refreshToken: 'invalid-refresh-token' })
+      // Use expired access token (refresh will fail because mock returns 401)
+      setTokens({ accessToken: 'expired-token' })
 
       await expect(
         apiJson({ path: '/auth/me' })
       ).rejects.toThrow(APIError)
 
-      // Tokens should be cleared after failed refresh
+      // Access token should be cleared after failed refresh
       const tokens = getTokens()
       expect(tokens.accessToken).toBeNull()
-      expect(tokens.refreshToken).toBeNull()
     })
 
     it('does not attempt refresh for login endpoint', async () => {
       // Even with expired tokens, login should not trigger refresh
-      setTokens({ accessToken: 'expired-token', refreshToken: TEST_TOKENS.refresh_token })
+      setTokens({ accessToken: 'expired-token' })
 
       const result = await apiJson<{ access_token: string }>({
         method: 'POST',
@@ -150,7 +149,7 @@ describe('apiJson', () => {
 
     it('does not attempt refresh when allowRefresh is false', async () => {
       // Use expired token
-      setTokens({ accessToken: 'expired-token', refreshToken: TEST_TOKENS.refresh_token })
+      setTokens({ accessToken: 'expired-token' })
 
       await expect(
         apiJson({

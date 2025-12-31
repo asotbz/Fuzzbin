@@ -14,7 +14,7 @@ function mockOkJson(data: unknown) {
 describe('LibraryPage', () => {
   beforeEach(() => {
     clearTokens()
-    setTokens({ accessToken: 'test', refreshToken: 'test' })
+    setTokens({ accessToken: 'test' })
 
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)

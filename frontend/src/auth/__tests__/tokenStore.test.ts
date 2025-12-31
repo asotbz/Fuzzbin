@@ -1,51 +1,48 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   getTokens,
   setTokens,
   clearTokens,
   subscribe,
+  loadTokens,
 } from '../tokenStore'
 
 describe('tokenStore', () => {
   beforeEach(() => {
     clearTokens()
+    localStorage.clear()
   })
 
   describe('getTokens', () => {
-    it('returns null tokens initially', () => {
+    it('returns null token initially', () => {
       const tokens = getTokens()
 
       expect(tokens.accessToken).toBeNull()
-      expect(tokens.refreshToken).toBeNull()
     })
   })
 
   describe('setTokens', () => {
-    it('stores access and refresh tokens', () => {
+    it('stores access token in memory and localStorage', () => {
       setTokens({
         accessToken: 'test-access-token',
-        refreshToken: 'test-refresh-token',
       })
 
       const tokens = getTokens()
       expect(tokens.accessToken).toBe('test-access-token')
-      expect(tokens.refreshToken).toBe('test-refresh-token')
+      expect(localStorage.getItem('fuzzbin_access_token')).toBe('test-access-token')
     })
 
     it('overwrites existing tokens', () => {
       setTokens({
         accessToken: 'first-access',
-        refreshToken: 'first-refresh',
       })
 
       setTokens({
         accessToken: 'second-access',
-        refreshToken: 'second-refresh',
       })
 
       const tokens = getTokens()
       expect(tokens.accessToken).toBe('second-access')
-      expect(tokens.refreshToken).toBe('second-refresh')
     })
   })
 
@@ -53,14 +50,31 @@ describe('tokenStore', () => {
     it('clears stored tokens', () => {
       setTokens({
         accessToken: 'test-access',
-        refreshToken: 'test-refresh',
       })
 
       clearTokens()
 
       const tokens = getTokens()
       expect(tokens.accessToken).toBeNull()
-      expect(tokens.refreshToken).toBeNull()
+      expect(localStorage.getItem('fuzzbin_access_token')).toBeNull()
+    })
+  })
+
+  describe('loadTokens', () => {
+    it('loads token from localStorage', () => {
+      localStorage.setItem('fuzzbin_access_token', 'stored-token')
+
+      const hasToken = loadTokens()
+
+      expect(hasToken).toBe(true)
+      expect(getTokens().accessToken).toBe('stored-token')
+    })
+
+    it('returns false when no token in localStorage', () => {
+      const hasToken = loadTokens()
+
+      expect(hasToken).toBe(false)
+      expect(getTokens().accessToken).toBeNull()
     })
   })
 
@@ -71,7 +85,6 @@ describe('tokenStore', () => {
 
       setTokens({
         accessToken: 'new-access',
-        refreshToken: 'new-refresh',
       })
 
       expect(listener).toHaveBeenCalledTimes(1)
@@ -84,7 +97,6 @@ describe('tokenStore', () => {
 
       setTokens({
         accessToken: 'test',
-        refreshToken: 'test',
       })
       listener.mockClear()
 
@@ -102,7 +114,6 @@ describe('tokenStore', () => {
 
       setTokens({
         accessToken: 'new-access',
-        refreshToken: 'new-refresh',
       })
 
       expect(listener).not.toHaveBeenCalled()
@@ -116,7 +127,6 @@ describe('tokenStore', () => {
 
       setTokens({
         accessToken: 'test',
-        refreshToken: 'test',
       })
 
       expect(listener1).toHaveBeenCalledTimes(1)
@@ -136,7 +146,6 @@ describe('tokenStore', () => {
 
       setTokens({
         accessToken: 'test',
-        refreshToken: 'test',
       })
 
       expect(listener1).not.toHaveBeenCalled()

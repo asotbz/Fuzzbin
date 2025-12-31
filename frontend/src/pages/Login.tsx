@@ -1,13 +1,12 @@
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { getApiBaseUrl } from '../api/client'
+import { getApiBaseUrl, scheduleTokenRefresh } from '../api/client'
 import { setTokens } from '../auth/tokenStore'
 import { useAuthTokens } from '../auth/useAuthTokens'
 
-type TokenResponse = {
+type AccessTokenResponse = {
   access_token: string
-  refresh_token: string
   token_type: string
   expires_in: number
 }
@@ -35,6 +34,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        credentials: 'include', // Required for httpOnly cookie
       })
 
       const headerSaysRotation = resp.headers.get('X-Password-Change-Required') === 'true'
@@ -69,8 +69,10 @@ export default function LoginPage() {
         return
       }
 
-      const data = (await resp.json()) as TokenResponse
-      setTokens({ accessToken: data.access_token, refreshToken: data.refresh_token })
+      const data = (await resp.json()) as AccessTokenResponse
+      setTokens({ accessToken: data.access_token })
+      // Schedule proactive token refresh
+      scheduleTokenRefresh(data.access_token)
       navigate('/library')
     } finally {
       setIsSubmitting(false)

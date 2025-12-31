@@ -432,10 +432,13 @@ class TestLoginEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" in data
+        # refresh_token is now in httpOnly cookie, not in response body
+        assert "refresh_token" not in data
         assert data["token_type"] == "bearer"
         assert "expires_in" in data
         assert data["expires_in"] == 30 * 60  # 30 minutes in seconds
+        # Verify refresh token cookie is set
+        assert "refresh_token" in response.cookies
 
     def test_login_wrong_password(self, auth_test_app: TestClient):
         """Test login failure with wrong password."""
@@ -491,37 +494,34 @@ class TestRefreshEndpoint:
 
     def test_refresh_token_success(self, auth_test_app: TestClient):
         """Test successful token refresh."""
-        # First, login to get tokens
+        # First, login to get tokens (refresh token is set as cookie)
         login_response = auth_test_app.post(
             "/auth/login",
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         assert login_response.status_code == 200
-        refresh_token = login_response.json()["refresh_token"]
         
-        # Now refresh
-        response = auth_test_app.post(
-            "/auth/refresh",
-            json={"refresh_token": refresh_token},
-        )
+        # Now refresh - the cookie is automatically sent by TestClient
+        response = auth_test_app.post("/auth/refresh")
         
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" in data
+        # refresh_token is rotated via cookie, not in response body
+        assert "refresh_token" not in data
+        # Verify new refresh token cookie is set
+        assert "refresh_token" in response.cookies
 
     def test_refresh_with_invalid_token(self, auth_test_app: TestClient):
-        """Test refresh failure with invalid token."""
-        response = auth_test_app.post(
-            "/auth/refresh",
-            json={"refresh_token": "invalid.token.here"},
-        )
+        """Test refresh failure with invalid/missing cookie."""
+        # Don't login first, so no cookie exists
+        response = auth_test_app.post("/auth/refresh")
         
         assert response.status_code == 401
-        assert "Invalid or expired refresh token" in response.json()["detail"]
+        assert "No refresh token provided" in response.json()["detail"]
 
-    def test_refresh_with_access_token(self, auth_test_app: TestClient):
-        """Test refresh failure when using access token instead of refresh token."""
+    def test_refresh_with_access_token_as_cookie(self, auth_test_app: TestClient):
+        """Test refresh failure when using access token instead of refresh token in cookie."""
         # Login to get access token
         login_response = auth_test_app.post(
             "/auth/login",
@@ -529,11 +529,12 @@ class TestRefreshEndpoint:
         )
         access_token = login_response.json()["access_token"]
         
-        # Try to use access token as refresh token
-        response = auth_test_app.post(
-            "/auth/refresh",
-            json={"refresh_token": access_token},
-        )
+        # Manually set the access token as the refresh_token cookie
+        auth_test_app.cookies.clear()
+        auth_test_app.cookies.set("refresh_token", access_token, path="/auth")
+        
+        # Try to refresh with access token in cookie (should fail - wrong token type)
+        response = auth_test_app.post("/auth/refresh")
         
         assert response.status_code == 401
 
@@ -638,8 +639,11 @@ class TestPasswordRotation:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" in data
+        # refresh_token is now in httpOnly cookie, not in response body
+        assert "refresh_token" not in data
         assert data["token_type"] == "bearer"
+        # Verify refresh token cookie is set
+        assert "refresh_token" in response.cookies
 
     def test_set_initial_password_then_login_works(self, password_rotation_app: TestClient):
         """Test that login works after setting initial password."""

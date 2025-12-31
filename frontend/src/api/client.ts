@@ -1,6 +1,13 @@
 import { clearTokens, getTokens, setTokens } from '../auth/tokenStore'
+import { decodeJwt } from '../lib/jwt'
 
 const DEFAULT_BASE_URL = 'http://localhost:8000'
+
+// Proactive refresh timer
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+// Buffer time before token expiry to trigger refresh (1 minute)
+const REFRESH_BUFFER_MS = 60 * 1000
 
 function getBaseUrl() {
   const envUrl = import.meta.env.VITE_API_BASE_URL
@@ -22,8 +29,6 @@ export class APIError extends Error {
     this.retryAfterSeconds = retryAfterSeconds
   }
 }
-
-type Json = Record<string, unknown>
 
 type FetchOptions = {
   method?: string
@@ -57,12 +62,15 @@ async function doFetch<T>(options: FetchOptions, hasRetried = false): Promise<T>
     method: options.method ?? 'GET',
     headers,
     body,
+    credentials: 'include', // Required for httpOnly cookie refresh token
   })
 
   if (resp.status === 401 && (options.allowRefresh ?? true) && !hasRetried) {
-    const refreshToken = getTokens().refreshToken
-    if (refreshToken && options.path !== '/auth/login' && options.path !== '/auth/refresh') {
-      const refreshed = await tryRefresh(refreshToken)
+    // httpOnly cookie is sent automatically, so we just need to check if we have an access token
+    // indicating we were logged in and should try to refresh
+    const { accessToken } = getTokens()
+    if (accessToken && options.path !== '/auth/login' && options.path !== '/auth/refresh') {
+      const refreshed = await tryRefresh()
       if (refreshed) {
         return doFetch<T>(options, true)
       }
@@ -93,18 +101,24 @@ async function doFetch<T>(options: FetchOptions, hasRetried = false): Promise<T>
   return JSON.parse(text) as T
 }
 
-async function tryRefresh(refreshToken: string): Promise<boolean> {
+/**
+ * Try to refresh the access token using the httpOnly cookie.
+ * The browser automatically sends the refresh token cookie.
+ */
+async function tryRefresh(): Promise<boolean> {
   try {
-    const refreshed = await doFetch<{ access_token: string; refresh_token: string }>({
+    const refreshed = await doFetch<{ access_token: string; expires_in: number }>({
       method: 'POST',
       path: '/auth/refresh',
       auth: 'none',
       allowRefresh: false,
-      body: { refresh_token: refreshToken } satisfies Json,
+      // No body needed - refresh token is sent via httpOnly cookie
     })
 
-    if (refreshed?.access_token && refreshed?.refresh_token) {
-      setTokens({ accessToken: refreshed.access_token, refreshToken: refreshed.refresh_token })
+    if (refreshed?.access_token) {
+      setTokens({ accessToken: refreshed.access_token })
+      // Schedule next proactive refresh
+      scheduleTokenRefresh(refreshed.access_token)
       return true
     }
   } catch {
@@ -112,7 +126,66 @@ async function tryRefresh(refreshToken: string): Promise<boolean> {
   }
 
   clearTokens()
+  clearRefreshTimer()
   return false
+}
+
+/**
+ * Schedule a proactive token refresh before the access token expires.
+ */
+export function scheduleTokenRefresh(accessToken: string): void {
+  clearRefreshTimer()
+
+  const payload = decodeJwt(accessToken)
+  if (!payload?.exp) {
+    return
+  }
+
+  const nowMs = Date.now()
+  const expiryMs = payload.exp * 1000
+  const timeUntilRefresh = expiryMs - nowMs - REFRESH_BUFFER_MS
+
+  if (timeUntilRefresh > 0) {
+    refreshTimer = setTimeout(() => {
+      tryRefresh()
+    }, timeUntilRefresh)
+  }
+}
+
+/**
+ * Clear the proactive refresh timer (e.g., on logout).
+ */
+export function clearRefreshTimer(): void {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+/**
+ * Logout the user.
+ *
+ * Calls the backend /auth/logout endpoint to:
+ * 1. Revoke the current access token
+ * 2. Clear the httpOnly refresh token cookie
+ *
+ * Then clears local state (access token in localStorage and memory).
+ */
+export async function logout(): Promise<void> {
+  try {
+    // Call logout endpoint to revoke token and clear cookie
+    await doFetch({
+      method: 'POST',
+      path: '/auth/logout',
+      auth: 'auto', // Send the access token for revocation
+      allowRefresh: false,
+    })
+  } catch {
+    // Even if the API call fails, clear local state
+  }
+
+  clearRefreshTimer()
+  clearTokens()
 }
 
 export async function apiJson<T>(options: FetchOptions): Promise<T> {
