@@ -366,6 +366,9 @@ async def handle_spotify_batch_import(job: Job) -> None:
 
         try:
             # Prepare video data
+            # Use normalized genre if available (mapped to primary category like Rock, Pop, etc.)
+            genre_value = metadata.get("genre_normalized") or metadata.get("genre")
+
             video_data = {
                 "title": track_title,
                 "artist": track_artist,
@@ -373,6 +376,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
                 "year": metadata.get("year"),
                 "studio": metadata.get("label"),
                 "director": metadata.get("directors"),
+                "genre": genre_value,
                 "status": initial_status,
                 "download_source": "spotify",
             }
@@ -1916,6 +1920,39 @@ async def handle_add_single_import(job: Job) -> None:
             if getattr(video, "artists", None):
                 artist = getattr(video.artists[0], "name", None)
 
+            # Try to get genre from Discogs via enrichment service
+            genre: str | None = None
+            discogs_config = (config.apis or {}).get("discogs")
+            if discogs_config and artist:
+                try:
+                    from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
+                    from fuzzbin.common.string_utils import normalize_genre
+
+                    discogs_service = DiscogsEnrichmentService(
+                        imvdb_config=imvdb_config,
+                        discogs_config=discogs_config,
+                    )
+                    discogs_result = await discogs_service.enrich_from_imvdb_video(
+                        imvdb_video_id=vid,
+                        track_title=title,
+                        artist_name=artist,
+                    )
+                    if discogs_result.genre:
+                        _, genre, _ = normalize_genre(discogs_result.genre)
+                        logger.info(
+                            "add_single_import_genre_found",
+                            source="imvdb",
+                            item_id=item_id,
+                            genre=genre,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "add_single_import_genre_lookup_failed",
+                        source="imvdb",
+                        item_id=item_id,
+                        error=str(e),
+                    )
+
             job.update_progress(2, 3, "Creating video record...")
             video_id = await repository.create_video(
                 title=title,
@@ -1926,6 +1963,7 @@ async def handle_add_single_import(job: Job) -> None:
                     if getattr(video, "directors", None)
                     else None
                 ),
+                genre=genre,
                 imvdb_video_id=imvdb_video_id,
                 youtube_id=youtube_id,
                 download_source=("youtube" if youtube_id else None),
@@ -2006,6 +2044,37 @@ async def handle_add_single_import(job: Job) -> None:
 
         youtube_id = youtube_id_override
 
+        # Extract and normalize genre from Discogs response
+        genre: str | None = None
+        genres_list = payload.get("genres", [])
+        if genres_list and isinstance(genres_list, list) and len(genres_list) > 0:
+            try:
+                from fuzzbin.common.string_utils import normalize_genre
+
+                raw_genre = genres_list[0]
+                _, genre, _ = normalize_genre(raw_genre)
+                logger.info(
+                    "add_single_import_genre_found",
+                    source=source,
+                    item_id=item_id,
+                    raw_genre=raw_genre,
+                    genre=genre,
+                )
+            except Exception as e:
+                logger.warning(
+                    "add_single_import_genre_normalize_failed",
+                    source=source,
+                    item_id=item_id,
+                    error=str(e),
+                )
+
+        # Extract label from Discogs response
+        label: str | None = None
+        labels_list = payload.get("labels", [])
+        if labels_list and isinstance(labels_list, list) and len(labels_list) > 0:
+            if isinstance(labels_list[0], dict):
+                label = labels_list[0].get("name")
+
         if not skipped:
             job.update_progress(2, 3, "Creating video record...")
             video_id = await repository.create_video(
@@ -2013,6 +2082,8 @@ async def handle_add_single_import(job: Job) -> None:
                 artist=artist,
                 album=title,
                 year=year if isinstance(year, int) else None,
+                genre=genre,
+                studio=label,
                 youtube_id=youtube_id,
                 download_source=("youtube" if youtube_id else None),
                 status=initial_status,
@@ -2041,10 +2112,46 @@ async def handle_add_single_import(job: Job) -> None:
                 pass
 
         if not skipped:
+            yt_title = getattr(info, "title", None) or youtube_id or "YouTube Video"
+            yt_artist = getattr(info, "channel", None)
+
+            # Try to get genre from Discogs via text search
+            genre: str | None = None
+            discogs_config = (config.apis or {}).get("discogs")
+            if discogs_config and yt_title and yt_artist:
+                try:
+                    from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
+                    from fuzzbin.common.string_utils import normalize_genre
+
+                    discogs_service = DiscogsEnrichmentService(
+                        imvdb_config=None,
+                        discogs_config=discogs_config,
+                    )
+                    discogs_result = await discogs_service._enrich_via_text_search(
+                        artist_name=yt_artist,
+                        track_title=yt_title,
+                    )
+                    if discogs_result.genre:
+                        _, genre, _ = normalize_genre(discogs_result.genre)
+                        logger.info(
+                            "add_single_import_genre_found",
+                            source="youtube",
+                            item_id=item_id,
+                            genre=genre,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "add_single_import_genre_lookup_failed",
+                        source="youtube",
+                        item_id=item_id,
+                        error=str(e),
+                    )
+
             job.update_progress(2, 3, "Creating video record...")
             video_id = await repository.create_video(
-                title=(getattr(info, "title", None) or youtube_id or "YouTube Video"),
-                artist=getattr(info, "channel", None),
+                title=yt_title,
+                artist=yt_artist,
+                genre=genre,
                 youtube_id=youtube_id,
                 download_source="youtube",
                 status=initial_status,
@@ -2197,19 +2304,20 @@ async def handle_import_download(job: Job) -> None:
         # Update video status to downloaded
         await repository.update_video(video_id, status="downloaded")
 
-        job.update_progress(2, 3, "Queuing organize job...")
+        job.update_progress(2, 3, "Queuing post-process job...")
 
-        # Queue organize job with parent relationship
+        # Queue post-process job with parent relationship
+        # This runs FFProbe + thumbnail generation before organizing
         queue = get_job_queue()
-        organize_job = Job(
-            type=JobType.IMPORT_ORGANIZE,
+        post_process_job = Job(
+            type=JobType.VIDEO_POST_PROCESS,
             metadata={
                 "video_id": video_id,
                 "temp_path": str(temp_file),
             },
             parent_job_id=job.id,
         )
-        await queue.submit(organize_job)
+        await queue.submit(post_process_job)
 
         job.update_progress(3, 3, "Download complete")
         job.mark_completed(
@@ -2218,7 +2326,7 @@ async def handle_import_download(job: Job) -> None:
                 "youtube_id": youtube_id,
                 "temp_path": str(temp_file),
                 "file_size": result.file_size,
-                "organize_job_id": organize_job.id,
+                "post_process_job_id": post_process_job.id,
             }
         )
 
@@ -2251,6 +2359,196 @@ async def handle_import_download(job: Job) -> None:
             job_id=job.id,
             video_id=video_id,
             **error_details,
+        )
+        raise
+
+
+async def handle_video_post_process(job: Job) -> None:
+    """Handle post-download processing for video files.
+
+    Runs FFProbe to extract media metadata, generates thumbnail, updates
+    database with technical info, then queues IMPORT_ORGANIZE job.
+
+    This handler is inserted between download and organize to ensure:
+    1. Media info (duration, resolution, codecs) is captured from actual file
+    2. Thumbnail is generated from video content before file is moved
+    3. All technical metadata is in database before file organization
+
+    Job metadata parameters:
+        video_id (int, required): Video database ID
+        temp_path (str, required): Temporary file path from download
+
+    Job result on completion:
+        video_id: Database video ID
+        temp_path: Temporary file path (passed to organize job)
+        media_info: Extracted media metadata dict
+        thumbnail_path: Path to generated thumbnail (or None if failed)
+        organize_job_id: ID of queued organize job
+
+    Args:
+        job: Job instance with metadata containing post-process parameters
+
+    Raises:
+        ValueError: If required parameters missing or video not found
+        FileNotFoundError: If temp file doesn't exist
+    """
+    video_id = job.metadata.get("video_id")
+    temp_path_str = job.metadata.get("temp_path")
+
+    if not video_id or not temp_path_str:
+        raise ValueError("Missing required parameters: video_id, temp_path")
+
+    temp_path = Path(temp_path_str)
+    if not temp_path.exists():
+        raise FileNotFoundError(f"Temp file not found: {temp_path}")
+
+    logger.info(
+        "video_post_process_job_starting",
+        job_id=job.id,
+        video_id=video_id,
+        temp_path=temp_path_str,
+    )
+
+    import fuzzbin
+    from fuzzbin.core.file_manager import FileManager
+
+    job.update_progress(0, 4, "Initializing post-processing...")
+
+    repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Update video status
+    await repository.update_video(video_id, status="processing")
+
+    media_info: dict[str, Any] = {}
+    thumbnail_path: Path | None = None
+
+    try:
+        job.update_progress(1, 4, "Analyzing video with FFProbe...")
+
+        # Create file manager for FFProbe and thumbnail generation
+        library_dir = config.library_dir
+        if library_dir is None:
+            from fuzzbin.common.config import _get_default_library_dir
+
+            library_dir = _get_default_library_dir()
+
+        file_manager = FileManager.from_config(
+            config.file_manager,
+            library_dir=library_dir,
+            config_dir=config.config_dir or Path.cwd() / "config",
+        )
+
+        # Run FFProbe to extract media info
+        try:
+            media_info = await file_manager.validate_video_format(temp_path)
+            logger.info(
+                "video_post_process_ffprobe_complete",
+                job_id=job.id,
+                video_id=video_id,
+                duration=media_info.get("duration"),
+                resolution=f"{media_info.get('width')}x{media_info.get('height')}",
+            )
+
+            # Update database with media info
+            await repository.update_video(
+                video_id,
+                duration=media_info.get("duration"),
+                width=media_info.get("width"),
+                height=media_info.get("height"),
+                video_codec=media_info.get("video_codec"),
+                audio_codec=media_info.get("audio_codec"),
+                container_format=media_info.get("container_format"),
+                bitrate=media_info.get("bitrate"),
+                frame_rate=media_info.get("frame_rate"),
+                audio_channels=media_info.get("audio_channels"),
+                audio_sample_rate=media_info.get("audio_sample_rate"),
+            )
+        except Exception as e:
+            # Log but don't fail - FFProbe is optional
+            logger.warning(
+                "video_post_process_ffprobe_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        job.update_progress(2, 4, "Generating thumbnail...")
+
+        # Generate thumbnail from video
+        try:
+            thumbnail_path = await file_manager.generate_thumbnail(
+                video_id=video_id,
+                video_path=temp_path,
+                force=True,  # Always generate for new imports
+            )
+            logger.info(
+                "video_post_process_thumbnail_complete",
+                job_id=job.id,
+                video_id=video_id,
+                thumbnail_path=str(thumbnail_path),
+            )
+        except Exception as e:
+            # Log but don't fail - thumbnail generation is optional
+            logger.warning(
+                "video_post_process_thumbnail_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        job.update_progress(3, 4, "Queuing organize job...")
+
+        # Queue organize job with parent relationship
+        queue = get_job_queue()
+        organize_job = Job(
+            type=JobType.IMPORT_ORGANIZE,
+            metadata={
+                "video_id": video_id,
+                "temp_path": str(temp_path),
+            },
+            parent_job_id=job.id,
+        )
+        await queue.submit(organize_job)
+
+        job.update_progress(4, 4, "Post-processing complete")
+        job.mark_completed(
+            {
+                "video_id": video_id,
+                "temp_path": str(temp_path),
+                "media_info": media_info,
+                "thumbnail_path": str(thumbnail_path) if thumbnail_path else None,
+                "organize_job_id": organize_job.id,
+            }
+        )
+
+        logger.info(
+            "video_post_process_job_completed",
+            job_id=job.id,
+            video_id=video_id,
+            has_media_info=bool(media_info),
+            has_thumbnail=thumbnail_path is not None,
+        )
+
+    except Exception as e:
+        # Update video status to processing_failed
+        await repository.update_video(video_id, status="processing_failed")
+
+        logger.error(
+            "video_post_process_job_failed",
+            job_id=job.id,
+            video_id=video_id,
+            error=str(e),
         )
         raise
 
@@ -2710,6 +3008,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.IMPORT_ADD_SINGLE, handle_add_single_import)
     # Import workflow handlers
     queue.register_handler(JobType.IMPORT_DOWNLOAD, handle_import_download)
+    queue.register_handler(JobType.VIDEO_POST_PROCESS, handle_video_post_process)
     queue.register_handler(JobType.IMPORT_ORGANIZE, handle_import_organize)
     queue.register_handler(JobType.IMPORT_NFO_GENERATE, handle_import_nfo_generate)
     queue.register_handler(JobType.BACKUP, handle_backup)
@@ -2730,6 +3029,7 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.LIBRARY_SCAN.value,
             JobType.IMPORT.value,
             JobType.IMPORT_DOWNLOAD.value,
+            JobType.VIDEO_POST_PROCESS.value,
             JobType.IMPORT_ORGANIZE.value,
             JobType.IMPORT_NFO_GENERATE.value,
             JobType.BACKUP.value,

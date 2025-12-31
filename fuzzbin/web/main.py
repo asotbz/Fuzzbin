@@ -426,11 +426,12 @@ ws://localhost:8000/ws/jobs/{job_id}
         exports,
         backup,
         config,
+        genres,
         imvdb,
         scan,
         spotify,
         ytdlp,
-    )  # Phase 7 routes + config + ytdlp + external APIs
+    )  # Phase 7 routes + config + ytdlp + external APIs + genres
 
     # Auth routes (public - no authentication required)
     app.include_router(auth.router)
@@ -458,6 +459,7 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(exports.router, dependencies=protected_dependencies)
     app.include_router(backup.router, dependencies=protected_dependencies)
     app.include_router(config.router, dependencies=protected_dependencies)
+    app.include_router(genres.router, dependencies=protected_dependencies)
     app.include_router(ytdlp.router, dependencies=protected_dependencies)
     app.include_router(scan.router, dependencies=protected_dependencies)
 

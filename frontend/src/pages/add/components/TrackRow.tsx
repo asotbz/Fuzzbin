@@ -22,6 +22,7 @@ interface TrackMetadata {
   directors: string | null
   featuredArtists: string | null
   youtubeId: string | null
+  genre: string | null
 }
 
 interface TrackRowProps {
@@ -118,6 +119,9 @@ export default function TrackRow({
   const displayDirectors: string | null | undefined = metadataOverride?.directors ?? (enrichmentData?.metadata?.directors as string | null | undefined)
   const displayFeaturedArtists: string | null | undefined =
     metadataOverride?.featuredArtists ?? (enrichmentData?.metadata?.featured_artists as string | null | undefined)
+  // Genre comes from Discogs via enrichment - prefer normalized version
+  const displayGenre: string | null | undefined =
+    metadataOverride?.genre ?? enrichmentData?.genre_normalized ?? enrichmentData?.genre
 
   return (
     <div
@@ -161,6 +165,11 @@ export default function TrackRow({
           {displayLabel && (
             <div className="trackRowLabel">
               <span className="trackRowFieldLabel">Label:</span> {displayLabel}
+            </div>
+          )}
+          {displayGenre && (
+            <div className="trackRowGenre">
+              <span className="trackRowFieldLabel">Genre:</span> {displayGenre}
             </div>
           )}
           {displayDirectors && (

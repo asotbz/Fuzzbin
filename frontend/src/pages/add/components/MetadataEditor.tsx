@@ -12,6 +12,7 @@ export interface EditedMetadata {
   directors: string | null
   featuredArtists: string | null
   youtubeUrl: string | null
+  genre: string | null
 }
 
 interface TrackMetadataOverride {
@@ -23,6 +24,7 @@ interface TrackMetadataOverride {
   directors: string | null
   featuredArtists: string | null
   youtubeId: string | null
+  genre: string | null
 }
 
 interface MetadataEditorProps {
@@ -80,6 +82,13 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
   const [featuredArtists, setFeaturedArtists] = useState<string>(
     currentOverride?.featuredArtists || (enrichmentData?.metadata?.featured_artists as string | null | undefined) || ''
   )
+  // Genre: prefer normalized version from enrichment
+  const [genre, setGenre] = useState<string>(
+    currentOverride?.genre ||
+      enrichmentData?.genre_normalized ||
+      enrichmentData?.genre ||
+      ''
+  )
   const [youtubeUrl, setYoutubeUrl] = useState<string>(() => {
     // Priority: currentOverride > enrichmentData > empty
     if (currentOverride?.youtubeId) {
@@ -116,6 +125,7 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
       directors: directors.trim() || null,
       featuredArtists: featuredArtists.trim() || null,
       youtubeUrl: youtubeUrl.trim() || null,
+      genre: genre.trim() || null,
     }
 
     onSave(metadata)
@@ -212,6 +222,17 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="e.g., Columbia, Warner Records"
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">Genre</label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                placeholder="e.g., Rock, Pop, Hip Hop/R&B"
               />
             </div>
 

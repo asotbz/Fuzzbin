@@ -26,7 +26,7 @@ from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.clients.ytdlp_client import YTDLPClient
 from fuzzbin.common.config import YTDLPConfig
-from fuzzbin.common.string_utils import normalize_spotify_title
+from fuzzbin.common.string_utils import normalize_genre, normalize_spotify_title
 from fuzzbin.tasks import Job, JobType, get_job_queue
 from fuzzbin.web.dependencies import get_current_user
 from fuzzbin.web.schemas.add import (
@@ -55,6 +55,7 @@ from fuzzbin.web.schemas.add import (
     normalize_spotify_playlist_id,
 )
 from fuzzbin.parsers.imvdb_parser import IMVDbParser
+from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
 from fuzzbin.web.schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from fuzzbin.web.schemas.imvdb import IMVDbVideoDetail
 from fuzzbin.web.schemas.scan import ImportMode, ScanJobResponse, ScanRequest
@@ -1208,6 +1209,48 @@ async def enrich_spotify_track(
                 )
                 raise
 
+            # Step 5: Enrich with Discogs genre
+            genre: Optional[str] = None
+            genre_normalized: Optional[str] = None
+            genre_is_mapped: Optional[bool] = None
+
+            try:
+                discogs_config = _get_api_config("discogs")
+                if discogs_config and api_config:
+                    discogs_service = DiscogsEnrichmentService(
+                        imvdb_config=api_config,
+                        discogs_config=discogs_config,
+                    )
+                    discogs_result = await discogs_service.enrich_from_imvdb_video(
+                        imvdb_video_id=matched_video.id,
+                        track_title=request.track_title,
+                        artist_name=request.artist,
+                    )
+
+                    if discogs_result.genre:
+                        genre = discogs_result.genre
+                        _, genre_normalized, genre_is_mapped = normalize_genre(genre)
+
+                        logger.info(
+                            "spotify_enrich_track_genre_found",
+                            spotify_track_id=request.spotify_track_id,
+                            genre=genre,
+                            genre_normalized=genre_normalized,
+                            genre_is_mapped=genre_is_mapped,
+                        )
+
+                        # Add genre to metadata dict
+                        metadata["genre"] = genre
+                        metadata["genre_normalized"] = genre_normalized
+
+            except Exception as e:
+                logger.warning(
+                    "spotify_enrich_track_genre_failed",
+                    spotify_track_id=request.spotify_track_id,
+                    error=str(e),
+                )
+                # Continue without genre - not critical
+
             # Build response
             try:
                 match_type = "exact" if getattr(matched_video, "is_exact_match", False) else "fuzzy"
@@ -1221,6 +1264,9 @@ async def enrich_spotify_track(
                     metadata=metadata,
                     already_exists=existing_video is not None,
                     existing_video_id=existing_video_id,
+                    genre=genre,
+                    genre_normalized=genre_normalized,
+                    genre_is_mapped=genre_is_mapped,
                 )
 
                 logger.info(
@@ -1230,6 +1276,7 @@ async def enrich_spotify_track(
                     match_type=match_type,
                     youtube_id_count=len(youtube_ids),
                     already_exists=response.already_exists,
+                    genre=genre,
                     user=user_label,
                 )
 

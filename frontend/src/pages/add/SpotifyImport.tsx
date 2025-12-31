@@ -33,6 +33,7 @@ interface TrackMetadataOverride {
   directors: string | null
   featuredArtists: string | null
   youtubeId: string | null
+  genre: string | null
 }
 
 interface EnrichedMetadata {
@@ -45,6 +46,8 @@ interface EnrichedMetadata {
   featuredArtists?: string | null
   youtubeIds?: string[]
   imvdbId?: number | null
+  genre?: string | null
+  genreNormalized?: string | null
 }
 
 export default function SpotifyImport() {
@@ -206,6 +209,7 @@ export default function SpotifyImport() {
         directors: metadata.directors,
         featuredArtists: metadata.featuredArtists,
         youtubeId,
+        genre: metadata.genre,
       })
       return newMap
     })
@@ -228,6 +232,7 @@ export default function SpotifyImport() {
         directors: null,
         featuredArtists: null,
         youtubeId: null,
+        genre: null,
       }
       newMap.set(trackId, { ...existing, youtubeId })
       return newMap
@@ -248,9 +253,13 @@ export default function SpotifyImport() {
         label?: string | null
         directors?: string | null
         featured_artists?: string | null
+        genre?: string | null
+        genre_normalized?: string | null
       }
       youtube_ids?: string[]
       imvdb_id?: number | null
+      genre?: string | null
+      genre_normalized?: string | null
     }
   ) => {
     const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
@@ -267,6 +276,8 @@ export default function SpotifyImport() {
         featuredArtists: enrichment.metadata?.featured_artists,
         youtubeIds: enrichment.youtube_ids,
         imvdbId: enrichment.imvdb_id,
+        genre: enrichment.genre,
+        genreNormalized: enrichment.genre_normalized,
       })
       return newMap
     })
@@ -290,6 +301,7 @@ export default function SpotifyImport() {
         const enrichment = enrichmentData.get(trackId)
 
         // Priority: User override > Enrichment data > Original Spotify data
+        // For genre: prefer normalized version from enrichment (maps to primary categories like Rock, Pop, etc.)
         const finalMetadata = {
           title: override?.title ?? enrichment?.title ?? track.title,
           artist: override?.artist ?? enrichment?.artist ?? track.artist,
@@ -298,6 +310,8 @@ export default function SpotifyImport() {
           label: override?.label ?? enrichment?.label ?? track.label,
           directors: override?.directors ?? enrichment?.directors ?? null,
           featured_artists: override?.featuredArtists ?? enrichment?.featuredArtists ?? null,
+          genre: override?.genre ?? enrichment?.genreNormalized ?? enrichment?.genre ?? null,
+          genre_normalized: enrichment?.genreNormalized ?? null,
         }
 
         // For YouTube ID, prefer user override, then enrichment (first available ID)

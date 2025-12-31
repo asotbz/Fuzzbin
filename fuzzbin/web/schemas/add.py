@@ -349,6 +349,18 @@ class SpotifyTrackEnrichResponse(BaseModel):
         default=None,
         description="Video ID if track already exists",
     )
+    genre: Optional[str] = Field(
+        default=None,
+        description="Original genre from Discogs (if found)",
+    )
+    genre_normalized: Optional[str] = Field(
+        default=None,
+        description="Normalized primary genre category (Rock, Pop, Hip Hop/R&B, etc.)",
+    )
+    genre_is_mapped: Optional[bool] = Field(
+        default=None,
+        description="Whether genre was mapped to a primary category (False = passed through)",
+    )
 
 
 class SelectedTrackImport(BaseModel):

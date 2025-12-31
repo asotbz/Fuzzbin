@@ -16,6 +16,7 @@ interface TrackMetadata {
   directors: string | null
   featuredArtists: string | null
   youtubeId: string | null
+  genre: string | null
 }
 
 interface SpotifyTrackTableProps {

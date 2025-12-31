@@ -21,6 +21,7 @@ class JobType(str, Enum):
     IMPORT_DOWNLOAD = "import_download"  # Download video from YouTube
     IMPORT_ORGANIZE = "import_organize"  # Organize video file to library structure
     IMPORT_NFO_GENERATE = "import_nfo_generate"  # Generate NFO file for imported video
+    VIDEO_POST_PROCESS = "video_post_process"  # Post-download: FFProbe, thumbnail, queue organize
     DOWNLOAD_YOUTUBE = "download_youtube"
     FILE_ORGANIZE = "file_organize"
     FILE_DUPLICATE_RESOLVE = "file_duplicate_resolve"
