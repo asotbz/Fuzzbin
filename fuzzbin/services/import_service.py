@@ -211,8 +211,8 @@ class ImportService(BaseService):
                 progress_callback=self._create_progress_callback(),
             )
 
-            # Run import
-            result = await importer.import_from_directory(
+            # Run import - returns (result, imported_videos) tuple
+            result, _imported_videos = await importer.import_from_directory(
                 root_path=directory,
                 recursive=recursive,
                 update_file_paths=update_file_paths,
