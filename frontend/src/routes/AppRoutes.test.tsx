@@ -86,8 +86,8 @@ describe('routing', () => {
     )
 
     expect(await screen.findByText('Import Hub')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /back to library/i })).toHaveAttribute('href', '/library')
+    expect(screen.getByRole('link', { name: /video library/i })).toHaveAttribute('href', '/library')
     expect(await screen.findByText('Spotify Playlist')).toBeInTheDocument()
-    expect(await screen.findByText('NFO Directory')).toBeInTheDocument()
+    expect(await screen.findByText('NFO Directory Scan')).toBeInTheDocument()
   })
 })
