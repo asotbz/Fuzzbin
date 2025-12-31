@@ -88,11 +88,11 @@ export default function LibraryPage() {
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
-    mutationFn: async ({ videoIds, hardDelete }: { videoIds: number[]; hardDelete: boolean }) => {
-      await bulkDeleteVideos(videoIds, hardDelete)
+    mutationFn: async ({ videoIds, deleteFiles }: { videoIds: number[]; deleteFiles: boolean }) => {
+      await bulkDeleteVideos(videoIds, deleteFiles)
     },
-    onSuccess: (_, { videoIds, hardDelete }) => {
-      if (hardDelete) {
+    onSuccess: (_, { videoIds, deleteFiles }) => {
+      if (deleteFiles) {
         toast.success(`Deleted ${videoIds.length} video${videoIds.length !== 1 ? 's' : ''} and files`)
       } else {
         toast.success(`Deleted ${videoIds.length} video${videoIds.length !== 1 ? 's' : ''}`)
@@ -295,10 +295,10 @@ export default function LibraryPage() {
     setShowBulkDeleteConfirm(true)
   }
 
-  function handleBulkDeleteConfirm(hardDelete?: boolean) {
+  function handleBulkDeleteConfirm(deleteFiles?: boolean) {
     bulkDeleteMutation.mutate({
       videoIds: Array.from(selectedVideoIds),
-      hardDelete: hardDelete ?? false,
+      deleteFiles: deleteFiles ?? false,
     })
     setShowBulkDeleteConfirm(false)
   }
