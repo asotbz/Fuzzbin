@@ -26,6 +26,11 @@ from .video_service import VideoService
 from .import_service import ImportService
 from .search_service import SearchService
 from .backup_service import BackupService
+from .discogs_enrichment import (
+    DiscogsEnrichmentService,
+    DiscogsEnrichmentResult,
+    DiscogsTrackMatch,
+)
 
 __all__ = [
     # Base classes and utilities
@@ -41,4 +46,7 @@ __all__ = [
     "ImportService",
     "SearchService",
     "BackupService",
+    "DiscogsEnrichmentService",
+    "DiscogsEnrichmentResult",
+    "DiscogsTrackMatch",
 ]

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { addSearch, addPreview, addImport, checkVideoExists } from '../../lib/api/endpoints/add'
+import { addSearch, addPreview, addImport, checkVideoExists, getYouTubeMetadata } from '../../lib/api/endpoints/add'
 import { addKeys } from '../../lib/api/queryKeys'
 import { useSearchWizard } from '../../hooks/add/useSearchWizard'
 import WizardStepper from '../../components/add/wizard/WizardStepper'
@@ -159,9 +159,13 @@ export default function SearchWizard() {
         directors = videoData.directors.map((d: any) => d.entity_name).filter(Boolean).join(', ')
       }
 
-      // Extract YouTube ID from extra.youtube_ids (IMVDb only)
+      // Extract YouTube IDs from extra.youtube_ids (IMVDb only)
       if (extra?.youtube_ids && Array.isArray(extra.youtube_ids) && extra.youtube_ids.length > 0) {
         youtubeId = extra.youtube_ids[0]
+        // Store all available YouTube sources
+        wizard.setAvailableYouTubeSources(extra.youtube_ids)
+        // Check availability of first YouTube ID
+        checkYouTubeAvailability(extra.youtube_ids[0])
       }
 
       // Fill in missing data from Discogs if available
@@ -195,6 +199,10 @@ export default function SearchWizard() {
       title = videoData.title || ''
       artist = videoData.channel || ''
       youtubeId = videoData.id || wizard.selectedSource.id
+      // Check availability
+      if (youtubeId) {
+        checkYouTubeAvailability(youtubeId)
+      }
     }
 
     wizard.setMetadata({
@@ -207,7 +215,35 @@ export default function SearchWizard() {
       youtubeId,
       initialStatus: 'discovered',
       skipExisting: true,
+      autoDownload: true,  // Default to auto-download enabled
     })
+  }
+
+  // Check YouTube video availability
+  const checkYouTubeAvailability = async (youtubeId: string) => {
+    try {
+      const response = await getYouTubeMetadata({ youtube_id: youtubeId })
+      wizard.setYouTubeSourceInfo({
+        youtube_id: response.youtube_id,
+        available: response.available,
+        view_count: response.view_count,
+        duration: response.duration,
+        channel: response.channel,
+        title: response.title,
+        error: response.error,
+      })
+    } catch (error) {
+      console.error('Failed to check YouTube availability:', error)
+      wizard.setYouTubeSourceInfo({
+        youtube_id: youtubeId,
+        available: false,
+        view_count: null,
+        duration: null,
+        channel: null,
+        title: null,
+        error: 'Failed to check availability',
+      })
+    }
   }
 
   // Step 4: Import mutation
@@ -346,6 +382,7 @@ export default function SearchWizard() {
       youtube_id: wizard.editedMetadata.youtubeId || undefined,
       initial_status: wizard.editedMetadata.initialStatus,
       skip_existing: wizard.editedMetadata.skipExisting,
+      auto_download: wizard.editedMetadata.autoDownload,
     }
 
     importMutation.mutate(request)
@@ -640,6 +677,37 @@ export default function SearchWizard() {
                       Select the video source to use for this import.
                     </p>
 
+                    {/* Availability status banner */}
+                    {wizard.youtubeSourceInfo && !wizard.youtubeSourceInfo.available && (
+                      <div className="youtubeUnavailableBanner">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="bannerIcon">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span className="bannerText">
+                          Selected video is unavailable: {wizard.youtubeSourceInfo.error || 'Video not accessible'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Availability info for selected video */}
+                    {wizard.youtubeSourceInfo?.available && (
+                      <div className="youtubeAvailableInfo">
+                        <span className="availableChannel">{wizard.youtubeSourceInfo.channel}</span>
+                        <span className="availableDuration">
+                          {wizard.youtubeSourceInfo.duration
+                            ? `${Math.floor(wizard.youtubeSourceInfo.duration / 60)}:${String(wizard.youtubeSourceInfo.duration % 60).padStart(2, '0')}`
+                            : ''}
+                        </span>
+                        <span className="availableViews">
+                          {wizard.youtubeSourceInfo.view_count
+                            ? `${(wizard.youtubeSourceInfo.view_count / 1000000).toFixed(1)}M views`
+                            : ''}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="videoSourcesList">
                       {((wizard.previewData.extra as any).youtube_ids as string[]).map((ytId) => (
                         <label key={ytId} className="videoSourceOption">
@@ -648,9 +716,17 @@ export default function SearchWizard() {
                             name="youtubeId"
                             value={ytId}
                             checked={wizard.editedMetadata.youtubeId === ytId}
-                            onChange={() => wizard.updateMetadata({ youtubeId: ytId })}
+                            onChange={() => {
+                              wizard.updateMetadata({ youtubeId: ytId })
+                              checkYouTubeAvailability(ytId)
+                            }}
                           />
                           <span className="videoSourceId">{ytId}</span>
+                          {wizard.youtubeSourceInfo?.youtube_id === ytId && (
+                            <span className={`videoSourceStatus ${wizard.youtubeSourceInfo.available ? 'available' : 'unavailable'}`}>
+                              {wizard.youtubeSourceInfo.available ? '✓ Available' : '✗ Unavailable'}
+                            </span>
+                          )}
                           <button
                             type="button"
                             className="videoSourcePreview"
@@ -660,6 +736,18 @@ export default function SearchWizard() {
                           </button>
                         </label>
                       ))}
+                    </div>
+
+                    {/* Search YouTube button */}
+                    <div className="videoSourcesActions">
+                      <button
+                        type="button"
+                        className="searchWizardButtonSecondary"
+                        onClick={() => youtubeSearchMutation.mutate()}
+                        disabled={youtubeSearchMutation.isPending}
+                      >
+                        {youtubeSearchMutation.isPending ? 'Searching...' : 'Search YouTube for Alternate'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -777,6 +865,20 @@ export default function SearchWizard() {
                   />
                   <span>Skip if already exists</span>
                 </label>
+              </div>
+
+              <div className="configureFormGroup">
+                <label className="configureCheckbox">
+                  <input
+                    type="checkbox"
+                    checked={wizard.editedMetadata.autoDownload}
+                    onChange={(e) => wizard.updateMetadata({ autoDownload: e.target.checked })}
+                  />
+                  <span>Download video upon import</span>
+                </label>
+                <p className="configureHint">
+                  When enabled, the video will be automatically downloaded from YouTube after import.
+                </p>
               </div>
             </div>
 

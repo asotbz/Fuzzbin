@@ -294,6 +294,10 @@ class AddSingleImportRequest(BaseModel):
         default=True,
         description="Skip creating a new record if a matching record already exists",
     )
+    auto_download: bool = Field(
+        default=True,
+        description="Queue download job after import",
+    )
 
 
 class AddSingleImportResponse(BaseModel):

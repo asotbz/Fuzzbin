@@ -1859,6 +1859,7 @@ async def handle_add_single_import(job: Job) -> None:
     initial_status = job.metadata.get("initial_status", "discovered")
     youtube_id_override = job.metadata.get("youtube_id")
     youtube_url = job.metadata.get("youtube_url")
+    auto_download = job.metadata.get("auto_download", True)
 
     logger.info(
         "add_single_import_job_starting",
@@ -2058,9 +2059,9 @@ async def handle_add_single_import(job: Job) -> None:
 
     job.update_progress(3, 3, "Import complete")
 
-    # If youtube_id exists and video was created, queue download job
+    # If youtube_id exists and video was created, queue download job (if auto_download enabled)
     download_job_id: str | None = None
-    if created and youtube_id:
+    if created and youtube_id and auto_download:
         logger.info(
             "queueing_download_job",
             job_id=job.id,
@@ -2085,6 +2086,9 @@ async def handle_add_single_import(job: Job) -> None:
         download_job_id = download_job.id
     elif created and not youtube_id:
         # No YouTube ID, mark as discovered for manual download later
+        await repository.update_video(video_id, status="discovered")
+    elif created and youtube_id and not auto_download:
+        # Auto-download disabled, mark as discovered for manual download later
         await repository.update_video(video_id, status="discovered")
 
     job.mark_completed(

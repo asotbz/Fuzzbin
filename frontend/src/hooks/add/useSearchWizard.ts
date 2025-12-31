@@ -1,6 +1,16 @@
 import { useState } from 'react'
 import type { AddSearchResponse, AddPreviewResponse } from '../../lib/api/types'
 
+export interface YouTubeSourceInfo {
+  youtube_id: string
+  available: boolean | null  // null = not yet checked
+  view_count: number | null
+  duration: number | null
+  channel: string | null
+  title: string | null
+  error: string | null
+}
+
 export interface MetadataFields {
   // Basic fields
   title: string
@@ -18,6 +28,7 @@ export interface MetadataFields {
   // Import config
   initialStatus: 'discovered' | 'imported'
   skipExisting: boolean
+  autoDownload: boolean  // Whether to queue download job on import
 }
 
 interface WizardState {
@@ -28,6 +39,9 @@ interface WizardState {
   previewData: AddPreviewResponse | null
   editedMetadata: MetadataFields
   compareWithDiscogs: boolean
+  // YouTube source info for availability checking
+  youtubeSourceInfo: YouTubeSourceInfo | null
+  availableYouTubeSources: string[]  // List of YouTube IDs from IMVDb sources
 }
 
 const initialMetadata: MetadataFields = {
@@ -40,6 +54,7 @@ const initialMetadata: MetadataFields = {
   youtubeId: null,
   initialStatus: 'discovered',
   skipExisting: true,
+  autoDownload: true,  // Default to download enabled
 }
 
 const initialState: WizardState = {
@@ -50,6 +65,8 @@ const initialState: WizardState = {
   previewData: null,
   editedMetadata: initialMetadata,
   compareWithDiscogs: false,
+  youtubeSourceInfo: null,
+  availableYouTubeSources: [],
 }
 
 export function useSearchWizard() {
@@ -97,6 +114,20 @@ export function useSearchWizard() {
     }))
   }
 
+  const setYouTubeSourceInfo = (info: YouTubeSourceInfo | null) => {
+    setState((prev) => ({
+      ...prev,
+      youtubeSourceInfo: info,
+    }))
+  }
+
+  const setAvailableYouTubeSources = (sources: string[]) => {
+    setState((prev) => ({
+      ...prev,
+      availableYouTubeSources: sources,
+    }))
+  }
+
   const setCompareWithDiscogs = (compare: boolean) => {
     setState((prev) => ({
       ...prev,
@@ -138,6 +169,8 @@ export function useSearchWizard() {
     updateMetadata,
     setMetadata,
     setCompareWithDiscogs,
+    setYouTubeSourceInfo,
+    setAvailableYouTubeSources,
     nextStep,
     prevStep,
     goToStep,

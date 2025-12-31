@@ -924,6 +924,7 @@ async def submit_single_import(
             "youtube_url": request.youtube_url,
             "skip_existing": request.skip_existing,
             "initial_status": request.initial_status,
+            "auto_download": request.auto_download,
         },
     )
 
