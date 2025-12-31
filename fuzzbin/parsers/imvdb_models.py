@@ -58,7 +58,7 @@ class IMVDbArtist(BaseModel):
     slug: Optional[str] = Field(default=None, description="URL-friendly slug")
     url: Optional[str] = Field(default=None, description="IMVDb profile URL")
 
-    @field_validator('name', 'slug', mode='before')
+    @field_validator("name", "slug", mode="before")
     @classmethod
     def coerce_to_string(cls, v: Any) -> Optional[str]:
         """Coerce integers and other types to strings (handles malformed IMVDb data)."""
@@ -170,7 +170,7 @@ class IMVDbVideo(BaseModel):
     release_date_string: Optional[str] = Field(default=None, description="Release date string")
     is_exact_match: bool = Field(default=True, description="Whether this was an exact search match")
 
-    @field_validator('song_title', 'song_slug', mode='before')
+    @field_validator("song_title", "song_slug", mode="before")
     @classmethod
     def coerce_to_string(cls, v: Any) -> Optional[str]:
         """Coerce integers and other types to strings (handles malformed IMVDb data)."""
@@ -178,11 +178,11 @@ class IMVDbVideo(BaseModel):
             return None
         return str(v)
 
-    @field_validator('year', mode='before')
+    @field_validator("year", mode="before")
     @classmethod
     def coerce_year(cls, v: Any) -> Optional[int]:
         """Coerce empty strings and invalid values to None for year field."""
-        if v is None or v == '':
+        if v is None or v == "":
             return None
         try:
             return int(v)
@@ -219,7 +219,7 @@ class IMVDbEntityVideo(BaseModel):
         default=None, description="Image URLs (can be dict, list, or null)"
     )
 
-    @field_validator('song_title', 'song_slug', mode='before')
+    @field_validator("song_title", "song_slug", mode="before")
     @classmethod
     def coerce_to_string(cls, v: Any) -> Optional[str]:
         """Coerce integers and other types to strings (handles malformed IMVDb data)."""
@@ -227,11 +227,11 @@ class IMVDbEntityVideo(BaseModel):
             return None
         return str(v)
 
-    @field_validator('year', mode='before')
+    @field_validator("year", mode="before")
     @classmethod
     def coerce_year(cls, v: Any) -> Optional[int]:
         """Coerce empty strings and invalid values to None for year field."""
-        if v is None or v == '':
+        if v is None or v == "":
             return None
         try:
             return int(v)

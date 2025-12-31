@@ -646,32 +646,43 @@ async def events_websocket(websocket: WebSocket) -> None:
                                         continue
 
                                     # Apply filters
-                                    if sub_msg.job_types and job.type.value not in sub_msg.job_types:
+                                    if (
+                                        sub_msg.job_types
+                                        and job.type.value not in sub_msg.job_types
+                                    ):
                                         continue
                                     if sub_msg.job_ids and job.id not in sub_msg.job_ids:
                                         continue
 
-                                    job_states.append({
-                                        "job_id": job.id,
-                                        "job_type": job.type.value,
-                                        "status": job.status.value,
-                                        "progress": job.progress,
-                                        "current_step": job.current_step,
-                                        "processed_items": job.processed_items,
-                                        "total_items": job.total_items,
-                                        "created_at": job.created_at.isoformat() if job.created_at else None,
-                                        "started_at": job.started_at.isoformat() if job.started_at else None,
-                                        "metadata": job.metadata,
-                                    })
+                                    job_states.append(
+                                        {
+                                            "job_id": job.id,
+                                            "job_type": job.type.value,
+                                            "status": job.status.value,
+                                            "progress": job.progress,
+                                            "current_step": job.current_step,
+                                            "processed_items": job.processed_items,
+                                            "total_items": job.total_items,
+                                            "created_at": (
+                                                job.created_at.isoformat()
+                                                if job.created_at
+                                                else None
+                                            ),
+                                            "started_at": (
+                                                job.started_at.isoformat()
+                                                if job.started_at
+                                                else None
+                                            ),
+                                            "metadata": job.metadata,
+                                        }
+                                    )
 
                                 await websocket.send_json(
                                     WSJobStateMessage(jobs=job_states).model_dump()
                                 )
                             except RuntimeError:
                                 # Job queue not initialized
-                                await websocket.send_json(
-                                    WSJobStateMessage(jobs=[]).model_dump()
-                                )
+                                await websocket.send_json(WSJobStateMessage(jobs=[]).model_dump())
 
                         logger.info(
                             "websocket_subscribed_jobs",
@@ -681,9 +692,7 @@ async def events_websocket(websocket: WebSocket) -> None:
 
                     elif msg_type == "unsubscribe_jobs":
                         await connection_manager.unsubscribe_jobs(websocket)
-                        await websocket.send_json(
-                            WSUnsubscribeJobsSuccessResponse().model_dump()
-                        )
+                        await websocket.send_json(WSUnsubscribeJobsSuccessResponse().model_dump())
                         logger.info("websocket_unsubscribed_jobs")
 
                 except (json.JSONDecodeError, Exception) as e:

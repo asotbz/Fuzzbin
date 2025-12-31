@@ -128,11 +128,11 @@ def remove_version_qualifiers(text: str) -> str:
         "(What's the Story) Morning Glory?"
     """
     result = text.strip()
-    
+
     # Don't process titles that start with parentheses (they're part of the actual title)
     if result.startswith("("):
         return result
-    
+
     # Pattern for parenthetical qualifiers (must appear at end of string)
     # Matches: (Remastered), (Deluxe Edition), (2015 Remaster), etc.
     parenthetical_pattern = re.compile(
@@ -143,7 +143,7 @@ def remove_version_qualifiers(text: str) -> str:
         r")\b[^)]*\)\s*$",
         re.IGNORECASE,
     )
-    
+
     # Pattern for hyphenated qualifiers (must appear at end of string)
     # Matches: - 2015 Remaster, - From "Movie" Soundtrack, - Radio Edit, etc.
     hyphenated_pattern = re.compile(
@@ -162,7 +162,7 @@ def remove_version_qualifiers(text: str) -> str:
         r")\s*$",
         re.IGNORECASE,
     )
-    
+
     # Pattern for bracketed qualifiers (less common, but some labels use them)
     # Matches: [Remastered], [Deluxe Edition], etc.
     bracketed_pattern = re.compile(
@@ -171,7 +171,7 @@ def remove_version_qualifiers(text: str) -> str:
         r")\b[^\]]*\]\s*$",
         re.IGNORECASE,
     )
-    
+
     # Apply patterns repeatedly until no more matches
     # (handles cases with multiple qualifiers like "Song (Deluxe) - Remastered")
     max_iterations = 5  # Safety limit
@@ -180,11 +180,11 @@ def remove_version_qualifiers(text: str) -> str:
         result = parenthetical_pattern.sub("", result).strip()
         result = hyphenated_pattern.sub("", result).strip()
         result = bracketed_pattern.sub("", result).strip()
-        
+
         # Stop if no changes were made
         if result == original:
             break
-    
+
     return result
 
 
@@ -225,18 +225,18 @@ def normalize_spotify_title(
         'artist'
     """
     result = text
-    
+
     # Step 1: Remove version qualifiers (if enabled)
     if remove_version_qualifiers_flag:
         result = remove_version_qualifiers(result)
-    
+
     # Step 2: Remove featured artists (if enabled)
     if remove_featured:
         result = remove_featured_artists(result)
-    
+
     # Step 3: Normalize to lowercase and strip
     result = normalize_string(result)
-    
+
     return result
 
 

@@ -27,7 +27,9 @@ class BulkOperationResult(BaseModel):
     success_ids: List[int] = Field(default_factory=list, description="IDs that succeeded")
     failed_ids: List[int] = Field(default_factory=list, description="IDs that failed")
     errors: dict = Field(default_factory=dict, description="Error messages keyed by ID")
-    file_errors: List[str] = Field(default_factory=list, description="File deletion errors (non-fatal)")
+    file_errors: List[str] = Field(
+        default_factory=list, description="File deletion errors (non-fatal)"
+    )
     total: int = Field(description="Total items processed")
     success_count: int = Field(description="Number of successful operations")
     failed_count: int = Field(description="Number of failed operations")
@@ -397,7 +399,7 @@ async def bulk_download_videos(
             skipped.append({"video_id": video_id, "reason": "Not found"})
             continue
 
-        youtube_id = getattr(video, 'youtube_id', None)
+        youtube_id = getattr(video, "youtube_id", None)
         if not youtube_id:
             skipped.append({"video_id": video_id, "reason": "No YouTube ID"})
             continue

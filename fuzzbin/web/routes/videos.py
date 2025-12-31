@@ -415,15 +415,13 @@ async def download_video(
     video = await repository.get_video_by_id(video_id)
     if not video:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video {video_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Video {video_id} not found"
         )
 
-    youtube_id = getattr(video, 'youtube_id', None)
+    youtube_id = getattr(video, "youtube_id", None)
     if not youtube_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Video does not have a YouTube ID"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Video does not have a YouTube ID"
         )
 
     # Queue IMPORT_DOWNLOAD job (will auto-queue organize and NFO jobs)

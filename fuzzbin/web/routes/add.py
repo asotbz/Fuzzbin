@@ -256,11 +256,11 @@ async def preview_batch(
                 remove_version_qualifiers_flag=False,
                 remove_featured=True,
             )
-            
+
             # Query by artist first, then compare normalized titles
             query = repository.query().where_artist(primary_artist)
             results = await query.execute()
-            
+
             # Check if any result matches normalized title
             for result in results:
                 db_title = result.get("title", "")
@@ -997,7 +997,7 @@ async def enrich_spotify_track(
             remove_version_qualifiers_flag=True,
             remove_featured=True,
         )
-        
+
         logger.debug(
             "spotify_titles_normalized",
             original_artist=request.artist,
@@ -1005,7 +1005,7 @@ async def enrich_spotify_track(
             original_title=request.track_title,
             normalized_title=normalized_title,
         )
-        
+
         async with IMVDbClient.from_config(api_config) as imvdb_client:
             search_result = await imvdb_client.search_videos(
                 artist=normalized_artist,
@@ -1103,7 +1103,7 @@ async def enrich_spotify_track(
                     if d.entity_name:
                         directors_list.append(d.entity_name)
                 directors_str = ", ".join(directors_list) if directors_list else None
-                
+
                 # Normalize album name from Spotify (remove version qualifiers)
                 normalized_album = None
                 if request.album:
@@ -1120,7 +1120,9 @@ async def enrich_spotify_track(
                 for fa in video.featured_artists or []:
                     if fa.name:
                         featured_artists_list.append(fa.name)
-                featured_artists_str = ", ".join(featured_artists_list) if featured_artists_list else None
+                featured_artists_str = (
+                    ", ".join(featured_artists_list) if featured_artists_list else None
+                )
 
                 metadata = {
                     "title": video.song_title,  # Use IMVDb's clean title

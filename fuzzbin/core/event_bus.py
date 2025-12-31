@@ -183,9 +183,7 @@ class EventBus:
             self._pending_progress[job.id] = debounced
 
             # Schedule flush after debounce interval
-            debounced.flush_task = asyncio.create_task(
-                self._flush_progress_after_delay(job.id)
-            )
+            debounced.flush_task = asyncio.create_task(self._flush_progress_after_delay(job.id))
 
     async def _flush_progress_after_delay(self, job_id: str) -> None:
         """Flush pending progress after debounce delay.

@@ -475,7 +475,7 @@ class SpotifyClient(RateLimitedAPIClient):
 
         # Batch into groups of 20
         for i in range(0, len(album_ids), MAX_IDS_PER_REQUEST):
-            batch = album_ids[i:i+MAX_IDS_PER_REQUEST]
+            batch = album_ids[i : i + MAX_IDS_PER_REQUEST]
             ids_param = ",".join(batch)
 
             self.logger.info(

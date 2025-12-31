@@ -50,11 +50,11 @@ def _get_artist_directory_from_pattern(
     """
     # Check if pattern contains {artist}
     pattern_parts = pattern.split("/")
-    
+
     # If pattern has no directory separator or only one part, no artist directory
     if len(pattern_parts) == 1:
         return None
-    
+
     artist_level = None
 
     for i, part in enumerate(pattern_parts):
@@ -427,7 +427,9 @@ async def handle_spotify_batch_import(job: Job) -> None:
             featured_artists_str = metadata.get("featured_artists")
             if featured_artists_str:
                 # Parse comma-separated featured artists
-                featured_artists = [fa.strip() for fa in featured_artists_str.split(",") if fa.strip()]
+                featured_artists = [
+                    fa.strip() for fa in featured_artists_str.split(",") if fa.strip()
+                ]
 
                 # Upsert featured artists and link them to the video
                 for position, featured_artist in enumerate(featured_artists, start=1):
@@ -447,26 +449,26 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     config = fuzzbin.get_config()
                     from fuzzbin.core.file_manager import FileManager
                     from fuzzbin.common.http_client import AsyncHTTPClient
-                    
+
                     file_manager = FileManager.from_config(
                         config.file_manager,
                         library_dir=config.library_dir or Path.cwd(),
                         config_dir=config.config_dir or Path.cwd() / "config",
                     )
-                    
+
                     # Download thumbnail using HTTP client
                     async with AsyncHTTPClient(config.http) as http_client:
                         response = await http_client.get(thumbnail_url)
                         response.raise_for_status()
-                        
+
                         # Save to thumbnail cache directory
                         thumbnail_path = file_manager.get_thumbnail_path(video_id)
                         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
-                        
+
                         # Write thumbnail data
                         with open(thumbnail_path, "wb") as f:
                             f.write(response.content)
-                        
+
                         logger.info(
                             "spotify_batch_import_thumbnail_downloaded",
                             video_id=video_id,
@@ -1276,12 +1278,8 @@ async def handle_metadata_enrich(job: Job) -> None:
 
                     # Link featured artists
                     if imvdb_video_data.featured_artists:
-                        for position, featured_art in enumerate(
-                            imvdb_video_data.featured_artists
-                        ):
-                            artist_id = await repository.upsert_artist(
-                                name=featured_art.name
-                            )
+                        for position, featured_art in enumerate(imvdb_video_data.featured_artists):
+                            artist_id = await repository.upsert_artist(name=featured_art.name)
                             await repository.link_video_artist(
                                 video_id=video_id,
                                 artist_id=artist_id,
@@ -2390,9 +2388,7 @@ async def handle_import_organize(job: Job) -> None:
                             new_name=primary_artist_name,
                         )
                         exporter = NFOExporter(repository)
-                        await exporter.export_artist_to_nfo(
-                            primary_artist_id, artist_nfo_path
-                        )
+                        await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
                     else:
                         # Existing artist.nfo is correct
                         logger.debug(
@@ -2408,9 +2404,7 @@ async def handle_import_organize(job: Job) -> None:
                         artist_name=primary_artist_name,
                     )
                     exporter = NFOExporter(repository)
-                    await exporter.export_artist_to_nfo(
-                        primary_artist_id, artist_nfo_path
-                    )
+                    await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
 
             except Exception as e:
                 # Fail the operation if artist.nfo creation/validation fails
