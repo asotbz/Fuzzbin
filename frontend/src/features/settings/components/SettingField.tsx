@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Settings system uses dynamic config types */
 import { useState, useEffect, useCallback } from 'react'
 import SafetyBadge from './SafetyBadge'
 import type { SafetyLevel } from '../../../lib/api/endpoints/config'
@@ -38,7 +39,9 @@ export default function SettingField({
 
   // Update local value when prop changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing prop to local state is a valid pattern
     setLocalValue(value)
+     
     setIsDirty(false)
   }, [value])
 
@@ -80,7 +83,7 @@ export default function SettingField({
             />
             <span className="fieldToggleSlider"></span>
             <span className="fieldToggleLabel">
-              {Boolean(localValue) ? 'Enabled' : 'Disabled'}
+              {localValue ? 'Enabled' : 'Disabled'}
             </span>
           </label>
         )

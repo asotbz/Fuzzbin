@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Wizard handles dynamic API responses */
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
@@ -25,11 +26,14 @@ export default function SearchWizard() {
   // Initialize local form state from wizard state (if returning to earlier step)
   useEffect(() => {
     if (wizard.searchQuery.artist) {
+       
       setArtist(wizard.searchQuery.artist)
     }
     if (wizard.searchQuery.trackTitle) {
+       
       setTrackTitle(wizard.searchQuery.trackTitle)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount
   }, [])
 
   // Reset wizard on unmount to ensure clean state for next visit
@@ -38,6 +42,7 @@ export default function SearchWizard() {
       // Cleanup: reset wizard when component unmounts
       wizard.resetWizard()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on unmount
   }, [])
 
   // Step 1: Search mutation
@@ -284,6 +289,7 @@ export default function SearchWizard() {
         selections.year = 'imvdb'
       }
 
+       
       setSelectedDiscogsFields(selections)
     }
   }, [discogsResults, wizard.previewData])

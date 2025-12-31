@@ -271,4 +271,5 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export { extractYouTubeId }

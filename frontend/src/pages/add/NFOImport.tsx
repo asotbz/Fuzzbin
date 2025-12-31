@@ -117,6 +117,7 @@ export default function NFOImport() {
     }
 
     queryClient.invalidateQueries({ queryKey: videosKeys.all })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jobQuery.data?.error only needed when status becomes 'failed'
   }, [jobId, jobQuery.data?.status, jobWs.lastUpdate?.status, queryClient, navigate])
 
   const handlePreview = (e: React.FormEvent) => {

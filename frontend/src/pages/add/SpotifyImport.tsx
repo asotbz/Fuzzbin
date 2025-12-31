@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Import wizard handles dynamic API responses */
 import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
@@ -44,7 +45,6 @@ interface EnrichedMetadata {
   featuredArtists?: string | null
   youtubeIds?: string[]
   imvdbId?: number | null
-  thumbnailUrl?: string | null
 }
 
 export default function SpotifyImport() {
@@ -214,7 +214,7 @@ export default function SpotifyImport() {
     toast.success('Metadata updated')
   }
 
-  const handleYouTubeSelect = (track: BatchPreviewItem, youtubeId: string, _youtubeUrl: string) => {
+  const handleYouTubeSelect = (track: BatchPreviewItem, youtubeId: string) => {
     const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
 
     setMetadataOverrides((prev) => {
@@ -267,7 +267,6 @@ export default function SpotifyImport() {
         featuredArtists: enrichment.metadata?.featured_artists,
         youtubeIds: enrichment.youtube_ids,
         imvdbId: enrichment.imvdb_id,
-        thumbnailUrl: enrichment.thumbnail_url,
       })
       return newMap
     })
@@ -314,7 +313,7 @@ export default function SpotifyImport() {
           imvdb_id: enrichment?.imvdbId ?? null,
           youtube_id: youtubeId,
           youtube_url: youtubeId ? `https://youtube.com/watch?v=${youtubeId}` : null,
-          thumbnail_url: enrichment?.thumbnailUrl ?? null,
+          thumbnail_url: null,
         }
       })
 
@@ -505,7 +504,7 @@ export default function SpotifyImport() {
         <YouTubeSearchModal
           artist={searchingTrack.artist}
           trackTitle={searchingTrack.title}
-          onSelect={(youtubeId, youtubeUrl) => handleYouTubeSelect(searchingTrack, youtubeId, youtubeUrl)}
+          onSelect={(youtubeId) => handleYouTubeSelect(searchingTrack, youtubeId)}
           onCancel={() => setSearchingTrack(null)}
         />
       )}

@@ -51,6 +51,7 @@ export function useActivityWebSocket(accessToken: string | null) {
 
   useEffect(() => {
     if (!accessToken) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting state when auth changes is intentional
       setState('disconnected')
       return
     }
@@ -134,7 +135,7 @@ export function useActivityWebSocket(accessToken: string | null) {
 
             // Handle job events
             if (any.event_type && typeof any.event_type === 'string') {
-              handleJobEvent(any as WSEvent)
+              handleJobEvent(any as unknown as WSEvent)
               return
             }
           }

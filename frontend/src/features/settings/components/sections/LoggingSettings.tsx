@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Settings system uses dynamic config types */
 import { useState } from 'react'
 import SettingSection from '../SettingSection'
 import SettingField from '../SettingField'

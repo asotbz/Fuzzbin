@@ -1,5 +1,3 @@
-import type { JobData } from '../hooks/useActivityWebSocket'
-
 interface JobFilterBarProps {
   statusFilter: Set<string>
   onStatusFilterChange: (status: Set<string>) => void

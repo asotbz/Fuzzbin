@@ -319,6 +319,7 @@ export default function LibraryPage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectAll is stable, only re-bind when items/selection changes
   }, [items.length, selectedVideoIds.size])
 
   return (

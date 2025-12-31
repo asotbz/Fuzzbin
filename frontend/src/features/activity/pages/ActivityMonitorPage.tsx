@@ -123,7 +123,7 @@ export default function ActivityMonitorPage() {
     }
   }
 
-  const handleClearJob = (jobId: string) => {
+  const handleClearJob = (_jobId: string) => {
     // For now, just remove from local state
     // In production, you might want to persist this to localStorage or backend
     toast.info('Job cleared from view')
