@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthTokens } from '../auth/useAuthTokens'
 import LibraryPage from '../features/library/pages/LibraryPage'
+import ActivityMonitorPage from '../features/activity/pages/ActivityMonitorPage'
 import ImportHub from '../pages/add/ImportHub'
 import SearchWizard from '../pages/add/SearchWizard'
 import SpotifyImport from '../pages/add/SpotifyImport'
@@ -62,6 +63,15 @@ export default function AppRoutes() {
         element={
           <RequireAuth>
             <NFOImport />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/activity"
+        element={
+          <RequireAuth>
+            <ActivityMonitorPage />
           </RequireAuth>
         }
       />

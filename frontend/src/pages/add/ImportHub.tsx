@@ -16,6 +16,9 @@ export default function ImportHub() {
           <Link to="/library" className="primaryButton">
             Video Library
           </Link>
+          <Link to="/activity" className="primaryButton">
+            Activity Monitor
+          </Link>
         </nav>
       </header>
 

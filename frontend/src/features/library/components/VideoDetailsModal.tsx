@@ -147,13 +147,13 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: async (hardDelete: boolean) => {
+    mutationFn: async (deleteFiles: boolean) => {
       if (!videoId) throw new Error('No video ID')
-      // Use bulk delete endpoint with one ID to support hard_delete parameter
-      await bulkDeleteVideos([videoId], hardDelete)
+      // Use bulk delete endpoint with one ID to support delete_files parameter
+      await bulkDeleteVideos([videoId], deleteFiles)
     },
-    onSuccess: (_, hardDelete) => {
-      if (hardDelete) {
+    onSuccess: (_, deleteFiles) => {
+      if (deleteFiles) {
         toast.success('Video and files deleted successfully')
       } else {
         toast.success('Video deleted successfully')
