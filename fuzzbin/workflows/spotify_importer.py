@@ -325,12 +325,12 @@ class SpotifyPlaylistImporter:
                 remove_version_qualifiers_flag=False,
                 remove_featured=True,
             )
-            
+
             # Query by artist first (more selective)
             query = self.repository.query()
             query = query.where_artist(track.artists[0].name)
             results = await query.execute()
-            
+
             # Compare normalized titles to avoid false negatives
             # (e.g., "Jump" vs "Jump - 2015 Remaster")
             for result in results:
@@ -348,7 +348,7 @@ class SpotifyPlaylistImporter:
                         normalized_title=normalized_title,
                     )
                     return True
-            
+
             return False
 
         except Exception as e:
