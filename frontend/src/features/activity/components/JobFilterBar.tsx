@@ -24,6 +24,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'metadata_enrich': 'Metadata',
   'file_organize': 'Organize',
   'library_scan': 'Library Scan',
+  'video_post_process': 'Video Processing',
 }
 
 function formatJobTypeLabel(jobType: string): string {

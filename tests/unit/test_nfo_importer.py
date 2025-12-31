@@ -2,13 +2,13 @@
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from fuzzbin.parsers.models import MusicVideoNFO
 from fuzzbin.parsers.musicvideo_parser import MusicVideoNFOParser
-from fuzzbin.workflows.nfo_importer import NFOImporter
+from fuzzbin.workflows.nfo_importer import NFOImporter, BATCH_SIZE, VIDEO_EXTENSIONS
 from fuzzbin.workflows.spotify_importer import ImportResult
 
 
@@ -45,7 +45,7 @@ def sample_nfo_directory(tmp_path):
     <album>Nevermind</album>
     <year>1991</year>
     <director>Samuel Bayer</director>
-    <genre>Rock</genre>
+    <genre>Alternative Rock</genre>
     <studio>DGC</studio>
 </musicvideo>
 """)
@@ -85,6 +85,24 @@ def sample_nfo_directory(tmp_path):
 """)
 
     return tmp_path
+
+
+@pytest.fixture
+def nfo_with_video_file(tmp_path):
+    """Create directory with NFO file and matching video file."""
+    nfo_path = tmp_path / "Artist - Song.nfo"
+    nfo_path.write_text("""<?xml version="1.0" encoding="UTF-8"?>
+<musicvideo>
+    <title>Song</title>
+    <artist>Artist</artist>
+    <genre>Hip Hop</genre>
+</musicvideo>
+""")
+
+    video_path = tmp_path / "Artist - Song.mp4"
+    video_path.write_bytes(b"fake video content")
+
+    return tmp_path, nfo_path, video_path
 
 
 @pytest.fixture
@@ -205,7 +223,7 @@ def test_map_nfo_to_video_data_all_fields(nfo_importer):
         album="Nevermind",
         year=1991,
         director="Samuel Bayer",
-        genre="Rock",
+        genre="Alternative Rock",  # Will be normalized to "Rock"
         studio="DGC",
     )
 
@@ -216,11 +234,12 @@ def test_map_nfo_to_video_data_all_fields(nfo_importer):
     assert video_data["album"] == "Nevermind"
     assert video_data["year"] == 1991
     assert video_data["director"] == "Samuel Bayer"
-    assert video_data["genre"] == "Rock"
+    assert video_data["genre"] == "Rock"  # Normalized from "Alternative Rock"
     assert video_data["studio"] == "DGC"
     assert video_data["status"] == "discovered"
     assert video_data["download_source"] == "nfo_import"
     assert "nfo_file_path" not in video_data
+    assert "video_file_path" not in video_data
 
 
 def test_map_nfo_to_video_data_minimal(nfo_importer):
@@ -248,11 +267,150 @@ def test_map_nfo_to_video_data_with_file_path(nfo_importer, tmp_path):
         artist="Test Artist",
     )
     nfo_path = tmp_path / "test.nfo"
+    video_path = tmp_path / "test.mp4"
+    video_path.write_bytes(b"test")
 
-    video_data = nfo_importer._map_nfo_to_video_data(nfo, nfo_file_path=nfo_path)
+    video_data = nfo_importer._map_nfo_to_video_data(nfo, nfo_file_path=nfo_path, video_file_path=video_path)
 
     assert "nfo_file_path" in video_data
     assert video_data["nfo_file_path"] == str(nfo_path.resolve())
+    assert "video_file_path" in video_data
+    assert video_data["video_file_path"] == str(video_path.resolve())
+
+
+# Genre Normalization Tests
+
+
+def test_map_nfo_genre_normalization_hip_hop(nfo_importer):
+    """Test genre normalization for Hip Hop variants."""
+    nfo = MusicVideoNFO(
+        title="Test",
+        artist="Test Artist",
+        genre="Hip Hop",
+    )
+
+    video_data = nfo_importer._map_nfo_to_video_data(nfo)
+
+    assert video_data["genre"] == "Hip Hop/R&B"
+
+
+def test_map_nfo_genre_normalization_grunge(nfo_importer):
+    """Test genre normalization for grunge (maps to Rock)."""
+    nfo = MusicVideoNFO(
+        title="Test",
+        artist="Test Artist",
+        genre="grunge",
+    )
+
+    video_data = nfo_importer._map_nfo_to_video_data(nfo)
+
+    assert video_data["genre"] == "Rock"
+
+
+def test_map_nfo_genre_normalization_unmapped(nfo_importer):
+    """Test genre normalization for unmapped genre (passes through)."""
+    nfo = MusicVideoNFO(
+        title="Test",
+        artist="Test Artist",
+        genre="Afrobeat",
+    )
+
+    video_data = nfo_importer._map_nfo_to_video_data(nfo)
+
+    assert video_data["genre"] == "Afrobeat"
+
+
+def test_map_nfo_genre_none(nfo_importer):
+    """Test mapping NFO without genre."""
+    nfo = MusicVideoNFO(
+        title="Test",
+        artist="Test Artist",
+    )
+
+    video_data = nfo_importer._map_nfo_to_video_data(nfo)
+
+    assert video_data["genre"] is None
+
+
+# Video File Discovery Tests
+
+
+def test_discover_video_file_single_match(nfo_importer, tmp_path):
+    """Test video file discovery with single matching file."""
+    nfo_path = tmp_path / "Artist - Title.nfo"
+    nfo_path.write_text("<musicvideo></musicvideo>")
+
+    video_path = tmp_path / "Artist - Title.mp4"
+    video_path.write_bytes(b"video content")
+
+    result = nfo_importer._discover_video_file(nfo_path)
+
+    assert result == video_path
+
+
+def test_discover_video_file_mkv_extension(nfo_importer, tmp_path):
+    """Test video file discovery with .mkv extension."""
+    nfo_path = tmp_path / "Artist - Title.nfo"
+    nfo_path.write_text("<musicvideo></musicvideo>")
+
+    video_path = tmp_path / "Artist - Title.mkv"
+    video_path.write_bytes(b"video content")
+
+    result = nfo_importer._discover_video_file(nfo_path)
+
+    assert result == video_path
+
+
+def test_discover_video_file_no_match(nfo_importer, tmp_path):
+    """Test video file discovery when no video file exists."""
+    nfo_path = tmp_path / "Artist - Title.nfo"
+    nfo_path.write_text("<musicvideo></musicvideo>")
+
+    result = nfo_importer._discover_video_file(nfo_path)
+
+    assert result is None
+
+
+def test_discover_video_file_multiple_matches_warning(nfo_importer, tmp_path):
+    """Test video file discovery with multiple matching files logs warning."""
+    nfo_path = tmp_path / "Artist - Title.nfo"
+    nfo_path.write_text("<musicvideo></musicvideo>")
+
+    # Create multiple video files with same base name
+    (tmp_path / "Artist - Title.mp4").write_bytes(b"video 1")
+    (tmp_path / "Artist - Title.mkv").write_bytes(b"video 2")
+
+    result = nfo_importer._discover_video_file(nfo_path)
+
+    assert result is None  # Returns None due to ambiguity
+
+
+def test_discover_video_file_different_base_name(nfo_importer, tmp_path):
+    """Test video file discovery ignores files with different base name."""
+    nfo_path = tmp_path / "Artist - Title.nfo"
+    nfo_path.write_text("<musicvideo></musicvideo>")
+
+    # Video with different name - should not match
+    (tmp_path / "Other - Video.mp4").write_bytes(b"video content")
+
+    result = nfo_importer._discover_video_file(nfo_path)
+
+    assert result is None
+
+
+def test_video_extensions_constant():
+    """Test VIDEO_EXTENSIONS contains expected extensions."""
+    assert ".mp4" in VIDEO_EXTENSIONS
+    assert ".mkv" in VIDEO_EXTENSIONS
+    assert ".avi" in VIDEO_EXTENSIONS
+    assert ".mov" in VIDEO_EXTENSIONS
+    assert ".webm" in VIDEO_EXTENSIONS
+    assert ".m4v" in VIDEO_EXTENSIONS
+
+
+def test_batch_size_constant():
+    """Test BATCH_SIZE is 25."""
+    assert BATCH_SIZE == 25
 
 
 # Validation Tests
@@ -372,14 +530,39 @@ async def test_import_single_nfo_success(nfo_importer, mock_repository, tmp_path
     )
     nfo_path = tmp_path / "test.nfo"
 
-    video_id = await nfo_importer._import_single_nfo(nfo, nfo_path)
+    video_id, video_file_path = await nfo_importer._import_single_nfo(nfo, nfo_path)
 
     assert video_id == 1
+    assert video_file_path is None  # No video file passed
     mock_repository.create_video.assert_called_once()
     mock_repository.upsert_artist.assert_called_once_with(name="Test Artist")
     mock_repository.link_video_artist.assert_called_once_with(
         video_id=1, artist_id=10, role="primary", position=0
     )
+
+
+@pytest.mark.asyncio
+async def test_import_single_nfo_with_video_file(nfo_importer, mock_repository, tmp_path):
+    """Test importing NFO with discovered video file."""
+    nfo = MusicVideoNFO(
+        title="Test Title",
+        artist="Test Artist",
+    )
+    nfo_path = tmp_path / "test.nfo"
+    video_path = tmp_path / "test.mp4"
+    video_path.write_bytes(b"video content")
+
+    video_id, returned_video_path = await nfo_importer._import_single_nfo(
+        nfo, nfo_path, video_file_path=video_path
+    )
+
+    assert video_id == 1
+    assert returned_video_path == video_path
+
+    # Verify video_file_path was passed to create_video
+    call_kwargs = mock_repository.create_video.call_args[1]
+    assert "video_file_path" in call_kwargs
+    assert call_kwargs["video_file_path"] == str(video_path.resolve())
 
 
 @pytest.mark.asyncio
@@ -395,9 +578,10 @@ async def test_import_single_nfo_with_featured_artists(nfo_importer, mock_reposi
     # Mock upsert_artist to return different IDs
     mock_repository.upsert_artist = AsyncMock(side_effect=[10, 11, 12])
 
-    video_id = await nfo_importer._import_single_nfo(nfo, nfo_path)
+    video_id, video_file_path = await nfo_importer._import_single_nfo(nfo, nfo_path)
 
     assert video_id == 1
+    assert video_file_path is None
     assert mock_repository.upsert_artist.call_count == 3
     assert mock_repository.link_video_artist.call_count == 3
 
@@ -412,7 +596,7 @@ async def test_import_single_nfo_with_featured_artists(nfo_importer, mock_reposi
 @pytest.mark.asyncio
 async def test_import_from_directory_full_workflow(nfo_importer, mock_repository, sample_nfo_directory):
     """Test full workflow: import from directory."""
-    result = await nfo_importer.import_from_directory(
+    result, imported_videos = await nfo_importer.import_from_directory(
         root_path=sample_nfo_directory,
         recursive=True,
         update_file_paths=True,
@@ -424,6 +608,31 @@ async def test_import_from_directory_full_workflow(nfo_importer, mock_repository
     assert result.skipped_count == 0
     assert result.failed_count == 0
 
+    # Check imported_videos list
+    assert len(imported_videos) == 3
+    for video_id, video_file_path in imported_videos:
+        assert video_id is not None
+        assert video_file_path is None  # No video files in sample directory
+
+
+@pytest.mark.asyncio
+async def test_import_from_directory_with_video_files(nfo_importer, mock_repository, nfo_with_video_file):
+    """Test import from directory discovers companion video files."""
+    tmp_path, nfo_path, video_path = nfo_with_video_file
+
+    result, imported_videos = await nfo_importer.import_from_directory(
+        root_path=tmp_path,
+        recursive=True,
+        update_file_paths=True,
+    )
+
+    assert result.imported_count == 1
+    assert len(imported_videos) == 1
+
+    video_id, discovered_video_path = imported_videos[0]
+    assert video_id == 1
+    assert discovered_video_path == video_path
+
 
 @pytest.mark.asyncio
 async def test_import_skip_existing(nfo_importer, mock_repository, sample_nfo_directory):
@@ -431,7 +640,7 @@ async def test_import_skip_existing(nfo_importer, mock_repository, sample_nfo_di
     # Mock query to return existing video
     mock_repository.query().execute = AsyncMock(return_value=[{"id": 1}])
 
-    result = await nfo_importer.import_from_directory(
+    result, imported_videos = await nfo_importer.import_from_directory(
         root_path=sample_nfo_directory,
         recursive=True,
         update_file_paths=False,
@@ -439,6 +648,7 @@ async def test_import_skip_existing(nfo_importer, mock_repository, sample_nfo_di
 
     assert result.skipped_count == 3  # All 3 videos exist
     assert result.imported_count == 0
+    assert len(imported_videos) == 0
 
 
 @pytest.mark.asyncio
@@ -452,7 +662,7 @@ async def test_import_with_missing_critical_fields(nfo_importer, mock_repository
 </musicvideo>
 """)
 
-    result = await nfo_importer.import_from_directory(
+    result, imported_videos = await nfo_importer.import_from_directory(
         root_path=tmp_path,
         recursive=False,
         update_file_paths=False,
@@ -462,6 +672,7 @@ async def test_import_with_missing_critical_fields(nfo_importer, mock_repository
     assert result.imported_count == 0
     assert len(result.failed_tracks) == 1
     assert "Missing critical fields" in result.failed_tracks[0]["error"]
+    assert len(imported_videos) == 0
 
 
 @pytest.mark.asyncio
@@ -472,7 +683,7 @@ async def test_import_continues_on_error(nfo_importer, mock_repository, sample_n
         side_effect=[Exception("DB error"), 1, 2]
     )
 
-    result = await nfo_importer.import_from_directory(
+    result, imported_videos = await nfo_importer.import_from_directory(
         root_path=sample_nfo_directory,
         recursive=True,
         update_file_paths=False,
@@ -481,6 +692,7 @@ async def test_import_continues_on_error(nfo_importer, mock_repository, sample_n
     assert result.failed_count == 1
     assert result.imported_count == 2
     assert len(result.failed_tracks) == 1
+    assert len(imported_videos) == 2
 
 
 @pytest.mark.asyncio
@@ -494,3 +706,79 @@ async def test_import_invalid_directory(nfo_importer, tmp_path):
             recursive=True,
             update_file_paths=False,
         )
+
+
+# Batch Processing Tests
+
+
+@pytest.mark.asyncio
+async def test_import_processes_in_batches(nfo_importer, mock_repository, tmp_path):
+    """Test that large imports are processed in batches."""
+    # Create more NFO files than BATCH_SIZE
+    for i in range(BATCH_SIZE + 5):
+        nfo_path = tmp_path / f"video{i}.nfo"
+        nfo_path.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
+<musicvideo>
+    <title>Video {i}</title>
+    <artist>Artist {i}</artist>
+</musicvideo>
+""")
+
+    result, imported_videos = await nfo_importer.import_from_directory(
+        root_path=tmp_path,
+        recursive=False,
+        update_file_paths=False,
+    )
+
+    assert result.imported_count == BATCH_SIZE + 5
+    assert len(imported_videos) == BATCH_SIZE + 5
+
+
+# Enrichment Tests (with mocked API clients)
+
+
+@pytest.mark.asyncio
+async def test_import_single_nfo_with_api_config(nfo_importer, mock_repository, tmp_path):
+    """Test that import can accept api_config for enrichment."""
+    nfo = MusicVideoNFO(
+        title="Test Song",
+        artist="Test Artist",
+    )
+    nfo_path = tmp_path / "test.nfo"
+
+    # Test that import works without API config (no enrichment)
+    video_id, video_file_path = await nfo_importer._import_single_nfo(
+        nfo, nfo_path, api_config=None
+    )
+
+    assert video_id == 1
+
+    # Verify create_video was called without IMVDb ID
+    call_kwargs = mock_repository.create_video.call_args[1]
+    assert call_kwargs.get("imvdb_video_id") is None
+
+
+@pytest.mark.asyncio
+async def test_import_from_directory_accepts_api_config(nfo_importer, mock_repository, tmp_path):
+    """Test that import_from_directory accepts api_config parameter."""
+    nfo_path = tmp_path / "test.nfo"
+    nfo_path.write_text("""<?xml version="1.0" encoding="UTF-8"?>
+<musicvideo>
+    <title>Test Song</title>
+    <artist>Test Artist</artist>
+</musicvideo>
+""")
+
+    # Test with api_config (even if enrichment fails, import should succeed)
+    api_config = {"imvdb": {"app_key": "test"}, "discogs": {"api_key": "test"}}
+
+    result, imported_videos = await nfo_importer.import_from_directory(
+        root_path=tmp_path,
+        recursive=False,
+        update_file_paths=False,
+        api_config=api_config,
+    )
+
+    # Import should succeed even though API clients aren't properly configured
+    assert result.imported_count == 1
+    assert result.failed_count == 0

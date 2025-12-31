@@ -24,6 +24,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'file_duplicate_resolve': 'Resolve Duplicates',
   'metadata_refresh': 'Metadata Refresh',
   'backup': 'System Backup',
+  'video_post_process': 'Video Processing',
 }
 
 function formatJobType(jobType: string): string {

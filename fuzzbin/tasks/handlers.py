@@ -87,11 +87,15 @@ async def handle_nfo_import(job: Job) -> None:
     """Handle NFO import job.
 
     Wraps NFOImporter workflow with progress callback for real-time updates.
+    Performs IMVDb and Discogs enrichment for metadata enhancement.
+    Queues VIDEO_POST_PROCESS jobs for videos with discovered video files.
 
     Job metadata parameters:
         directory (str, required): Path to directory containing NFO files
         recursive (bool, optional): Scan subdirectories (default: True)
         skip_existing (bool, optional): Skip already imported videos (default: True)
+        initial_status (str, optional): Status for imported videos (default: "discovered")
+        update_file_paths (bool, optional): Store file paths in database (default: True)
 
     Job result on completion:
         imported: Number of videos imported
@@ -99,6 +103,8 @@ async def handle_nfo_import(job: Job) -> None:
         failed: Number of import failures
         total_files: Total NFO files found
         duration_seconds: Time taken for import
+        videos_with_files: Number of videos with discovered video files
+        post_process_jobs_queued: Number of VIDEO_POST_PROCESS jobs queued
 
     Args:
         job: Job instance with metadata containing import parameters
@@ -142,8 +148,17 @@ async def handle_nfo_import(job: Job) -> None:
 
         job.update_progress(processed, total, f"Importing {current_file}...")
 
-    # Get repository from fuzzbin global state
+    # Get repository and config from fuzzbin global state
     repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
+
+    # Build API config for enrichment
+    api_config = None
+    if config.apis:
+        api_config = {
+            "imvdb": config.apis.get("imvdb"),
+            "discogs": config.apis.get("discogs"),
+        }
 
     # Create importer with progress callback
     importer = NFOImporter(
@@ -153,18 +168,53 @@ async def handle_nfo_import(job: Job) -> None:
         progress_callback=progress_callback,
     )
 
-    # Run import
+    # Run import with enrichment
     import asyncio
 
-    result = await importer.import_from_directory(
+    result, imported_videos = await importer.import_from_directory(
         root_path=directory,
         recursive=recursive,
         update_file_paths=update_file_paths,
+        api_config=api_config,
     )
 
     # Check for cancellation after import
     if job.status == JobStatus.CANCELLED:
         return
+
+    # Queue VIDEO_POST_PROCESS jobs for videos with discovered video files
+    post_process_jobs_queued = 0
+    videos_with_files = 0
+
+    queue = get_job_queue()
+    for video_id, video_file_path in imported_videos:
+        if video_file_path is not None:
+            videos_with_files += 1
+            try:
+                post_process_job = Job(
+                    type=JobType.VIDEO_POST_PROCESS,
+                    metadata={
+                        "video_id": video_id,
+                        "video_path": str(video_file_path),
+                    },
+                    parent_job_id=job.id,
+                )
+                await queue.submit(post_process_job)
+                post_process_jobs_queued += 1
+
+                logger.debug(
+                    "video_post_process_job_queued",
+                    video_id=video_id,
+                    video_path=str(video_file_path),
+                    post_process_job_id=post_process_job.id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "video_post_process_job_queue_failed",
+                    video_id=video_id,
+                    video_path=str(video_file_path),
+                    error=str(e),
+                )
 
     # Mark completed with result
     job.mark_completed(
@@ -176,6 +226,8 @@ async def handle_nfo_import(job: Job) -> None:
             "duration_seconds": result.duration_seconds,
             "failed_tracks": result.failed_tracks[:10],  # Limit to first 10 failures
             "initial_status": initial_status,
+            "videos_with_files": videos_with_files,
+            "post_process_jobs_queued": post_process_jobs_queued,
         }
     )
 
@@ -186,6 +238,8 @@ async def handle_nfo_import(job: Job) -> None:
         skipped=result.skipped_count,
         initial_status=initial_status,
         failed=result.failed_count,
+        videos_with_files=videos_with_files,
+        post_process_jobs_queued=post_process_jobs_queued,
     )
 
 
@@ -1537,6 +1591,8 @@ async def handle_library_scan(job: Job) -> None:
 
     Scans the library for new or modified files.
     Used by scheduled tasks for periodic library maintenance.
+    Performs IMVDb and Discogs enrichment for imported NFO files.
+    Queues VIDEO_POST_PROCESS jobs for videos with discovered video files.
 
     Job metadata parameters:
         directory (str, optional): Directory to scan (default: workspace root)
@@ -1547,6 +1603,8 @@ async def handle_library_scan(job: Job) -> None:
         new_files_found: Number of new files discovered
         nfo_imported: Number of NFO files imported
         errors: Number of errors encountered
+        videos_with_files: Number of videos with discovered video files
+        post_process_jobs_queued: Number of VIDEO_POST_PROCESS jobs queued
 
     Args:
         job: Job instance with metadata containing scan parameters
@@ -1592,6 +1650,8 @@ async def handle_library_scan(job: Job) -> None:
                 "new_files_found": 0,
                 "nfo_imported": 0,
                 "errors": 0,
+                "videos_with_files": 0,
+                "post_process_jobs_queued": 0,
                 "message": "No NFO files found",
             }
         )
@@ -1600,6 +1660,8 @@ async def handle_library_scan(job: Job) -> None:
     new_files_found = 0
     nfo_imported = 0
     errors = 0
+    videos_with_files = 0
+    post_process_jobs_queued = 0
 
     if import_nfo:
         # Progress callback
@@ -1608,21 +1670,61 @@ async def handle_library_scan(job: Job) -> None:
                 raise asyncio.CancelledError("Job cancelled by user")
             job.update_progress(processed, total, f"Processing {current_file}...")
 
-        # Use NFOImporter
+        # Build API config for enrichment
+        api_config = None
+        if config.apis:
+            api_config = {
+                "imvdb": config.apis.get("imvdb"),
+                "discogs": config.apis.get("discogs"),
+            }
+
+        # Use NFOImporter with enrichment
         importer = NFOImporter(
             video_repository=repository,
             skip_existing=True,
             progress_callback=progress_callback,
         )
 
-        result = await importer.import_from_directory(
+        result, imported_videos = await importer.import_from_directory(
             root_path=directory,
             recursive=recursive,
+            api_config=api_config,
         )
 
-        new_files_found = result.total_files
-        nfo_imported = result.imported
-        errors = result.failed
+        new_files_found = result.total_tracks
+        nfo_imported = result.imported_count
+        errors = result.failed_count
+
+        # Queue VIDEO_POST_PROCESS jobs for videos with discovered video files
+        queue = get_job_queue()
+        for video_id, video_file_path in imported_videos:
+            if video_file_path is not None:
+                videos_with_files += 1
+                try:
+                    post_process_job = Job(
+                        type=JobType.VIDEO_POST_PROCESS,
+                        metadata={
+                            "video_id": video_id,
+                            "video_path": str(video_file_path),
+                        },
+                        parent_job_id=job.id,
+                    )
+                    await queue.submit(post_process_job)
+                    post_process_jobs_queued += 1
+
+                    logger.debug(
+                        "library_scan_post_process_job_queued",
+                        video_id=video_id,
+                        video_path=str(video_file_path),
+                        post_process_job_id=post_process_job.id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "library_scan_post_process_job_queue_failed",
+                        video_id=video_id,
+                        video_path=str(video_file_path),
+                        error=str(e),
+                    )
     else:
         # Just count files
         new_files_found = len(nfo_files)
@@ -1633,6 +1735,8 @@ async def handle_library_scan(job: Job) -> None:
             "nfo_imported": nfo_imported,
             "errors": errors,
             "directory": str(directory),
+            "videos_with_files": videos_with_files,
+            "post_process_jobs_queued": post_process_jobs_queued,
         }
     )
 
@@ -1642,6 +1746,8 @@ async def handle_library_scan(job: Job) -> None:
         new_files_found=new_files_found,
         nfo_imported=nfo_imported,
         errors=errors,
+        videos_with_files=videos_with_files,
+        post_process_jobs_queued=post_process_jobs_queued,
     )
 
 

@@ -104,10 +104,16 @@ export default function NFOImport() {
     if (!status || !isTerminalJobStatus(status)) return
 
     if (status === 'completed') {
+      const result = jobWs.lastUpdate?.result ?? jobQuery.data?.result
+      const postProcessJobs = (result as { post_process_jobs_queued?: number })?.post_process_jobs_queued ?? 0
+      const description = postProcessJobs > 0
+        ? `${postProcessJobs} video processing job${postProcessJobs === 1 ? '' : 's'} queued. Check Activity Monitor for progress.`
+        : undefined
       toast.success('Scan completed!', {
+        description,
         action: {
-          label: 'View Library',
-          onClick: () => navigate('/library'),
+          label: postProcessJobs > 0 ? 'View Activity' : 'View Library',
+          onClick: () => navigate(postProcessJobs > 0 ? '/activity' : '/library'),
         },
       })
     } else if (status === 'failed') {

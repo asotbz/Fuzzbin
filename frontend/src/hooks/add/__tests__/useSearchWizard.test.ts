@@ -150,6 +150,7 @@ describe('useSearchWizard', () => {
         youtubeId: 'yt-123',
         initialStatus: 'imported' as const,
         skipExisting: false,
+        autoDownload: true,
       }
 
       act(() => {
