@@ -29,6 +29,7 @@ class JobType(str, Enum):
     LIBRARY_SCAN = "library_scan"  # Phase 7: Scheduled library scan
     IMPORT = "import"  # Phase 7: Generic import job (YouTube/IMVDb)
     BACKUP = "backup"  # System backup job
+    TRASH_CLEANUP = "trash_cleanup"  # Automatic trash cleanup job
 
 
 class JobStatus(str, Enum):

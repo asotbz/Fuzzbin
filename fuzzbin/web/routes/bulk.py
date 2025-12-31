@@ -9,8 +9,9 @@ from pydantic import BaseModel, Field
 import fuzzbin
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
+from fuzzbin.services import VideoService
 
-from ..dependencies import get_repository, require_auth
+from ..dependencies import get_repository, get_video_service, require_auth
 from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES, BulkOperationResponse
 
 logger = structlog.get_logger(__name__)
@@ -26,17 +27,19 @@ class BulkOperationResult(BaseModel):
     success_ids: List[int] = Field(default_factory=list, description="IDs that succeeded")
     failed_ids: List[int] = Field(default_factory=list, description="IDs that failed")
     errors: dict = Field(default_factory=dict, description="Error messages keyed by ID")
+    file_errors: List[str] = Field(default_factory=list, description="File deletion errors (non-fatal)")
     total: int = Field(description="Total items processed")
     success_count: int = Field(description="Number of successful operations")
     failed_count: int = Field(description="Number of failed operations")
 
     @classmethod
-    def from_repo_result(cls, result: dict) -> "BulkOperationResult":
+    def from_repo_result(cls, result: dict, file_errors: List[str] = None) -> "BulkOperationResult":
         """Create from repository result dict."""
         return cls(
             success_ids=result.get("success_ids", []),
             failed_ids=result.get("failed_ids", []),
             errors=result.get("errors", {}),
+            file_errors=file_errors or [],
             total=len(result.get("success_ids", [])) + len(result.get("failed_ids", [])),
             success_count=len(result.get("success_ids", [])),
             failed_count=len(result.get("failed_ids", [])),
@@ -58,8 +61,11 @@ class BulkDeleteRequest(BaseModel):
     """Request for bulk deleting videos."""
 
     video_ids: List[int] = Field(..., min_length=1, description="Video IDs to delete")
-    hard_delete: bool = Field(
-        default=False, description="Permanently delete (True) or soft delete (False)"
+    permanent: bool = Field(
+        default=False, description="Permanently delete DB records (True) or soft delete (False)"
+    )
+    delete_files: bool = Field(
+        default=False, description="Also delete video/NFO files from disk (moved to trash)"
     )
 
 
@@ -168,20 +174,44 @@ async def bulk_update_videos(
     response_model=BulkOperationResult,
     responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
     summary="Bulk delete videos",
-    description="Delete multiple videos (soft delete by default, hard delete optional).",
+    description="Delete multiple videos. Optionally also delete files from disk (moved to trash).",
 )
 async def bulk_delete_videos(
     request: BulkDeleteRequest,
     current_user: Annotated[UserInfo, Depends(require_auth)],
     repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> BulkOperationResult:
-    """Bulk delete videos."""
+    """Bulk delete videos.
+
+    - permanent=False (default): Soft delete DB records (can be restored)
+    - permanent=True: Permanently delete DB records
+    - delete_files=True: Also delete video/NFO files from disk (moved to trash)
+    """
     max_items = await _get_max_bulk_items()
     _validate_bulk_limit(len(request.video_ids), max_items)
 
+    file_errors: List[str] = []
+
+    # Delete files first if requested (before DB deletion)
+    if request.delete_files:
+        for video_id in request.video_ids:
+            try:
+                await video_service.delete_files(video_id=video_id, hard_delete=False)
+            except Exception as e:
+                # Log error but continue with remaining videos
+                error_msg = f"Video {video_id}: {str(e)}"
+                file_errors.append(error_msg)
+                logger.warning(
+                    "bulk_delete_file_error",
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+    # Delete DB records
     result = await repo.bulk_delete_videos(
         video_ids=request.video_ids,
-        hard_delete=request.hard_delete,
+        hard_delete=request.permanent,
     )
 
     logger.info(
@@ -190,10 +220,12 @@ async def bulk_delete_videos(
         total=len(request.video_ids),
         success=len(result["success_ids"]),
         failed=len(result["failed_ids"]),
-        hard_delete=request.hard_delete,
+        permanent=request.permanent,
+        delete_files=request.delete_files,
+        file_errors_count=len(file_errors),
     )
 
-    return BulkOperationResult.from_repo_result(result)
+    return BulkOperationResult.from_repo_result(result, file_errors=file_errors)
 
 
 @router.post(

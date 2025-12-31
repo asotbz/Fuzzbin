@@ -467,3 +467,18 @@ backup:
   
   # Directory for backup archives (relative to config_dir)
   output_dir: backups
+
+# Automatic trash cleanup configuration
+# Deleted files are moved to the trash directory (.trash/ in library_dir)
+# This config controls automatic cleanup of old items in the trash
+trash:
+  # Whether automatic scheduled trash cleanup is enabled (default: true)
+  enabled: true
+  
+  # Cron expression for cleanup schedule (default: daily at 3 AM)
+  # Format: minute hour day-of-month month day-of-week
+  schedule: "0 3 * * *"
+  
+  # Delete items from trash older than this many days (default: 30)
+  # Items newer than this will be preserved for potential restoration
+  retention_days: 30

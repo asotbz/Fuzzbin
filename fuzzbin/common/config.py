@@ -648,6 +648,29 @@ class BackupConfig(BaseModel):
     )
 
 
+class TrashConfig(BaseModel):
+    """Configuration for automatic trash cleanup.
+
+    Deleted files are moved to the trash directory (configured in file_manager.trash_dir).
+    This config controls automatic cleanup of old items in the trash.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic scheduled trash cleanup",
+    )
+    schedule: str = Field(
+        default="0 3 * * *",
+        description="Cron expression for cleanup schedule (default: daily at 3 AM)",
+    )
+    retention_days: int = Field(
+        default=30,
+        ge=1,
+        le=365,
+        description="Delete items from trash older than this many days",
+    )
+
+
 def _get_default_config_dir() -> Path:
     """
     Get default config directory based on environment.
@@ -783,6 +806,10 @@ class Config(BaseModel):
     backup: BackupConfig = Field(
         default_factory=BackupConfig,
         description="Automatic backup configuration",
+    )
+    trash: TrashConfig = Field(
+        default_factory=TrashConfig,
+        description="Automatic trash cleanup configuration",
     )
 
     def resolve_paths(self, create_dirs: bool = True) -> "Config":

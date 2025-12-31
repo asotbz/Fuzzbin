@@ -655,6 +655,62 @@ class VideoRepository:
             )
             raise QueryError(f"Failed to restore video: {e}") from e
 
+    async def get_deleted_videos(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all soft-deleted video records.
+
+        Args:
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+
+        Returns:
+            List of soft-deleted video records
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        sql = """
+            SELECT v.*
+            FROM videos v
+            WHERE v.is_deleted = 1
+            ORDER BY v.deleted_at DESC
+        """
+
+        if limit is not None:
+            sql += f" LIMIT {limit} OFFSET {offset}"
+
+        try:
+            cursor = await self._connection.execute(sql)
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error("get_deleted_videos_failed", error=str(e))
+            raise QueryError(f"Failed to get deleted videos: {e}") from e
+
+    async def count_deleted_videos(self) -> int:
+        """
+        Count total number of soft-deleted videos.
+
+        Returns:
+            Count of soft-deleted videos
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        try:
+            cursor = await self._connection.execute(
+                "SELECT COUNT(*) FROM videos WHERE is_deleted = 1"
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+        except Exception as e:
+            logger.error("count_deleted_videos_failed", error=str(e))
+            raise QueryError(f"Failed to count deleted videos: {e}") from e
+
     async def search_videos(
         self, query: str, include_deleted: bool = False
     ) -> List[Dict[str, Any]]:

@@ -119,6 +119,43 @@ class ResolveResponse(BaseModel):
     removed_video_ids: List[int]
 
 
+# ==================== Trash Schemas ====================
+
+
+class TrashItemResponse(BaseModel):
+    """Response for a single item in trash."""
+
+    video_id: int
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    deleted_at: Optional[str] = None
+    trash_path: Optional[str] = None
+    file_size: Optional[int] = Field(default=None, description="File size in bytes")
+
+
+class TrashListResponse(BaseModel):
+    """Response for list trash endpoint."""
+
+    items: List[TrashItemResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class TrashStatsResponse(BaseModel):
+    """Response for trash statistics."""
+
+    total_count: int
+    total_size_bytes: int
+
+
+class EmptyTrashResponse(BaseModel):
+    """Response for empty trash operation."""
+
+    deleted_count: int
+    errors: List[str] = Field(default_factory=list)
+
+
 class LibraryIssueResponse(BaseModel):
     """Response for a single library issue."""
 
@@ -344,6 +381,116 @@ async def restore_video(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e.message),
+        )
+
+
+# ==================== Trash Management Endpoints ====================
+
+
+@router.get(
+    "/trash",
+    response_model=TrashListResponse,
+    summary="List trashed videos",
+    description="List all videos in the trash (soft-deleted).",
+    responses={
+        200: {"description": "List of trashed videos"},
+        500: {"description": "Failed to list trash"},
+    },
+)
+async def list_trash(
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    user: Optional[UserInfo] = Depends(require_auth),
+    video_service: VideoService = Depends(get_video_service),
+) -> TrashListResponse:
+    """List all videos in the trash."""
+    try:
+        offset = (page - 1) * page_size
+        videos = await video_service.list_trash(limit=page_size, offset=offset)
+        stats = await video_service.get_trash_stats()
+
+        items = [
+            TrashItemResponse(
+                video_id=v["id"],
+                title=v.get("title"),
+                artist=v.get("artist"),
+                deleted_at=v.get("deleted_at"),
+                trash_path=v.get("video_file_path"),
+                file_size=v.get("file_size"),
+            )
+            for v in videos
+        ]
+
+        return TrashListResponse(
+            items=items,
+            total=stats["total_count"],
+            page=page,
+            page_size=page_size,
+        )
+
+    except Exception as e:
+        logger.error("list_trash_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list trash: {str(e)}",
+        )
+
+
+@router.get(
+    "/trash/stats",
+    response_model=TrashStatsResponse,
+    summary="Get trash statistics",
+    description="Get count and total size of items in trash.",
+    responses={
+        200: {"description": "Trash statistics"},
+        500: {"description": "Failed to get stats"},
+    },
+)
+async def get_trash_stats(
+    user: Optional[UserInfo] = Depends(require_auth),
+    video_service: VideoService = Depends(get_video_service),
+) -> TrashStatsResponse:
+    """Get trash statistics."""
+    try:
+        stats = await video_service.get_trash_stats()
+        return TrashStatsResponse(
+            total_count=stats["total_count"],
+            total_size_bytes=stats["total_size_bytes"],
+        )
+    except Exception as e:
+        logger.error("get_trash_stats_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get trash stats: {str(e)}",
+        )
+
+
+@router.post(
+    "/trash/empty",
+    response_model=EmptyTrashResponse,
+    summary="Empty trash",
+    description="Permanently delete all items in the trash.",
+    responses={
+        200: {"description": "Trash emptied"},
+        500: {"description": "Empty trash failed"},
+    },
+)
+async def empty_trash(
+    user: Optional[UserInfo] = Depends(require_auth),
+    video_service: VideoService = Depends(get_video_service),
+) -> EmptyTrashResponse:
+    """Permanently delete all items in the trash."""
+    try:
+        result = await video_service.empty_trash()
+        return EmptyTrashResponse(
+            deleted_count=result["deleted_count"],
+            errors=result["errors"],
+        )
+    except Exception as e:
+        logger.error("empty_trash_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to empty trash: {str(e)}",
         )
 
 

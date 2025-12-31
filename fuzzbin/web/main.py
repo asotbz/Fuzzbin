@@ -85,6 +85,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             retention_count=config.backup.retention_count,
         )
 
+    # Schedule automatic trash cleanup if enabled
+    if config.trash.enabled:
+        trash_cleanup_job = Job(
+            type=JobType.TRASH_CLEANUP,
+            schedule=config.trash.schedule,
+            metadata={"retention_days": config.trash.retention_days},
+        )
+        await queue.submit(trash_cleanup_job)
+        logger.info(
+            "scheduled_trash_cleanup_enabled",
+            schedule=config.trash.schedule,
+            retention_days=config.trash.retention_days,
+        )
+
     # Check for default password if auth is enabled
     if settings.auth_enabled:
         logger.info("api_auth_enabled", jwt_algorithm=settings.jwt_algorithm)

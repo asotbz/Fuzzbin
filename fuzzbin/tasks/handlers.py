@@ -2629,6 +2629,67 @@ async def handle_backup(job: Job) -> None:
     )
 
 
+async def handle_trash_cleanup(job: Job) -> None:
+    """Handle automatic trash cleanup job.
+
+    Deletes items from trash older than the configured retention period.
+
+    Job metadata parameters:
+        retention_days (int, required): Delete items older than this many days
+
+    Job result on completion:
+        deleted_count: Number of items permanently deleted
+        errors: List of any errors encountered
+
+    Args:
+        job: Job instance with metadata containing cleanup parameters
+    """
+    import fuzzbin
+    from fuzzbin.services import VideoService
+
+    logger.info("trash_cleanup_job_starting", job_id=job.id)
+    job.update_progress(0, 2, "Initializing trash cleanup...")
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Get config and create video service
+    config = fuzzbin.get_config()
+    repository = fuzzbin.get_repository()
+    video_service = VideoService(repository=repository)
+
+    # Extract parameters
+    retention_days = job.metadata.get("retention_days", config.trash.retention_days)
+
+    job.update_progress(1, 2, f"Cleaning up items older than {retention_days} days...")
+
+    # Cleanup old trash
+    result = await video_service.cleanup_old_trash(retention_days=retention_days)
+
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    job.update_progress(2, 2, "Trash cleanup complete")
+
+    # Mark completed with result
+    job.mark_completed(
+        {
+            "deleted_count": result["deleted_count"],
+            "errors": result["errors"],
+            "retention_days": retention_days,
+        }
+    )
+
+    logger.info(
+        "trash_cleanup_job_completed",
+        job_id=job.id,
+        deleted_count=result["deleted_count"],
+        errors_count=len(result["errors"]),
+        retention_days=retention_days,
+    )
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -2654,6 +2715,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.IMPORT_ORGANIZE, handle_import_organize)
     queue.register_handler(JobType.IMPORT_NFO_GENERATE, handle_import_nfo_generate)
     queue.register_handler(JobType.BACKUP, handle_backup)
+    queue.register_handler(JobType.TRASH_CLEANUP, handle_trash_cleanup)
 
     logger.info(
         "job_handlers_registered",
@@ -2673,5 +2735,6 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.IMPORT_ORGANIZE.value,
             JobType.IMPORT_NFO_GENERATE.value,
             JobType.BACKUP.value,
+            JobType.TRASH_CLEANUP.value,
         ],
     )

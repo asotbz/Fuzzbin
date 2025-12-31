@@ -805,6 +805,194 @@ class VideoService(BaseService):
         except FileManagerError as e:
             raise ServiceError(f"Restore operation failed: {e}") from e
 
+    # ==================== Trash Management ====================
+
+    async def list_trash(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        List all videos in trash (soft-deleted).
+
+        Args:
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+
+        Returns:
+            List of deleted video records with metadata
+        """
+        videos = await self.repository.get_deleted_videos(limit=limit, offset=offset)
+
+        # Enrich with file size info if available
+        for video in videos:
+            video_path = video.get("video_file_path")
+            if video_path:
+                try:
+                    path = Path(video_path)
+                    if path.exists():
+                        video["file_size"] = path.stat().st_size
+                    else:
+                        video["file_size"] = None
+                except Exception:
+                    video["file_size"] = None
+            else:
+                video["file_size"] = None
+
+        return videos
+
+    async def get_trash_stats(self) -> Dict[str, Any]:
+        """
+        Get trash statistics.
+
+        Returns:
+            Dict with total_count, total_size_bytes
+        """
+        count = await self.repository.count_deleted_videos()
+        videos = await self.repository.get_deleted_videos()
+
+        total_size = 0
+        for video in videos:
+            video_path = video.get("video_file_path")
+            if video_path:
+                try:
+                    path = Path(video_path)
+                    if path.exists():
+                        total_size += path.stat().st_size
+                except Exception:
+                    pass
+
+        return {
+            "total_count": count,
+            "total_size_bytes": total_size,
+        }
+
+    async def empty_trash(self) -> Dict[str, Any]:
+        """
+        Permanently delete all trashed videos and their files.
+
+        Returns:
+            Dict with deleted_count and errors list
+        """
+        videos = await self.repository.get_deleted_videos()
+        file_manager = await self._get_file_manager()
+
+        deleted_count = 0
+        errors: List[str] = []
+
+        for video in videos:
+            video_id = video["id"]
+            video_path = video.get("video_file_path")
+            nfo_path = video.get("nfo_file_path")
+
+            try:
+                if video_path:
+                    await file_manager.hard_delete(
+                        video_id=video_id,
+                        video_path=Path(video_path),
+                        repository=self.repository,
+                        nfo_path=Path(nfo_path) if nfo_path else None,
+                    )
+                else:
+                    # No file, just delete DB record
+                    await self.repository.hard_delete_video(video_id)
+
+                deleted_count += 1
+            except Exception as e:
+                error_msg = f"Video {video_id}: {str(e)}"
+                errors.append(error_msg)
+                self.logger.warning(
+                    "empty_trash_video_error",
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+        self.logger.info(
+            "trash_emptied",
+            deleted_count=deleted_count,
+            errors_count=len(errors),
+        )
+
+        return {
+            "deleted_count": deleted_count,
+            "errors": errors,
+        }
+
+    async def cleanup_old_trash(self, retention_days: int) -> Dict[str, Any]:
+        """
+        Delete items from trash older than retention period.
+
+        Args:
+            retention_days: Delete items older than this many days
+
+        Returns:
+            Dict with deleted_count and errors list
+        """
+        from datetime import datetime, timedelta, timezone
+
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        videos = await self.repository.get_deleted_videos()
+        file_manager = await self._get_file_manager()
+
+        deleted_count = 0
+        errors: List[str] = []
+
+        for video in videos:
+            deleted_at = video.get("deleted_at")
+            if not deleted_at:
+                continue
+
+            # Parse deleted_at timestamp
+            try:
+                if isinstance(deleted_at, str):
+                    # ISO format timestamp
+                    deleted_dt = datetime.fromisoformat(deleted_at.replace("Z", "+00:00"))
+                else:
+                    continue
+            except (ValueError, TypeError):
+                continue
+
+            # Skip if not old enough
+            if deleted_dt > cutoff_date:
+                continue
+
+            video_id = video["id"]
+            video_path = video.get("video_file_path")
+            nfo_path = video.get("nfo_file_path")
+
+            try:
+                if video_path:
+                    await file_manager.hard_delete(
+                        video_id=video_id,
+                        video_path=Path(video_path),
+                        repository=self.repository,
+                        nfo_path=Path(nfo_path) if nfo_path else None,
+                    )
+                else:
+                    await self.repository.hard_delete_video(video_id)
+
+                deleted_count += 1
+            except Exception as e:
+                error_msg = f"Video {video_id}: {str(e)}"
+                errors.append(error_msg)
+                self.logger.warning(
+                    "cleanup_old_trash_error",
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+        self.logger.info(
+            "old_trash_cleaned",
+            retention_days=retention_days,
+            deleted_count=deleted_count,
+            errors_count=len(errors),
+        )
+
+        return {
+            "deleted_count": deleted_count,
+            "errors": errors,
+        }
+
     # ==================== Duplicate Detection ====================
 
     async def find_duplicates(
