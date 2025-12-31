@@ -12,10 +12,10 @@ Returns basic health information including API version.
 User authentication, token management, and password operations
 
 - `POST` `/auth/login` — Authenticate user
-  - Authenticate a user and return JWT tokens.
+  - Authenticate a user and return JWT access token.
 
-Validates username and password, returns access and refresh tokens
-on successful authentication.
+Validates username and password, returns access token in response body
+and sets refresh token as an httpOnly cookie for security.
 
 If the user's password_must_change flag is set, returns 403 with
 instructions to use /auth/set-initial-password endpoint.
@@ -24,7 +24,9 @@ Rate limited: 5 failed attempts per minute per IP address.
 - `POST` `/auth/refresh` — Refresh access token
   - Refresh an access token using a valid refresh token.
 
-Returns new access and refresh tokens.
+The refresh token is read from the httpOnly cookie set during login.
+Returns new access token in response body and rotates the refresh
+token cookie.
 - `POST` `/auth/password` — Change password
   - Change the password for the authenticated user.
 
@@ -40,7 +42,7 @@ Remediation note: implement true "revoke all tokens" with a DB-backed mechanism
 The provided Bearer token will be added to the revocation list,
 preventing it from being used again even if it hasn't expired.
 
-Clients should also discard their refresh token after logout.
+Also clears the httpOnly refresh token cookie.
 - `POST` `/auth/set-initial-password` — Set initial password for first-time setup
   - Set a new password for users requiring password rotation.
 
@@ -74,6 +76,8 @@ Video CRUD operations and metadata management
   - Remove a tag from a video.
 - `POST` `/videos/{video_id}/restore` — Restore video
   - Restore a soft-deleted video.
+- `POST` `/videos/{video_id}/download` — Queue video download
+  - Queue download job for a video with a YouTube ID. Downloads to temp, organizes to configured path, and generates NFO.
 - `DELETE` `/videos/{video_id}/permanent` — Permanently delete video
   - Permanently delete a video. This cannot be undone.
 - `GET` `/videos/{video_id}/status-history` — Get status history
@@ -170,6 +174,12 @@ File operations: organize, delete, restore, verify, and duplicate detection
   - Delete video files (soft delete to trash or hard delete permanently).
 - `POST` `/files/videos/{video_id}/restore` — Restore video from trash
   - Restore a soft-deleted video from the trash directory.
+- `GET` `/files/trash` — List trashed videos
+  - List all videos in the trash (soft-deleted).
+- `GET` `/files/trash/stats` — Get trash statistics
+  - Get count and total size of items in trash.
+- `POST` `/files/trash/empty` — Empty trash
+  - Permanently delete all items in the trash.
 - `GET` `/files/videos/{video_id}/duplicates` — Find duplicate videos
   - Find potential duplicate videos by hash and/or metadata.
 - `POST` `/files/duplicates/resolve` — Resolve duplicate videos
@@ -215,7 +225,7 @@ Batch operations for updating, deleting, tagging, and organizing multiple videos
 - `POST` `/videos/bulk/update` — Bulk update videos
   - Update multiple videos with the same field values in a single transaction.
 - `POST` `/videos/bulk/delete` — Bulk delete videos
-  - Delete multiple videos (soft delete by default, hard delete optional).
+  - Delete multiple videos. Optionally also delete files from disk (moved to trash).
 - `POST` `/videos/bulk/status` — Bulk update status
   - Update status for multiple videos in a single transaction.
 - `POST` `/videos/bulk/tags` — Bulk apply tags
@@ -224,6 +234,8 @@ Batch operations for updating, deleting, tagging, and organizing multiple videos
   - Add multiple videos to a collection in a single transaction.
 - `POST` `/videos/bulk/organize` — Bulk update file paths
   - Update file paths for multiple videos after file organization.
+- `POST` `/videos/bulk/download` — Bulk download videos
+  - Queue download jobs for multiple videos with YouTube IDs. Skips videos without YouTube IDs.
 
 ## IMVDb
 IMVDb music video database: search videos/entities, get metadata and credits
@@ -554,3 +566,5 @@ Import hub endpoints: batch preview and import job submission
   - Search YouTube using yt-dlp for video results. Returns results in the same format as /add/search.
 - `POST` `/add/spotify/import-selected` — Import selected tracks from Spotify playlist
   - Submit a job to import only the selected tracks from a Spotify playlist with optional metadata overrides and auto-download.
+- `POST` `/add/youtube/metadata` — Get YouTube video metadata
+  - Fetch YouTube video metadata (view count, duration, channel) using yt-dlp.

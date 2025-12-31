@@ -34,7 +34,7 @@
           "Authentication"
         ],
         "summary": "Authenticate user",
-        "description": "Authenticate a user and return JWT tokens.\n\nValidates username and password, returns access and refresh tokens\non successful authentication.\n\nIf the user's password_must_change flag is set, returns 403 with\ninstructions to use /auth/set-initial-password endpoint.\n\nRate limited: 5 failed attempts per minute per IP address.",
+        "description": "Authenticate a user and return JWT access token.\n\nValidates username and password, returns access token in response body\nand sets refresh token as an httpOnly cookie for security.\n\nIf the user's password_must_change flag is set, returns 403 with\ninstructions to use /auth/set-initial-password endpoint.\n\nRate limited: 5 failed attempts per minute per IP address.",
         "operationId": "login_auth_login_post",
         "requestBody": {
           "content": {
@@ -48,11 +48,11 @@
         },
         "responses": {
           "200": {
-            "description": "Successful authentication",
+            "description": "Successful authentication (refresh token set as httpOnly cookie)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
+                  "$ref": "#/components/schemas/AccessTokenResponse"
                 }
               }
             }
@@ -92,25 +92,33 @@
           "Authentication"
         ],
         "summary": "Refresh access token",
-        "description": "Refresh an access token using a valid refresh token.\n\nReturns new access and refresh tokens.",
+        "description": "Refresh an access token using a valid refresh token.\n\nThe refresh token is read from the httpOnly cookie set during login.\nReturns new access token in response body and rotates the refresh\ntoken cookie.",
         "operationId": "refresh_token_auth_refresh_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshRequest"
-              }
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Refresh Token"
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "200": {
-            "description": "New tokens issued",
+            "description": "New access token issued (refresh token rotated via httpOnly cookie)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
+                  "$ref": "#/components/schemas/AccessTokenResponse"
                 }
               }
             }
@@ -183,7 +191,7 @@
           "Authentication"
         ],
         "summary": "Logout and revoke tokens",
-        "description": "Logout and revoke the current access token.\n\nThe provided Bearer token will be added to the revocation list,\npreventing it from being used again even if it hasn't expired.\n\nClients should also discard their refresh token after logout.",
+        "description": "Logout and revoke the current access token.\n\nThe provided Bearer token will be added to the revocation list,\npreventing it from being used again even if it hasn't expired.\n\nAlso clears the httpOnly refresh token cookie.",
         "operationId": "logout_auth_logout_post",
         "responses": {
           "204": {
@@ -220,11 +228,11 @@
         },
         "responses": {
           "200": {
-            "description": "Password changed, tokens issued",
+            "description": "Password changed, access token issued (refresh token set as httpOnly cookie)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
+                  "$ref": "#/components/schemas/AccessTokenResponse"
                 }
               }
             }
@@ -1237,6 +1245,114 @@
           },
           "404": {
             "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/videos/{video_id}/download": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Queue video download",
+        "description": "Queue download job for a video with a YouTube ID. Downloads to temp, organizes to configured path, and generates NFO.",
+        "operationId": "download_video_videos__video_id__download_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource already exists or state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -3790,6 +3906,135 @@
         }
       }
     },
+    "/files/trash": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "List trashed videos",
+        "description": "List all videos in the trash (soft-deleted).",
+        "operationId": "list_trash_files_trash_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of trashed videos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to list trash"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/trash/stats": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Get trash statistics",
+        "description": "Get count and total size of items in trash.",
+        "operationId": "get_trash_stats_files_trash_stats_get",
+        "responses": {
+          "200": {
+            "description": "Trash statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashStatsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to get stats"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/files/trash/empty": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Empty trash",
+        "description": "Permanently delete all items in the trash.",
+        "operationId": "empty_trash_files_trash_empty_post",
+        "responses": {
+          "200": {
+            "description": "Trash emptied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyTrashResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Empty trash failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/files/videos/{video_id}/duplicates": {
       "get": {
         "tags": [
@@ -5529,6 +5774,83 @@
         ]
       }
     },
+    "/add/youtube/metadata": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Get YouTube video metadata",
+        "description": "Fetch YouTube video metadata (view count, duration, channel) using yt-dlp.",
+        "operationId": "get_youtube_metadata_add_youtube_metadata_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YouTubeMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YouTubeMetadataResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/videos/bulk/update": {
       "post": {
         "tags": [
@@ -5612,7 +5934,7 @@
           "Bulk Operations"
         ],
         "summary": "Bulk delete videos",
-        "description": "Delete multiple videos (soft delete by default, hard delete optional).",
+        "description": "Delete multiple videos. Optionally also delete files from disk (moved to trash).",
         "operationId": "bulk_delete_videos_videos_bulk_delete_post",
         "requestBody": {
           "content": {
@@ -5975,6 +6297,117 @@
           },
           "400": {
             "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/download": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk download videos",
+        "description": "Queue download jobs for multiple videos with YouTube IDs. Skips videos without YouTube IDs.",
+        "operationId": "bulk_download_videos_videos_bulk_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "title": "Video Ids"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource already exists or state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -7965,6 +8398,140 @@
         }
       }
     },
+    "/genres/normalize": {
+      "get": {
+        "tags": [
+          "Genres"
+        ],
+        "summary": "Normalize genre",
+        "description": "Normalize a genre string to a primary category. Genres like 'grunge', 'alternative rock', 'punk rock' map to 'Rock'. If no mapping exists, the original genre is passed through unchanged.",
+        "operationId": "normalize_genre_endpoint_genres_normalize_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "genre",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Genre string to normalize",
+              "title": "Genre"
+            },
+            "description": "Genre string to normalize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreNormalizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/genres/categories": {
+      "get": {
+        "tags": [
+          "Genres"
+        ],
+        "summary": "List genre categories",
+        "description": "Get the list of primary genre categories used for normalization.",
+        "operationId": "list_genre_categories_genres_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenreCategoriesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/genres/normalize/batch": {
+      "post": {
+        "tags": [
+          "Genres"
+        ],
+        "summary": "Normalize multiple genres",
+        "description": "Normalize multiple genre strings to primary categories in a single request.",
+        "operationId": "normalize_genres_batch_genres_normalize_batch_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "genres",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of genre strings to normalize",
+              "title": "Genres"
+            },
+            "description": "List of genre strings to normalize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GenreNormalizeResponse"
+                  },
+                  "title": "Response Normalize Genres Batch Genres Normalize Batch Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ytdlp/search": {
       "get": {
         "tags": [
@@ -8526,6 +9093,33 @@
   },
   "components": {
     "schemas": {
+      "AccessTokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "description": "JWT access token for API authentication"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "description": "Token type (always 'bearer')",
+            "default": "bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In",
+            "description": "Access token expiration time in seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "expires_in"
+        ],
+        "title": "AccessTokenResponse",
+        "description": "Response schema for authentication (refresh token sent via httpOnly cookie).\n\nThis response is returned by login and refresh endpoints. The refresh token\nis set as an httpOnly cookie for security (not accessible to JavaScript),\nso only the access token is included in the response body."
+      },
       "AddBatchMode": {
         "type": "string",
         "enum": [
@@ -8836,6 +9430,12 @@
             "type": "boolean",
             "title": "Skip Existing",
             "description": "Skip creating a new record if a matching record already exists",
+            "default": true
+          },
+          "auto_download": {
+            "type": "boolean",
+            "title": "Auto Download",
+            "description": "Queue download job after import",
             "default": true
           }
         },
@@ -9571,10 +10171,16 @@
             "title": "Video Ids",
             "description": "Video IDs to delete"
           },
-          "hard_delete": {
+          "permanent": {
             "type": "boolean",
-            "title": "Hard Delete",
-            "description": "Permanently delete (True) or soft delete (False)",
+            "title": "Permanent",
+            "description": "Permanently delete DB records (True) or soft delete (False)",
+            "default": false
+          },
+          "delete_files": {
+            "type": "boolean",
+            "title": "Delete Files",
+            "description": "Also delete video/NFO files from disk (moved to trash)",
             "default": false
           }
         },
@@ -9584,6 +10190,49 @@
         ],
         "title": "BulkDeleteRequest",
         "description": "Request for bulk deleting videos."
+      },
+      "BulkOperationResponse": {
+        "properties": {
+          "submitted": {
+            "type": "integer",
+            "title": "Submitted",
+            "description": "Number of operations successfully submitted"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "description": "Number of items skipped"
+          },
+          "job_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Job Ids",
+            "description": "List of job IDs for submitted operations"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Additional details about skipped items or errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submitted",
+          "skipped",
+          "job_ids"
+        ],
+        "title": "BulkOperationResponse",
+        "description": "Response for bulk operations on multiple videos."
       },
       "BulkOperationResult": {
         "properties": {
@@ -9608,6 +10257,14 @@
             "type": "object",
             "title": "Errors",
             "description": "Error messages keyed by ID"
+          },
+          "file_errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "File Errors",
+            "description": "File deletion errors (non-fatal)"
           },
           "total": {
             "type": "integer",
@@ -11775,6 +12432,27 @@
         "title": "DuplicatesResponse",
         "description": "Response for duplicates endpoint."
       },
+      "EmptyTrashResponse": {
+        "properties": {
+          "deleted_count": {
+            "type": "integer",
+            "title": "Deleted Count"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted_count"
+        ],
+        "title": "EmptyTrashResponse",
+        "description": "Response for empty trash operation."
+      },
       "ErrorDetail": {
         "properties": {
           "detail": {
@@ -11861,6 +12539,51 @@
         "type": "object",
         "title": "FacetsResponse",
         "description": "Response containing all facets for filtering UI."
+      },
+      "GenreCategoriesResponse": {
+        "properties": {
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories",
+            "description": "List of primary genre categories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categories"
+        ],
+        "title": "GenreCategoriesResponse",
+        "description": "Response for available genre categories."
+      },
+      "GenreNormalizeResponse": {
+        "properties": {
+          "original": {
+            "type": "string",
+            "title": "Original",
+            "description": "Original genre value as provided"
+          },
+          "normalized": {
+            "type": "string",
+            "title": "Normalized",
+            "description": "Normalized primary genre category"
+          },
+          "is_mapped": {
+            "type": "boolean",
+            "title": "Is Mapped",
+            "description": "True if genre was mapped to a primary category, False if passed through unchanged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "original",
+          "normalized",
+          "is_mapped"
+        ],
+        "title": "GenreNormalizeResponse",
+        "description": "Response for genre normalization."
       },
       "HTTPValidationError": {
         "properties": {
@@ -13150,6 +13873,7 @@
           "import_download",
           "import_organize",
           "import_nfo_generate",
+          "video_post_process",
           "download_youtube",
           "file_organize",
           "file_duplicate_resolve",
@@ -13157,7 +13881,8 @@
           "metadata_refresh",
           "library_scan",
           "import",
-          "backup"
+          "backup",
+          "trash_cleanup"
         ],
         "title": "JobType",
         "description": "Job type enumeration."
@@ -13777,21 +14502,6 @@
         ],
         "title": "PlaylistExportResult",
         "description": "Result of playlist export."
-      },
-      "RefreshRequest": {
-        "properties": {
-          "refresh_token": {
-            "type": "string",
-            "title": "Refresh Token",
-            "description": "Valid refresh token to exchange for new access token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "refresh_token"
-        ],
-        "title": "RefreshRequest",
-        "description": "Request schema for token refresh."
       },
       "RepairRequest": {
         "properties": {
@@ -14649,6 +15359,18 @@
             ],
             "title": "Youtube Url",
             "description": "YouTube URL"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "Thumbnail image URL to download"
           }
         },
         "type": "object",
@@ -15289,6 +16011,42 @@
             ],
             "title": "Existing Video Id",
             "description": "Video ID if track already exists"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre",
+            "description": "Original genre from Discogs (if found)"
+          },
+          "genre_normalized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre Normalized",
+            "description": "Normalized primary genre category (Rock, Pop, Hip Hop/R&B, etc.)"
+          },
+          "genre_is_mapped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre Is Mapped",
+            "description": "Whether genre was mapped to a primary category (False = passed through)"
           }
         },
         "type": "object",
@@ -15463,38 +16221,126 @@
         "title": "TagsSet",
         "description": "Schema for setting tags on a video (replaces existing)."
       },
-      "TokenResponse": {
+      "TrashItemResponse": {
         "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token",
-            "description": "JWT access token for API authentication"
-          },
-          "refresh_token": {
-            "type": "string",
-            "title": "Refresh Token",
-            "description": "JWT refresh token for obtaining new access tokens"
-          },
-          "token_type": {
-            "type": "string",
-            "title": "Token Type",
-            "description": "Token type (always 'bearer')",
-            "default": "bearer"
-          },
-          "expires_in": {
+          "video_id": {
             "type": "integer",
-            "title": "Expires In",
-            "description": "Access token expiration time in seconds"
+            "title": "Video Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "trash_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Path"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size",
+            "description": "File size in bytes"
           }
         },
         "type": "object",
         "required": [
-          "access_token",
-          "refresh_token",
-          "expires_in"
+          "video_id"
         ],
-        "title": "TokenResponse",
-        "description": "Response schema for successful authentication."
+        "title": "TrashItemResponse",
+        "description": "Response for a single item in trash."
+      },
+      "TrashListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "TrashListResponse",
+        "description": "Response for list trash endpoint."
+      },
+      "TrashStatsResponse": {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "total_size_bytes": {
+            "type": "integer",
+            "title": "Total Size Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_count",
+          "total_size_bytes"
+        ],
+        "title": "TrashStatsResponse",
+        "description": "Response for trash statistics."
       },
       "ValidationError": {
         "properties": {
@@ -16721,6 +17567,102 @@
         ],
         "title": "YTDLPVideoInfoResponse",
         "description": "Response containing single video metadata.\n\nAttributes:\n    video: Video metadata"
+      },
+      "YouTubeMetadataRequest": {
+        "properties": {
+          "youtube_id": {
+            "type": "string",
+            "title": "Youtube Id",
+            "description": "YouTube video ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "youtube_id"
+        ],
+        "title": "YouTubeMetadataRequest",
+        "description": "Request to fetch YouTube video metadata using yt-dlp."
+      },
+      "YouTubeMetadataResponse": {
+        "properties": {
+          "youtube_id": {
+            "type": "string",
+            "title": "Youtube Id",
+            "description": "YouTube video ID"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "description": "Whether the video is available"
+          },
+          "view_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Count",
+            "description": "View count"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "Duration in seconds"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel",
+            "description": "Channel name"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Video title"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message if unavailable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "youtube_id",
+          "available"
+        ],
+        "title": "YouTubeMetadataResponse",
+        "description": "Response with YouTube video metadata from yt-dlp."
       },
       "YouTubeSearchRequest": {
         "properties": {
