@@ -7,6 +7,7 @@ from typing import Optional, Dict, List, Any, Set
 import string
 
 import yaml
+from ruamel.yaml import YAML
 from pydantic import BaseModel, Field, field_validator, model_validator
 import structlog
 
@@ -928,10 +929,44 @@ class Config(BaseModel):
         library_dir = self.library_dir or _get_default_library_dir()
         return library_dir / trash_path
 
+    @staticmethod
+    def _deep_merge(original: Any, updates: Any) -> Any:
+        """
+        Deep merge updates into original while preserving structure and comments.
+
+        This is used to update ruamel.yaml CommentedMap/CommentedSeq structures
+        while preserving comments and formatting.
+
+        Args:
+            original: Original data structure (potentially with comments)
+            updates: New data to merge in
+
+        Returns:
+            Merged data structure with preserved comments
+        """
+        # If original is None or updates is None, return updates
+        if original is None or updates is None:
+            return updates
+
+        # If both are dicts, merge recursively
+        if isinstance(original, dict) and isinstance(updates, dict):
+            for key, value in updates.items():
+                if key in original:
+                    # Recursively merge nested structures
+                    original[key] = Config._deep_merge(original[key], value)
+                else:
+                    # New key, just add it
+                    original[key] = value
+            return original
+
+        # For lists and primitives, replace entirely
+        # (list merging is too complex and rarely needed for config)
+        return updates
+
     @classmethod
     def from_yaml(cls, path: Path) -> "Config":
         """
-        Load configuration from YAML file.
+        Load configuration from YAML file using ruamel.yaml for comment preservation.
 
         Args:
             path: Path to YAML configuration file
@@ -948,8 +983,12 @@ class Config(BaseModel):
             >>> from pathlib import Path
             >>> config = Config.from_yaml(Path("config.yaml"))
         """
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
+        yaml_loader = YAML()
+        yaml_loader.preserve_quotes = True
+        yaml_loader.default_flow_style = False
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml_loader.load(f)
         return cls.model_validate(data or {})
 
     @classmethod
@@ -977,7 +1016,9 @@ class Config(BaseModel):
         exclude_secrets: bool = True,
     ) -> None:
         """
-        Save configuration to YAML file with atomic write.
+        Save configuration to YAML file with atomic write and comment preservation.
+
+        Uses ruamel.yaml to preserve comments and formatting from the original file.
 
         Args:
             path: Path to YAML configuration file
@@ -1007,21 +1048,37 @@ class Config(BaseModel):
                 if "custom" in api_config:
                     del api_config["custom"]
 
+        # Set up ruamel.yaml for comment preservation
+        yaml_dumper = YAML()
+        yaml_dumper.preserve_quotes = True
+        yaml_dumper.default_flow_style = False
+        yaml_dumper.width = 4096  # Prevent line wrapping
+
+        # Load original file to preserve comments and structure
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    original = yaml_dumper.load(f)
+
+                # Merge new data into original structure (preserves comments)
+                merged_data = self._deep_merge(original, data)
+            except Exception as e:
+                logger.warning("failed_to_load_original_yaml", path=str(path), error=str(e))
+                # If we can't load original, just use new data
+                merged_data = data
+        else:
+            # No existing file, use new data as-is
+            merged_data = data
+
         # Atomic write pattern: temp file + fsync + rename
         temp_path = path.with_suffix(".tmp")
         try:
             # Ensure directory exists
             path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write to temp file
+            # Write to temp file using ruamel.yaml (preserves comments)
             with open(temp_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(
-                    data,
-                    f,
-                    default_flow_style=False,
-                    allow_unicode=True,
-                    sort_keys=False,  # Preserve field order (Python 3.7+)
-                )
+                yaml_dumper.dump(merged_data, f)
                 f.flush()
                 os.fsync(f.fileno())  # Force write to disk
 

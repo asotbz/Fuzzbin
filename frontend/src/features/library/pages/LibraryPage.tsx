@@ -382,6 +382,9 @@ export default function LibraryPage() {
           <Link className="primaryButton" to="/add" aria-label="Open Import Hub">
             Import Hub
           </Link>
+          <Link className="primaryButton" to="/settings" aria-label="Open Settings">
+            Settings
+          </Link>
         </nav>
       </header>
 

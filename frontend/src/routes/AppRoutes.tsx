@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthTokens } from '../auth/useAuthTokens'
 import LibraryPage from '../features/library/pages/LibraryPage'
 import ActivityMonitorPage from '../features/activity/pages/ActivityMonitorPage'
+import SettingsPage from '../features/settings/pages/SettingsPage'
 import ImportHub from '../pages/add/ImportHub'
 import SearchWizard from '../pages/add/SearchWizard'
 import SpotifyImport from '../pages/add/SpotifyImport'
@@ -72,6 +73,15 @@ export default function AppRoutes() {
         element={
           <RequireAuth>
             <ActivityMonitorPage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/settings"
+        element={
+          <RequireAuth>
+            <SettingsPage />
           </RequireAuth>
         }
       />

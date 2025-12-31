@@ -1,0 +1,227 @@
+/* ============================================================================
+   SETTING FIELD - SMART FIELD EDITOR
+   ============================================================================ */
+
+.settingField {
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 3px solid var(--bg-accent);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+  margin-bottom: var(--space-4);
+  transition: all 0.15s;
+}
+
+.settingFieldDirty {
+  border-color: var(--mtv-orange);
+  box-shadow:
+    0 0 0 3px rgba(251, 146, 60, 0.2),
+    3px 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.settingFieldError {
+  border-color: var(--mtv-red);
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.2),
+    3px 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Field Header */
+.fieldHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+  gap: var(--space-3);
+}
+
+.fieldLabelGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.fieldLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.fieldRevert {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 2px solid var(--mtv-orange);
+  color: var(--mtv-orange);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.fieldRevert:hover {
+  background: var(--mtv-orange);
+  color: var(--bg-base);
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Description */
+.fieldDescription {
+  margin: 0 0 var(--space-3) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Input Styles */
+.fieldInput {
+  margin-bottom: var(--space-2);
+}
+
+.fieldInputText,
+.fieldInputNumber,
+.fieldInputSelect,
+.fieldInputTextarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-base);
+  border: 3px solid var(--bg-accent);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all 0.15s;
+}
+
+.fieldInputText:focus,
+.fieldInputNumber:focus,
+.fieldInputSelect:focus,
+.fieldInputTextarea:focus {
+  border-color: var(--mtv-purple);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.fieldInputText:disabled,
+.fieldInputNumber:disabled,
+.fieldInputSelect:disabled,
+.fieldInputTextarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fieldInputTextarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Boolean Toggle */
+.fieldToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.fieldToggleInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.fieldToggleSlider {
+  position: relative;
+  width: 56px;
+  height: 28px;
+  background: var(--bg-accent);
+  border: 3px solid var(--bg-accent);
+  transition: all 0.2s;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.fieldToggleSlider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--text-secondary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.fieldToggleInput:checked + .fieldToggleSlider {
+  background: var(--mtv-green);
+  border-color: #15803d;
+}
+
+.fieldToggleInput:checked + .fieldToggleSlider::before {
+  transform: translateX(28px);
+  background: var(--text-on-dark);
+}
+
+.fieldToggle:hover .fieldToggleSlider {
+  box-shadow:
+    inset 2px 2px 0 rgba(0, 0, 0, 0.2),
+    0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.fieldToggleLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+}
+
+/* Field Status */
+.fieldStatus {
+  padding: var(--space-2) var(--space-3);
+  background: var(--mtv-orange);
+  border-left: 3px solid #ea580c;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--bg-base);
+  letter-spacing: 0.1em;
+  margin-bottom: var(--space-2);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+/* Field Error */
+.fieldError {
+  padding: var(--space-2) var(--space-3);
+  background: var(--mtv-red);
+  border-left: 3px solid #b91c1c;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-on-dark);
+  margin-bottom: var(--space-2);
+}
+
+/* Field Path */
+.fieldPath {
+  font-family: 'Courier New', monospace;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  opacity: 0.6;
+}
+
+/* Array Input */
+.fieldArray {
+  width: 100%;
+}

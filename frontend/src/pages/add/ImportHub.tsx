@@ -19,6 +19,9 @@ export default function ImportHub() {
           <Link to="/activity" className="primaryButton">
             Activity Monitor
           </Link>
+          <Link to="/settings" className="primaryButton">
+            Settings
+          </Link>
         </nav>
       </header>
 

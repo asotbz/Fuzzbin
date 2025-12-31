@@ -150,6 +150,9 @@ export default function ActivityMonitorPage() {
           <Link className="navButton" to="/add" aria-label="Go to Import Hub">
             Import Hub
           </Link>
+          <Link className="navButton" to="/settings" aria-label="Go to Settings">
+            Settings
+          </Link>
         </nav>
       </header>
 

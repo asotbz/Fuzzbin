@@ -1,0 +1,40 @@
+/* ============================================================================
+   SETTING SECTION - GROUPED FIELDS
+   ============================================================================ */
+
+.settingSection {
+  margin-bottom: var(--space-8);
+}
+
+.settingSection:last-child {
+  margin-bottom: 0;
+}
+
+.settingSectionHeader {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 3px solid var(--bg-accent);
+}
+
+.settingSectionTitle {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0 0 var(--space-2) 0;
+  text-shadow: 2px 2px 0 rgba(139, 92, 246, 0.15);
+}
+
+.settingSectionDescription {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.settingSectionFields {
+  /* Fields are rendered as children */
+}
