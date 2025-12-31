@@ -357,6 +357,7 @@ class SelectedTrackImport(BaseModel):
     imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if matched")
     youtube_id: Optional[str] = Field(default=None, description="YouTube video ID")
     youtube_url: Optional[str] = Field(default=None, description="YouTube URL")
+    thumbnail_url: Optional[str] = Field(default=None, description="Thumbnail image URL to download")
 
 
 class SpotifyBatchImportRequest(BaseModel):

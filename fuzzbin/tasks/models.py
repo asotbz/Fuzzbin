@@ -2,10 +2,13 @@
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from fuzzbin.core.event_bus import EventBus
 
 
 class JobType(str, Enum):
@@ -108,18 +111,50 @@ class Job(BaseModel):
     )
     next_run_at: datetime | None = Field(default=None, description="Next scheduled run time")
 
-    def update_progress(self, processed: int, total: int, step: str) -> None:
+    # Progress callback for event bus integration (not serialized)
+    _progress_callback: Callable[["Job", float | None, int | None], None] | None = None
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def set_progress_callback(
+        self,
+        callback: Callable[["Job", float | None, int | None], None],
+    ) -> None:
+        """Set a callback to be invoked when progress is updated.
+
+        The callback receives (job, download_speed, eta_seconds).
+        Used by the event bus to emit debounced progress events.
+
+        Args:
+            callback: Function to call on progress updates
+        """
+        object.__setattr__(self, "_progress_callback", callback)
+
+    def update_progress(
+        self,
+        processed: int,
+        total: int,
+        step: str,
+        download_speed: float | None = None,
+        eta_seconds: int | None = None,
+    ) -> None:
         """Update job progress.
 
         Args:
             processed: Number of items processed
             total: Total number of items
             step: Human-readable current step description
+            download_speed: Optional download speed in MB/s (for download jobs)
+            eta_seconds: Optional estimated time remaining in seconds
         """
         self.processed_items = processed
         self.total_items = total
         self.current_step = step
         self.progress = processed / total if total > 0 else 0.0
+
+        # Invoke progress callback if set (for event bus)
+        if self._progress_callback:
+            self._progress_callback(self, download_speed, eta_seconds)
 
     def mark_waiting(self) -> None:
         """Mark job as waiting for dependencies."""

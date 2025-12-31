@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 
 import fuzzbin
-from fuzzbin.tasks.models import Job, JobStatus, JobType
+from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
 from fuzzbin.tasks.queue import JobQueue, get_job_queue
 from fuzzbin.workflows.nfo_importer import NFOImporter
 
@@ -353,6 +353,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
         imvdb_id = track_data.get("imvdb_id")
         youtube_id = track_data.get("youtube_id")
         youtube_url = track_data.get("youtube_url")
+        thumbnail_url = track_data.get("thumbnail_url")
 
         track_title = metadata.get("title", "Unknown")
         track_artist = metadata.get("artist", "Unknown")
@@ -370,7 +371,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
                 "artist": track_artist,
                 "album": metadata.get("album"),
                 "year": metadata.get("year"),
-                "label": metadata.get("label"),
+                "studio": metadata.get("label"),
                 "director": metadata.get("directors"),
                 "status": initial_status,
                 "download_source": "spotify",
@@ -404,7 +405,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
             if existing_video:
                 # Update existing video
                 video_id = existing_video.get("id")
-                await repository.update_video(video_id, video_data)
+                await repository.update_video(video_id, **video_data)
                 logger.info(
                     "spotify_batch_import_track_updated",
                     video_id=video_id,
@@ -413,8 +414,8 @@ async def handle_spotify_batch_import(job: Job) -> None:
                 )
             else:
                 # Create new video
-                video = await repository.create_video(video_data)
-                video_id = video.get("id")
+                video_id = await repository.create_video(**video_data)
+                video = await repository.get_video_by_id(video_id)
                 logger.info(
                     "spotify_batch_import_track_created",
                     video_id=video_id,
@@ -439,6 +440,47 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     )
 
             imported_count += 1
+
+            # Download thumbnail if URL provided
+            if thumbnail_url and video_id:
+                try:
+                    config = fuzzbin.get_config()
+                    from fuzzbin.core.file_manager import FileManager
+                    from fuzzbin.common.http_client import AsyncHTTPClient
+                    
+                    file_manager = FileManager.from_config(
+                        config.file_manager,
+                        library_dir=config.library_dir or Path.cwd(),
+                        config_dir=config.config_dir or Path.cwd() / "config",
+                    )
+                    
+                    # Download thumbnail using HTTP client
+                    async with AsyncHTTPClient(config.http) as http_client:
+                        response = await http_client.get(thumbnail_url)
+                        response.raise_for_status()
+                        
+                        # Save to thumbnail cache directory
+                        thumbnail_path = file_manager.get_thumbnail_path(video_id)
+                        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Write thumbnail data
+                        with open(thumbnail_path, "wb") as f:
+                            f.write(response.content)
+                        
+                        logger.info(
+                            "spotify_batch_import_thumbnail_downloaded",
+                            video_id=video_id,
+                            thumbnail_url=thumbnail_url,
+                            thumbnail_path=str(thumbnail_path),
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "spotify_batch_import_thumbnail_download_failed",
+                        video_id=video_id,
+                        thumbnail_url=thumbnail_url,
+                        error=str(e),
+                    )
+                    # Continue even if thumbnail download fails
 
             # Queue download job if auto_download enabled and YouTube ID available
             if auto_download and youtube_id:
@@ -610,18 +652,29 @@ async def _handle_direct_url_download(job: Job, url: str, output_path: str) -> N
             cancellation_token.cancel()
             return
 
-        # Update job progress
-        job.progress = progress.percent / 100.0
+        # Calculate download-specific values
+        download_speed: float | None = None
+        eta_seconds: int | None = None
+
         speed_str = ""
         if progress.speed_bytes_per_sec:
-            speed_mb = progress.speed_bytes_per_sec / (1024 * 1024)
-            speed_str = f" at {speed_mb:.1f} MB/s"
+            download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
+            speed_str = f" at {download_speed:.1f} MB/s"
 
         eta_str = ""
         if progress.eta_seconds:
-            eta_str = f" (ETA: {progress.eta_seconds}s)"
+            eta_seconds = progress.eta_seconds
+            eta_str = f" (ETA: {eta_seconds}s)"
 
-        job.current_step = f"Downloading: {progress.percent:.1f}%{speed_str}{eta_str}"
+        # Update job progress with download-specific metadata
+        # This will trigger event bus emission via the callback
+        job.update_progress(
+            processed=int(progress.percent),
+            total=100,
+            step=f"Downloading: {progress.percent:.1f}%{speed_str}{eta_str}",
+            download_speed=download_speed,
+            eta_seconds=eta_seconds,
+        )
 
     hooks = DownloadHooks(on_progress=on_progress)
 
@@ -773,11 +826,28 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                 def on_progress(progress: DownloadProgress) -> None:
                     if job.status == JobStatus.CANCELLED:
                         raise asyncio.CancelledError("Job cancelled")
-                    # Update job with download progress
+
+                    # Calculate download-specific values
+                    download_speed: float | None = None
+                    eta_seconds: int | None = None
+
+                    if progress.speed_bytes_per_sec:
+                        download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
+                    if progress.eta_seconds:
+                        eta_seconds = progress.eta_seconds
+
+                    # Calculate overall progress across all videos
                     percent = progress.percent / 100.0
-                    overall_progress = (current_video_idx - 1 + percent) / len(video_ids)
-                    job.progress = min(overall_progress, 1.0)
-                    job.current_step = f"Downloading {video.title}: {progress.percent:.1f}%"
+                    overall_processed = int((current_video_idx - 1 + percent) * 100)
+
+                    # Update job with download progress
+                    job.update_progress(
+                        processed=overall_processed,
+                        total=len(video_ids) * 100,
+                        step=f"Downloading {video.title}: {progress.percent:.1f}%",
+                        download_speed=download_speed,
+                        eta_seconds=eta_seconds,
+                    )
 
                 hooks = DownloadHooks(on_progress=on_progress)
 
