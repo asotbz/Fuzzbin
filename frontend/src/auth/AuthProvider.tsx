@@ -7,7 +7,7 @@
  * 3. Schedules proactive token refresh before expiry
  */
 import { useEffect, useState, type ReactNode } from 'react'
-import { loadTokens, getTokens, clearTokens } from './tokenStore'
+import { loadTokens, getTokens, clearTokens, setTokens } from './tokenStore'
 import { isTokenExpired } from '../lib/jwt'
 import { scheduleTokenRefresh, clearRefreshTimer, apiJson } from '../api/client'
 
@@ -39,8 +39,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
               })
 
               if (result?.access_token) {
-                // Import setTokens here to avoid circular dependency issues
-                const { setTokens } = await import('./tokenStore')
                 setTokens({ accessToken: result.access_token })
                 scheduleTokenRefresh(result.access_token)
               } else {
