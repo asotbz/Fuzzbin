@@ -431,7 +431,9 @@ async def logout(
     response_model=AccessTokenResponse,
     summary="Set initial password for first-time setup",
     responses={
-        200: {"description": "Password changed, access token issued (refresh token set as httpOnly cookie)"},
+        200: {
+            "description": "Password changed, access token issued (refresh token set as httpOnly cookie)"
+        },
         400: {"description": "Invalid current password or new password requirements not met"},
         401: {"description": "Invalid credentials"},
         403: {"description": "Password rotation not required for this user"},
