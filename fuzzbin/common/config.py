@@ -930,6 +930,29 @@ class Config(BaseModel):
         return library_dir / trash_path
 
     @staticmethod
+    def _convert_paths_to_strings(data: Any) -> Any:
+        """
+        Recursively convert Path objects to strings for YAML serialization.
+
+        ruamel.yaml cannot serialize Path objects directly, so we need to
+        convert them to strings before dumping.
+
+        Args:
+            data: Data structure potentially containing Path objects
+
+        Returns:
+            Data structure with all Path objects converted to strings
+        """
+        if isinstance(data, Path):
+            return str(data)
+        elif isinstance(data, dict):
+            return {key: Config._convert_paths_to_strings(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [Config._convert_paths_to_strings(item) for item in data]
+        else:
+            return data
+
+    @staticmethod
     def _deep_merge(original: Any, updates: Any) -> Any:
         """
         Deep merge updates into original while preserving structure and comments.
@@ -1047,6 +1070,9 @@ class Config(BaseModel):
                 # Remove custom dict entirely - these often contain secrets from env vars
                 if "custom" in api_config:
                     del api_config["custom"]
+
+        # Convert Path objects to strings for YAML serialization
+        data = self._convert_paths_to_strings(data)
 
         # Set up ruamel.yaml for comment preservation
         yaml_dumper = YAML()
