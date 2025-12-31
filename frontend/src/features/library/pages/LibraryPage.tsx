@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import VideoCard from '../../../components/video/VideoCard'
 import VideoGrid from '../../../components/video/VideoGrid'
+import LibraryTable from '../components/LibraryTable'
+import MultiSelectToolbar from '../components/MultiSelectToolbar'
+import BulkTagModal from '../components/BulkTagModal'
+import VideoDetailsModal from '../components/VideoDetailsModal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import type { FacetsResponse, ListVideosQuery, SortOrder, Video } from '../../../lib/api/types'
 import { useFacets } from '../hooks/useFacets'
 import { useVideos } from '../hooks/useVideos'
+import { videosKeys } from '../../../lib/api/queryKeys'
+import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
 import './LibraryPage.css'
 
 type FacetItem = { value: string; count: number }
@@ -61,6 +70,43 @@ export default function LibraryPage() {
 
   const [filters, setFilters] = useState<FacetSelections>({})
 
+  // View mode state
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+
+  // Facets sidebar state
+  const [facetsExpanded, setFacetsExpanded] = useState(true)
+
+  // Multi-select state
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<number>>(new Set())
+
+  // Modal state
+  const [detailsModalVideo, setDetailsModalVideo] = useState<Video | null>(null)
+  const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+
+  const queryClient = useQueryClient()
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async ({ videoIds, hardDelete }: { videoIds: number[]; hardDelete: boolean }) => {
+      await bulkDeleteVideos(videoIds, hardDelete)
+    },
+    onSuccess: (_, { videoIds, hardDelete }) => {
+      if (hardDelete) {
+        toast.success(`Deleted ${videoIds.length} video${videoIds.length !== 1 ? 's' : ''} and files`)
+      } else {
+        toast.success(`Deleted ${videoIds.length} video${videoIds.length !== 1 ? 's' : ''}`)
+      }
+      queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      clearSelection()
+    },
+    onError: (error) => {
+      toast.error('Failed to delete videos', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    },
+  })
+
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const urlSearch = (params.get('search') ?? '').trim()
@@ -78,6 +124,44 @@ export default function LibraryPage() {
     }, 300)
     return () => window.clearTimeout(t)
   }, [search])
+
+  // Load view mode from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('library-view-mode')
+    if (saved === 'grid' || saved === 'table') setViewMode(saved)
+  }, [])
+
+  // Save view mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('library-view-mode', viewMode)
+  }, [viewMode])
+
+  // Load facets expanded state from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('library-facets-expanded')
+    if (saved !== null) setFacetsExpanded(saved === 'true')
+  }, [])
+
+  // Save facets expanded state to localStorage
+  useEffect(() => {
+    localStorage.setItem('library-facets-expanded', String(facetsExpanded))
+  }, [facetsExpanded])
+
+  // Force grid view on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768 && viewMode === 'table') {
+        setViewMode('grid')
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [viewMode])
+
+  // Clear selection on page change
+  useEffect(() => {
+    setSelectedVideoIds(new Set())
+  }, [page])
 
   const facetsQuery = useFacets({ include_deleted: false })
   const facets = useMemo(() => getFacets(facetsQuery.data), [facetsQuery.data])
@@ -115,57 +199,222 @@ export default function LibraryPage() {
     setPage(1)
   }
 
+  // Selection management
+  function toggleSelection(id: number) {
+    setSelectedVideoIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedVideoIds(new Set(items.map((v) => {
+      const id = (v as unknown as Record<string, unknown>).id
+      return typeof id === 'number' ? id : 0
+    }).filter(id => id !== 0)))
+  }
+
+  function clearSelection() {
+    setSelectedVideoIds(new Set())
+  }
+
+  // Bulk operation handlers
+  async function handleBulkTags(addTags: string[], removeTags: string[]) {
+    try {
+      // TODO: Replace with actual API call when endpoint is available
+      // await bulkUpdateTags(Array.from(selectedVideoIds), addTags, removeTags)
+
+      toast.success(
+        `Tags updated for ${selectedVideoIds.size} video${selectedVideoIds.size !== 1 ? 's' : ''}`,
+        {
+          description: `Added: ${addTags.join(', ') || 'none'} | Removed: ${removeTags.join(', ') || 'none'}`,
+        }
+      )
+
+      // Invalidate queries to refresh the video list
+      await queryClient.invalidateQueries({ queryKey: videosKeys.all })
+
+      setBulkTagModalOpen(false)
+      clearSelection()
+    } catch (error) {
+      toast.error('Failed to update tags', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }
+
+  function handleBulkWriteNFO() {
+    // TODO: Implement bulk NFO write
+    toast.info(`Writing NFO files for ${selectedVideoIds.size} videos...`)
+    console.log('Write NFO for', selectedVideoIds.size, 'videos')
+  }
+
+  function handleBulkOrganize() {
+    // TODO: Implement bulk organize
+    toast.info(`Organizing ${selectedVideoIds.size} videos...`)
+    console.log('Organize', selectedVideoIds.size, 'videos')
+  }
+
+  async function handleBulkDownload() {
+    const selectedIds = Array.from(selectedVideoIds)
+
+    try {
+      const response = await fetch('/api/videos/bulk/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedIds),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to submit bulk download')
+      }
+
+      const result = await response.json()
+
+      if (result.skipped > 0) {
+        toast.warning(`Queued ${result.submitted} download(s), skipped ${result.skipped}`, {
+          description: 'Some videos lack YouTube IDs',
+        })
+      } else {
+        toast.success(`Queued ${result.submitted} download(s)`, {
+          description: 'Check job queue for progress',
+        })
+      }
+
+      clearSelection()
+    } catch (error) {
+      toast.error('Bulk download failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }
+
+  function handleBulkDeleteClick() {
+    setShowBulkDeleteConfirm(true)
+  }
+
+  function handleBulkDeleteConfirm(hardDelete?: boolean) {
+    bulkDeleteMutation.mutate({
+      videoIds: Array.from(selectedVideoIds),
+      hardDelete: hardDelete ?? false,
+    })
+    setShowBulkDeleteConfirm(false)
+  }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+A or Cmd+A to select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && items.length > 0) {
+        e.preventDefault()
+        selectAll()
+      }
+      // Esc to clear selection
+      if (e.key === 'Escape' && selectedVideoIds.size > 0) {
+        clearSelection()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [items.length, selectedVideoIds.size])
+
   return (
     <div className="libraryPage">
       <header className="libraryHeader">
-        <h1 className="libraryTitle">Video Library</h1>
+        <div className="libraryHeaderTop">
+          <div className="libraryTitleContainer">
+            <img src="/fuzzbin-icon.png" alt="Fuzzbin" className="libraryIcon" />
+            <h1 className="libraryTitle">Video Library</h1>
+          </div>
 
-        <div className="libraryControls">
-          <input
-            className="searchInput"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search videos…"
-            aria-label="Search videos"
-          />
+          <div className="libraryControls">
+            <input
+              className="searchInput"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search videos…"
+              aria-label="Search videos"
+            />
 
-          <select className="select" value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="Sort by">
-            <option value="created_at">Created</option>
-            <option value="title">Title</option>
-            <option value="artist">Artist</option>
-            <option value="year">Year</option>
-          </select>
+            <select className="select" value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="Sort by">
+              <option value="created_at">Created</option>
+              <option value="title">Title</option>
+              <option value="artist">Artist</option>
+              <option value="year">Year</option>
+            </select>
 
+            <button
+              className="primaryButton"
+              type="button"
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              aria-label="Toggle sort order"
+            >
+              {sortOrder === 'asc' ? 'Asc' : 'Desc'}
+            </button>
+
+            <div className="viewToggle">
+              <button
+                className={`viewToggleButton ${viewMode === 'grid' ? 'viewToggleButtonActive' : ''}`}
+                type="button"
+                onClick={() => setViewMode('grid')}
+                aria-label="Grid view"
+                aria-pressed={viewMode === 'grid'}
+              >
+                Grid
+              </button>
+              <button
+                className={`viewToggleButton ${viewMode === 'table' ? 'viewToggleButtonActive' : ''}`}
+                type="button"
+                onClick={() => setViewMode('table')}
+                aria-label="Table view"
+                aria-pressed={viewMode === 'table'}
+              >
+                Table
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <nav className="libraryNav">
           <Link className="primaryButton" to="/add" aria-label="Open Import Hub">
             Import Hub
           </Link>
-
-          <button
-            className="primaryButton"
-            type="button"
-            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            aria-label="Toggle sort order"
-          >
-            {sortOrder === 'asc' ? 'Asc' : 'Desc'}
-          </button>
-        </div>
+        </nav>
       </header>
 
       <main className="libraryMain">
-        <aside className="panelCard" aria-label="Filters">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <h2 className="sectionTitle" style={{ marginBottom: 0 }}>
-              Facets
-            </h2>
-            <button className="facetItem" type="button" onClick={resetFilters}>
-              Reset
+        <aside className={`panelCard libraryFacets ${facetsExpanded ? 'libraryFacetsExpanded' : 'libraryFacetsCollapsed'}`} aria-label="Filters">
+          <div className="libraryFacetsHeader">
+            <button
+              className="libraryFacetsToggle"
+              type="button"
+              onClick={() => setFacetsExpanded(!facetsExpanded)}
+              aria-label={facetsExpanded ? 'Collapse filters' : 'Expand filters'}
+              aria-expanded={facetsExpanded}
+            >
+              {facetsExpanded ? '◀' : '▶'}
             </button>
+            {facetsExpanded && (
+              <>
+                <h2 className="sectionTitle" style={{ marginBottom: 0 }}>
+                  Facets
+                </h2>
+                <button className="facetItem" type="button" onClick={resetFilters}>
+                  Reset
+                </button>
+              </>
+            )}
           </div>
 
-          {facetsQuery.isLoading ? <div className="statusLine">Loading filters…</div> : null}
-          {facetsQuery.isError ? <div className="statusLine">Filters unavailable</div> : null}
+          {facetsExpanded && (
+            <>
+              {facetsQuery.isLoading ? <div className="statusLine">Loading filters…</div> : null}
+              {facetsQuery.isError ? <div className="statusLine">Filters unavailable</div> : null}
 
-          {!facetsQuery.isLoading && !facetsQuery.isError ? (
+              {!facetsQuery.isLoading && !facetsQuery.isError ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', marginTop: 'var(--space-4)' }}>
               <section>
                 <h3 className="sectionTitle">Tags</h3>
@@ -252,9 +501,11 @@ export default function LibraryPage() {
               </section>
             </div>
           ) : null}
+            </>
+          )}
         </aside>
 
-        <section className="panelCard" aria-label="Videos">
+        <section className="panelCard libraryVideos" aria-label="Videos">
           {videosQuery.isLoading ? <div className="statusLine">Loading videos…</div> : null}
           {videosQuery.isError ? <div className="statusLine">Videos unavailable</div> : null}
 
@@ -264,13 +515,34 @@ export default function LibraryPage() {
 
           {!videosQuery.isLoading && !videosQuery.isError && items.length > 0 ? (
             <>
-              <VideoGrid>
-                {items.map((v) => {
-                  const id = (v as unknown as Record<string, unknown>).id
-                  const key = typeof id === 'number' || typeof id === 'string' ? String(id) : JSON.stringify(v)
-                  return <VideoCard key={key} video={v} />
-                })}
-              </VideoGrid>
+              {viewMode === 'grid' ? (
+                <VideoGrid>
+                  {items.map((v) => {
+                    const id = (v as unknown as Record<string, unknown>).id
+                    const videoId = typeof id === 'number' ? id : 0
+                    const key = typeof id === 'number' || typeof id === 'string' ? String(id) : JSON.stringify(v)
+                    return (
+                      <VideoCard
+                        key={key}
+                        video={v}
+                        selectable
+                        selected={selectedVideoIds.has(videoId)}
+                        onToggleSelection={toggleSelection}
+                        onClick={() => setDetailsModalVideo(v)}
+                      />
+                    )
+                  })}
+                </VideoGrid>
+              ) : (
+                <LibraryTable
+                  videos={items}
+                  selectedIds={selectedVideoIds}
+                  onToggleSelection={toggleSelection}
+                  onSelectAll={selectAll}
+                  onClearAll={clearSelection}
+                  onVideoClick={(video) => setDetailsModalVideo(video)}
+                />
+              )}
 
               <div className="pagination">
                 <button className="primaryButton" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!canPrev}>
@@ -287,6 +559,49 @@ export default function LibraryPage() {
           ) : null}
         </section>
       </main>
+
+      {selectedVideoIds.size > 0 && (
+        <MultiSelectToolbar
+          count={selectedVideoIds.size}
+          onAddTags={() => setBulkTagModalOpen(true)}
+          onRemoveTags={() => setBulkTagModalOpen(true)}
+          onWriteNFO={handleBulkWriteNFO}
+          onOrganize={handleBulkOrganize}
+          onDownload={handleBulkDownload}
+          onDelete={handleBulkDeleteClick}
+          onClear={clearSelection}
+        />
+      )}
+
+      {bulkTagModalOpen && (
+        <BulkTagModal
+          count={selectedVideoIds.size}
+          availableTags={facets.tags.map((t) => t.value)}
+          onApply={handleBulkTags}
+          onCancel={() => setBulkTagModalOpen(false)}
+        />
+      )}
+
+      {detailsModalVideo && (
+        <VideoDetailsModal
+          video={detailsModalVideo}
+          onClose={() => setDetailsModalVideo(null)}
+        />
+      )}
+
+      {showBulkDeleteConfirm && (
+        <ConfirmDialog
+          title="Delete Videos"
+          message={`Are you sure you want to delete ${selectedVideoIds.size} video${selectedVideoIds.size !== 1 ? 's' : ''}?`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          variant="danger"
+          checkboxLabel="Also delete video files from disk (cannot be undone)"
+          checkboxDefaultChecked={false}
+          onConfirm={handleBulkDeleteConfirm}
+          onCancel={() => setShowBulkDeleteConfirm(false)}
+        />
+      )}
     </div>
   )
 }

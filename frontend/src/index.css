@@ -1,47 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@700&display=swap');
+
 :root {
-  /* Channel Colors */
-  --channel-library: #00f0ff;
-  --channel-import: #ff006e;
-  --channel-player: #ffd60a;
-  --channel-manage: #39ff14;
-  --channel-system: #9d4edd;
+  /* MTV Primary Colors - Bold and Saturated */
+  --mtv-orange: #FF6600;
+  --mtv-pink: #FF0099;
+  --mtv-blue: #0099FF;
+  --mtv-yellow: #FFCC00;
+  --mtv-purple: #9933FF;
+  --mtv-red: #FF0033;
+  --mtv-green: #00CC66;
 
-  /* Backgrounds */
-  --bg-base: #0a0014;
-  --bg-surface: #1a0f2e;
-  --bg-surface-light: #2d1b4e;
-  --bg-surface-hover: #3d2b5e;
+  /* Channel Colors - Map to MTV palette */
+  --channel-library: var(--mtv-blue);
+  --channel-import: var(--mtv-pink);
+  --channel-player: var(--mtv-yellow);
+  --channel-manage: var(--mtv-green);
+  --channel-system: var(--mtv-purple);
 
-  /* Text */
-  --text-primary: #f8f8ff;
-  --text-secondary: #b8a8d8;
-  --text-tertiary: #8b7aa8;
+  /* Backgrounds - Dark mode MTV */
+  --bg-base: #0A0A0A;
+  --bg-surface: #1A1A1A;
+  --bg-surface-light: #2A2A2A;
+  --bg-surface-hover: #3A3A3A;
+  --bg-accent: #0A0A0A;
+
+  /* Text - Light on dark */
+  --text-primary: #FFFFFF;
+  --text-secondary: #AAAAAA;
+  --text-tertiary: #777777;
+  --text-on-dark: #FFFFFF;
 
   /* Semantic */
-  --success: #39ff14;
-  --warning: #ffd60a;
-  --error: #ff006e;
-  --info: #00f0ff;
+  --success: #00CC66;
+  --warning: #FFCC00;
+  --error: #FF0033;
+  --info: #0099FF;
 
-  /* Gradients */
-  --gradient-mesh: radial-gradient(at 0% 0%, rgba(157, 78, 221, 0.3) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(0, 240, 255, 0.2) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(255, 0, 110, 0.25) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(255, 214, 10, 0.2) 0px, transparent 50%);
+  /* Gradients - Removed for MTV aesthetic */
+  --gradient-mesh: none;
 
-  /* Typography */
-  --font-display: 'Barlow Condensed', 'Impact', sans-serif;
-  --font-body: 'Outfit', 'Segoe UI', sans-serif;
-  --font-ui: 'Barlow', 'Arial Narrow', sans-serif;
+  /* MTV Typography - Bold, condensed, impactful */
+  --font-display: 'Bebas Neue', 'Oswald', 'Impact', 'Arial Black', sans-serif;
+  --font-body: 'Arial', 'Helvetica Neue', sans-serif;
+  --font-ui: 'Arial Narrow', 'Arial', sans-serif;
 
+  /* Size scale - bigger headlines for MTV */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.5rem;
-  --text-2xl: 2rem;
-  --text-3xl: 3rem;
-  --text-4xl: 4rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.5rem;
+  --text-3xl: 4rem;
+  --text-4xl: 6rem;
+  --text-5xl: 8rem;
 
   /* Spacing */
   --space-1: 0.25rem;
@@ -54,22 +66,28 @@
   --space-10: 4rem;
   --space-12: 6rem;
 
-  /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-full: 9999px;
+  /* MTV Sharp Corners - All square edges */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-full: 0;
 
-  /* Shadows */
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.7), 0 8px 16px rgba(0, 0, 0, 0.6);
+  /* MTV Hard Drop Shadows - No glow, solid black */
+  --shadow-sm: 3px 3px 0 rgba(0, 0, 0, 0.9);
+  --shadow-md: 5px 5px 0 rgba(0, 0, 0, 0.9);
+  --shadow-lg: 8px 8px 0 rgba(0, 0, 0, 0.9);
+  --shadow-xl: 12px 12px 0 rgba(0, 0, 0, 0.9);
 
-  --shadow-glow-cyan: 0 0 20px rgba(0, 240, 255, 0.5), 0 0 40px rgba(0, 240, 255, 0.2);
-  --shadow-glow-magenta: 0 0 20px rgba(255, 0, 110, 0.5), 0 0 40px rgba(255, 0, 110, 0.2);
-  --shadow-glow-yellow: 0 0 20px rgba(255, 214, 10, 0.5), 0 0 40px rgba(255, 214, 10, 0.2);
+  /* Colored shadow variants for emphasis */
+  --shadow-orange: 5px 5px 0 var(--mtv-orange);
+  --shadow-pink: 5px 5px 0 var(--mtv-pink);
+  --shadow-blue: 5px 5px 0 var(--mtv-blue);
+
+  /* Remove glow shadows */
+  --shadow-glow-cyan: none;
+  --shadow-glow-magenta: none;
+  --shadow-glow-yellow: none;
 
   color-scheme: dark;
   text-rendering: optimizeLegibility;

@@ -40,10 +40,24 @@ async function submitDownloadJob(videoId: number, youtubeId: string): Promise<{ 
   return response.json()
 }
 
-export default function VideoCard({ video }: { video: Video }) {
+interface VideoCardProps {
+  video: Video
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelection?: (id: number) => void
+  onClick?: () => void
+}
+
+export default function VideoCard({
+  video,
+  selectable = false,
+  selected = false,
+  onToggleSelection,
+  onClick,
+}: VideoCardProps) {
   const queryClient = useQueryClient()
   const [showRetrySuccess, setShowRetrySuccess] = useState(false)
-  
+
   const anyVideo = video as Record<string, unknown>
   const videoId = typeof anyVideo.id === 'number' ? anyVideo.id : null
   const title = (typeof anyVideo.title === 'string' && anyVideo.title.trim().length > 0 ? anyVideo.title : 'Untitled') as string
@@ -72,9 +86,45 @@ export default function VideoCard({ video }: { video: Video }) {
     },
   })
 
+  const handleCardClick = () => {
+    if (onClick) onClick()
+  }
+
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+  }
+
+  const handleCheckboxChange = () => {
+    if (onToggleSelection && videoId) {
+      onToggleSelection(videoId)
+    }
+  }
+
   return (
-    <div className="videoCard" role="article">
-      <div className="videoCardThumb" aria-hidden="true">
+    <div
+      className={`videoCard ${selectable && selected ? 'videoCardSelected' : ''}`}
+      onClick={handleCardClick}
+      role="article"
+      style={{ cursor: onClick ? 'pointer' : 'default' }}
+    >
+      <div
+        className="videoCardThumb"
+        style={{
+          backgroundImage: videoId ? `url(/api/videos/${videoId}/thumbnail)` : undefined
+        }}
+        aria-hidden="true"
+      >
+        {selectable && (
+          <div className="videoCardCheckboxContainer" onClick={handleCheckboxClick}>
+            <input
+              type="checkbox"
+              className="videoCardCheckbox"
+              checked={selected}
+              onChange={handleCheckboxChange}
+              aria-label={`Select ${title}`}
+            />
+          </div>
+        )}
         <div className="videoCardDuration">{duration}</div>
         {canRetryDownload ? (
           <button

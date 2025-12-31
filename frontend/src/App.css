@@ -9,9 +9,9 @@
 .panel {
   width: 100%;
   max-width: 440px;
-  background: var(--bg-surface);
-  border: 3px solid var(--bg-surface-light);
-  border-radius: var(--radius-lg);
+  background: var(--bg-base);
+  border: 5px solid var(--bg-accent);
+  border-radius: 0;
   box-shadow: var(--shadow-lg);
   padding: var(--space-6);
   display: flex;
@@ -29,14 +29,15 @@
 
 .textInput {
   width: 100%;
-  border-radius: var(--radius-lg);
-  border: 3px solid var(--bg-surface-light);
+  border-radius: 0;
+  border: 4px solid var(--bg-accent);
   background: var(--bg-surface);
   color: var(--text-primary);
   padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-base);
   outline: none;
+  transition: all 0.15s;
 }
 
 .textInput::placeholder {
@@ -44,25 +45,25 @@
 }
 
 .textInput:focus {
-  border-color: var(--channel-library);
-  box-shadow: var(--shadow-glow-cyan);
+  border-color: var(--mtv-blue);
+  box-shadow: 4px 4px 0 var(--mtv-blue);
 }
 
 .btnPrimary {
   width: 100%;
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-4) var(--space-6);
   font-family: var(--font-ui);
-  font-weight: 700;
+  font-weight: 900;
   font-size: var(--text-base);
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  border: 3px solid var(--channel-library);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  color: var(--channel-library);
-  box-shadow: var(--shadow-lg);
+  border: 4px solid var(--mtv-blue);
+  border-radius: 0;
+  background: var(--mtv-blue);
+  color: var(--text-on-dark);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.15s;
 }
 
 .btnPrimary:disabled {
@@ -71,12 +72,13 @@
 }
 
 .btnPrimary:not(:disabled):hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: var(--shadow-xl), var(--shadow-glow-cyan);
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 rgba(0, 0, 0, 0.9);
 }
 
 .btnPrimary:not(:disabled):active {
-  transform: translateY(0) scale(0.98);
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
 }
 
 .errorText {

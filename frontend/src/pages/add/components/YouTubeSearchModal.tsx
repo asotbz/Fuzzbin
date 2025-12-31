@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { searchYouTube } from '../../../lib/api/endpoints/spotify'
 import type { AddSearchResponse } from '../../../lib/api/types'
@@ -36,8 +36,6 @@ export default function YouTubeSearchModal({
   const handleManualSearch = () => {
     // For manual search, we'd need to update the query
     // For now, this is a placeholder
-    const [newArtist, ...titleParts] = searchQuery.split(' ')
-    const newTitle = titleParts.join(' ')
     searchResults.refetch()
   }
 
@@ -89,11 +87,11 @@ export default function YouTubeSearchModal({
 
           {searchResults.data && (
             <div className="youtubeSearchModalResults">
-              {searchResults.data.results.length === 0 && (
+              {(searchResults.data.results ?? []).length === 0 && (
                 <div className="youtubeSearchModalEmpty">No results found</div>
               )}
 
-              {searchResults.data.results.map((result) => (
+              {(searchResults.data.results ?? []).map((result) => (
                 <div
                   key={result.id}
                   className="youtubeSearchModalResult"
@@ -115,15 +113,15 @@ export default function YouTubeSearchModal({
                   <div className="youtubeSearchModalInfo">
                     <div className="youtubeSearchModalResultTitle">{result.title}</div>
                     <div className="youtubeSearchModalMeta">
-                      {result.extra?.channel && (
-                        <span className="youtubeSearchModalChannel">{result.extra.channel}</span>
+                      {result.extra && typeof result.extra === 'object' && 'channel' in result.extra && (
+                        <span className="youtubeSearchModalChannel">{String(result.extra.channel)}</span>
                       )}
-                      {result.extra?.view_count && (
+                      {result.extra && typeof result.extra === 'object' && 'view_count' in result.extra && typeof result.extra.view_count === 'number' && (
                         <span className="youtubeSearchModalViews">
                           {formatViewCount(result.extra.view_count)}
                         </span>
                       )}
-                      {result.extra?.duration && (
+                      {result.extra && typeof result.extra === 'object' && 'duration' in result.extra && typeof result.extra.duration === 'number' && (
                         <span className="youtubeSearchModalDuration">
                           {formatDuration(result.extra.duration)}
                         </span>

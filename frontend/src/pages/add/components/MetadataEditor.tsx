@@ -10,12 +10,25 @@ export interface EditedMetadata {
   album: string | null
   label: string | null
   directors: string | null
+  featuredArtists: string | null
   youtubeUrl: string | null
+}
+
+interface TrackMetadataOverride {
+  title: string
+  artist: string
+  year: number | null
+  album: string | null
+  label: string | null
+  directors: string | null
+  featuredArtists: string | null
+  youtubeId: string | null
 }
 
 interface MetadataEditorProps {
   track: BatchPreviewItem
   state: TrackRowState
+  currentOverride?: TrackMetadataOverride
   onSave: (metadata: EditedMetadata) => void
   onCancel: () => void
 }
@@ -37,25 +50,46 @@ function extractYouTubeId(url: string): string | null {
   return null
 }
 
-export default function MetadataEditor({ track, state, onSave, onCancel }: MetadataEditorProps) {
+export default function MetadataEditor({ track, state, currentOverride, onSave, onCancel }: MetadataEditorProps) {
   const enrichmentData = state.enrichmentData
 
-  // Initialize form with track data or enrichment data
-  const [title, setTitle] = useState(enrichmentData?.metadata?.title || track.title)
-  const [artist, setArtist] = useState(enrichmentData?.metadata?.artist || track.artist)
+  // Initialize form with priority: currentOverride > enrichmentData > track
+  const [title, setTitle] = useState<string>(
+    currentOverride?.title || (enrichmentData?.metadata?.title as string | undefined) || track.title
+  )
+  const [artist, setArtist] = useState<string>(
+    currentOverride?.artist || (enrichmentData?.metadata?.artist as string | undefined) || track.artist
+  )
   const [year, setYear] = useState<string>(
-    String(enrichmentData?.metadata?.year || track.year || '')
+    String(
+      currentOverride?.year ?? (enrichmentData?.metadata?.year as number | null | undefined) ?? track.year ?? ''
+    )
   )
-  const [album, setAlbum] = useState(
-    enrichmentData?.metadata?.album || getDisplayAlbumTitle(track.album) || ''
+  const [album, setAlbum] = useState<string>(
+    currentOverride?.album ||
+      (enrichmentData?.metadata?.album as string | null | undefined) ||
+      getDisplayAlbumTitle(track.album ?? null) ||
+      ''
   )
-  const [label, setLabel] = useState(enrichmentData?.metadata?.label || track.label || '')
-  const [directors, setDirectors] = useState(enrichmentData?.metadata?.directors || '')
-  const [youtubeUrl, setYoutubeUrl] = useState(
-    enrichmentData?.youtube_ids && enrichmentData.youtube_ids.length > 0
-      ? `https://youtube.com/watch?v=${enrichmentData.youtube_ids[0]}`
-      : ''
+  const [label, setLabel] = useState<string>(
+    currentOverride?.label || (enrichmentData?.metadata?.label as string | null | undefined) || track.label || ''
   )
+  const [directors, setDirectors] = useState<string>(
+    currentOverride?.directors || (enrichmentData?.metadata?.directors as string | null | undefined) || ''
+  )
+  const [featuredArtists, setFeaturedArtists] = useState<string>(
+    currentOverride?.featuredArtists || (enrichmentData?.metadata?.featured_artists as string | null | undefined) || ''
+  )
+  const [youtubeUrl, setYoutubeUrl] = useState<string>(() => {
+    // Priority: currentOverride > enrichmentData > empty
+    if (currentOverride?.youtubeId) {
+      return `https://youtube.com/watch?v=${currentOverride.youtubeId}`
+    }
+    if (enrichmentData?.youtube_ids && enrichmentData.youtube_ids.length > 0) {
+      return `https://youtube.com/watch?v=${enrichmentData.youtube_ids[0]}`
+    }
+    return ''
+  })
 
   const [youtubeUrlError, setYoutubeUrlError] = useState<string | null>(null)
 
@@ -80,6 +114,7 @@ export default function MetadataEditor({ track, state, onSave, onCancel }: Metad
       album: album.trim() || null,
       label: label.trim() || null,
       directors: directors.trim() || null,
+      featuredArtists: featuredArtists.trim() || null,
       youtubeUrl: youtubeUrl.trim() || null,
     }
 
@@ -109,11 +144,11 @@ export default function MetadataEditor({ track, state, onSave, onCancel }: Metad
               </div>
               <div className="metadataEditorComparisonRow">
                 <div>{track.title}</div>
-                <div>{enrichmentData.metadata?.title || '-'}</div>
+                <div>{(enrichmentData.metadata?.title as string | undefined) || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
                 <div>{track.artist}</div>
-                <div>{enrichmentData.metadata?.artist || '-'}</div>
+                <div>{(enrichmentData.metadata?.artist as string | undefined) || '-'}</div>
               </div>
             </div>
           )}
@@ -188,6 +223,17 @@ export default function MetadataEditor({ track, state, onSave, onCancel }: Metad
                 value={directors}
                 onChange={(e) => setDirectors(e.target.value)}
                 placeholder="Comma-separated"
+              />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">Featured Artists</label>
+              <input
+                type="text"
+                className="metadataEditorInput"
+                value={featuredArtists}
+                onChange={(e) => setFeaturedArtists(e.target.value)}
+                placeholder="e.g., T.I., Pharrell Williams"
               />
             </div>
 

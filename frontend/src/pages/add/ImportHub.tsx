@@ -4,16 +4,20 @@ import './ImportHub.css'
 export default function ImportHub() {
   return (
     <div className="importHub">
-      <div className="importHubHeader">
-        <div className="importHubHeaderGlow" />
-        <h1 className="importHubTitle">
-          <span className="importHubTitleLine">Import</span>
-          <span className="importHubTitleLine">Hub</span>
-        </h1>
-        <p className="importHubSubtitle">
-          Choose your data stream
-        </p>
-      </div>
+      <header className="importHubHeader">
+        <div className="importHubHeaderTop">
+          <div className="importHubTitleContainer">
+            <img src="/fuzzbin-icon.png" alt="Fuzzbin" className="importHubIcon" />
+            <h1 className="importHubTitle">Import Hub</h1>
+          </div>
+        </div>
+
+        <nav className="importHubNav">
+          <Link to="/library" className="primaryButton">
+            Video Library
+          </Link>
+        </nav>
+      </header>
 
       <div className="importHubGrid">
         {/* Artist/Title Search Card */}

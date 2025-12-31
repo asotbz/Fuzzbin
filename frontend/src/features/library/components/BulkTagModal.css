@@ -1,0 +1,307 @@
+.bulkTagModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 0, 20, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.bulkTagModal {
+  background: var(--bg-surface);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-xl);
+  width: 90%;
+  max-width: 700px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(255, 0, 110, 0.4);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bulkTagModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-6);
+  border-bottom: 2px solid var(--bg-surface-light);
+}
+
+.bulkTagModalTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--channel-import);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.bulkTagModalClose {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 2px solid var(--text-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-2xl);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.bulkTagModalClose:hover {
+  border-color: var(--channel-import);
+  color: var(--channel-import);
+  transform: scale(1.1);
+}
+
+.bulkTagModalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.bulkTagSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bulkTagSectionTitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.bulkTagSectionDescription {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.bulkTagInputGroup {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.bulkTagInput {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  border: 3px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.bulkTagInput:focus {
+  border-color: var(--channel-import);
+  box-shadow: 0 0 20px rgba(255, 0, 110, 0.3);
+}
+
+.bulkTagAddButton {
+  padding: var(--space-3) var(--space-6);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--channel-import);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulkTagAddButton:hover:not(:disabled) {
+  background: var(--channel-import);
+  color: var(--bg-base);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
+}
+
+.bulkTagAddButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bulkTagSelectedGroup,
+.bulkTagAvailableGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bulkTagSelectedLabel,
+.bulkTagAvailableLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.bulkTagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bulkTagChip {
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-full);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulkTagChip:hover {
+  border-color: var(--channel-import);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
+}
+
+.bulkTagChipAdd {
+  border-color: var(--channel-library);
+  color: var(--channel-library);
+}
+
+.bulkTagChipAdd:hover {
+  border-color: var(--channel-library);
+  box-shadow: 0 4px 12px rgba(0, 240, 255, 0.3);
+}
+
+.bulkTagChipRemove.bulkTagChipSelected {
+  border-color: var(--channel-import);
+  background: rgba(255, 0, 110, 0.12);
+  color: var(--channel-import);
+}
+
+.bulkTagChipSelected {
+  border-color: var(--channel-library);
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--channel-library);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+}
+
+.bulkTagModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-top: 2px solid var(--bg-surface-light);
+}
+
+.bulkTagModalButton {
+  padding: var(--space-3) var(--space-6);
+  border: 3px solid currentColor;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulkTagModalButtonCancel {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
+.bulkTagModalButtonCancel:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.bulkTagModalButtonApply {
+  background: var(--bg-surface);
+  color: var(--channel-import);
+  border-color: var(--channel-import);
+}
+
+.bulkTagModalButtonApply:hover:not(:disabled) {
+  background: var(--channel-import);
+  color: var(--bg-base);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4);
+}
+
+.bulkTagModalButtonApply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .bulkTagModal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .bulkTagModalHeader {
+    padding: var(--space-4);
+  }
+
+  .bulkTagModalBody {
+    padding: var(--space-4);
+  }
+
+  .bulkTagModalFooter {
+    padding: var(--space-4);
+  }
+}

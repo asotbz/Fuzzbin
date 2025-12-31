@@ -2,114 +2,67 @@
   min-height: 100vh;
   background: var(--bg-base);
   position: relative;
-  overflow: hidden;
-}
-
-/* Animated gradient mesh background */
-.importHub::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(157, 78, 221, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 100% 0%, rgba(0, 240, 255, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 100% 100%, rgba(255, 0, 110, 0.35) 0%, transparent 50%),
-    radial-gradient(circle at 0% 100%, rgba(255, 214, 10, 0.2) 0%, transparent 50%);
-  opacity: 0.8;
-  animation: meshPulse 20s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-
-@keyframes meshPulse {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
 }
 
 .importHubHeader {
   position: relative;
-  padding: var(--space-10) var(--space-6) var(--space-8);
-  text-align: center;
-  z-index: 1;
+  background: var(--mtv-pink);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 15px,
+    rgba(0, 0, 0, 0.15) 15px,
+    rgba(0, 0, 0, 0.15) 30px
+  );
+  border-bottom: 10px solid var(--bg-accent);
 }
 
-.importHubHeaderGlow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(255, 0, 110, 0.4) 0%, transparent 70%);
-  filter: blur(80px);
-  opacity: 0;
-  animation: headerGlowPulse 4s ease-in-out infinite;
-  pointer-events: none;
+.importHubHeaderTop {
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
 }
 
-@keyframes headerGlowPulse {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
+@media (min-width: 900px) {
+  .importHubHeaderTop {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.importHubTitleContainer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.importHubIcon {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, 0.3));
 }
 
 .importHubTitle {
   font-family: var(--font-display);
-  font-size: clamp(4rem, 12vw, 8rem);
+  font-size: 6rem;
   font-weight: 900;
   line-height: 0.85;
   margin: 0;
   text-transform: uppercase;
-  letter-spacing: -0.02em;
-  position: relative;
+  letter-spacing: -0.03em;
+  color: var(--text-on-dark);
+  text-shadow: 5px 5px 0 rgba(0, 0, 0, 0.3);
 }
 
-.importHubTitleLine {
-  display: block;
-  background: linear-gradient(135deg, var(--channel-import) 0%, #ff4db8 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 80px rgba(255, 0, 110, 0.5);
-  animation: titleSlideIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.importHubTitleLine:nth-child(1) { animation-delay: 0.1s; }
-.importHubTitleLine:nth-child(2) { animation-delay: 0.2s; }
-
-@keyframes titleSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(40px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.importHubSubtitle {
-  font-family: var(--font-ui);
-  font-size: var(--text-lg);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
-  margin: var(--space-5) 0 0;
-  opacity: 0;
-  animation: subtitleFadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
-}
-
-@keyframes subtitleFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.importHubNav {
+  padding: 0 var(--space-6) var(--space-4);
+  display: flex;
+  gap: var(--space-3);
+  border-top: 2px solid rgba(0, 0, 0, 0.2);
+  padding-top: var(--space-4);
 }
 
 .importHubGrid {
@@ -134,83 +87,26 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface);
-  border: 3px solid var(--bg-surface-light);
-  border-radius: var(--radius-xl);
+  background: var(--bg-base);
+  border: 5px solid var(--bg-accent);
+  border-radius: 0;
   padding: var(--space-8) var(--space-6) var(--space-6);
   text-decoration: none;
   color: inherit;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.15s;
   box-shadow: var(--shadow-lg);
-  opacity: 0;
-  animation: cardSlideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.importCard:nth-child(1) { animation-delay: 0.5s; }
-.importCard:nth-child(2) { animation-delay: 0.6s; }
-.importCard:nth-child(3) { animation-delay: 0.7s; }
-
-@keyframes cardSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(60px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.importCard::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    var(--channel-import) 50%,
-    transparent 100%);
-  opacity: 0;
-  transition: opacity 0.4s;
-}
-
-.importCardGlow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle, rgba(255, 0, 110, 0.3) 0%, transparent 70%);
-  filter: blur(40px);
-  opacity: 0;
-  transition: opacity 0.4s;
-  pointer-events: none;
 }
 
 .importCard:hover {
-  transform: translateY(-8px) scale(1.02);
-  border-color: var(--channel-import);
-  box-shadow:
-    var(--shadow-xl),
-    0 0 0 1px var(--channel-import),
-    var(--shadow-glow-magenta);
-}
-
-.importCard:hover::before {
-  opacity: 1;
-}
-
-.importCard:hover .importCardGlow {
-  opacity: 1;
+  transform: translateY(-8px);
+  border-color: var(--mtv-pink);
+  box-shadow: 10px 10px 0 var(--mtv-pink);
 }
 
 .importCard:hover .importCardIcon {
-  transform: scale(1.1) rotate(5deg);
-  color: var(--channel-import);
+  transform: scale(1.1);
+  color: var(--mtv-pink);
 }
 
 .importCard:hover .importCardCta {
@@ -218,16 +114,8 @@
 }
 
 .importCard:active {
-  transform: translateY(-4px) scale(1.01);
-}
-
-/* Primary card (Artist/Title Search) - more prominent */
-.importCardPrimary {
-  border-color: rgba(255, 0, 110, 0.3);
-}
-
-.importCardPrimary .importCardGlow {
-  opacity: 0.3;
+  transform: translateY(-4px);
+  box-shadow: 6px 6px 0 var(--mtv-pink);
 }
 
 .importCardIcon {
@@ -235,8 +123,7 @@
   height: 64px;
   margin-bottom: var(--space-5);
   color: var(--text-secondary);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  filter: drop-shadow(0 0 20px currentColor);
+  transition: all 0.15s;
 }
 
 .importCardIcon svg {
@@ -280,10 +167,11 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: var(--space-1) var(--space-3);
-  background: rgba(255, 0, 110, 0.1);
-  border: 1px solid rgba(255, 0, 110, 0.3);
-  border-radius: var(--radius-full);
-  color: var(--channel-import);
+  background: var(--mtv-pink);
+  border: 3px solid var(--mtv-pink);
+  border-radius: 0;
+  color: var(--text-on-dark);
+  font-weight: 700;
 }
 
 .importCardCta {
@@ -295,10 +183,10 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--channel-import);
+  color: var(--mtv-pink);
   padding-top: var(--space-4);
-  border-top: 2px solid var(--bg-surface-light);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-top: 3px solid var(--bg-accent);
+  transition: transform 0.15s;
 }
 
 .importCardCta svg {
@@ -321,12 +209,13 @@
   font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   text-decoration: none;
   padding: var(--space-3) var(--space-5);
-  border: 2px solid var(--bg-surface-light);
-  border-radius: var(--radius-lg);
-  transition: all 0.3s;
+  border: 3px solid var(--bg-accent);
+  border-radius: 0;
+  transition: all 0.15s;
+  box-shadow: var(--shadow-sm);
 }
 
 .importHubBackLink svg {
@@ -335,7 +224,8 @@
 }
 
 .importHubBackLink:hover {
-  color: var(--channel-import);
-  border-color: var(--channel-import);
+  color: var(--mtv-pink);
+  border-color: var(--mtv-pink);
   transform: translateX(-4px);
+  box-shadow: 4px 4px 0 var(--mtv-pink);
 }

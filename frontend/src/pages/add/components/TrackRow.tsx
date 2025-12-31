@@ -20,6 +20,7 @@ interface TrackMetadata {
   album: string | null
   label: string | null
   directors: string | null
+  featuredArtists: string | null
   youtubeId: string | null
 }
 
@@ -108,7 +109,15 @@ export default function TrackRow({
     track.title,
     enrichmentData?.metadata?.title as string | undefined
   )
-  const displayAlbum = getDisplayAlbumTitle(track.album)
+  const displayAlbum = getDisplayAlbumTitle(track.album ?? null)
+
+  // Get metadata from enrichment data or metadata override
+  const displayArtist: string = metadataOverride?.artist || (enrichmentData?.metadata?.artist as string | undefined) || track.artist
+  const displayYear: number | null | undefined = metadataOverride?.year ?? (enrichmentData?.metadata?.year as number | null | undefined) ?? track.year
+  const displayLabel: string | null | undefined = metadataOverride?.label ?? (enrichmentData?.metadata?.label as string | null | undefined) ?? track.label
+  const displayDirectors: string | null | undefined = metadataOverride?.directors ?? (enrichmentData?.metadata?.directors as string | null | undefined)
+  const displayFeaturedArtists: string | null | undefined =
+    metadataOverride?.featuredArtists ?? (enrichmentData?.metadata?.featured_artists as string | null | undefined)
 
   return (
     <div
@@ -134,11 +143,37 @@ export default function TrackRow({
         />
       </div>
 
-      {/* Track Info */}
+      {/* Track Info - Two Column Layout */}
       <div className="trackRowInfo">
-        <div className="trackRowTitle">{displayTitle}</div>
-        <div className="trackRowArtist">{track.artist}</div>
-        {displayAlbum && <div className="trackRowAlbum">{displayAlbum}</div>}
+        {/* First Column */}
+        <div className="trackRowColumn">
+          <div className="trackRowArtist">{displayArtist}</div>
+          <div className="trackRowTitle">{displayTitle}</div>
+          <div className="trackRowAlbumYear">
+            {displayAlbum && <span className="trackRowAlbumName">{displayAlbum}</span>}
+            {displayAlbum && displayYear && <span className="trackRowSeparator"> • </span>}
+            {displayYear && <span className="trackRowYear">({displayYear})</span>}
+          </div>
+        </div>
+
+        {/* Second Column */}
+        <div className="trackRowColumn">
+          {displayLabel && (
+            <div className="trackRowLabel">
+              <span className="trackRowFieldLabel">Label:</span> {displayLabel}
+            </div>
+          )}
+          {displayDirectors && (
+            <div className="trackRowDirectors">
+              <span className="trackRowFieldLabel">Director:</span> {displayDirectors}
+            </div>
+          )}
+          {displayFeaturedArtists && (
+            <div className="trackRowFeaturedArtists">
+              <span className="trackRowFieldLabel">feat.</span> {displayFeaturedArtists}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Match Status */}
@@ -233,14 +268,13 @@ export default function TrackRow({
                   )}
                 </div>
               ) : (
-                <div className="trackRowYoutubeMetadata">
+                <div className="trackRowYoutubeMetadata" title={youtubeMetadata.error || 'Video unavailable'}>
                   <svg
                     className="trackRowYoutubeWarning"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    title={youtubeMetadata.error || 'Video unavailable'}
                   >
                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                     <line x1="12" y1="9" x2="12" y2="13" />

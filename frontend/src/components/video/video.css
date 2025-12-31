@@ -5,23 +5,32 @@
 }
 
 .videoCard {
-  background: var(--bg-surface);
-  border: 3px solid var(--bg-surface-light);
-  border-radius: var(--radius-lg);
+  background: var(--bg-base);
+  border: 4px solid var(--bg-accent);
+  border-radius: 0;
   overflow: hidden;
   box-shadow: var(--shadow-md);
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  cursor: pointer;
 }
 
 .videoCard:hover {
-  transform: translateY(-4px) rotate(-1deg);
-  border-color: var(--channel-library);
-  box-shadow: var(--shadow-xl), var(--shadow-glow-cyan);
+  transform: translateY(-6px);
+  border-color: var(--mtv-blue);
+  box-shadow: 8px 8px 0 var(--mtv-blue);
+}
+
+.videoCard:active {
+  transform: translateY(-3px);
+  box-shadow: 5px 5px 0 var(--mtv-blue);
 }
 
 .videoCardThumb {
   aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, var(--channel-library) 0%, var(--channel-import) 100%);
+  background: linear-gradient(135deg, var(--mtv-orange) 0%, #ff8c42 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   position: relative;
 }
 
@@ -30,12 +39,13 @@
   bottom: 8px;
   right: 8px;
   padding: 4px 8px;
-  background: rgba(10, 0, 20, 0.9);
-  border-radius: var(--radius-sm);
+  background: var(--bg-accent);
+  border-radius: 0;
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: 700;
-  border: 2px solid var(--bg-surface-light);
+  color: var(--text-on-dark);
+  border: 3px solid var(--bg-accent);
 }
 
 .videoCardBody {
@@ -87,13 +97,13 @@
   display: inline-flex;
   align-items: center;
   padding: var(--space-1) var(--space-3);
-  border: 2px solid currentColor;
-  border-radius: var(--radius-full);
-  background: var(--bg-surface);
+  border: 3px solid currentColor;
+  border-radius: 0;
+  background: var(--bg-base);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 900;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   box-shadow: var(--shadow-sm);
   white-space: nowrap;
@@ -114,24 +124,30 @@
 .videoCardRetryButton {
   margin-top: var(--space-3);
   padding: var(--space-2) var(--space-4);
-  background: linear-gradient(135deg, var(--channel-download) 0%, var(--accent-purple) 100%);
-  border: 2px solid var(--channel-download);
-  border-radius: var(--radius-md);
+  background: var(--mtv-purple);
+  border: 3px solid var(--mtv-purple);
+  border-radius: 0;
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-on-dark);
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .videoCardRetryButton:hover {
-  transform: scale(1.05);
-  box-shadow: var(--shadow-glow-purple);
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.9);
+}
+
+.videoCardRetryButton:active {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
 }
 
 .videoCardRetryButton:disabled {
@@ -141,5 +157,34 @@
 
 .videoCardRetryButton:disabled:hover {
   transform: none;
-  box-shadow: none;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Selection */
+.videoCardCheckboxContainer {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 15;
+  background: var(--bg-accent);
+  backdrop-filter: blur(4px);
+  border-radius: 0;
+  padding: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--bg-accent);
+}
+
+.videoCardCheckbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--mtv-blue);
+}
+
+.videoCardSelected {
+  border-color: var(--mtv-blue);
+  box-shadow: var(--shadow-blue);
+  transform: translateY(-2px);
 }

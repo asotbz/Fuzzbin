@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -30,7 +30,21 @@ interface TrackMetadataOverride {
   album: string | null
   label: string | null
   directors: string | null
+  featuredArtists: string | null
   youtubeId: string | null
+}
+
+interface EnrichedMetadata {
+  title?: string
+  artist?: string
+  year?: number | null
+  album?: string | null
+  label?: string | null
+  directors?: string | null
+  featuredArtists?: string | null
+  youtubeIds?: string[]
+  imvdbId?: number | null
+  thumbnailUrl?: string | null
 }
 
 export default function SpotifyImport() {
@@ -46,6 +60,7 @@ export default function SpotifyImport() {
   // Preview/table state
   const [preview, setPreview] = useState<BatchPreviewResponse | null>(null)
   const [metadataOverrides, setMetadataOverrides] = useState<Map<string, TrackMetadataOverride>>(new Map())
+  const [enrichmentData, setEnrichmentData] = useState<Map<string, EnrichedMetadata>>(new Map())
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
 
   // Modal state
@@ -112,27 +127,39 @@ export default function SpotifyImport() {
   })
 
   // WebSocket updates
-  if (jobId && jobWs.lastUpdate) {
-    queryClient.setQueryData<GetJobResponse>(jobsKeys.byId(jobId), (prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        status: jobWs.lastUpdate!.status as GetJobResponse['status'],
-        progress: jobWs.lastUpdate!.progress,
-        current_step: jobWs.lastUpdate!.current_step,
-        processed_items: jobWs.lastUpdate!.processed_items,
-        total_items: jobWs.lastUpdate!.total_items,
-        error: (jobWs.lastUpdate!.error ?? null) as GetJobResponse['error'],
-        result: (jobWs.lastUpdate!.result ?? null) as GetJobResponse['result'],
-      }
-    })
-  }
+  useEffect(() => {
+    if (jobId && jobWs.lastUpdate) {
+      queryClient.setQueryData<GetJobResponse>(jobsKeys.byId(jobId), (prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          status: jobWs.lastUpdate!.status as GetJobResponse['status'],
+          progress: jobWs.lastUpdate!.progress,
+          current_step: jobWs.lastUpdate!.current_step,
+          processed_items: jobWs.lastUpdate!.processed_items,
+          total_items: jobWs.lastUpdate!.total_items,
+          error: (jobWs.lastUpdate!.error ?? null) as GetJobResponse['error'],
+          result: (jobWs.lastUpdate!.result ?? null) as GetJobResponse['result'],
+        }
+      })
+    }
+  }, [jobId, jobWs.lastUpdate, queryClient])
 
   // Job completion handling
-  if (jobId) {
+  const hasShownToastRef = useRef(false)
+
+  useEffect(() => {
+    if (!jobId) {
+      hasShownToastRef.current = false
+      return
+    }
+
     const wsStatus = jobWs.lastUpdate?.status
     const status = wsStatus ?? jobQuery.data?.status
-    if (status && isTerminalJobStatus(status)) {
+
+    if (status && isTerminalJobStatus(status) && !hasShownToastRef.current) {
+      hasShownToastRef.current = true
+
       if (status === 'completed') {
         const result = jobQuery.data?.result as any
         const downloadJobs = result?.download_jobs || 0
@@ -151,7 +178,7 @@ export default function SpotifyImport() {
         })
       }
     }
-  }
+  }, [jobId, jobWs.lastUpdate?.status, jobQuery.data?.status, jobQuery.data?.result, jobQuery.data?.error, navigate, queryClient])
 
   const handleLoadPlaylist = (e: React.FormEvent) => {
     e.preventDefault()
@@ -177,6 +204,7 @@ export default function SpotifyImport() {
         album: metadata.album,
         label: metadata.label,
         directors: metadata.directors,
+        featuredArtists: metadata.featuredArtists,
         youtubeId,
       })
       return newMap
@@ -186,7 +214,7 @@ export default function SpotifyImport() {
     toast.success('Metadata updated')
   }
 
-  const handleYouTubeSelect = (track: BatchPreviewItem, youtubeId: string, youtubeUrl: string) => {
+  const handleYouTubeSelect = (track: BatchPreviewItem, youtubeId: string, _youtubeUrl: string) => {
     const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
 
     setMetadataOverrides((prev) => {
@@ -194,10 +222,11 @@ export default function SpotifyImport() {
       const existing = newMap.get(trackId) || {
         title: track.title,
         artist: track.artist,
-        year: track.year,
-        album: track.album,
-        label: track.label,
+        year: track.year ?? null,
+        album: track.album ?? null,
+        label: track.label ?? null,
         directors: null,
+        featuredArtists: null,
         youtubeId: null,
       }
       newMap.set(trackId, { ...existing, youtubeId })
@@ -208,14 +237,50 @@ export default function SpotifyImport() {
     toast.success('YouTube video selected')
   }
 
+  const handleEnrichmentComplete = (
+    track: BatchPreviewItem,
+    enrichment: {
+      metadata?: {
+        title?: string
+        artist?: string
+        year?: number | null
+        album?: string | null
+        label?: string | null
+        directors?: string | null
+        featured_artists?: string | null
+      }
+      youtube_ids?: string[]
+      imvdb_id?: number | null
+    }
+  ) => {
+    const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
+
+    setEnrichmentData((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(trackId, {
+        title: enrichment.metadata?.title,
+        artist: enrichment.metadata?.artist,
+        year: enrichment.metadata?.year,
+        album: enrichment.metadata?.album,
+        label: enrichment.metadata?.label,
+        directors: enrichment.metadata?.directors,
+        featuredArtists: enrichment.metadata?.featured_artists,
+        youtubeIds: enrichment.youtube_ids,
+        imvdbId: enrichment.imvdb_id,
+        thumbnailUrl: enrichment.thumbnail_url,
+      })
+      return newMap
+    })
+  }
+
   const handleImport = () => {
     if (!preview || selectedTrackIds.size === 0) {
       toast.error('Please select tracks to import')
       return
     }
 
-    // Build tracks array with metadata overrides
-    const tracks = preview.items
+    // Build tracks array with metadata from three sources (priority: override > enrichment > original)
+    const tracks = (preview.items ?? [])
       .filter((track) => {
         const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
         return selectedTrackIds.has(trackId)
@@ -223,20 +288,33 @@ export default function SpotifyImport() {
       .map((track) => {
         const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
         const override = metadataOverrides.get(trackId)
+        const enrichment = enrichmentData.get(trackId)
+
+        // Priority: User override > Enrichment data > Original Spotify data
+        const finalMetadata = {
+          title: override?.title ?? enrichment?.title ?? track.title,
+          artist: override?.artist ?? enrichment?.artist ?? track.artist,
+          year: override?.year ?? enrichment?.year ?? track.year,
+          album: override?.album ?? enrichment?.album ?? track.album,
+          label: override?.label ?? enrichment?.label ?? track.label,
+          directors: override?.directors ?? enrichment?.directors ?? null,
+          featured_artists: override?.featuredArtists ?? enrichment?.featuredArtists ?? null,
+        }
+
+        // For YouTube ID, prefer user override, then enrichment (first available ID)
+        const youtubeId =
+          override?.youtubeId ??
+          (enrichment?.youtubeIds && enrichment.youtubeIds.length > 0
+            ? enrichment.youtubeIds[0]
+            : null)
 
         return {
           spotify_track_id: track.spotify_track_id || trackId,
-          metadata: {
-            title: override?.title || track.title,
-            artist: override?.artist || track.artist,
-            year: override?.year || track.year,
-            album: override?.album || track.album,
-            label: override?.label || track.label,
-            directors: override?.directors || null,
-          },
-          imvdb_id: null, // Will be set by enrichment
-          youtube_id: override?.youtubeId || null,
-          youtube_url: override?.youtubeId ? `https://youtube.com/watch?v=${override.youtubeId}` : null,
+          metadata: finalMetadata,
+          imvdb_id: enrichment?.imvdbId ?? null,
+          youtube_id: youtubeId,
+          youtube_url: youtubeId ? `https://youtube.com/watch?v=${youtubeId}` : null,
+          thumbnail_url: enrichment?.thumbnailUrl ?? null,
         }
       })
 
@@ -254,15 +332,26 @@ export default function SpotifyImport() {
 
   return (
     <div className="spotifyImport">
-      <div className="spotifyImportHeader">
-        <h1 className="spotifyImportTitle">Spotify Playlist Import</h1>
-        <Link to="/add" className="spotifyImportBackLink">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Back to Hub
-        </Link>
-      </div>
+      <header className="spotifyImportHeader">
+        <div className="spotifyImportHeaderTop">
+          <div className="spotifyImportTitleContainer">
+            <img src="/fuzzbin-icon.png" alt="Fuzzbin" className="spotifyImportIcon" />
+            <h1 className="spotifyImportTitle">Spotify Playlist Import</h1>
+          </div>
+        </div>
+
+        <nav className="spotifyImportNav">
+          <Link to="/add" className="primaryButton">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '16px', height: '16px' }}>
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Back to Hub
+          </Link>
+          <Link to="/library" className="primaryButton">
+            Video Library
+          </Link>
+        </nav>
+      </header>
 
       <div className="spotifyImportContent">
         {/* Configuration Card */}
@@ -339,11 +428,12 @@ export default function SpotifyImport() {
             <div className="spotifyImportCard">
               <h2 className="spotifyImportCardTitle">Playlist Tracks</h2>
               <SpotifyTrackTable
-                tracks={preview.items}
+                tracks={preview.items ?? []}
                 metadataOverrides={metadataOverrides}
                 onEditTrack={(track, state) => setEditingTrack({ track, state })}
                 onSearchYouTube={(track) => setSearchingTrack(track)}
                 onSelectionChange={(selectedIds) => setSelectedTrackIds(selectedIds)}
+                onEnrichmentComplete={handleEnrichmentComplete}
               />
             </div>
 
@@ -403,6 +493,9 @@ export default function SpotifyImport() {
         <MetadataEditor
           track={editingTrack.track}
           state={editingTrack.state}
+          currentOverride={metadataOverrides.get(
+            editingTrack.track.spotify_track_id || `${editingTrack.track.artist}-${editingTrack.track.title}`
+          )}
           onSave={(metadata) => handleSaveMetadata(editingTrack.track, metadata)}
           onCancel={() => setEditingTrack(null)}
         />

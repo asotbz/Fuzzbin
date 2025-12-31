@@ -14,13 +14,17 @@ interface TrackMetadata {
   album: string | null
   label: string | null
   directors: string | null
+  featuredArtists: string | null
   youtubeId: string | null
 }
 
 interface SpotifyTrackTableProps {
   tracks: BatchPreviewItem[]
   metadataOverrides: Map<string, TrackMetadata>
-  onEnrichmentComplete?: () => void
+  onEnrichmentComplete?: (
+    track: BatchPreviewItem,
+    enrichment: SpotifyTrackEnrichResponse
+  ) => void
   onEditTrack: (track: BatchPreviewItem, state: TrackRowState) => void
   onSearchYouTube: (track: BatchPreviewItem) => void
   onSelectionChange?: (selectedIds: Set<string>) => void
@@ -84,6 +88,15 @@ export default function SpotifyTrackTable({
         return newStates
       })
 
+      // Call enrichment complete callback with track and enrichment data
+      const track = tracks.find((t) => {
+        const id = t.spotify_track_id || `${t.artist}-${t.title}`
+        return id === trackId
+      })
+      if (track && onEnrichmentComplete) {
+        onEnrichmentComplete(track, data)
+      }
+
       // Move to next track only after this one completes
       setCurrentEnrichingIndex((prev) => prev + 1)
     },
@@ -121,9 +134,6 @@ export default function SpotifyTrackTable({
 
     if (currentEnrichingIndex >= tracks.length) {
       // All tracks enriched
-      if (onEnrichmentComplete) {
-        onEnrichmentComplete()
-      }
       return
     }
 
