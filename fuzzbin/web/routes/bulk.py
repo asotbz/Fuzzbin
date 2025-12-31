@@ -11,7 +11,7 @@ from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
 
 from ..dependencies import get_repository, require_auth
-from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
+from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES, BulkOperationResponse
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/videos/bulk", tags=["Bulk Operations"])
@@ -333,3 +333,65 @@ async def bulk_organize_videos(
     )
 
     return BulkOperationResult.from_repo_result(result)
+
+
+@router.post(
+    "/download",
+    response_model=BulkOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**COMMON_ERROR_RESPONSES, **AUTH_ERROR_RESPONSES},
+    summary="Bulk download videos",
+    description="Queue download jobs for multiple videos with YouTube IDs. Skips videos without YouTube IDs.",
+)
+async def bulk_download_videos(
+    video_ids: List[int],
+    repository: VideoRepository = Depends(get_repository),
+) -> BulkOperationResponse:
+    """Queue download jobs for multiple videos with YouTube IDs.
+
+    Skips videos without YouTube IDs. Each video downloads to temp,
+    organizes to configured path pattern, and generates NFO.
+    """
+    from fuzzbin.tasks.models import Job, JobType, JobPriority
+    from fuzzbin.tasks.queue import get_job_queue
+
+    queue = get_job_queue()
+    submitted = []
+    skipped = []
+
+    for video_id in video_ids:
+        video = await repository.get_video_by_id(video_id)
+        if not video:
+            skipped.append({"video_id": video_id, "reason": "Not found"})
+            continue
+
+        youtube_id = getattr(video, 'youtube_id', None)
+        if not youtube_id:
+            skipped.append({"video_id": video_id, "reason": "No YouTube ID"})
+            continue
+
+        # Queue IMPORT_DOWNLOAD job
+        job = Job(
+            type=JobType.IMPORT_DOWNLOAD,
+            metadata={
+                "video_id": video_id,
+                "youtube_id": youtube_id,
+            },
+            priority=JobPriority.NORMAL,
+        )
+        await queue.submit(job)
+        submitted.append(job.id)
+
+    logger.info(
+        "bulk_download_queued",
+        total=len(video_ids),
+        submitted=len(submitted),
+        skipped=len(skipped),
+    )
+
+    return BulkOperationResponse(
+        submitted=len(submitted),
+        skipped=len(skipped),
+        job_ids=submitted,
+        details={"skipped_videos": skipped} if skipped else None,
+    )

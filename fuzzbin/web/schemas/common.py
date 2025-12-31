@@ -1,6 +1,6 @@
 """Common schema types for pagination, sorting, and filtering."""
 
-from typing import Generic, List, Literal, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -185,3 +185,14 @@ class VideoStatusHistoryResponse(BaseModel):
     """Video status history response."""
 
     items: List[VideoStatusHistoryEntry] = Field(description="Status history entries")
+
+
+class BulkOperationResponse(BaseModel):
+    """Response for bulk operations on multiple videos."""
+
+    submitted: int = Field(description="Number of operations successfully submitted")
+    skipped: int = Field(description="Number of items skipped")
+    job_ids: List[str] = Field(description="List of job IDs for submitted operations")
+    details: Optional[Dict[str, Any]] = Field(
+        default=None, description="Additional details about skipped items or errors"
+    )

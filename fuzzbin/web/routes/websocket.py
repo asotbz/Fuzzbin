@@ -1,6 +1,7 @@
 """WebSocket endpoints for real-time updates with first-message authentication."""
 
 import asyncio
+from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Optional, Set, Union
 
 import structlog
@@ -48,8 +49,64 @@ class WSSubscribeMessage(BaseModel):
     events: list[str] = Field(description="List of event types to subscribe to")
 
 
+class WSSubscribeJobsMessage(BaseModel):
+    """Subscribe to job events with optional filtering.
+
+    Clients can filter job events by job type and/or specific job IDs.
+    When include_active_state is True, the server sends current state of
+    all active jobs matching the filters immediately after subscribing.
+
+    Example:
+        # Subscribe to all job events
+        {"type": "subscribe_jobs"}
+
+        # Subscribe to specific job types
+        {"type": "subscribe_jobs", "job_types": ["download_youtube", "import_nfo"]}
+
+        # Subscribe to specific jobs
+        {"type": "subscribe_jobs", "job_ids": ["uuid-1", "uuid-2"]}
+
+        # Subscribe with initial state dump
+        {"type": "subscribe_jobs", "include_active_state": true}
+    """
+
+    type: Literal["subscribe_jobs"] = Field(description="Message type, must be 'subscribe_jobs'")
+    job_types: list[str] | None = Field(
+        default=None,
+        description="Filter by job types (e.g., ['download_youtube', 'import_nfo']). None = all types.",
+    )
+    job_ids: list[str] | None = Field(
+        default=None,
+        description="Filter by specific job IDs. None = all jobs.",
+    )
+    include_active_state: bool = Field(
+        default=True,
+        description="If true, immediately send current state of all active jobs matching filters.",
+    )
+
+
+class WSUnsubscribeJobsMessage(BaseModel):
+    """Unsubscribe from job events.
+
+    Removes all job event subscriptions for this connection.
+
+    Example:
+        {"type": "unsubscribe_jobs"}
+    """
+
+    type: Literal["unsubscribe_jobs"] = Field(
+        description="Message type, must be 'unsubscribe_jobs'"
+    )
+
+
 # Union type for all valid client messages
-WSClientMessage = Union[WSAuthMessage, WSPingMessage, WSSubscribeMessage]
+WSClientMessage = Union[
+    WSAuthMessage,
+    WSPingMessage,
+    WSSubscribeMessage,
+    WSSubscribeJobsMessage,
+    WSUnsubscribeJobsMessage,
+]
 
 
 class WSAuthSuccessResponse(BaseModel):
@@ -74,11 +131,73 @@ class WSPongResponse(BaseModel):
     type: Literal["pong"] = "pong"
 
 
+class WSSubscribeJobsSuccessResponse(BaseModel):
+    """Response sent on successful job subscription."""
+
+    type: Literal["subscribe_jobs_success"] = "subscribe_jobs_success"
+    job_types: list[str] | None = Field(description="Subscribed job types (None = all)")
+    job_ids: list[str] | None = Field(description="Subscribed job IDs (None = all)")
+
+
+class WSUnsubscribeJobsSuccessResponse(BaseModel):
+    """Response sent on successful job unsubscription."""
+
+    type: Literal["unsubscribe_jobs_success"] = "unsubscribe_jobs_success"
+
+
+class WSJobStateMessage(BaseModel):
+    """Initial job state sent when subscribing with include_active_state=true.
+
+    Contains snapshot of active jobs matching the subscription filters.
+    """
+
+    type: Literal["job_state"] = "job_state"
+    jobs: list[Dict[str, Any]] = Field(description="List of active job states")
+
+
+@dataclass
+class JobSubscription:
+    """Tracks a client's job event subscription filters."""
+
+    job_types: set[str] | None = None  # None = all types
+    job_ids: set[str] | None = None  # None = all jobs
+
+    def matches(self, event: Dict[str, Any]) -> bool:
+        """Check if an event matches this subscription's filters.
+
+        Args:
+            event: Event dict with event_type and payload
+
+        Returns:
+            True if event matches filters, False otherwise
+        """
+        event_type = event.get("event_type", "")
+
+        # Only filter job events
+        if not event_type.startswith("job_"):
+            return True  # Non-job events pass through
+
+        payload = event.get("payload", {})
+        job_type = payload.get("job_type")
+        job_id = payload.get("job_id")
+
+        # Check job type filter
+        if self.job_types is not None and job_type not in self.job_types:
+            return False
+
+        # Check job ID filter
+        if self.job_ids is not None and job_id not in self.job_ids:
+            return False
+
+        return True
+
+
 class ConnectionManager:
     """Manages WebSocket connections for broadcast events.
 
     Thread-safe connection tracking with broadcast support for
-    real-time event distribution to connected clients.
+    real-time event distribution to connected clients. Supports
+    per-connection job event subscriptions with filtering.
 
     Note: This manager does NOT accept connections automatically.
     The caller must call websocket.accept() before adding to manager,
@@ -88,6 +207,7 @@ class ConnectionManager:
     def __init__(self):
         """Initialize the connection manager."""
         self.active_connections: Set[WebSocket] = set()
+        self._job_subscriptions: Dict[WebSocket, JobSubscription] = {}
         self._lock = asyncio.Lock()
 
     async def add(self, websocket: WebSocket) -> None:
@@ -126,10 +246,56 @@ class ConnectionManager:
         """
         async with self._lock:
             self.active_connections.discard(websocket)
+            self._job_subscriptions.pop(websocket, None)
         logger.debug(
             "websocket_disconnected",
             total_connections=len(self.active_connections),
         )
+
+    async def subscribe_jobs(
+        self,
+        websocket: WebSocket,
+        job_types: list[str] | None = None,
+        job_ids: list[str] | None = None,
+    ) -> None:
+        """Subscribe a connection to job events with optional filters.
+
+        Args:
+            websocket: WebSocket connection to subscribe
+            job_types: Filter by job types (None = all types)
+            job_ids: Filter by job IDs (None = all jobs)
+        """
+        async with self._lock:
+            self._job_subscriptions[websocket] = JobSubscription(
+                job_types=set(job_types) if job_types else None,
+                job_ids=set(job_ids) if job_ids else None,
+            )
+        logger.debug(
+            "websocket_subscribed_jobs",
+            job_types=job_types,
+            job_ids=job_ids,
+        )
+
+    async def unsubscribe_jobs(self, websocket: WebSocket) -> None:
+        """Unsubscribe a connection from job events.
+
+        Args:
+            websocket: WebSocket connection to unsubscribe
+        """
+        async with self._lock:
+            self._job_subscriptions.pop(websocket, None)
+        logger.debug("websocket_unsubscribed_jobs")
+
+    def has_job_subscription(self, websocket: WebSocket) -> bool:
+        """Check if a connection has an active job subscription.
+
+        Args:
+            websocket: WebSocket connection to check
+
+        Returns:
+            True if subscribed to job events
+        """
+        return websocket in self._job_subscriptions
 
     async def broadcast(self, event: WebSocketEvent) -> None:
         """Broadcast an event to all connected clients.
@@ -170,19 +336,35 @@ class ConnectionManager:
     async def broadcast_dict(self, message: Dict) -> None:
         """Broadcast a raw dictionary message to all connected clients.
 
+        For job events, only sends to clients with matching subscriptions.
+        Non-job events are sent to all clients.
+
         Args:
             message: Dictionary to broadcast as JSON
         """
         if not self.active_connections:
             return
 
+        event_type = message.get("event_type", "")
+        is_job_event = event_type.startswith("job_")
         dead_connections: Set[WebSocket] = set()
 
         async with self._lock:
             connections = list(self.active_connections)
+            subscriptions = dict(self._job_subscriptions)
 
         for connection in connections:
             try:
+                # For job events, check subscription and filters
+                if is_job_event:
+                    subscription = subscriptions.get(connection)
+                    if subscription is None:
+                        # No job subscription, skip this client
+                        continue
+                    if not subscription.matches(message):
+                        # Doesn't match filters, skip
+                        continue
+
                 await connection.send_json(message)
             except Exception:
                 dead_connections.add(connection)
@@ -190,11 +372,18 @@ class ConnectionManager:
         if dead_connections:
             async with self._lock:
                 self.active_connections -= dead_connections
+                for conn in dead_connections:
+                    self._job_subscriptions.pop(conn, None)
 
     @property
     def connection_count(self) -> int:
         """Get the number of active connections."""
         return len(self.active_connections)
+
+    @property
+    def job_subscription_count(self) -> int:
+        """Get the number of connections with job subscriptions."""
+        return len(self._job_subscriptions)
 
 
 # Global connection manager instance for event broadcasting
@@ -369,6 +558,14 @@ async def events_websocket(websocket: WebSocket) -> None:
         - job_failed: Background job failed with error
         - client_reloaded: API client was reloaded with new configuration
 
+    Job Subscriptions:
+        After authentication, clients can subscribe to job events:
+        - {"type": "subscribe_jobs"} - Subscribe to all job events
+        - {"type": "subscribe_jobs", "job_types": ["download_youtube"]} - Filter by type
+        - {"type": "subscribe_jobs", "job_ids": ["uuid"]} - Filter by job ID
+        - {"type": "subscribe_jobs", "include_active_state": true} - Get current state
+        - {"type": "unsubscribe_jobs"} - Stop receiving job events
+
     WebSocket Close Codes:
         - 4000: Authentication timeout
         - 4001: Authentication failed
@@ -408,10 +605,89 @@ async def events_websocket(websocket: WebSocket) -> None:
                     import json
 
                     data = json.loads(raw_message)
-                    if data.get("type") == "ping":
+                    msg_type = data.get("type")
+
+                    if msg_type == "ping":
                         await websocket.send_json(WSPongResponse().model_dump())
-                except (json.JSONDecodeError, Exception):
-                    pass  # Ignore invalid messages
+
+                    elif msg_type == "subscribe_jobs":
+                        # Parse and validate subscription message
+                        try:
+                            sub_msg = WSSubscribeJobsMessage.model_validate(data)
+                        except ValidationError as e:
+                            logger.warning("invalid_subscribe_jobs_message", error=str(e))
+                            continue
+
+                        # Register subscription
+                        await connection_manager.subscribe_jobs(
+                            websocket,
+                            job_types=sub_msg.job_types,
+                            job_ids=sub_msg.job_ids,
+                        )
+
+                        # Send confirmation
+                        await websocket.send_json(
+                            WSSubscribeJobsSuccessResponse(
+                                job_types=sub_msg.job_types,
+                                job_ids=sub_msg.job_ids,
+                            ).model_dump()
+                        )
+
+                        # Send current active job state if requested
+                        if sub_msg.include_active_state:
+                            try:
+                                queue = get_job_queue()
+                                active_jobs = await queue.list_jobs()
+
+                                # Filter to non-terminal jobs matching subscription
+                                job_states = []
+                                for job in active_jobs:
+                                    if job.is_terminal:
+                                        continue
+
+                                    # Apply filters
+                                    if sub_msg.job_types and job.type.value not in sub_msg.job_types:
+                                        continue
+                                    if sub_msg.job_ids and job.id not in sub_msg.job_ids:
+                                        continue
+
+                                    job_states.append({
+                                        "job_id": job.id,
+                                        "job_type": job.type.value,
+                                        "status": job.status.value,
+                                        "progress": job.progress,
+                                        "current_step": job.current_step,
+                                        "processed_items": job.processed_items,
+                                        "total_items": job.total_items,
+                                        "created_at": job.created_at.isoformat() if job.created_at else None,
+                                        "started_at": job.started_at.isoformat() if job.started_at else None,
+                                        "metadata": job.metadata,
+                                    })
+
+                                await websocket.send_json(
+                                    WSJobStateMessage(jobs=job_states).model_dump()
+                                )
+                            except RuntimeError:
+                                # Job queue not initialized
+                                await websocket.send_json(
+                                    WSJobStateMessage(jobs=[]).model_dump()
+                                )
+
+                        logger.info(
+                            "websocket_subscribed_jobs",
+                            job_types=sub_msg.job_types,
+                            job_ids=sub_msg.job_ids,
+                        )
+
+                    elif msg_type == "unsubscribe_jobs":
+                        await connection_manager.unsubscribe_jobs(websocket)
+                        await websocket.send_json(
+                            WSUnsubscribeJobsSuccessResponse().model_dump()
+                        )
+                        logger.info("websocket_unsubscribed_jobs")
+
+                except (json.JSONDecodeError, Exception) as e:
+                    logger.debug("websocket_message_parse_error", error=str(e))
 
             except asyncio.TimeoutError:
                 # Send server ping to keep connection alive
@@ -426,139 +702,3 @@ async def events_websocket(websocket: WebSocket) -> None:
     finally:
         await connection_manager.disconnect(websocket)
         logger.info("websocket_events_closed")
-
-
-@router.websocket("/ws/jobs/{job_id}")
-async def job_progress_websocket(websocket: WebSocket, job_id: str) -> None:
-    """WebSocket endpoint for real-time job progress updates.
-
-    Connects to a specific job and streams progress updates until the job
-    reaches a terminal state (completed, failed, or cancelled).
-    Requires first-message authentication when auth is enabled.
-
-    Args:
-        websocket: WebSocket connection
-        job_id: Job ID to monitor
-
-    Authentication Protocol (first-message auth):
-        1. Client connects to /ws/jobs/{job_id}
-        2. Server accepts the WebSocket connection
-        3. Client MUST send auth message within 10 seconds:
-           {"type": "auth", "token": "<jwt_access_token>"}
-        4. Server validates token and responds with auth_success or auth_error
-        5. On success, server sends initial job state and streams updates
-        6. On failure, server closes with code 4001
-
-    Progress Message Format (JSON):
-        {
-            "job_id": "uuid",
-            "status": "running",
-            "progress": 0.45,
-            "current_step": "Processing file.nfo...",
-            "processed_items": 45,
-            "total_items": 100,
-            "error": null,
-            "result": null
-        }
-
-    WebSocket Close Codes:
-        - 4000: Authentication timeout
-        - 4001: Authentication failed
-        - 1008: Job not found
-        - 1011: Internal error
-    """
-    settings = get_settings()
-
-    # Accept the connection first
-    await websocket.accept()
-    logger.info("websocket_job_connecting", job_id=job_id)
-
-    # Perform first-message authentication if auth is enabled
-    if settings.auth_enabled:
-        user_info = await _authenticate_websocket(websocket)
-        if not user_info:
-            return  # Connection already closed with error
-        logger.info(
-            "websocket_job_authenticated",
-            job_id=job_id,
-            user_id=user_info["user_id"],
-            username=user_info["username"],
-        )
-    else:
-        logger.warning("websocket_job_no_auth", job_id=job_id, reason="auth_disabled")
-
-    try:
-        queue = get_job_queue()
-    except RuntimeError:
-        await websocket.send_json({"error": "Job queue not initialized"})
-        await websocket.close(code=1011, reason="Job queue not initialized")
-        return
-
-    try:
-        # Send initial job state
-        job = await queue.get_job(job_id)
-        if not job:
-            await websocket.send_json({"error": "Job not found"})
-            await websocket.close(code=1008, reason="Job not found")
-            return
-
-        # Send initial state
-        update = JobProgressUpdate(
-            job_id=job.id,
-            status=job.status,
-            progress=job.progress,
-            current_step=job.current_step,
-            processed_items=job.processed_items,
-            total_items=job.total_items,
-            error=job.error,
-            result=job.result,
-        )
-        await websocket.send_json(update.model_dump(mode="json"))
-
-        # Poll for updates every 500ms
-        last_progress = job.progress
-        last_step = job.current_step
-
-        while True:
-            await asyncio.sleep(0.5)
-
-            job = await queue.get_job(job_id)
-            if not job:
-                logger.warning("job_disappeared", job_id=job_id)
-                break
-
-            # Only send update if something changed
-            if job.progress != last_progress or job.current_step != last_step or job.is_terminal:
-                update = JobProgressUpdate(
-                    job_id=job.id,
-                    status=job.status,
-                    progress=job.progress,
-                    current_step=job.current_step,
-                    processed_items=job.processed_items,
-                    total_items=job.total_items,
-                    error=job.error,
-                    result=job.result,
-                )
-                await websocket.send_json(update.model_dump(mode="json"))
-                last_progress = job.progress
-                last_step = job.current_step
-
-            # Exit if job is terminal
-            if job.is_terminal:
-                logger.info(
-                    "job_terminal_state",
-                    job_id=job_id,
-                    status=job.status.value,
-                )
-                break
-
-    except WebSocketDisconnect:
-        logger.info("websocket_disconnected", job_id=job_id)
-    except Exception as e:
-        logger.error("websocket_error", job_id=job_id, error=str(e), exc_info=True)
-        try:
-            await websocket.close(code=1011, reason="Internal error")
-        except Exception:
-            pass  # Connection may already be closed
-    finally:
-        logger.info("websocket_closed", job_id=job_id)

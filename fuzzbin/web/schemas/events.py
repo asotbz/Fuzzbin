@@ -70,6 +70,15 @@ class JobProgressPayload(BaseModel):
     total_items: int = Field(
         description="Total number of items to process",
     )
+    # Optional download-specific fields
+    download_speed: Optional[float] = Field(
+        default=None,
+        description="Download speed in MB/s (for download jobs)",
+    )
+    eta_seconds: Optional[int] = Field(
+        default=None,
+        description="Estimated time remaining in seconds (for download jobs)",
+    )
 
 
 class JobCompletedPayload(BaseModel):

@@ -13,6 +13,7 @@ from fastapi.openapi.utils import get_openapi
 import fuzzbin
 from fuzzbin.auth import is_default_password
 from fuzzbin.common.logging_config import setup_logging
+from fuzzbin.core import init_event_bus, get_event_bus, reset_event_bus
 from fuzzbin.tasks import init_job_queue, reset_job_queue, Job, JobType
 from fuzzbin.tasks.handlers import register_all_handlers
 
@@ -56,6 +57,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Initialize and start job queue
     queue = init_job_queue(max_workers=2)
     register_all_handlers(queue)
+
+    # Initialize event bus and wire up to job queue
+    event_bus = init_event_bus()
+    from fuzzbin.web.routes.websocket import get_connection_manager
+
+    ws_manager = get_connection_manager()
+    event_bus.set_broadcast_function(ws_manager.broadcast_dict)
+    queue.set_event_bus(event_bus)
+    logger.info("event_bus_wired_to_job_queue")
+
     await queue.start()
     logger.info("job_queue_started_in_lifespan")
 
@@ -150,6 +161,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from .dependencies import cleanup_api_clients
 
     await cleanup_api_clients()
+
+    # Shutdown event bus
+    await event_bus.shutdown()
+    reset_event_bus()
+    logger.info("event_bus_shutdown_in_lifespan")
 
     # Stop job queue
     await queue.stop()

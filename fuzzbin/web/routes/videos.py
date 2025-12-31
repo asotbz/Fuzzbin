@@ -23,6 +23,7 @@ from ..schemas.common import (
     SortParams,
     VideoStatusHistoryEntry,
 )
+from ..schemas.jobs import JobResponse
 from ..schemas.video import (
     VideoCreate,
     VideoFilters,
@@ -388,6 +389,56 @@ async def restore_video(
     collections = await repo.get_video_collections(video_id)
     tags = await repo.get_video_tags(video_id)
     return VideoResponse.from_db_row(row, artists=artists, collections=collections, tags=tags)
+
+
+@router.post(
+    "/{video_id}/download",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**COMMON_ERROR_RESPONSES, **AUTH_ERROR_RESPONSES},
+    summary="Queue video download",
+    description="Queue download job for a video with a YouTube ID. Downloads to temp, organizes to configured path, and generates NFO.",
+)
+async def download_video(
+    video_id: int,
+    repository: VideoRepository = Depends(get_repository),
+) -> JobResponse:
+    """Queue download job for a video with a YouTube ID.
+
+    Downloads video to temporary location, then organizes to library
+    structure using configured path pattern, and generates NFO file.
+    """
+    from fuzzbin.tasks.models import Job, JobType, JobPriority
+    from fuzzbin.tasks.queue import get_job_queue
+
+    # Get video to verify it exists and has youtube_id
+    video = await repository.get_video_by_id(video_id)
+    if not video:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Video {video_id} not found"
+        )
+
+    youtube_id = getattr(video, 'youtube_id', None)
+    if not youtube_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Video does not have a YouTube ID"
+        )
+
+    # Queue IMPORT_DOWNLOAD job (will auto-queue organize and NFO jobs)
+    queue = get_job_queue()
+    job = Job(
+        type=JobType.IMPORT_DOWNLOAD,
+        metadata={
+            "video_id": video_id,
+            "youtube_id": youtube_id,
+        },
+        priority=JobPriority.HIGH,
+    )
+    await queue.submit(job)
+
+    return JobResponse.from_job(job)
 
 
 @router.delete(

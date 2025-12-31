@@ -4,12 +4,15 @@ import asyncio
 import heapq
 from collections.abc import Callable, Coroutine
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from fuzzbin.tasks.metrics import FailedJobAlert, JobMetrics, MetricsCollector
 from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
+
+if TYPE_CHECKING:
+    from fuzzbin.core.event_bus import EventBus
 
 logger = structlog.get_logger(__name__)
 
@@ -199,6 +202,49 @@ class JobQueue:
         self.running = False
         self._lock = asyncio.Lock()
         self._metrics = MetricsCollector()
+        self._event_bus: "EventBus | None" = None
+
+    def set_event_bus(self, event_bus: "EventBus") -> None:
+        """Set the event bus for real-time job updates.
+
+        When set, the queue will emit events for job state changes:
+        - job_started: When a job begins execution
+        - job_progress: When job.update_progress() is called (debounced)
+        - job_completed: When a job completes successfully
+        - job_failed: When a job fails with an error
+        - job_cancelled: When a job is cancelled
+        - job_timeout: When a job exceeds its timeout
+
+        Args:
+            event_bus: EventBus instance for broadcasting events
+        """
+        self._event_bus = event_bus
+        logger.info("job_queue_event_bus_configured")
+
+    def _create_progress_callback(
+        self, job: Job
+    ) -> Callable[[Job, float | None, int | None], None]:
+        """Create a progress callback that emits events via the event bus.
+
+        Args:
+            job: Job to create callback for
+
+        Returns:
+            Callback function for job.set_progress_callback()
+        """
+
+        def progress_callback(
+            job: Job,
+            download_speed: float | None,
+            eta_seconds: int | None,
+        ) -> None:
+            if self._event_bus:
+                # Schedule the async emit as a task
+                asyncio.create_task(
+                    self._event_bus.emit_job_progress(job, download_speed, eta_seconds)
+                )
+
+        return progress_callback
 
     def on_job_failed(
         self,
@@ -429,9 +475,18 @@ class JobQueue:
             # Check if job was cancelled while in queue
             if job.status == JobStatus.CANCELLED:
                 self.queue.task_done()
+                # Emit cancelled event
+                if self._event_bus:
+                    await self._event_bus.emit_job_cancelled(job)
                 continue
 
             job.mark_running()
+
+            # Set up progress callback for event bus integration
+            if self._event_bus:
+                job.set_progress_callback(self._create_progress_callback(job))
+                await self._event_bus.emit_job_started(job)
+
             logger.info(
                 "job_started",
                 job_id=job.id,
@@ -451,6 +506,9 @@ class JobQueue:
                         job.mark_timeout()
                         # Record timeout as failure for metrics
                         await self._metrics.record_failure(job)
+                        # Emit timeout event
+                        if self._event_bus:
+                            await self._event_bus.emit_job_timeout(job)
                         logger.warning(
                             "job_timeout",
                             job_id=job.id,
@@ -468,6 +526,10 @@ class JobQueue:
                 # Record completion metrics
                 await self._metrics.record_completion(job)
 
+                # Emit completed event
+                if self._event_bus:
+                    await self._event_bus.emit_job_completed(job)
+
                 logger.info("job_completed", job_id=job.id, status=job.status.value)
 
                 # Check if any waiting jobs can now be queued
@@ -475,6 +537,9 @@ class JobQueue:
 
             except asyncio.CancelledError:
                 job.mark_cancelled()
+                # Emit cancelled event
+                if self._event_bus:
+                    await self._event_bus.emit_job_cancelled(job)
                 logger.warning("job_cancelled_during_execution", job_id=job.id)
                 raise
 
@@ -482,6 +547,9 @@ class JobQueue:
                 job.mark_failed(str(e))
                 # Record failure and trigger alerts
                 await self._metrics.record_failure(job)
+                # Emit failed event
+                if self._event_bus:
+                    await self._event_bus.emit_job_failed(job, error=str(e))
                 logger.error(
                     "job_failed",
                     job_id=job.id,
