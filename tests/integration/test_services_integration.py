@@ -61,42 +61,59 @@ def test_workspace(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def database_config(test_workspace: Path) -> DatabaseConfig:
-    """Create database config pointing to test workspace."""
-    return DatabaseConfig(
-        database_path=str(test_workspace / "test.db"),
-        enable_wal_mode=False,  # Disable WAL for tests
-        connection_timeout=30,
-        backup_dir=str(test_workspace / "backups"),
-    )
+def database_config() -> DatabaseConfig:
+    """Create database config.
+    
+    Note: DatabaseConfig no longer has user-configurable fields.
+    Tests should use direct VideoRepository instantiation with db_path.
+    """
+    return DatabaseConfig()
 
 
 @pytest.fixture
 def file_manager_config(test_workspace: Path) -> FileManagerConfig:
-    """Create FileManager config for test workspace."""
+    """Create FileManager config for test workspace.
+    
+    Note: FileManagerConfig only has trash_dir now.
+    """
     return FileManagerConfig(
         trash_dir="trash",  # Relative to library_dir
-        hash_algorithm="sha256",
-        enable_hash_verification=True,
-        organize_pattern="{artist}/{album}/{title}.{ext}",
     )
 
 
 @pytest.fixture
 def thumbnail_config(test_workspace: Path) -> ThumbnailConfig:
-    """Create thumbnail config for tests."""
+    """Create thumbnail config for tests.
+    
+    Note: ThumbnailConfig only has cache_dir now.
+    """
     return ThumbnailConfig(
         cache_dir="thumbnails",  # Relative to config_dir
-        default_timestamp=5.0,
-        width=320,
-        height=180,
     )
 
 
 @pytest_asyncio.fixture
-async def repository(database_config: DatabaseConfig) -> AsyncGenerator[VideoRepository, None]:
-    """Create a real VideoRepository with migrations applied."""
-    repo = await VideoRepository.from_config(database_config)
+async def repository(test_workspace: Path) -> AsyncGenerator[VideoRepository, None]:
+    """Create a real VideoRepository with migrations applied.
+    
+    Uses direct VideoRepository instantiation with temp database path.
+    """
+    from fuzzbin.core.db.migrator import Migrator
+    
+    db_path = test_workspace / "test.db"
+    migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
+    
+    repo = VideoRepository(
+        db_path=db_path,
+        enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
+        timeout=30,
+    )
+    await repo.connect()
+    
+    # Run migrations
+    migrator = Migrator(db_path, migrations_dir, enable_wal=False)
+    await migrator.run_migrations(connection=repo._connection)
+    
     yield repo
     await repo.close()
 

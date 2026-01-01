@@ -100,54 +100,58 @@ class IMVDbClient(RateLimitedAPIClient):
             has_api_key=bool(api_key),
         )
 
+    # Default configuration constants
+    DEFAULT_BASE_URL = "https://imvdb.com/api/v1"
+    DEFAULT_REQUESTS_PER_MINUTE = 1000
+    DEFAULT_BURST_SIZE = 50
+    DEFAULT_MAX_CONCURRENT = 10
+
     @classmethod
     def from_config(cls, config: APIClientConfig) -> "IMVDbClient":
         """
         Create IMVDb client from APIClientConfig.
 
+        Uses hardcoded defaults for base URL, rate limiting, and concurrency.
+        Only authentication can be configured via the config object.
+
         Args:
-            config: API client configuration
+            config: API client configuration (only auth field is used)
 
         Returns:
             Configured IMVDbClient instance
 
         Example:
             >>> from fuzzbin.common.config import APIClientConfig
-            >>> config = APIClientConfig(
-            ...     name="imvdb",
-            ...     base_url="https://imvdb.com/api/v1"
-            ... )
+            >>> config = APIClientConfig(auth={"app_key": "YOUR_KEY"})
             >>> client = IMVDbClient.from_config(config)
         """
-        # Extract API key from config.custom if present
+        # Extract API key from config.auth if present
         app_key = None
-        if config.custom:
-            app_key = config.custom.get("app_key")
+        if config.auth:
+            app_key = config.auth.get("app_key")
 
-        # Create rate limiter if configured
-        rate_limiter = None
-        if config.rate_limit and config.rate_limit.enabled:
-            from ..common.rate_limiter import RateLimiter
+        # Create rate limiter with hardcoded defaults
+        from ..common.rate_limiter import RateLimiter
 
-            rate_limiter = RateLimiter(
-                requests_per_minute=config.rate_limit.requests_per_minute,
-                requests_per_second=config.rate_limit.requests_per_second,
-                requests_per_hour=config.rate_limit.requests_per_hour,
-                burst_size=config.rate_limit.burst_size,
-            )
+        rate_limiter = RateLimiter(
+            requests_per_minute=cls.DEFAULT_REQUESTS_PER_MINUTE,
+            burst_size=cls.DEFAULT_BURST_SIZE,
+        )
 
-        # Create concurrency limiter if configured
-        concurrency_limiter = None
-        if config.concurrency:
-            from ..common.concurrency_limiter import ConcurrencyLimiter
+        # Create concurrency limiter with hardcoded defaults
+        from ..common.concurrency_limiter import ConcurrencyLimiter
 
-            concurrency_limiter = ConcurrencyLimiter(
-                max_concurrent=config.concurrency.max_concurrent_requests
-            )
+        concurrency_limiter = ConcurrencyLimiter(
+            max_concurrent=cls.DEFAULT_MAX_CONCURRENT
+        )
+
+        # Use default HTTP config
+        from ..common.config import HTTPConfig
+        http_config = HTTPConfig()
 
         return cls(
-            http_config=config.http,
-            base_url=config.base_url,
+            http_config=http_config,
+            base_url=cls.DEFAULT_BASE_URL,
             rate_limiter=rate_limiter,
             concurrency_limiter=concurrency_limiter,
             app_key=app_key,

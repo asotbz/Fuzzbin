@@ -266,11 +266,9 @@ class FFProbeClient:
             "json",  # Output in JSON format
         ]
 
-        if self.config.show_format:
-            args.append("-show_format")
-
-        if self.config.show_streams:
-            args.append("-show_streams")
+        # Always include format and streams (hardcoded defaults)
+        args.append("-show_format")
+        args.append("-show_streams")
 
         args.append(str(file_path))
 

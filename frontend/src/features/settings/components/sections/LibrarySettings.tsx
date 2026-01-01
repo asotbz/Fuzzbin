@@ -147,15 +147,22 @@ export default function LibrarySettings({ config, section }: LibrarySettingsProp
         onChange={handleFieldChange}
       />
 
-      <SettingField
-        path="file_manager.verify_file_integrity"
-        label="Verify File Integrity"
-        description="Verify file integrity during operations"
-        value={fileManager.verify_file_integrity}
-        type="boolean"
-        safetyLevel="safe"
-        onChange={handleFieldChange}
-      />
+      <div style={{
+        padding: 'var(--space-3)',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-subtle)',
+        marginTop: 'var(--space-4)',
+        fontFamily: 'var(--font-body)',
+        fontSize: 'var(--text-sm)',
+        lineHeight: '1.6'
+      }}>
+        File integrity verification is enabled by default.
+        For advanced configuration, see <code style={{
+          background: 'rgba(0,0,0,0.2)',
+          padding: '2px 6px',
+          fontFamily: 'monospace'
+        }}>docs/advanced-config.md</code>
+      </div>
     </SettingSection>
   )
 

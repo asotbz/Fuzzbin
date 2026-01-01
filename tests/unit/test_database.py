@@ -17,12 +17,12 @@ from fuzzbin.core.db import (
 class TestDatabaseBasics:
     """Test basic database operations."""
 
-    async def test_repository_initialization(self, database_config: DatabaseConfig):
+    async def test_repository_initialization(self, test_repository: VideoRepository):
         """Test repository can be initialized."""
-        repo = await VideoRepository.from_config(database_config)
-        assert repo is not None
-        assert repo.db_path == Path(database_config.database_path)
-        await repo.close()
+        # Repository is already initialized by the fixture
+        assert test_repository is not None
+        assert test_repository.db_path is not None
+        assert test_repository.db_path.exists()
 
     async def test_create_video(self, test_repository: VideoRepository):
         """Test creating a video record."""

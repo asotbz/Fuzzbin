@@ -17,7 +17,7 @@ class TestYTDLPIntegration:
     @pytest.mark.asyncio
     async def test_search_real(self):
         """Test real YouTube search."""
-        config = YTDLPConfig(search_max_results=3)
+        config = YTDLPConfig()
 
         async with YTDLPClient.from_config(config) as client:
             results = await client.search("Bush", "Machinehead", max_results=3)
@@ -42,7 +42,7 @@ class TestYTDLPIntegration:
     @pytest.mark.asyncio
     async def test_search_multiple_artists(self):
         """Test search with different artists."""
-        config = YTDLPConfig(search_max_results=2)
+        config = YTDLPConfig()
 
         test_cases = [
             ("Robin Thicke", "Blurred Lines"),
@@ -64,7 +64,7 @@ class TestYTDLPIntegration:
 
         Note: This downloads "Me at the zoo" - the first YouTube video (18 seconds).
         """
-        config = YTDLPConfig(quiet=True)
+        config = YTDLPConfig()
         output_file = tmp_path / "test_video.mp4"
 
         # Use the first YouTube video ever uploaded (short, public domain-ish)
@@ -90,7 +90,7 @@ class TestYTDLPIntegration:
     @pytest.mark.asyncio
     async def test_search_then_download(self, tmp_path):
         """Test complete workflow: search then download."""
-        config = YTDLPConfig(search_max_results=1, quiet=True)
+        config = YTDLPConfig()
         output_file = tmp_path / "downloaded_video.mp4"
 
         async with YTDLPClient.from_config(config) as client:

@@ -21,7 +21,6 @@ class TestGetConfig:
 
         data = response.json()
         assert "config" in data
-        assert "http" in data["config"]
         assert "logging" in data["config"]
         assert "database" in data["config"]
 
@@ -38,13 +37,13 @@ class TestGetConfig:
 class TestGetConfigField:
     """Tests for GET /config/field/{path} endpoint."""
 
-    def test_get_field_http_timeout(self, test_app: TestClient) -> None:
-        """GET /config/field/http.timeout returns timeout value."""
-        response = test_app.get("/config/field/http.timeout")
+    def test_get_field_backup_retention(self, test_app: TestClient) -> None:
+        """GET /config/field/backup.retention_count returns retention value."""
+        response = test_app.get("/config/field/backup.retention_count")
         assert response.status_code == 200
 
         data = response.json()
-        assert data["path"] == "http.timeout"
+        assert data["path"] == "backup.retention_count"
         assert isinstance(data["value"], int)
         assert data["safety_level"] == "safe"
 
@@ -64,12 +63,12 @@ class TestGetConfigField:
 
     def test_get_field_returns_safety_level(self, test_app: TestClient) -> None:
         """GET /config/field includes safety level."""
-        # Test a field that requires reload
-        response = test_app.get("/config/field/http.max_connections")
+        # Test a field that affects state
+        response = test_app.get("/config/field/file_manager.trash_dir")
         assert response.status_code == 200
 
         data = response.json()
-        assert data["safety_level"] == "requires_reload"
+        assert data["safety_level"] == "affects_state"
 
 
 class TestUpdateConfig:
@@ -78,81 +77,81 @@ class TestUpdateConfig:
     def test_update_safe_field(self, test_app: TestClient) -> None:
         """PATCH /config with safe field succeeds."""
         # Get original value
-        original_response = test_app.get("/config/field/http.timeout")
+        original_response = test_app.get("/config/field/backup.retention_count")
         original_value = original_response.json()["value"]
 
         # Update to new value
-        new_value = 45
+        new_value = 12
         response = test_app.patch(
             "/config",
-            json={"updates": {"http.timeout": new_value}},
+            json={"updates": {"backup.retention_count": new_value}},
         )
         assert response.status_code == 200
 
         data = response.json()
-        assert "http.timeout" in data["updated_fields"]
+        assert "backup.retention_count" in data["updated_fields"]
         assert data["safety_level"] == "safe"
         assert data["required_actions"] == []
 
         # Verify change applied
-        verify_response = test_app.get("/config/field/http.timeout")
+        verify_response = test_app.get("/config/field/backup.retention_count")
         assert verify_response.json()["value"] == new_value
 
         # Restore original
-        test_app.patch("/config", json={"updates": {"http.timeout": original_value}})
+        test_app.patch("/config", json={"updates": {"backup.retention_count": original_value}})
 
     def test_update_requires_reload_without_force_returns_409(
         self, test_app: TestClient
     ) -> None:
-        """PATCH /config with requires_reload field returns 409 without force."""
+        """PATCH /config with affects_state field returns 409 without force."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"http.max_connections": 200}},
+            json={"updates": {"file_manager.trash_dir": ".new_trash"}},
         )
         assert response.status_code == 409
 
         data = response.json()["detail"]
         assert "affected_fields" in data
         assert len(data["affected_fields"]) == 1
-        assert data["affected_fields"][0]["safety_level"] == "requires_reload"
+        assert data["affected_fields"][0]["safety_level"] == "affects_state"
         assert "required_actions" in data
 
     def test_update_requires_reload_with_force_succeeds(
         self, test_app: TestClient
     ) -> None:
-        """PATCH /config with requires_reload field succeeds with force=true."""
+        """PATCH /config with affects_state field succeeds with force=true."""
         # Get original
-        original_response = test_app.get("/config/field/http.max_connections")
+        original_response = test_app.get("/config/field/file_manager.trash_dir")
         original_value = original_response.json()["value"]
 
         response = test_app.patch(
             "/config",
-            json={"updates": {"http.max_connections": 150}, "force": True},
+            json={"updates": {"file_manager.trash_dir": ".forced_trash"}, "force": True},
         )
         assert response.status_code == 200
 
         data = response.json()
-        assert data["safety_level"] == "requires_reload"
+        assert data["safety_level"] == "affects_state"
         assert len(data["required_actions"]) > 0
 
         # Restore
         test_app.patch(
             "/config",
-            json={"updates": {"http.max_connections": original_value}, "force": True},
+            json={"updates": {"file_manager.trash_dir": original_value}, "force": True},
         )
 
     def test_update_multiple_fields(self, test_app: TestClient) -> None:
         """PATCH /config with multiple safe fields updates all."""
         # Get originals
-        orig_timeout = test_app.get("/config/field/http.timeout").json()["value"]
-        orig_redirects = test_app.get("/config/field/http.max_redirects").json()["value"]
+        orig_count = test_app.get("/config/field/backup.retention_count").json()["value"]
+        orig_enabled = test_app.get("/config/field/backup.enabled").json()["value"]
 
         response = test_app.patch(
             "/config",
             json={
                 "updates": {
-                    "http.timeout": 50,
-                    "http.max_redirects": 8,
+                    "backup.retention_count": 14,
+                    "backup.enabled": not orig_enabled,
                 },
                 "description": "Test batch update",
             },
@@ -161,16 +160,16 @@ class TestUpdateConfig:
 
         data = response.json()
         assert len(data["updated_fields"]) == 2
-        assert "http.timeout" in data["updated_fields"]
-        assert "http.max_redirects" in data["updated_fields"]
+        assert "backup.retention_count" in data["updated_fields"]
+        assert "backup.enabled" in data["updated_fields"]
 
         # Restore
         test_app.patch(
             "/config",
             json={
                 "updates": {
-                    "http.timeout": orig_timeout,
-                    "http.max_redirects": orig_redirects,
+                    "backup.retention_count": orig_count,
+                    "backup.enabled": orig_enabled,
                 }
             },
         )
@@ -179,18 +178,18 @@ class TestUpdateConfig:
         """PATCH /config with invalid value returns 400."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"http.timeout": -5}},  # Negative timeout invalid
+            json={"updates": {"backup.retention_count": -5}},  # Negative interval invalid
         )
         assert response.status_code == 400
 
     def test_update_with_description_recorded(self, test_app: TestClient) -> None:
         """PATCH /config with description records it in history."""
-        orig_timeout = test_app.get("/config/field/http.timeout").json()["value"]
+        orig_interval = test_app.get("/config/field/backup.retention_count").json()["value"]
 
         response = test_app.patch(
             "/config",
             json={
-                "updates": {"http.timeout": 55},
+                "updates": {"backup.retention_count": 18},
                 "description": "Custom description for test",
             },
         )
@@ -201,7 +200,7 @@ class TestUpdateConfig:
         history = history_response.json()
 
         # Restore first
-        test_app.patch("/config", json={"updates": {"http.timeout": orig_timeout}})
+        test_app.patch("/config", json={"updates": {"backup.retention_count": orig_interval}})
 
 
 class TestConfigHistory:
@@ -234,15 +233,15 @@ class TestUndoRedo:
     def test_undo_after_change(self, test_app: TestClient) -> None:
         """POST /config/undo reverts a change."""
         # Get original
-        orig_response = test_app.get("/config/field/http.timeout")
+        orig_response = test_app.get("/config/field/backup.retention_count")
         orig_value = orig_response.json()["value"]
 
         # Make change
         new_value = orig_value + 10
-        test_app.patch("/config", json={"updates": {"http.timeout": new_value}})
+        test_app.patch("/config", json={"updates": {"backup.retention_count": new_value}})
 
         # Verify change
-        changed_response = test_app.get("/config/field/http.timeout")
+        changed_response = test_app.get("/config/field/backup.retention_count")
         assert changed_response.json()["value"] == new_value
 
         # Undo
@@ -251,7 +250,7 @@ class TestUndoRedo:
         assert undo_response.json()["success"] is True
 
         # Verify undone
-        verify_response = test_app.get("/config/field/http.timeout")
+        verify_response = test_app.get("/config/field/backup.retention_count")
         assert verify_response.json()["value"] == orig_value
 
     def test_undo_with_no_history_returns_400(self, test_app: TestClient) -> None:
@@ -269,12 +268,12 @@ class TestUndoRedo:
     def test_redo_after_undo(self, test_app: TestClient) -> None:
         """POST /config/redo restores an undone change."""
         # Get original
-        orig_response = test_app.get("/config/field/http.timeout")
+        orig_response = test_app.get("/config/field/backup.retention_count")
         orig_value = orig_response.json()["value"]
 
         # Make change
         new_value = orig_value + 15
-        test_app.patch("/config", json={"updates": {"http.timeout": new_value}})
+        test_app.patch("/config", json={"updates": {"backup.retention_count": new_value}})
 
         # Undo
         test_app.post("/config/undo")
@@ -285,11 +284,11 @@ class TestUndoRedo:
         assert redo_response.json()["success"] is True
 
         # Verify redone
-        verify_response = test_app.get("/config/field/http.timeout")
+        verify_response = test_app.get("/config/field/backup.retention_count")
         assert verify_response.json()["value"] == new_value
 
         # Restore original
-        test_app.patch("/config", json={"updates": {"http.timeout": orig_value}})
+        test_app.patch("/config", json={"updates": {"backup.retention_count": orig_value}})
 
 
 class TestSafetyLevel:
@@ -297,29 +296,29 @@ class TestSafetyLevel:
 
     def test_get_safety_safe_field(self, test_app: TestClient) -> None:
         """GET /config/safety for safe field returns correct level."""
-        response = test_app.get("/config/safety/http.timeout")
+        response = test_app.get("/config/safety/backup.retention_count")
         assert response.status_code == 200
 
         data = response.json()
-        assert data["path"] == "http.timeout"
+        assert data["path"] == "backup.retention_count"
         assert data["safety_level"] == "safe"
         assert "description" in data
 
-    def test_get_safety_requires_reload_field(self, test_app: TestClient) -> None:
-        """GET /config/safety for requires_reload field returns correct level."""
-        response = test_app.get("/config/safety/http.max_connections")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["safety_level"] == "requires_reload"
-
     def test_get_safety_affects_state_field(self, test_app: TestClient) -> None:
         """GET /config/safety for affects_state field returns correct level."""
-        response = test_app.get("/config/safety/database.database_path")
+        response = test_app.get("/config/safety/file_manager.trash_dir")
         assert response.status_code == 200
 
         data = response.json()
         assert data["safety_level"] == "affects_state"
+
+    def test_get_safety_logging_level(self, test_app: TestClient) -> None:
+        """GET /config/safety for logging.level returns safe."""
+        response = test_app.get("/config/safety/logging.level")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["safety_level"] == "safe"
 
 
 class TestClientList:
@@ -353,7 +352,7 @@ class TestConflictResponse:
         """409 response includes all required fields."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"database.database_path": "/new/path/db.sqlite"}},
+            json={"updates": {"file_manager.trash_dir": ".conflict_trash"}},
         )
         assert response.status_code == 409
 
@@ -378,12 +377,12 @@ class TestConflictResponse:
         """409 response includes appropriate required_actions."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"database.database_path": "/new/path/db.sqlite"}},
+            json={"updates": {"file_manager.trash_dir": ".conflict_trash"}},
         )
         assert response.status_code == 409
 
         data = response.json()["detail"]
 
-        # Should have database-related action
+        # Should have file-related action
         action_types = [a["action_type"] for a in data["required_actions"]]
-        assert any("database" in at for at in action_types)
+        assert any("file" in at or "restart" in at for at in action_types)

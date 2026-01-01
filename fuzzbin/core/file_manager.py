@@ -220,7 +220,7 @@ class FileManager:
 
     Example:
         >>> from fuzzbin.common.config import FileManagerConfig
-        >>> config = FileManagerConfig(trash_dir=".trash", hash_algorithm="sha256")
+        >>> config = FileManagerConfig(trash_dir=".trash")
         >>> fm = FileManager(
         ...     config,
         ...     library_dir=Path("/music_videos"),
@@ -236,6 +236,12 @@ class FileManager:
         ... )
     """
 
+    # Default configuration constants (not exposed in user config)
+    DEFAULT_HASH_ALGORITHM = "sha256"
+    DEFAULT_VERIFY_AFTER_MOVE = True
+    DEFAULT_MAX_FILE_SIZE = None  # No limit
+    DEFAULT_CHUNK_SIZE = 8192
+
     def __init__(
         self,
         config: FileManagerConfig,
@@ -248,7 +254,7 @@ class FileManager:
         Initialize file manager.
 
         Args:
-            config: FileManagerConfig with trash_dir, hash_algorithm, etc.
+            config: FileManagerConfig with trash_dir setting
             library_dir: Root directory for media files, NFOs, and trash
             config_dir: Directory for configuration, database, cache, and thumbnails
             organizer_config: Optional OrganizerConfig for path generation
@@ -272,7 +278,7 @@ class FileManager:
             config_dir=str(self.config_dir),
             trash_dir=str(self.trash_dir),
             thumbnail_cache_dir=str(self.thumbnail_cache_dir),
-            hash_algorithm=config.hash_algorithm,
+            hash_algorithm=self.DEFAULT_HASH_ALGORITHM,
         )
 
     @classmethod
@@ -325,17 +331,17 @@ class FileManager:
                 path=file_path,
             )
 
-        # Check file size limit
+        # Check file size limit (use hardcoded default)
         file_size = file_path.stat().st_size
-        if self.config.max_file_size and file_size > self.config.max_file_size:
+        if self.DEFAULT_MAX_FILE_SIZE and file_size > self.DEFAULT_MAX_FILE_SIZE:
             raise FileTooLargeError(
-                f"File size {file_size} exceeds maximum {self.config.max_file_size}",
+                f"File size {file_size} exceeds maximum {self.DEFAULT_MAX_FILE_SIZE}",
                 file_size=file_size,
-                max_size=self.config.max_file_size,
+                max_size=self.DEFAULT_MAX_FILE_SIZE,
             )
 
-        # Select hash algorithm
-        algorithm = self.config.hash_algorithm.lower()
+        # Select hash algorithm (use hardcoded default)
+        algorithm = self.DEFAULT_HASH_ALGORITHM.lower()
         if algorithm == "xxhash":
             try:
                 import xxhash
@@ -352,10 +358,10 @@ class FileManager:
         else:
             hasher = hashlib.sha256()
 
-        # Read file in chunks
+        # Read file in chunks (use hardcoded default)
         async with aiofiles.open(file_path, "rb") as f:
             while True:
-                chunk = await f.read(self.config.chunk_size)
+                chunk = await f.read(self.DEFAULT_CHUNK_SIZE)
                 if not chunk:
                     break
                 hasher.update(chunk)
@@ -721,7 +727,7 @@ class FileManager:
         async with aiofiles.open(source, "rb") as src:
             async with aiofiles.open(target, "wb") as dst:
                 while True:
-                    chunk = await src.read(self.config.chunk_size)
+                    chunk = await src.read(self.DEFAULT_CHUNK_SIZE)
                     if not chunk:
                         break
                     await dst.write(chunk)
@@ -807,7 +813,7 @@ class FileManager:
 
         # Compute source hash before move (if verification enabled)
         source_hash: Optional[str] = None
-        if self.config.verify_after_move:
+        if self.DEFAULT_VERIFY_AFTER_MOVE:
             source_hash = await self.compute_file_hash(source_video_path)
 
         # Track files for rollback
@@ -824,7 +830,7 @@ class FileManager:
                 moved_files.append((target_paths.nfo_path, source_nfo_path))
 
             # Verify hash after move
-            if self.config.verify_after_move and source_hash:
+            if self.DEFAULT_VERIFY_AFTER_MOVE and source_hash:
                 target_hash = await self.compute_file_hash(target_paths.video_path)
                 if target_hash != source_hash:
                     raise HashMismatchError(
@@ -847,7 +853,7 @@ class FileManager:
                 video_id=video_id,
                 source_video=str(source_video_path),
                 target_video=str(target_paths.video_path),
-                hash_verified=self.config.verify_after_move,
+                hash_verified=self.DEFAULT_VERIFY_AFTER_MOVE,
             )
 
             return target_paths

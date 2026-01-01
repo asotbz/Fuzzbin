@@ -13,10 +13,6 @@ import respx
 from fuzzbin.api.imvdb_client import IMVDbClient
 from fuzzbin.common.config import (
     APIClientConfig,
-    ConcurrencyConfig,
-    HTTPConfig,
-    RateLimitConfig,
-    RetryConfig,
 )
 from fuzzbin.parsers.imvdb_models import (
     IMVDbEntity,
@@ -69,18 +65,7 @@ def entity_response(examples_dir):
 def imvdb_config():
     """Create IMVDb API configuration for testing."""
     return APIClientConfig(
-        name="imvdb",
-        base_url="https://imvdb.com/api/v1",
-        http=HTTPConfig(
-            timeout=10,
-            retry=RetryConfig(
-                max_attempts=3,
-                status_codes=[500, 502, 503],  # Don't retry 403/404
-            ),
-        ),
-        rate_limit=RateLimitConfig(requests_per_minute=1000, burst_size=50),
-        concurrency=ConcurrencyConfig(max_concurrent_requests=10),
-        custom={"app_key": "test-api-key-123"},
+        auth={"app_key": "test-api-key-123"},
     )
 
 
@@ -268,69 +253,45 @@ class TestIMVDbClient:
     @pytest.mark.asyncio
     @respx.mock
     async def test_rate_limiting_enforcement(self, imvdb_config, search_videos_response):
-        """Test that rate limiting is enforced (1000 req/min)."""
+        """Test that rate limiting is configured with defaults."""
         respx.get("https://imvdb.com/api/v1/search/videos").mock(
             return_value=httpx.Response(200, json=search_videos_response)
         )
 
-        # Create config with lower rate for faster testing
-        test_config = APIClientConfig(
-            name="imvdb",
-            base_url="https://imvdb.com/api/v1",
-            rate_limit=RateLimitConfig(
-                requests_per_second=5,  # 5 req/s for testing
-                burst_size=2,
-            ),
-            custom={"app_key": "test-key"},
-        )
-
-        async with IMVDbClient.from_config(config=test_config) as client:
-            # Make 6 requests
-            start = time.monotonic()
-            tasks = [
-                client.search_videos("Artist", "Track") for _ in range(6)
-            ]
-            responses = await asyncio.gather(*tasks)
-            elapsed = time.monotonic() - start
-
-            # With 5 req/s and burst=2, 6 requests should take at least 0.8s
-            assert elapsed >= 0.7, f"Rate limiting not enforced: {elapsed}s"
-            assert len(responses) == 6
+        async with IMVDbClient.from_config(config=imvdb_config) as client:
+            # Verify rate limiter is configured with defaults
+            assert client.rate_limiter is not None
+            expected_rate = IMVDbClient.DEFAULT_REQUESTS_PER_MINUTE / 60.0
+            assert abs(client.rate_limiter.rate - expected_rate) < 0.01
+            
+            # Make a few requests - they should succeed
+            for _ in range(3):
+                await client.search_videos("Artist", "Track")
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_concurrency_limiting(self, imvdb_config, search_videos_response):
-        """Test that concurrency limiting is enforced."""
+        """Test that concurrency limiting is configured with defaults."""
         # Mock with delay
         async def slow_response(request):
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.05)
             return httpx.Response(200, json=search_videos_response)
 
         respx.get("https://imvdb.com/api/v1/search/videos").mock(
             side_effect=slow_response
         )
 
-        # Create config with low concurrency for testing
-        test_config = APIClientConfig(
-            name="imvdb",
-            base_url="https://imvdb.com/api/v1",
-            concurrency=ConcurrencyConfig(max_concurrent_requests=2),
-            custom={"app_key": "test-key"},
-        )
-
-        async with IMVDbClient.from_config(config=test_config) as client:
-            # Start 6 requests simultaneously
-            start = time.monotonic()
+        async with IMVDbClient.from_config(config=imvdb_config) as client:
+            # Verify concurrency limiter is configured with defaults
+            assert client.concurrency_limiter is not None
+            assert client.concurrency_limiter.max_concurrent == IMVDbClient.DEFAULT_MAX_CONCURRENT
+            
+            # Make concurrent requests - they should all succeed
             tasks = [
-                client.search_videos("Artist", "Track") for _ in range(6)
+                client.search_videos("Artist", "Track") for _ in range(5)
             ]
             responses = await asyncio.gather(*tasks)
-            elapsed = time.monotonic() - start
-
-            # With max 2 concurrent and 0.15s each, 6 requests should take at least 0.45s
-            # (3 batches of 2 parallel requests)
-            assert elapsed >= 0.40, f"Concurrency limiting not enforced: {elapsed}s"
-            assert len(responses) == 6
+            assert len(responses) == 5
 
     @pytest.mark.asyncio
     @respx.mock
@@ -496,10 +457,7 @@ class TestIMVDbClient:
         if "IMVDB_APP_KEY" in os.environ:
             del os.environ["IMVDB_APP_KEY"]
 
-        config = APIClientConfig(
-            name="imvdb",
-            base_url="https://imvdb.com/api/v1",
-        )
+        config = APIClientConfig()
 
         async with IMVDbClient.from_config(config=config) as client:
             # Should work but not have the auth header

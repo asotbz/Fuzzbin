@@ -12,11 +12,9 @@ import respx
 from fuzzbin.common.config import (
     HTTPConfig,
     CacheConfig,
-    APIClientConfig,
-    RateLimitConfig,
-    ConcurrencyConfig,
 )
 from fuzzbin.common.http_client import AsyncHTTPClient
+from fuzzbin.common.rate_limiter import RateLimiter
 from fuzzbin.api.base_client import RateLimitedAPIClient
 
 
@@ -41,18 +39,13 @@ def http_config() -> HTTPConfig:
 
 
 @pytest.fixture
-def api_client_config(http_config: HTTPConfig, cache_config: CacheConfig) -> APIClientConfig:
-    """Create an API client configuration with cache enabled."""
-    return APIClientConfig(
-        name="test_api",
-        base_url="https://api.example.com",
-        http=http_config,
-        rate_limit=RateLimitConfig(
-            enabled=True,
-            requests_per_minute=60,
-        ),
-        cache=cache_config,
-    )
+def api_client_config(http_config: HTTPConfig, cache_config: CacheConfig) -> dict:
+    """Create configuration dict for API client with cache enabled."""
+    return {
+        "http_config": http_config,
+        "base_url": "https://api.example.com",
+        "cache_config": cache_config,
+    }
 
 
 @pytest.mark.asyncio
@@ -296,14 +289,18 @@ class TestCacheClearing:
 
     @respx.mock
     async def test_clear_cache_on_api_client(
-        self, api_client_config: APIClientConfig
+        self, api_client_config: dict
     ):
         """Test cache clearing on RateLimitedAPIClient."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with RateLimitedAPIClient.from_config(api_client_config) as client:
+        async with RateLimitedAPIClient(
+            http_config=api_client_config["http_config"],
+            base_url=api_client_config["base_url"],
+            cache_config=api_client_config["cache_config"],
+        ) as client:
             # First request
             await client.get("/data")
             assert mock_route.call_count == 1
@@ -326,14 +323,20 @@ class TestCacheWithRateLimiting:
 
     @respx.mock
     async def test_cache_hit_bypasses_rate_limiter(
-        self, api_client_config: APIClientConfig
+        self, api_client_config: dict
     ):
         """Test that cached responses don't consume rate limit quota."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with RateLimitedAPIClient.from_config(api_client_config) as client:
+        rate_limiter = RateLimiter(requests_per_minute=60)
+        async with RateLimitedAPIClient(
+            http_config=api_client_config["http_config"],
+            base_url=api_client_config["base_url"],
+            cache_config=api_client_config["cache_config"],
+            rate_limiter=rate_limiter,
+        ) as client:
             # First request - should use rate limiter
             response1 = await client.get("/data")
             assert response1.status_code == 200
@@ -353,12 +356,23 @@ class TestCacheWithRateLimiting:
                 tokens_after_second = client.rate_limiter.get_available_tokens()
                 assert tokens_after_second >= tokens_after_first
                 assert tokens_after_second < tokens_after_first + 1.0  # Less than 1 second of refill
+
+    @respx.mock
+    async def test_multiple_cache_hits_preserve_rate_limit(
+        self, api_client_config: dict
+    ):
         """Test that multiple cache hits don't consume any rate limit."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with RateLimitedAPIClient.from_config(api_client_config) as client:
+        rate_limiter = RateLimiter(requests_per_minute=60)
+        async with RateLimitedAPIClient(
+            http_config=api_client_config["http_config"],
+            base_url=api_client_config["base_url"],
+            cache_config=api_client_config["cache_config"],
+            rate_limiter=rate_limiter,
+        ) as client:
             # First request
             await client.get("/data")
             
@@ -377,6 +391,8 @@ class TestCacheWithRateLimiting:
                 tokens_after_cached = client.rate_limiter.get_available_tokens()
                 assert tokens_after_cached >= tokens_after_first
                 assert tokens_after_cached < tokens_after_first + 1.0  # Less than 1 second of refill
+
+
 class TestPerAPIConfiguration:
     """Test per-API cache configuration."""
 

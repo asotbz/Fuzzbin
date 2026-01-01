@@ -60,6 +60,15 @@ class FFmpegClient:
         >>> asyncio.run(main())
     """
 
+    # Default configuration constants (not exposed in user config)
+    DEFAULT_TIMESTAMP = 5.0  # seconds into video
+    DEFAULT_WIDTH = 320  # pixels
+    DEFAULT_HEIGHT = 180  # pixels
+    DEFAULT_QUALITY = 5  # JPEG quality (1=best, 31=worst)
+    DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    DEFAULT_TIMEOUT = 30  # seconds
+    DEFAULT_FFMPEG_PATH = "ffmpeg"
+
     def __init__(
         self,
         config: Optional[ThumbnailConfig] = None,
@@ -99,11 +108,11 @@ class FFmpegClient:
 
         Example:
             >>> from fuzzbin.common.config import ThumbnailConfig
-            >>> config = ThumbnailConfig(width=320, height=180)
+            >>> config = ThumbnailConfig()
             >>> async with FFmpegClient.from_config(config) as client:
             ...     await client.extract_frame(video_path, output_path)
         """
-        return cls(config=config, ffmpeg_path=config.ffmpeg_path)
+        return cls(config=config, ffmpeg_path=cls.DEFAULT_FFMPEG_PATH)
 
     async def _verify_binary(self) -> None:
         """
@@ -172,10 +181,10 @@ class FFmpegClient:
         if not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        # Use config defaults if not specified
-        timestamp = timestamp if timestamp is not None else self.config.default_timestamp
-        width = width or self.config.width
-        height = height or self.config.height
+        # Use hardcoded defaults if not specified
+        timestamp = timestamp if timestamp is not None else self.DEFAULT_TIMESTAMP
+        width = width or self.DEFAULT_WIDTH
+        height = height or self.DEFAULT_HEIGHT
 
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,7 +206,7 @@ class FFmpegClient:
             "-vf",
             f"scale={width}:{height}:force_original_aspect_ratio=decrease",
             "-q:v",
-            str(self.config.quality),  # JPEG quality
+            str(self.DEFAULT_QUALITY),  # JPEG quality
             str(output_path),
         ]
 
@@ -218,7 +227,7 @@ class FFmpegClient:
 
             _, stderr = await asyncio.wait_for(
                 process.communicate(),
-                timeout=self.config.timeout,
+                timeout=self.DEFAULT_TIMEOUT,
             )
 
             if process.returncode != 0:
@@ -242,20 +251,20 @@ class FFmpegClient:
 
             # Safety check: verify output file size
             output_size = output_path.stat().st_size
-            if output_size > self.config.max_file_size:
+            if output_size > self.DEFAULT_MAX_FILE_SIZE:
                 # Delete the oversized file
                 output_path.unlink()
                 self.logger.error(
                     "thumbnail_too_large",
                     output_path=str(output_path),
                     size=output_size,
-                    max_size=self.config.max_file_size,
+                    max_size=self.DEFAULT_MAX_FILE_SIZE,
                 )
                 raise ThumbnailTooLargeError(
                     f"Generated thumbnail ({output_size} bytes) exceeds "
-                    f"max size ({self.config.max_file_size} bytes)",
+                    f"max size ({self.DEFAULT_MAX_FILE_SIZE} bytes)",
                     size=output_size,
-                    max_size=self.config.max_file_size,
+                    max_size=self.DEFAULT_MAX_FILE_SIZE,
                 )
 
             self.logger.info(
@@ -279,6 +288,6 @@ class FFmpegClient:
                 output_path.unlink()
             self.logger.error(
                 "ffmpeg_timeout",
-                timeout=self.config.timeout,
+                timeout=self.DEFAULT_TIMEOUT,
             )
-            raise FFmpegExecutionError(f"ffmpeg command timed out after {self.config.timeout}s")
+            raise FFmpegExecutionError(f"ffmpeg command timed out after {self.DEFAULT_TIMEOUT}s")

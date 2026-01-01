@@ -33,49 +33,13 @@
 #   config_dir: $HOME/Fuzzbin/config
 #   library_dir: $HOME/Fuzzbin/music_videos
 #
-# All relative paths in this file (database_path, cache storage_path, backup_dir,
-# thumbnail cache_dir) are resolved against config_dir at runtime.
+# Advanced Settings:
+# ------------------
+# This file contains only commonly-needed settings. For advanced configuration
+# options (rate limiting, caching, timeouts, etc.), see docs/advanced-config.md
 # =======================
 
-http:
-  # Connection timeout in seconds (default: 30)
-  timeout: 30
-  
-  # Maximum number of redirects to follow (default: 5)
-  max_redirects: 5
-  
-  # Whether to verify SSL certificates (default: true)
-  verify_ssl: true
-  
-  # Maximum connections in the pool (default: 100)
-  max_connections: 100
-  
-  # Maximum keep-alive connections (default: 20)
-  max_keepalive_connections: 20
-  
-  # Retry configuration
-  retry:
-    # Maximum number of retry attempts (default: 3)
-    max_attempts: 3
-    
-    # Exponential backoff multiplier in seconds (default: 1.0)
-    backoff_multiplier: 1.0
-    
-    # Minimum wait time between retries in seconds (default: 1.0)
-    min_wait: 1.0
-    
-    # Maximum wait time between retries in seconds (default: 10.0)
-    max_wait: 10.0
-    
-    # HTTP status codes that should trigger a retry
-    # 408: Request Timeout
-    # 429: Too Many Requests
-    # 500: Internal Server Error
-    # 502: Bad Gateway
-    # 503: Service Unavailable
-    # 504: Gateway Timeout
-    status_codes: [408, 429, 500, 502, 503, 504]
-
+# Logging configuration
 logging:
   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)
   level: INFO
@@ -83,236 +47,47 @@ logging:
   # Log format: json or text (default: json)
   # Use "text" for development, "json" for production
   format: json
-  
-  # Enabled log handlers: console, file (default: [console])
-  handlers:
-    - console
-  
-  # File logging configuration (optional)
-  # Uncomment to enable file logging
-  # file:
-  #   path: logs/fuzzbin.log
-  #   max_bytes: 10485760  # 10MB
-  #   backup_count: 5
-  
-  # Log levels for third-party libraries
-  third_party:
-    httpx: WARNING
-    httpcore: WARNING
-    tenacity: INFO
 
-# Database configuration
-# Paths are relative to config_dir unless absolute
-database:
-  # SQLite database file (default: fuzzbin.db)
-  database_path: fuzzbin.db
-  
-  # Enable WAL mode for better concurrency (default: true)
-  enable_wal_mode: true
-  
-  # Connection timeout in seconds (default: 30)
-  connection_timeout: 30
-  
-  # Directory for database backups (default: backups)
-  backup_dir: backups
-
-# Response caching configuration using Hishel
-# Caching can significantly improve performance for repeated API requests
-# Each API client instance uses its own cache database for isolation
-cache:
-  # Whether caching is enabled globally (default: false)
-  enabled: true
-  
-  # Path to SQLite cache database (default: .cache/default.db)
-  # Each API can override this to use its own cache database
-  storage_path: .cache/default.db
-  
-  # Default time-to-live for cached responses in seconds (default: 3600 = 1 hour)
-  ttl: 3600
-  
-  # Stale-while-revalidate: time in seconds to serve stale responses while
-  # revalidating in background (default: 60 seconds)
-  stale_while_revalidate: 60
-  
-  # HTTP methods that can be cached (default: GET, HEAD)
-  cacheable_methods:
-    - GET
-    - HEAD
-  
-  # HTTP status codes that can be cached (default: 2xx, 3xx)
-  cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
-
-# API client configurations for rate-limited integrations
-# Each API can have its own rate limits, concurrency controls, and auth settings
+# API client configurations
+# Environment variables take precedence over config file values.
 apis:
   # IMVDb (Internet Music Video Database) API
   imvdb:
-    name: imvdb
-    base_url: https://imvdb.com/api/v1
-    
-    # HTTP configuration with custom retry settings
-    # Don't retry 403/404 errors, only retry server errors
-    http:
-      timeout: 30
-      retry:
-        max_attempts: 3
-        backoff_multiplier: 1.0
-        min_wait: 1.0
-        max_wait: 10.0
-        status_codes: [500, 502, 503]  # Don't retry 403, 404
-    
-    # Rate limiting - IMVDb allows 1000 requests per minute
-    rate_limit:
-      enabled: true
-      requests_per_minute: 1000
-      burst_size: 50  # Allow bursts up to 50 requests
-    
-    # Concurrency control
-    concurrency:
-      max_concurrent_requests: 10
-    
-    # Response caching - IMVDb data changes moderately
-    # Cache for 30 minutes with 2 minute stale-while-revalidate
-    cache:
-      enabled: true
-      storage_path: .cache/imvdb.db
-      ttl: 1800  # 30 minutes
-      stale_while_revalidate: 120  # 2 minutes
-      cacheable_methods:
-        - GET
-        - HEAD
-      cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
-    
-    # API key (can be overridden by IMVDB_APP_KEY environment variable)
-    # Environment variable takes precedence
-    custom:
+    auth:
+      # API key (or set IMVDB_APP_KEY environment variable)
       app_key: YOUR_IMVDB_APP_KEY
   
   # Discogs API
   discogs:
-    name: discogs
-    base_url: https://api.discogs.com
-    
-    # HTTP configuration with custom retry settings
-    # Don't retry 401/403/404 errors, only retry server errors
-    http:
-      timeout: 30
-      retry:
-        max_attempts: 3
-        backoff_multiplier: 1.0
-        min_wait: 1.0
-        max_wait: 10.0
-        status_codes: [500, 502, 503]  # Don't retry 401, 403, 404
-    
-    # Rate limiting - Discogs allows 60 requests per minute (authenticated)
-    # This can be dynamically adjusted based on X-Discogs-Ratelimit headers
-    rate_limit:
-      enabled: true
-      requests_per_minute: 60
-      burst_size: 10  # Allow bursts up to 10 requests
-    
-    # Concurrency control
-    concurrency:
-      max_concurrent_requests: 5
-    
-    # Response caching - Discogs catalog data is relatively stable
-    # Cache for 2 hours with 5 minute stale-while-revalidate
-    cache:
-      enabled: true
-      storage_path: .cache/discogs.db
-      ttl: 7200  # 2 hours
-      stale_while_revalidate: 300  # 5 minutes
-      cacheable_methods:
-        - GET
-        - HEAD
-      cacheable_status_codes: [200, 203, 204, 206, 300, 301, 308]
-    
-    # API credentials (can be overridden by DISCOGS_API_KEY and DISCOGS_API_SECRET env variables)
-    # Environment variables take precedence
-    custom:
+    auth:
+      # API credentials (or set DISCOGS_API_KEY and DISCOGS_API_SECRET environment variables)
       api_key: YOUR_DISCOGS_API_KEY
       api_secret: YOUR_DISCOGS_API_SECRET
 
   # Spotify Web API
   spotify:
-    name: spotify
-    base_url: https://api.spotify.com/v1
-
-    # HTTP configuration with custom retry settings
-    # Retry 429 (rate limit) and server errors
-    http:
-      timeout: 30
-      retry:
-        max_attempts: 3
-        backoff_multiplier: 1.0
-        min_wait: 1.0
-        max_wait: 10.0
-        status_codes: [429, 500, 502, 503, 504]
-
-    # Rate limiting - Spotify doesn't publish exact limits
-    # Using conservative estimate of ~180 requests per minute
-    # Actual limits enforced via 429 responses
-    rate_limit:
-      enabled: true
-      requests_per_minute: 180
-      burst_size: 10  # Allow small bursts
-
-    # Concurrency control
-    concurrency:
-      max_concurrent_requests: 5
-
-    # Response caching - Playlist and track data can be cached
-    # Track metadata is relatively stable
-    cache:
-      enabled: true
-      storage_path: .cache/spotify.db
-      ttl: 3600  # 1 hour
-      stale_while_revalidate: 300  # 5 minutes
-      cacheable_methods:
-        - GET
-      cacheable_status_codes: [200]
-
-    # Spotify authentication - choose one of two methods:
-    #
-    # Method 1: OAuth Client Credentials (RECOMMENDED)
-    # - Automatic token management with auto-refresh
-    # - Get credentials from: https://developer.spotify.com/dashboard
-    # - Click "Create App", then copy Client ID and Client Secret
-    # - Can also use SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET env variables
-    custom:
+    auth:
+      # OAuth Client Credentials (recommended)
+      # Get credentials from: https://developer.spotify.com/dashboard
+      # Or set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables
       client_id: YOUR_SPOTIFY_CLIENT_ID
       client_secret: YOUR_SPOTIFY_CLIENT_SECRET
+      
+      # Alternative: Manual access token (for testing only, expires in 1 hour)
+      # access_token: YOUR_SPOTIFY_ACCESS_TOKEN
 
-    # Method 2: Manual Access Token (for testing only)
-    # - Tokens expire after 1 hour and must be manually refreshed
-    # - Get token from: https://developer.spotify.com/console/get-playlist-tracks/
-    # - Can also use SPOTIFY_ACCESS_TOKEN environment variable
-    # - Uncomment line below to use manual token instead of OAuth:
-    # custom:
-    #   access_token: YOUR_SPOTIFY_ACCESS_TOKEN
-
-# yt-dlp client configuration for YouTube video search and download
+# yt-dlp configuration for YouTube video search and download
 ytdlp:
   # Path to yt-dlp binary (default: "yt-dlp" from PATH)
   ytdlp_path: yt-dlp
 
   # Default format specification for downloads
-  # Downloads best quality MP4 video with M4A audio, falls back to best available MP4
   format_spec: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
 
   # Bypass geographic restrictions (default: false)
   geo_bypass: false
 
-  # Suppress progress output during downloads (default: false)
-  quiet: false
-
-  # Default maximum search results (default: 5)
-  search_max_results: 5
-
-  # Command execution timeout in seconds (default: 300 = 5 minutes)
-  timeout: 300
-
-# ffprobe client configuration for video file metadata extraction
+# ffprobe configuration for video file metadata extraction
 ffprobe:
   # Path to ffprobe binary (default: "ffprobe" from PATH)
   ffprobe_path: ffprobe
@@ -320,27 +95,10 @@ ffprobe:
   # Command execution timeout in seconds (default: 30)
   timeout: 30
 
-  # Include format/container information in output (default: true)
-  show_format: true
-
-  # Include stream information in output (default: true)
-  show_streams: true
-
 # Thumbnail generation configuration
-# Thumbnails are stored in config_dir/.thumbnails
 thumbnail:
   # Directory for cached thumbnails (relative to config_dir)
   cache_dir: ".thumbnails"
-  
-  # Default timestamp in seconds to extract frame from
-  default_timestamp: 5.0
-  
-  # Thumbnail dimensions (width x height in pixels)
-  width: 320
-  height: 180
-  
-  # JPEG quality (1=best, 31=worst)
-  quality: 5
 
 # NFO file handling configuration
 nfo:
@@ -350,135 +108,57 @@ nfo:
     enabled: false
     
     # Field to append featured artists to: 'artist' or 'title'
-    # When enabled=true and featured_artists list is populated:
-    #   - 'artist': "Robin Thicke" becomes "Robin Thicke ft. T.I., Pharrell Williams"
-    #   - 'title': "Blurred Lines" becomes "Blurred Lines ft. T.I., Pharrell Williams"
     append_to_field: artist
 
 # Media file organizer configuration
 organizer:
   # Path pattern for organizing media files
   # Available fields: {artist}, {title}, {album}, {year}, {genre}, {director}, {studio}, {featured_artists}
-  # Note: {tags} is not allowed (list type)
   # 
   # Example patterns:
   #   - "{artist}/{title}" -> "Robin Thicke/Blurred Lines.mp4"
   #   - "{genre}/{artist}/{year}/{title}" -> "R&B/Robin Thicke/2013/Blurred Lines.mp4"
-  #   - "{artist}/{album}/{title}" -> "Robin Thicke/Blurred Lines/Blurred Lines.mp4"
   path_pattern: "{artist}/{title}"
   
-  # Whether to normalize filenames (lowercase, remove special chars, replace spaces with underscores)
-  # When true: "Björk/Jóga" -> "bjork/joga"
-  # When false: "Björk/Jóga" -> "Björk/Jóga"
+  # Whether to normalize filenames (lowercase, remove special chars)
   normalize_filenames: false
 
-# Tag management and auto-tagging configuration
+# Tag management configuration
 tags:
   # Normalize tag names to lowercase for consistency
-  # When true: "Rock" and "rock" are treated as the same tag
   normalize: true
   
   # Automatic decade tag configuration
   auto_decade:
-    # Enable automatic decade tag generation based on video release year
-    # When enabled, videos will automatically receive a decade tag (e.g., "90s" for 1990-1999)
     enabled: true
-    
-    # Format string for decade tags
-    # {decade} is replaced with the decade number (00, 10, 20, ..., 90)
-    # Examples:
-    #   - "{decade}s" produces "90s", "00s", "10s"
-    #   - "{decade}0s" produces "900s", "000s", "100s"
-    #   - "decade-{decade}" produces "decade-90", "decade-00"
     format: "{decade}s"
 
-# File management configuration for organizing, moving, and verifying media files
+# File management configuration
 file_manager:
   # Directory for soft-deleted files (relative to library_dir)
-  # Files moved here can be restored or permanently deleted later
   trash_dir: ".trash"
-  
-  # Hash algorithm for file integrity checks
-  # Options: sha256 (recommended), xxhash (faster), md5 (legacy)
-  hash_algorithm: sha256
-  
-  # Verify file integrity after move operations
-  # When true, computes hash before and after move to ensure data integrity
-  verify_after_move: true
-  
-  # Maximum file size for operations in bytes (null = no limit)
-  # Set this to prevent accidental operations on very large files
-  # Example: 10737418240 = 10GB
-  # max_file_size: null
-  
-  # Chunk size for file hashing operations in bytes (default: 8192)
-  # Larger values may improve performance for large files
-  chunk_size: 8192
-
-# Advanced features configuration
-# Settings for bulk operations, faceted search, and scheduled tasks
-advanced:
-  # Maximum items allowed in bulk operations
-  # Prevents excessively large batch operations that could overwhelm the system
-  max_bulk_items: 500
-  
-  # Time-to-live for facet cache in seconds
-  # Facets (tag/genre/year/director counts) are cached to improve search performance
-  # Set to 0 to disable caching
-  facet_cache_ttl: 60
-  
-  # Maximum items for synchronous import operations
-  # Imports with more items will be queued as background jobs
-  # Set lower for faster API responses, higher for more sync imports
-  max_sync_import_items: 10
-  
-  # Cron expression for scheduled library scans (optional)
-  # Runs NFO import on library_dir to discover new files
-  # Format: "minute hour day month weekday" (5 fields)
-  # Examples:
-  #   - "0 * * * *" = every hour at minute 0
-  #   - "0 0 * * *" = daily at midnight
-  #   - "0 0 * * 0" = weekly on Sunday at midnight
-  # Uncomment to enable:
-  # scheduler_library_scan_cron: "0 0 * * *"
-  
-  # Cron expression for scheduled metadata refresh (optional)
-  # Refreshes metadata from external APIs (IMVDb, Discogs) for stale videos
-  # Uncomment to enable:
-  # scheduler_metadata_refresh_cron: "0 2 * * *"
 
 # Automatic backup configuration
-# Backups include config.yaml, the SQLite database, and thumbnail repository
-# Archives are stored as timestamped .zip files that can be restored manually
 backup:
-  # Whether automatic scheduled backups are enabled (default: true)
+  # Whether automatic scheduled backups are enabled
   enabled: true
   
   # Cron expression for backup schedule (default: daily at 2 AM)
-  # Format: minute hour day-of-month month day-of-week
-  # Examples:
-  #   - "0 2 * * *"    -> Daily at 2:00 AM
-  #   - "0 */6 * * *"  -> Every 6 hours
-  #   - "0 3 * * 0"    -> Weekly on Sunday at 3:00 AM
   schedule: "0 2 * * *"
   
-  # Number of backup archives to retain (oldest are automatically deleted)
+  # Number of backup archives to retain
   retention_count: 7
   
   # Directory for backup archives (relative to config_dir)
   output_dir: backups
 
 # Automatic trash cleanup configuration
-# Deleted files are moved to the trash directory (.trash/ in library_dir)
-# This config controls automatic cleanup of old items in the trash
 trash:
-  # Whether automatic scheduled trash cleanup is enabled (default: true)
+  # Whether automatic scheduled trash cleanup is enabled
   enabled: true
   
   # Cron expression for cleanup schedule (default: daily at 3 AM)
-  # Format: minute hour day-of-month month day-of-week
   schedule: "0 3 * * *"
   
-  # Delete items from trash older than this many days (default: 30)
-  # Items newer than this will be preserved for potential restoration
+  # Delete items from trash older than this many days
   retention_days: 30

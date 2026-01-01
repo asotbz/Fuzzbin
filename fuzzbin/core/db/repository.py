@@ -48,6 +48,11 @@ class VideoRepository:
         self._db_connection = DatabaseConnection(db_path, enable_wal, timeout)
         self._connection: Optional[aiosqlite.Connection] = None
 
+    # Default database configuration constants (not user-configurable)
+    DEFAULT_DATABASE_PATH = "fuzzbin.db"
+    DEFAULT_ENABLE_WAL = True
+    DEFAULT_CONNECTION_TIMEOUT = 30
+
     @classmethod
     async def from_config(
         cls,
@@ -59,7 +64,7 @@ class VideoRepository:
         Create repository from DatabaseConfig.
 
         Args:
-            config: DatabaseConfig instance
+            config: DatabaseConfig instance (currently unused, kept for API compatibility)
             config_dir: Config directory for resolving relative database_path.
                        If not provided, database_path must be absolute or
                        will be resolved relative to CWD.
@@ -68,9 +73,9 @@ class VideoRepository:
         Returns:
             Initialized VideoRepository
         """
-        # Resolve database path
-        db_path = Path(config.database_path)
-        if not db_path.is_absolute() and config_dir:
+        # Use hardcoded defaults - database settings are not user-configurable
+        db_path = Path(cls.DEFAULT_DATABASE_PATH)
+        if config_dir:
             db_path = config_dir / db_path
 
         # Ensure parent directory exists
@@ -78,8 +83,8 @@ class VideoRepository:
 
         repo = cls(
             db_path=db_path,
-            enable_wal=config.enable_wal_mode,
-            timeout=config.connection_timeout,
+            enable_wal=cls.DEFAULT_ENABLE_WAL,
+            timeout=cls.DEFAULT_CONNECTION_TIMEOUT,
             library_dir=library_dir,
         )
 
@@ -88,7 +93,7 @@ class VideoRepository:
 
         # Run migrations using the existing connection to avoid WAL conflicts
         migrations_dir = Path(__file__).parent / "migrations"
-        migrator = Migrator(db_path, migrations_dir, enable_wal=config.enable_wal_mode)
+        migrator = Migrator(db_path, migrations_dir, enable_wal=cls.DEFAULT_ENABLE_WAL)
         await migrator.run_migrations(connection=repo._connection)
 
         logger.info(

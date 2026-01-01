@@ -3,7 +3,7 @@
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, List, Any, Set
+from typing import Optional, Dict, List, Any, Set, ClassVar
 import string
 
 import yaml
@@ -280,42 +280,26 @@ class CacheConfig(BaseModel):
 
 
 class APIClientConfig(BaseModel):
-    """Configuration for a specific API client."""
+    """Configuration for a specific API client.
 
-    name: str = Field(
-        description="Name of the API client",
-    )
-    base_url: str = Field(
-        description="Base URL for the API",
-    )
-    http: HTTPConfig = Field(
-        default_factory=HTTPConfig,
-        description="HTTP client configuration",
-    )
-    rate_limit: Optional[RateLimitConfig] = Field(
+    This is a simplified config that only contains authentication settings.
+    All other settings (rate limiting, caching, concurrency, HTTP config)
+    are hardcoded with sensible defaults in the API client implementations.
+
+    For advanced configuration options, see docs/advanced-config.md.
+    """
+
+    auth: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Rate limiting configuration",
-    )
-    concurrency: Optional[ConcurrencyConfig] = Field(
-        default=None,
-        description="Concurrency control configuration",
-    )
-    cache: Optional[CacheConfig] = Field(
-        default=None,
-        description="Response caching configuration",
-    )
-    auth: Optional[Dict[str, str]] = Field(
-        default=None,
-        description="Authentication configuration (headers, tokens, etc.)",
-    )
-    custom: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Custom API-specific configuration",
+        description="Authentication configuration (API keys, tokens, secrets)",
     )
 
 
 class YTDLPConfig(BaseModel):
-    """Configuration for yt-dlp client."""
+    """Configuration for yt-dlp client.
+
+    For advanced configuration options (quiet, timeout), see docs/advanced-config.md.
+    """
 
     ytdlp_path: str = Field(
         default="yt-dlp",
@@ -329,26 +313,13 @@ class YTDLPConfig(BaseModel):
         default=False,
         description="Bypass geographic restrictions",
     )
-    quiet: bool = Field(
-        default=False,
-        description="Suppress progress output during downloads",
-    )
-    search_max_results: int = Field(
-        default=5,
-        ge=1,
-        le=50,
-        description="Default maximum search results",
-    )
-    timeout: int = Field(
-        default=300,
-        ge=30,
-        le=3600,
-        description="Command execution timeout in seconds",
-    )
 
 
 class FFProbeConfig(BaseModel):
-    """Configuration for ffprobe client."""
+    """Configuration for ffprobe client.
+
+    For advanced configuration options, see docs/advanced-config.md.
+    """
 
     ffprobe_path: str = Field(
         default="ffprobe",
@@ -360,88 +331,34 @@ class FFProbeConfig(BaseModel):
         le=300,
         description="Command execution timeout in seconds",
     )
-    show_format: bool = Field(
-        default=True,
-        description="Include format/container information in output",
-    )
-    show_streams: bool = Field(
-        default=True,
-        description="Include stream information in output",
-    )
 
 
 class ThumbnailConfig(BaseModel):
-    """Configuration for thumbnail generation via ffmpeg."""
+    """Configuration for thumbnail generation via ffmpeg.
+
+    For advanced configuration options (dimensions, quality, timestamp),
+    see docs/advanced-config.md.
+    """
 
     cache_dir: str = Field(
         default=".thumbnails",
         description="Directory for cached thumbnails (relative to config_dir)",
-    )
-    default_timestamp: float = Field(
-        default=5.0,
-        ge=0.0,
-        description="Default timestamp in seconds to extract frame from",
-    )
-    width: int = Field(
-        default=320,
-        ge=32,
-        le=1920,
-        description="Thumbnail width in pixels",
-    )
-    height: int = Field(
-        default=180,
-        ge=32,
-        le=1080,
-        description="Thumbnail height in pixels",
-    )
-    quality: int = Field(
-        default=5,
-        ge=1,
-        le=31,
-        description="JPEG quality (1=best, 31=worst)",
-    )
-    max_file_size: int = Field(
-        default=5 * 1024 * 1024,  # 5MB
-        ge=1024,
-        description="Maximum thumbnail file size in bytes (safety limit)",
-    )
-    timeout: int = Field(
-        default=30,
-        ge=5,
-        le=300,
-        description="FFmpeg execution timeout in seconds",
-    )
-    ffmpeg_path: str = Field(
-        default="ffmpeg",
-        description="Path to ffmpeg binary",
     )
 
 
 class DatabaseConfig(BaseModel):
     """Configuration for SQLite database.
 
-    Note: database_path and backup_dir are relative to config_dir unless absolute.
-    They are resolved at runtime via Config.resolve_paths().
+    Note: All database settings use hardcoded defaults for reliability.
+    For advanced configuration, see docs/advanced-config.md.
     """
 
-    database_path: str = Field(
-        default="fuzzbin.db",
-        description="Path to SQLite metadata database file (relative to config_dir)",
-    )
-    enable_wal_mode: bool = Field(
-        default=True,
-        description="Enable Write-Ahead Logging mode for better concurrency",
-    )
-    connection_timeout: int = Field(
-        default=30,
-        ge=1,
-        le=300,
-        description="Database connection timeout in seconds",
-    )
-    backup_dir: str = Field(
-        default="backups",
-        description="Directory for database backups (relative to config_dir)",
-    )
+    # All fields removed - database uses hardcoded defaults:
+    # - database_path: "fuzzbin.db" (relative to config_dir)
+    # - enable_wal_mode: True
+    # - connection_timeout: 30 seconds
+    # - backup_dir: "backups" (relative to config_dir)
+    pass
 
 
 class NFOConfig(BaseModel):
@@ -549,76 +466,16 @@ class TagsConfig(BaseModel):
 class FileManagerConfig(BaseModel):
     """Configuration for file management operations.
 
-    Controls file organization, soft delete/restore, and integrity verification.
+    Controls file organization and soft delete/restore.
     All file operations use aiofiles for non-blocking I/O.
+
+    For advanced configuration options (hash algorithm, verification),
+    see docs/advanced-config.md.
     """
 
     trash_dir: str = Field(
         default=".trash",
         description="Directory for soft-deleted files (relative to library_dir)",
-    )
-    hash_algorithm: str = Field(
-        default="sha256",
-        description="Hash algorithm for file integrity checks: sha256 or xxhash",
-    )
-    verify_after_move: bool = Field(
-        default=True,
-        description="Verify file hash after move to ensure integrity",
-    )
-    max_file_size: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Maximum file size in bytes for operations (None = no limit)",
-    )
-    chunk_size: int = Field(
-        default=8192,
-        ge=1024,
-        le=1048576,
-        description="Chunk size in bytes for file hashing operations",
-    )
-
-    @field_validator("hash_algorithm")
-    @classmethod
-    def validate_hash_algorithm(cls, v: str) -> str:
-        """Validate hash algorithm is supported."""
-        valid_algorithms = ["sha256", "xxhash", "md5"]
-        v_lower = v.lower()
-        if v_lower not in valid_algorithms:
-            raise ValueError(f"Invalid hash algorithm: {v}. Must be one of {valid_algorithms}")
-        return v_lower
-
-
-class AdvancedFeaturesConfig(BaseModel):
-    """Configuration for Phase 7 advanced features.
-
-    Controls bulk operations, faceted search, and scheduling.
-    """
-
-    max_bulk_items: int = Field(
-        default=500,
-        ge=1,
-        le=10000,
-        description="Maximum number of items allowed in bulk operations",
-    )
-    facet_cache_ttl: int = Field(
-        default=60,
-        ge=1,
-        le=3600,
-        description="Time-to-live in seconds for faceted search result cache",
-    )
-    max_sync_import_items: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Maximum items for synchronous import (larger batches require background tasks)",
-    )
-    scheduler_library_scan_cron: Optional[str] = Field(
-        default=None,
-        description="Cron expression for periodic library scans (e.g., '0 2 * * *' for daily at 2 AM)",
-    )
-    scheduler_metadata_refresh_cron: Optional[str] = Field(
-        default=None,
-        description="Cron expression for periodic metadata refresh (e.g., '0 3 * * 0' for weekly)",
     )
 
 
@@ -752,10 +609,6 @@ class Config(BaseModel):
         description="Video library directory (media files, NFOs, trash). Resolved from FUZZBIN_LIBRARY_DIR or defaults.",
     )
 
-    http: HTTPConfig = Field(
-        default_factory=HTTPConfig,
-        description="HTTP client configuration",
-    )
     logging: LoggingConfig = Field(
         default_factory=LoggingConfig,
         description="Logging configuration",
@@ -763,10 +616,6 @@ class Config(BaseModel):
     database: DatabaseConfig = Field(
         default_factory=DatabaseConfig,
         description="Database configuration",
-    )
-    cache: Optional[CacheConfig] = Field(
-        default=None,
-        description="Global cache configuration (APIs can override)",
     )
     apis: Optional[Dict[str, APIClientConfig]] = Field(
         default=None,
@@ -799,10 +648,6 @@ class Config(BaseModel):
     file_manager: FileManagerConfig = Field(
         default_factory=FileManagerConfig,
         description="File management and organization configuration",
-    )
-    advanced: AdvancedFeaturesConfig = Field(
-        default_factory=AdvancedFeaturesConfig,
-        description="Advanced features configuration (bulk ops, facets, scheduling)",
     )
     backup: BackupConfig = Field(
         default_factory=BackupConfig,
@@ -856,6 +701,10 @@ class Config(BaseModel):
 
         return self
 
+    # Default database settings (not user-configurable)
+    DEFAULT_DATABASE_PATH: ClassVar[str] = "fuzzbin.db"
+    DEFAULT_BACKUP_DIR: ClassVar[str] = "backups"
+
     def get_database_path(self) -> Path:
         """
         Get absolute database path, resolved against config_dir.
@@ -863,10 +712,7 @@ class Config(BaseModel):
         Returns:
             Absolute path to database file
         """
-        db_path = Path(self.database.database_path)
-        if db_path.is_absolute():
-            return db_path
-
+        db_path = Path(self.DEFAULT_DATABASE_PATH)
         config_dir = self.config_dir or _get_default_config_dir()
         return config_dir / db_path
 
@@ -877,10 +723,7 @@ class Config(BaseModel):
         Returns:
             Absolute path to backup directory
         """
-        backup_path = Path(self.database.backup_dir)
-        if backup_path.is_absolute():
-            return backup_path
-
+        backup_path = Path(self.DEFAULT_BACKUP_DIR)
         config_dir = self.config_dir or _get_default_config_dir()
         return config_dir / backup_path
 
@@ -1128,14 +971,6 @@ class Config(BaseModel):
 # Field-level safety categorization for runtime config changes
 FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     # Safe fields - can change without side effects
-    "http.timeout": ConfigSafetyLevel.SAFE,
-    "http.max_redirects": ConfigSafetyLevel.SAFE,
-    "http.verify_ssl": ConfigSafetyLevel.SAFE,
-    "http.retry.max_attempts": ConfigSafetyLevel.SAFE,
-    "http.retry.backoff_multiplier": ConfigSafetyLevel.SAFE,
-    "http.retry.min_wait": ConfigSafetyLevel.SAFE,
-    "http.retry.max_wait": ConfigSafetyLevel.SAFE,
-    "http.retry.status_codes": ConfigSafetyLevel.SAFE,
     "logging.level": ConfigSafetyLevel.SAFE,
     "logging.format": ConfigSafetyLevel.SAFE,
     "logging.handlers": ConfigSafetyLevel.SAFE,
@@ -1150,33 +985,21 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     "ytdlp.audio_format": ConfigSafetyLevel.SAFE,
     "ytdlp.additional_args": ConfigSafetyLevel.SAFE,
     "ffprobe.binary_path": ConfigSafetyLevel.SAFE,
-    "ffprobe.timeout": ConfigSafetyLevel.SAFE,
-    "ffprobe.show_format": ConfigSafetyLevel.SAFE,
-    "ffprobe.show_streams": ConfigSafetyLevel.SAFE,
     "nfo.*": ConfigSafetyLevel.SAFE,
     "organizer.*": ConfigSafetyLevel.SAFE,
     "tags.*": ConfigSafetyLevel.SAFE,
+    "backup.enabled": ConfigSafetyLevel.SAFE,
+    "backup.schedule": ConfigSafetyLevel.SAFE,
+    "backup.retention_count": ConfigSafetyLevel.SAFE,
     # Requires reload - need to recreate components
-    "http.max_connections": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "http.max_keepalive_connections": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.base_url": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.http.*": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.rate_limit.*": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.concurrency.*": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.cache.enabled": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.cache.ttl": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.cache.force_cache": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.cache.cacheable_methods": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.cache.cacheable_status_codes": ConfigSafetyLevel.REQUIRES_RELOAD,
-    "apis.*.custom.*": ConfigSafetyLevel.REQUIRES_RELOAD,
+    "apis.*.auth.*": ConfigSafetyLevel.REQUIRES_RELOAD,
     # Affects state - changes persistent files/connections
     "config_dir": ConfigSafetyLevel.AFFECTS_STATE,
     "library_dir": ConfigSafetyLevel.AFFECTS_STATE,
-    "database.database_path": ConfigSafetyLevel.AFFECTS_STATE,
-    "database.enable_wal_mode": ConfigSafetyLevel.AFFECTS_STATE,
-    "database.connection_timeout": ConfigSafetyLevel.AFFECTS_STATE,
-    "database.backup_dir": ConfigSafetyLevel.AFFECTS_STATE,
-    "apis.*.cache.storage_path": ConfigSafetyLevel.AFFECTS_STATE,
+    # Note: database.* fields removed - database settings are not user-configurable
+    "thumbnail.cache_dir": ConfigSafetyLevel.AFFECTS_STATE,
+    "file_manager.trash_dir": ConfigSafetyLevel.AFFECTS_STATE,
+    "backup.output_dir": ConfigSafetyLevel.AFFECTS_STATE,
 }
 
 
@@ -1185,13 +1008,13 @@ def get_safety_level(field_path: str) -> ConfigSafetyLevel:
     Get safety level for a configuration field.
 
     Args:
-        field_path: Dot-notation path (e.g., "http.timeout", "apis.discogs.rate_limit.requests_per_minute")
+        field_path: Dot-notation path (e.g., "logging.level", "apis.discogs.auth.api_key")
 
     Returns:
         ConfigSafetyLevel indicating how safe it is to change this field at runtime
 
     Example:
-        >>> get_safety_level("http.timeout")
+        >>> get_safety_level("logging.level")
         ConfigSafetyLevel.SAFE
         >>> get_safety_level("database.database_path")
         ConfigSafetyLevel.AFFECTS_STATE

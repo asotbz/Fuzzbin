@@ -36,12 +36,14 @@ def ffprobe_sample_output(examples_dir):
 
 @pytest.fixture
 def ffprobe_config():
-    """Create FFProbe configuration for testing."""
+    """Create FFProbe configuration for testing.
+    
+    Note: FFProbeConfig only exposes ffprobe_path and timeout now.
+    Other settings (show_format, show_streams) use defaults.
+    """
     return FFProbeConfig(
         ffprobe_path="ffprobe",
         timeout=30,
-        show_format=True,
-        show_streams=True,
     )
 
 
@@ -62,8 +64,6 @@ class TestFFProbeClient:
         client = FFProbeClient.from_config(config=ffprobe_config)
         assert client.ffprobe_path == "ffprobe"
         assert client.config.timeout == 30
-        assert client.config.show_format is True
-        assert client.config.show_streams is True
 
     @pytest.mark.asyncio
     async def test_context_manager(self, ffprobe_config):

@@ -182,14 +182,26 @@ async def discogs_client(clean_test_config: Config):
 
 @pytest_asyncio.fixture
 async def test_repository(tmp_path: Path):
-    """Provide test database with migrations applied."""
-    db_config = DatabaseConfig(
-        database_path=str(tmp_path / "test_workflow.db"),
-        enable_wal_mode=False,  # Disable WAL mode in tests to avoid lock issues
-        connection_timeout=30,
-        backup_dir=str(tmp_path / "backups"),
+    """Provide test database with migrations applied.
+    
+    Uses direct VideoRepository instantiation with temp database path.
+    """
+    from fuzzbin.core.db.migrator import Migrator
+    
+    db_path = tmp_path / "test_workflow.db"
+    migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
+    
+    repo = VideoRepository(
+        db_path=db_path,
+        enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
+        timeout=30,
     )
-    repo = await VideoRepository.from_config(db_config, config_dir=tmp_path / "config")
+    await repo.connect()
+    
+    # Run migrations
+    migrator = Migrator(db_path, migrations_dir, enable_wal=False)
+    await migrator.run_migrations(connection=repo._connection)
+    
     try:
         yield repo
     finally:
@@ -198,13 +210,15 @@ async def test_repository(tmp_path: Path):
 
 @pytest_asyncio.fixture
 async def ytdlp_client():
-    """Provide configured YT-DLP client with minimal download settings."""
+    """Provide configured YT-DLP client with minimal download settings.
+    
+    Note: YTDLPConfig only has ytdlp_path, format_spec, and geo_bypass now.
+    Other settings (timeout, quiet) use class defaults.
+    """
     ytdlp_config = YTDLPConfig(
         ytdlp_path="yt-dlp",
-        timeout=300,
         format_spec="worst[ext=mp4]/worst",  # Use worst quality for fast downloads
         geo_bypass=True,
-        quiet=True,  # Suppress output for cleaner test logs
     )
     async with YTDLPClient.from_config(ytdlp_config) as client:
         yield client

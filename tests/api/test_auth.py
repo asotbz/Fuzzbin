@@ -1,6 +1,7 @@
 """Tests for authentication routes and security."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import AsyncGenerator, Generator
 from unittest.mock import patch
 
@@ -291,14 +292,25 @@ def fresh_throttle() -> LoginThrottle:
 
 @pytest_asyncio.fixture
 async def auth_test_repository(tmp_path) -> AsyncGenerator[VideoRepository, None]:
-    """Provide a test database repository with admin user seeded."""
-    db_config = DatabaseConfig(
-        database_path=str(tmp_path / "test_auth.db"),
-        enable_wal_mode=False,
-        connection_timeout=30,
-        backup_dir=str(tmp_path / "backups"),
+    """Provide a test database repository with admin user seeded.
+    
+    Uses direct VideoRepository instantiation with temp database path.
+    """
+    from fuzzbin.core.db.migrator import Migrator
+    
+    db_path = tmp_path / "test_auth.db"
+    migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
+    
+    repo = VideoRepository(
+        db_path=db_path,
+        enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
+        timeout=30,
     )
-    repo = await VideoRepository.from_config(db_config)
+    await repo.connect()
+    
+    # Run migrations
+    migrator = Migrator(db_path, migrations_dir, enable_wal=False)
+    await migrator.run_migrations(connection=repo._connection)
     
     # Verify admin user was created by migration
     cursor = await repo._connection.execute(
@@ -327,9 +339,7 @@ async def auth_test_app(
     from fuzzbin.auth import get_login_throttle
     
     test_config = Config(
-        database=DatabaseConfig(
-            database_path=":memory:",  # Not used, but required
-        ),
+        database=DatabaseConfig(),
         logging=LoggingConfig(
             level="WARNING",
             format="text",
@@ -541,14 +551,25 @@ class TestRefreshEndpoint:
 
 @pytest_asyncio.fixture
 async def password_rotation_repository(tmp_path) -> AsyncGenerator[VideoRepository, None]:
-    """Repository with password_must_change=true for testing password rotation."""
-    db_config = DatabaseConfig(
-        database_path=str(tmp_path / "test_rotation.db"),
-        enable_wal_mode=False,
-        connection_timeout=30,
-        backup_dir=str(tmp_path / "backups"),
+    """Repository with password_must_change=true for testing password rotation.
+    
+    Uses direct VideoRepository instantiation with temp database path.
+    """
+    from fuzzbin.core.db.migrator import Migrator
+    
+    db_path = tmp_path / "test_rotation.db"
+    migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
+    
+    repo = VideoRepository(
+        db_path=db_path,
+        enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
+        timeout=30,
     )
-    repo = await VideoRepository.from_config(db_config)
+    await repo.connect()
+    
+    # Run migrations
+    migrator = Migrator(db_path, migrations_dir, enable_wal=False)
+    await migrator.run_migrations(connection=repo._connection)
     
     # Keep password_must_change=true (set by migration 008)
     cursor = await repo._connection.execute(

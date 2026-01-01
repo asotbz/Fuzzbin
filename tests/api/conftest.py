@@ -53,16 +53,13 @@ def api_settings() -> APISettings:
 
 
 @pytest.fixture
-def test_database_config(tmp_path: Path) -> DatabaseConfig:
-    """Provide a test database configuration using temp directory."""
-    db_path = tmp_path / "test_api.db"
-    backup_dir = tmp_path / "backups"
-    return DatabaseConfig(
-        database_path=str(db_path),
-        enable_wal_mode=False,  # Disable WAL in tests to avoid lock issues
-        connection_timeout=30,
-        backup_dir=str(backup_dir),
-    )
+def test_database_config() -> DatabaseConfig:
+    """Provide a test database configuration.
+    
+    Note: DatabaseConfig no longer has user-configurable fields.
+    Tests should use direct VideoRepository instantiation with db_path.
+    """
+    return DatabaseConfig()
 
 
 @pytest.fixture
@@ -99,9 +96,27 @@ def test_config_dir(test_config: Config) -> Path:
 
 
 @pytest_asyncio.fixture
-async def test_repository(test_database_config: DatabaseConfig) -> AsyncGenerator[VideoRepository, None]:
-    """Provide a test database repository with migrations applied."""
-    repo = await VideoRepository.from_config(test_database_config)
+async def test_repository(tmp_path: Path) -> AsyncGenerator[VideoRepository, None]:
+    """Provide a test database repository with migrations applied.
+    
+    Uses direct VideoRepository instantiation with temp database path.
+    """
+    from fuzzbin.core.db.migrator import Migrator
+    
+    db_path = tmp_path / "test_api.db"
+    migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
+    
+    repo = VideoRepository(
+        db_path=db_path,
+        enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
+        timeout=30,
+    )
+    await repo.connect()
+    
+    # Run migrations
+    migrator = Migrator(db_path, migrations_dir, enable_wal=False)
+    await migrator.run_migrations(connection=repo._connection)
+    
     yield repo
     await repo.close()
 

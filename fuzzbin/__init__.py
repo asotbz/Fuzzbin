@@ -428,10 +428,13 @@ async def get_repository() -> VideoRepository:
             _config = Config()
             setup_logging(_config.logging)
 
-        _repository = await VideoRepository.from_config(_config.database)
+        _repository = await VideoRepository.from_config(
+            _config.database,
+            config_dir=_config.config_dir,
+        )
         logger.info(
             "repository_auto_initialized",
-            database_path=_config.database.database_path,
+            database_path=str(_config.get_database_path()),
         )
 
     return _repository

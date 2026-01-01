@@ -26,17 +26,9 @@ class RateLimitedAPIClient(AsyncHTTPClient):
     - Concurrent request limiting
     - All features from AsyncHTTPClient (retries, connection pooling, etc.)
 
-    Example:
-        >>> config = APIClientConfig(
-        ...     name="github",
-        ...     base_url="https://api.github.com",
-        ...     rate_limit=RateLimitConfig(requests_per_minute=60),
-        ...     concurrency=ConcurrencyConfig(max_concurrent_requests=10)
-        ... )
-        >>>
-        >>> async with RateLimitedAPIClient.from_config(config) as client:
-        ...     # Automatically rate limited and concurrency controlled
-        ...     response = await client.get("/users/octocat")
+    Note: For production use, use the API-specific clients (IMVDbClient,
+    DiscogsClient, SpotifyClient) which provide sensible defaults for
+    rate limiting and authentication.
     """
 
     def __init__(
@@ -81,43 +73,27 @@ class RateLimitedAPIClient(AsyncHTTPClient):
         """
         Create a client from APIClientConfig.
 
+        Note: This base implementation creates a minimal client without rate limiting
+        or concurrency control. Subclasses (IMVDbClient, DiscogsClient, SpotifyClient)
+        override this method to provide API-specific defaults.
+
         Args:
-            config: API client configuration
+            config: API client configuration (typically just contains auth)
             config_dir: Directory for resolving relative cache paths (optional)
 
         Returns:
             Configured RateLimitedAPIClient instance
-
-        Example:
-            >>> config = APIClientConfig(
-            ...     name="myapi",
-            ...     base_url="https://api.example.com",
-            ...     rate_limit=RateLimitConfig(requests_per_minute=100)
-            ... )
-            >>> client = RateLimitedAPIClient.from_config(config)
         """
-        rate_limiter = None
-        if config.rate_limit and config.rate_limit.enabled:
-            rate_limiter = RateLimiter(
-                requests_per_minute=config.rate_limit.requests_per_minute,
-                requests_per_second=config.rate_limit.requests_per_second,
-                requests_per_hour=config.rate_limit.requests_per_hour,
-                burst_size=config.rate_limit.burst_size,
-            )
-
-        concurrency_limiter = None
-        if config.concurrency:
-            concurrency_limiter = ConcurrencyLimiter(
-                max_concurrent=config.concurrency.max_concurrent_requests
-            )
-
+        # Use default HTTP config if not provided through some mechanism
+        http_config = HTTPConfig()
+        
         return cls(
-            http_config=config.http,
-            base_url=config.base_url,
-            rate_limiter=rate_limiter,
-            concurrency_limiter=concurrency_limiter,
+            http_config=http_config,
+            base_url="",  # Base URL must be set by subclass or caller
+            rate_limiter=None,
+            concurrency_limiter=None,
             auth_headers=config.auth,
-            cache_config=config.cache,
+            cache_config=None,
             config_dir=config_dir,
         )
 

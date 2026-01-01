@@ -106,20 +106,20 @@ def _get_required_actions(path: str, safety_level: ConfigSafetyLevel) -> List[Re
             )
 
     elif safety_level == ConfigSafetyLevel.AFFECTS_STATE:
-        if "database" in path:
-            actions.append(
-                RequiredAction(
-                    action_type="reconnect_database",
-                    target="database",
-                    description="Reconnect database with new settings (requires application restart)",
-                )
-            )
-        elif path in ("config_dir", "library_dir"):
+        if path in ("config_dir", "library_dir"):
             actions.append(
                 RequiredAction(
                     action_type="restart_service",
                     target="application",
                     description="Restart application to use new directory paths",
+                )
+            )
+        elif path.startswith("file_manager.") or path.startswith("thumbnail.") or path.startswith("backup.output_dir"):
+            actions.append(
+                RequiredAction(
+                    action_type="restart_file_manager",
+                    target="file_manager",
+                    description="Restart file manager to apply directory changes",
                 )
             )
         elif "storage_path" in path:

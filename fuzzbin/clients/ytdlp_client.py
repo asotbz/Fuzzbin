@@ -56,7 +56,7 @@ class YTDLPClient:
         >>> from fuzzbin.common.config import YTDLPConfig
         >>>
         >>> async def main():
-        ...     config = YTDLPConfig(search_max_results=5)
+        ...     config = YTDLPConfig()
         ...
         ...     async with YTDLPClient.from_config(config) as client:
         ...         # Search for videos
@@ -72,6 +72,10 @@ class YTDLPClient:
         >>>
         >>> asyncio.run(main())
     """
+
+    # Default configuration constants (not exposed in user config)
+    DEFAULT_TIMEOUT = 300  # 5 minutes
+    DEFAULT_QUIET = False
 
     def __init__(
         self,
@@ -156,7 +160,7 @@ class YTDLPClient:
 
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
-                timeout=self.config.timeout,
+                timeout=self.DEFAULT_TIMEOUT,
             )
 
             if process.returncode != 0:
@@ -773,7 +777,7 @@ class YTDLPClient:
             # Add config options
             if self.config.geo_bypass:
                 args.append("--geo-bypass")
-            if self.config.quiet:
+            if self.DEFAULT_QUIET:
                 args.append("--quiet")
             else:
                 args.append("--progress")

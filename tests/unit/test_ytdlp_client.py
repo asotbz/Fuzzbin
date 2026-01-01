@@ -20,13 +20,14 @@ from fuzzbin.parsers.ytdlp_models import DownloadProgress, YTDLPDownloadResult, 
 
 @pytest.fixture
 def ytdlp_config():
-    """Create yt-dlp configuration for testing."""
+    """Create yt-dlp configuration for testing.
+    
+    Note: YTDLPConfig now only exposes ytdlp_path, format_spec, and geo_bypass.
+    Other settings (search_max_results, quiet, timeout) use class defaults.
+    """
     return YTDLPConfig(
         ytdlp_path="yt-dlp",
-        search_max_results=5,
         geo_bypass=False,
-        quiet=True,
-        timeout=300,
     )
 
 
@@ -53,8 +54,7 @@ class TestYTDLPClient:
         """Test creating client from configuration."""
         async with YTDLPClient.from_config(ytdlp_config) as client:
             assert client.ytdlp_path == "yt-dlp"
-            assert client.config.search_max_results == 5
-            assert client.config.quiet is True
+            assert client.config.geo_bypass is False
 
     @pytest.mark.asyncio
     async def test_context_manager(self, ytdlp_config):
@@ -161,7 +161,11 @@ class TestYTDLPClient:
 
     @pytest.mark.asyncio
     async def test_search_timeout(self, ytdlp_config):
-        """Test search timeout handling."""
+        """Test search timeout handling.
+        
+        Note: timeout is now a class default (DEFAULT_TIMEOUT = 300).
+        We override it on the instance to test timeout handling.
+        """
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_process = AsyncMock()
             # Make communicate hang forever using an async function that never completes
@@ -172,10 +176,9 @@ class TestYTDLPClient:
             mock_process.communicate = never_completes
             mock_exec.return_value = mock_process
 
-            # Use very short timeout
-            ytdlp_config.timeout = 0.1
-
             async with YTDLPClient.from_config(ytdlp_config) as client:
+                # Override the class default for testing
+                client.DEFAULT_TIMEOUT = 0.1
                 with pytest.raises(YTDLPExecutionError) as exc_info:
                     await client.search("Artist", "Title")
 
@@ -356,8 +359,12 @@ class TestYTDLPClient:
 
     @pytest.mark.asyncio
     async def test_download_quiet_mode(self, tmp_path):
-        """Test download with quiet mode enabled."""
-        config = YTDLPConfig(quiet=True)
+        """Test download with quiet mode enabled.
+        
+        Note: quiet is now a class default (DEFAULT_QUIET = False).
+        We override it on the instance to test quiet mode behavior.
+        """
+        config = YTDLPConfig()
         output_file = tmp_path / "video.mp4"
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
@@ -369,6 +376,8 @@ class TestYTDLPClient:
             output_file.write_bytes(b"video")
 
             async with YTDLPClient.from_config(config) as client:
+                # Override the class default for testing
+                client.DEFAULT_QUIET = True
                 await client.download(
                     "https://www.youtube.com/watch?v=test",
                     output_file,

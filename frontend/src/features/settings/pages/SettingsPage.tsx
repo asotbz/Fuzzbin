@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useConfig } from '../hooks/useConfig'
-import HTTPSettings from '../components/sections/HTTPSettings'
 import LoggingSettings from '../components/sections/LoggingSettings'
 import DatabaseSettings from '../components/sections/DatabaseSettings'
 import CacheSettings from '../components/sections/CacheSettings'
@@ -19,7 +18,6 @@ interface ConfigSection {
 
 const CONFIG_SECTIONS: ConfigSection[] = [
   // Core System
-  { id: 'http', title: 'HTTP Client', group: 'Core System' },
   { id: 'logging', title: 'Logging', group: 'Core System' },
   { id: 'database', title: 'Database', group: 'Core System' },
   { id: 'cache', title: 'Cache', group: 'Core System' },
@@ -40,14 +38,13 @@ const CONFIG_SECTIONS: ConfigSection[] = [
   { id: 'tags', title: 'Tags', group: 'Library Management' },
   { id: 'file-manager', title: 'File Manager', group: 'Library Management' },
 
-  // Advanced
-  { id: 'advanced', title: 'Advanced', group: 'Advanced' },
-  { id: 'backup', title: 'Backup', group: 'Advanced' },
+  // System
+  { id: 'backup', title: 'Backup', group: 'System' },
 ]
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<string>(
-    () => localStorage.getItem('fuzzbin-settings-section') || 'http'
+    () => localStorage.getItem('fuzzbin-settings-section') || 'api-imvdb'
   )
 
   const configQuery = useConfig()
@@ -181,7 +178,6 @@ export default function SettingsPage() {
             {configQuery.isSuccess && activeConfig && (
               <div className="settingsFields">
                 {/* Core System */}
-                {activeSection === 'http' && <HTTPSettings config={activeConfig} />}
                 {activeSection === 'logging' && <LoggingSettings config={activeConfig} />}
                 {activeSection === 'database' && <DatabaseSettings config={activeConfig} />}
                 {activeSection === 'cache' && <CacheSettings config={activeConfig} />}
@@ -202,8 +198,7 @@ export default function SettingsPage() {
                 {activeSection === 'tags' && <LibrarySettings config={activeConfig} section="tags" />}
                 {activeSection === 'file-manager' && <LibrarySettings config={activeConfig} section="file-manager" />}
 
-                {/* Advanced */}
-                {activeSection === 'advanced' && <AdvancedSettings config={activeConfig} section="advanced" />}
+                {/* System */}
                 {activeSection === 'backup' && <AdvancedSettings config={activeConfig} section="backup" />}
               </div>
             )}

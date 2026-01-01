@@ -113,56 +113,60 @@ class DiscogsClient(RateLimitedAPIClient):
             user_agent=auth_headers["User-Agent"],
         )
 
+    # Default configuration constants
+    DEFAULT_BASE_URL = "https://api.discogs.com"
+    DEFAULT_REQUESTS_PER_MINUTE = 60
+    DEFAULT_BURST_SIZE = 10
+    DEFAULT_MAX_CONCURRENT = 5
+
     @classmethod
     def from_config(cls, config: APIClientConfig) -> "DiscogsClient":
         """
         Create Discogs client from APIClientConfig.
 
+        Uses hardcoded defaults for base URL, rate limiting, and concurrency.
+        Only authentication can be configured via the config object.
+
         Args:
-            config: API client configuration
+            config: API client configuration (only auth field is used)
 
         Returns:
             Configured DiscogsClient instance
 
         Example:
             >>> from fuzzbin.common.config import APIClientConfig
-            >>> config = APIClientConfig(
-            ...     name="discogs",
-            ...     base_url="https://api.discogs.com"
-            ... )
+            >>> config = APIClientConfig(auth={"api_key": "KEY", "api_secret": "SECRET"})
             >>> client = DiscogsClient.from_config(config)
         """
-        # Extract API credentials from config.custom if present
+        # Extract API credentials from config.auth if present
         api_key = None
         api_secret = None
-        if config.custom:
-            api_key = config.custom.get("api_key")
-            api_secret = config.custom.get("api_secret")
+        if config.auth:
+            api_key = config.auth.get("api_key")
+            api_secret = config.auth.get("api_secret")
 
-        # Create rate limiter if configured
-        rate_limiter = None
-        if config.rate_limit and config.rate_limit.enabled:
-            from ..common.rate_limiter import RateLimiter
+        # Create rate limiter with hardcoded defaults
+        from ..common.rate_limiter import RateLimiter
 
-            rate_limiter = RateLimiter(
-                requests_per_minute=config.rate_limit.requests_per_minute,
-                requests_per_second=config.rate_limit.requests_per_second,
-                requests_per_hour=config.rate_limit.requests_per_hour,
-                burst_size=config.rate_limit.burst_size,
-            )
+        rate_limiter = RateLimiter(
+            requests_per_minute=cls.DEFAULT_REQUESTS_PER_MINUTE,
+            burst_size=cls.DEFAULT_BURST_SIZE,
+        )
 
-        # Create concurrency limiter if configured
-        concurrency_limiter = None
-        if config.concurrency:
-            from ..common.concurrency_limiter import ConcurrencyLimiter
+        # Create concurrency limiter with hardcoded defaults
+        from ..common.concurrency_limiter import ConcurrencyLimiter
 
-            concurrency_limiter = ConcurrencyLimiter(
-                max_concurrent=config.concurrency.max_concurrent_requests
-            )
+        concurrency_limiter = ConcurrencyLimiter(
+            max_concurrent=cls.DEFAULT_MAX_CONCURRENT
+        )
+
+        # Use default HTTP config
+        from ..common.config import HTTPConfig
+        http_config = HTTPConfig()
 
         return cls(
-            http_config=config.http,
-            base_url=config.base_url,
+            http_config=http_config,
+            base_url=cls.DEFAULT_BASE_URL,
             rate_limiter=rate_limiter,
             concurrency_limiter=concurrency_limiter,
             api_key=api_key,

@@ -26,39 +26,19 @@ class TestFileManagerConfig:
     """Tests for FileManagerConfig."""
 
     def test_default_values(self):
-        """Test default configuration values."""
+        """Test default configuration values.
+        
+        Note: FileManagerConfig only exposes trash_dir now.
+        Other settings (hash_algorithm, verify_after_move, max_file_size, chunk_size)
+        use class defaults in FileManager.
+        """
         config = FileManagerConfig()
         assert config.trash_dir == ".trash"
-        assert config.hash_algorithm == "sha256"
-        assert config.verify_after_move is True
-        assert config.max_file_size is None
-        assert config.chunk_size == 8192
 
-    def test_custom_values(self):
-        """Test custom configuration values."""
-        config = FileManagerConfig(
-            trash_dir=".deleted",
-            hash_algorithm="xxhash",
-            verify_after_move=False,
-            max_file_size=1000000,
-            chunk_size=16384,
-        )
+    def test_custom_trash_dir(self):
+        """Test custom trash_dir configuration."""
+        config = FileManagerConfig(trash_dir=".deleted")
         assert config.trash_dir == ".deleted"
-        assert config.hash_algorithm == "xxhash"
-        assert config.verify_after_move is False
-        assert config.max_file_size == 1000000
-        assert config.chunk_size == 16384
-
-    def test_hash_algorithm_validation(self):
-        """Test hash algorithm validation."""
-        # Valid algorithms
-        for algo in ["sha256", "xxhash", "md5", "SHA256", "XXHASH"]:
-            config = FileManagerConfig(hash_algorithm=algo)
-            assert config.hash_algorithm == algo.lower()
-
-        # Invalid algorithm
-        with pytest.raises(ValueError, match="Invalid hash algorithm"):
-            FileManagerConfig(hash_algorithm="invalid")
 
 
 class TestFileManagerInit:
@@ -104,8 +84,11 @@ class TestComputeFileHash:
 
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
-        """Create file manager instance."""
-        config = FileManagerConfig(chunk_size=1024)
+        """Create file manager instance.
+        
+        Note: chunk_size is now a class default (DEFAULT_CHUNK_SIZE = 8192).
+        """
+        config = FileManagerConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -143,11 +126,17 @@ class TestComputeFileHash:
 
     @pytest.mark.asyncio
     async def test_hash_file_too_large(self, tmp_path):
-        """Test error for file exceeding max size."""
-        config = FileManagerConfig(max_file_size=10)
+        """Test error for file exceeding max size.
+        
+        Note: max_file_size is now a class default (DEFAULT_MAX_FILE_SIZE = None).
+        We override it on the instance to test the validation logic.
+        """
+        config = FileManagerConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         fm = FileManager(config, library_dir=library_dir, config_dir=config_dir)
+        # Override the class default for testing
+        fm.DEFAULT_MAX_FILE_SIZE = 10
         
         # Create file larger than limit
         large_file = tmp_path / "large.mp4"
@@ -189,8 +178,11 @@ class TestMoveVideoAtomic:
 
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
-        """Create file manager instance."""
-        config = FileManagerConfig(verify_after_move=True)
+        """Create file manager instance.
+        
+        Note: verify_after_move is now a class default (DEFAULT_VERIFY_AFTER_MOVE = True).
+        """
+        config = FileManagerConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)

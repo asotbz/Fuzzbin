@@ -142,41 +142,22 @@ export default function MediaSettings({ config, section }: MediaSettingsProps) {
         onChange={handleFieldChange}
       />
 
-      <SettingField
-        path="thumbnail.quality"
-        label="JPEG Quality"
-        description="Quality level for thumbnail images (1-100)"
-        value={sectionConfig.quality}
-        type="number"
-        min={1}
-        max={100}
-        safetyLevel="safe"
-        onChange={handleFieldChange}
-      />
-
-      <SettingField
-        path="thumbnail.max_width"
-        label="Maximum Width"
-        description="Maximum thumbnail width in pixels"
-        value={sectionConfig.max_width}
-        type="number"
-        min={100}
-        max={4096}
-        safetyLevel="safe"
-        onChange={handleFieldChange}
-      />
-
-      <SettingField
-        path="thumbnail.max_height"
-        label="Maximum Height"
-        description="Maximum thumbnail height in pixels"
-        value={sectionConfig.max_height}
-        type="number"
-        min={100}
-        max={4096}
-        safetyLevel="safe"
-        onChange={handleFieldChange}
-      />
+      <div style={{
+        padding: 'var(--space-3)',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-subtle)',
+        marginTop: 'var(--space-4)',
+        fontFamily: 'var(--font-body)',
+        fontSize: 'var(--text-sm)',
+        lineHeight: '1.6'
+      }}>
+        Thumbnail quality and dimensions use sensible defaults.
+        For advanced configuration, see <code style={{
+          background: 'rgba(0,0,0,0.2)',
+          padding: '2px 6px',
+          fontFamily: 'monospace'
+        }}>docs/advanced-config.md</code>
+      </div>
     </SettingSection>
   )
 

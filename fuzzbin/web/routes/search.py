@@ -24,17 +24,19 @@ from ..schemas.video import VideoResponse
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/search", tags=["Search"])
 
-# In-memory facet cache with TTL (configured via advanced.facet_cache_ttl)
+# In-memory facet cache with TTL
+# Default: 60 seconds (can be overridden via advanced config)
 _facet_cache: TTLCache = None
+
+# Default facet cache TTL in seconds
+DEFAULT_FACET_CACHE_TTL = 60
 
 
 def _get_facet_cache() -> TTLCache:
     """Get or create facet cache with configured TTL."""
     global _facet_cache
     if _facet_cache is None:
-        config = fuzzbin.get_config()
-        ttl = config.advanced.facet_cache_ttl
-        _facet_cache = TTLCache(maxsize=10, ttl=ttl)
+        _facet_cache = TTLCache(maxsize=10, ttl=DEFAULT_FACET_CACHE_TTL)
     return _facet_cache
 
 

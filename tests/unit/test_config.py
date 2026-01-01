@@ -10,6 +10,7 @@ from fuzzbin.common.config import (
     RetryConfig,
     LoggingConfig,
     FileLoggingConfig,
+    BackupConfig,
 )
 
 
@@ -87,32 +88,29 @@ class TestConfig:
     def test_default_config(self):
         """Test default configuration."""
         config = Config()
-        assert config.http.timeout == 30
         assert config.logging.level == "INFO"
+        assert config.backup.retention_count == 7
 
     def test_nested_config(self):
         """Test nested configuration."""
         config = Config(
-            http=HTTPConfig(timeout=60),
+            backup=BackupConfig(retention_count=14),
             logging=LoggingConfig(level="DEBUG"),
         )
-        assert config.http.timeout == 60
+        assert config.backup.retention_count == 14
         assert config.logging.level == "DEBUG"
 
     def test_from_yaml_string(self):
         """Test loading configuration from YAML string."""
         yaml_str = """
-http:
-  timeout: 45
-  retry:
-    max_attempts: 5
+backup:
+  retention_count: 10
 logging:
   level: DEBUG
   format: text
 """
         config = Config.from_yaml_string(yaml_str)
-        assert config.http.timeout == 45
-        assert config.http.retry.max_attempts == 5
+        assert config.backup.retention_count == 10
         assert config.logging.level == "DEBUG"
         assert config.logging.format == "text"
 
@@ -120,9 +118,9 @@ logging:
         """Test loading configuration from YAML file."""
         config_file = tmp_path / "test_config.yaml"
         config_file.write_text("""
-http:
-  timeout: 120
-  max_connections: 200
+backup:
+  retention_count: 14
+  output_dir: custom_backups
 logging:
   level: ERROR
   handlers:
@@ -135,8 +133,8 @@ logging:
 """)
 
         config = Config.from_yaml(config_file)
-        assert config.http.timeout == 120
-        assert config.http.max_connections == 200
+        assert config.backup.retention_count == 14
+        assert config.backup.output_dir == "custom_backups"
         assert config.logging.level == "ERROR"
         assert "file" in config.logging.handlers
         assert config.logging.file is not None
@@ -146,12 +144,12 @@ logging:
     def test_partial_config(self):
         """Test that partial configuration uses defaults."""
         yaml_str = """
-http:
-  timeout: 90
+backup:
+  retention_count: 20
 """
         config = Config.from_yaml_string(yaml_str)
-        assert config.http.timeout == 90
-        assert config.http.max_redirects == 5  # Default value
+        assert config.backup.retention_count == 20
+        assert config.backup.output_dir == "backups"  # Default value
         assert config.logging.level == "INFO"  # Default value
 
 

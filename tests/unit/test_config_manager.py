@@ -11,10 +11,10 @@ import pytest_asyncio
 from fuzzbin.common.config import (
     Config,
     ConfigSafetyLevel,
-    HTTPConfig,
     LoggingConfig,
     TagsConfig,
     OrganizerConfig,
+    BackupConfig,
     get_safety_level,
 )
 from fuzzbin.common.config_manager import (
@@ -46,7 +46,7 @@ def temp_config_file(tmp_path: Path) -> Path:
 def sample_config() -> Config:
     """Create a sample configuration for testing."""
     return Config(
-        http=HTTPConfig(timeout=30, max_redirects=5),
+        backup=BackupConfig(retention_count=7, output_dir="backups"),
         logging=LoggingConfig(level="INFO", format="json"),
     )
 
@@ -80,32 +80,27 @@ class TestSafetyLevel:
 
     def test_safe_fields(self):
         """Test that safe fields are correctly categorized."""
-        assert get_safety_level("http.timeout") == ConfigSafetyLevel.SAFE
-        assert get_safety_level("http.verify_ssl") == ConfigSafetyLevel.SAFE
         assert get_safety_level("logging.level") == ConfigSafetyLevel.SAFE
-        assert get_safety_level("ytdlp.format") == ConfigSafetyLevel.SAFE
+        assert get_safety_level("backup.retention_count") == ConfigSafetyLevel.SAFE
+        assert get_safety_level("backup.schedule") == ConfigSafetyLevel.SAFE
 
     def test_requires_reload_fields(self):
         """Test that reload-required fields are correctly categorized."""
-        assert get_safety_level("http.max_connections") == ConfigSafetyLevel.REQUIRES_RELOAD
         assert (
-            get_safety_level("apis.discogs.base_url")
+            get_safety_level("apis.discogs.auth.api_key")
             == ConfigSafetyLevel.REQUIRES_RELOAD
         )
         assert (
-            get_safety_level("apis.imvdb.rate_limit.requests_per_minute")
+            get_safety_level("apis.imvdb.auth.app_key")
             == ConfigSafetyLevel.REQUIRES_RELOAD
         )
 
     def test_affects_state_fields(self):
         """Test that state-affecting fields are correctly categorized."""
-        assert get_safety_level("database.database_path") == ConfigSafetyLevel.AFFECTS_STATE
+        assert get_safety_level("file_manager.trash_dir") == ConfigSafetyLevel.AFFECTS_STATE
         assert get_safety_level("library_dir") == ConfigSafetyLevel.AFFECTS_STATE
         assert get_safety_level("config_dir") == ConfigSafetyLevel.AFFECTS_STATE
-        assert (
-            get_safety_level("apis.discogs.cache.storage_path")
-            == ConfigSafetyLevel.AFFECTS_STATE
-        )
+        assert get_safety_level("backup.output_dir") == ConfigSafetyLevel.AFFECTS_STATE
 
     def test_wildcard_matching(self):
         """Test wildcard pattern matching for safety levels."""
@@ -115,9 +110,9 @@ class TestSafetyLevel:
         # organizer.* should match any organizer field
         assert get_safety_level("organizer.path_pattern") == ConfigSafetyLevel.SAFE
         
-        # apis.*.custom.* should match any API custom field
+        # apis.*.auth.* should match any API auth field
         assert (
-            get_safety_level("apis.spotify.custom.client_id")
+            get_safety_level("apis.spotify.auth.client_id")
             == ConfigSafetyLevel.REQUIRES_RELOAD
         )
 
@@ -163,13 +158,13 @@ class TestConfigHistory:
         
         # Save multiple snapshots
         for i in range(3):
-            config = Config(http=HTTPConfig(timeout=30 + i))
+            config = Config(backup=BackupConfig(retention_count=7 + i))
             history.save_snapshot(config, f"Config {i}")
         
         # Rollback 1 step
         prev_config = history.rollback(1)
         assert prev_config is not None
-        assert prev_config.http.timeout == 31
+        assert prev_config.backup.retention_count == 8
         assert history.current_index == 1
 
     def test_rollback_too_far(self, sample_config: Config):
@@ -187,7 +182,7 @@ class TestConfigHistory:
         
         # Save snapshots and rollback
         for i in range(3):
-            config = Config(http=HTTPConfig(timeout=30 + i))
+            config = Config(backup=BackupConfig(retention_count=7 + i))
             history.save_snapshot(config, f"Config {i}")
         
         history.rollback(2)
@@ -196,7 +191,7 @@ class TestConfigHistory:
         # Move forward
         next_config = history.forward(1)
         assert next_config is not None
-        assert next_config.http.timeout == 31
+        assert next_config.backup.retention_count == 8
         assert history.current_index == 1
 
     def test_truncate_forward_history(self, sample_config: Config):
@@ -205,7 +200,7 @@ class TestConfigHistory:
         
         # Save 3 snapshots
         for i in range(3):
-            config = Config(http=HTTPConfig(timeout=30 + i))
+            config = Config(backup=BackupConfig(retention_count=7 + i))
             history.save_snapshot(config, f"Config {i}")
         
         # Rollback to middle
@@ -213,19 +208,19 @@ class TestConfigHistory:
         assert len(history.snapshots) == 3
         
         # Save new snapshot - should discard forward history
-        new_config = Config(http=HTTPConfig(timeout=100))
+        new_config = Config(backup=BackupConfig(retention_count=100))
         history.save_snapshot(new_config, "New config")
         
         assert len(history.snapshots) == 3  # One was discarded
         assert history.current_index == 2
-        assert history.snapshots[-1].config.http.timeout == 100
+        assert history.snapshots[-1].config.backup.retention_count == 100
 
     def test_list_history(self, sample_config: Config):
         """Test listing recent history."""
         history = ConfigHistory()
         
         for i in range(15):
-            config = Config(http=HTTPConfig(timeout=30 + i))
+            config = Config(backup=BackupConfig(retention_count=7 + i))
             history.save_snapshot(config, f"Config {i}")
         
         # Get last 10
@@ -233,8 +228,8 @@ class TestConfigHistory:
         assert len(recent) == 10
         
         # Should be newest first
-        assert recent[0].config.http.timeout == 44  # Config 14
-        assert recent[-1].config.http.timeout == 35  # Config 5
+        assert recent[0].config.backup.retention_count == 21  # Config 14
+        assert recent[-1].config.backup.retention_count == 12  # Config 5
 
 
 # ============================================================================
@@ -325,13 +320,13 @@ class TestConfigManager:
 
     def test_nested_get(self, config_manager: ConfigManager):
         """Test getting nested configuration values."""
-        value = config_manager._get_nested(config_manager._config, "http.timeout")
-        assert value == 30
+        value = config_manager._get_nested(config_manager._config, "backup.retention_count")
+        assert value == 7
 
     def test_nested_set(self, config_manager: ConfigManager):
         """Test setting nested configuration values."""
-        config_manager._set_nested(config_manager._config, "http.timeout", 60)
-        assert config_manager._config.http.timeout == 60
+        config_manager._set_nested(config_manager._config, "backup.retention_count", 14)
+        assert config_manager._config.backup.retention_count == 14
 
     def test_nested_get_invalid_path(self, config_manager: ConfigManager):
         """Test that invalid paths raise AttributeError."""
@@ -415,15 +410,15 @@ class TestEventCallbacks:
         assert len(config_manager._callbacks) == 1
         
         # Trigger update
-        await config_manager.update("http.timeout", 60)
+        await config_manager.update("backup.retention_count", 14)
         
         # Give callbacks time to execute
         await asyncio.sleep(0.01)
         
         assert len(events) == 1
-        assert events[0].path == "http.timeout"
-        assert events[0].old_value == 30
-        assert events[0].new_value == 60
+        assert events[0].path == "backup.retention_count"
+        assert events[0].old_value == 7
+        assert events[0].new_value == 14
 
     @pytest.mark.asyncio
     async def test_register_async_callback(self, config_manager: ConfigManager):
@@ -436,10 +431,10 @@ class TestEventCallbacks:
         config_manager.on_change(callback)
         
         # Trigger update
-        await config_manager.update("http.timeout", 60)
+        await config_manager.update("backup.retention_count", 14)
         
         assert len(events) == 1
-        assert events[0].path == "http.timeout"
+        assert events[0].path == "backup.retention_count"
 
     @pytest.mark.asyncio
     async def test_remove_callback(self, config_manager: ConfigManager):
@@ -453,7 +448,7 @@ class TestEventCallbacks:
         config_manager.remove_callback(callback)
         
         # Trigger update
-        await config_manager.update("http.timeout", 60)
+        await config_manager.update("backup.retention_count", 14)
         
         # Callback should not be called
         assert len(events) == 0
@@ -468,9 +463,9 @@ class TestEventCallbacks:
         config_manager.on_change(bad_callback)
         
         # Update should succeed despite callback error
-        await config_manager.update("http.timeout", 60)
+        await config_manager.update("backup.retention_count", 14)
         
-        assert config_manager._config.http.timeout == 60
+        assert config_manager._config.backup.retention_count == 14
 
     @pytest.mark.asyncio
     async def test_weak_reference_cleanup(self, config_manager: ConfigManager):
@@ -487,14 +482,14 @@ class TestEventCallbacks:
         config_manager.on_change(handler.on_change)
         
         # Trigger update - callback should work
-        await config_manager.update("http.timeout", 60)
+        await config_manager.update("backup.retention_count", 14)
         assert len(handler.events) == 1
         
         # Delete handler - weak reference should be cleaned up
         del handler
         
         # Trigger another update - should clean up dead reference
-        await config_manager.update("http.timeout", 70)
+        await config_manager.update("backup.retention_count", 21)
         
         # Dead references should be removed during notification
         # (Exact count depends on cleanup timing)
@@ -511,24 +506,24 @@ class TestConfigUpdate:
     @pytest.mark.asyncio
     async def test_update_safe_field(self, config_manager: ConfigManager):
         """Test updating a safe field."""
-        await config_manager.update("http.timeout", 60)
+        await config_manager.update("backup.retention_count", 14)
         
-        assert config_manager._config.http.timeout == 60
+        assert config_manager._config.backup.retention_count == 14
         assert len(config_manager.history.snapshots) == 1
 
     @pytest.mark.asyncio
     async def test_update_validation_failure(self, config_manager: ConfigManager):
         """Test that validation failures rollback changes."""
         with pytest.raises(ConfigValidationError):
-            await config_manager.update("http.timeout", -10)  # Invalid
+            await config_manager.update("backup.retention_count", -10)  # Invalid
         
         # Should be rolled back to original value
-        assert config_manager._config.http.timeout == 30
+        assert config_manager._config.backup.retention_count == 7
 
     @pytest.mark.asyncio
     async def test_update_no_change(self, config_manager: ConfigManager):
         """Test that updating to same value is a no-op."""
-        await config_manager.update("http.timeout", 30)  # Same value
+        await config_manager.update("backup.retention_count", 7)  # Same value
         
         # No history snapshot should be created
         assert len(config_manager.history.snapshots) == 0
@@ -543,13 +538,13 @@ class TestConfigUpdate:
     async def test_update_many_success(self, config_manager: ConfigManager):
         """Test batch update of multiple fields."""
         await config_manager.update_many({
-            "http.timeout": 60,
-            "http.max_redirects": 10,
+            "backup.retention_count": 14,
+            "backup.output_dir": "custom_backups",
             "logging.level": "DEBUG",
         })
         
-        assert config_manager._config.http.timeout == 60
-        assert config_manager._config.http.max_redirects == 10
+        assert config_manager._config.backup.retention_count == 14
+        assert config_manager._config.backup.output_dir == "custom_backups"
         assert config_manager._config.logging.level == "DEBUG"
 
     @pytest.mark.asyncio
@@ -557,13 +552,12 @@ class TestConfigUpdate:
         """Test that batch update rolls back all changes on validation failure."""
         with pytest.raises(ConfigValidationError):
             await config_manager.update_many({
-                "http.timeout": 60,  # Valid
-                "http.max_redirects": -5,  # Invalid
+                "backup.retention_count": 14,  # Valid
+                "backup.retention_count": -5,  # Invalid (overwrites previous)
             })
         
-        # Both should be rolled back
-        assert config_manager._config.http.timeout == 30
-        assert config_manager._config.http.max_redirects == 5
+        # Should be rolled back
+        assert config_manager._config.backup.retention_count == 7
 
 
 # ============================================================================
@@ -578,9 +572,9 @@ class TestAutoSave:
     async def test_debounced_save(self, config_manager: ConfigManager, temp_config_file: Path):
         """Test that saves are debounced."""
         # Make multiple rapid updates
-        await config_manager.update("http.timeout", 60)
-        await config_manager.update("http.timeout", 70)
-        await config_manager.update("http.timeout", 80)
+        await config_manager.update("backup.retention_count", 10)
+        await config_manager.update("backup.retention_count", 15)
+        await config_manager.update("backup.retention_count", 20)
         
         # Should only trigger one save after debounce period
         await asyncio.sleep(0.2)  # Wait for debounce
@@ -590,7 +584,7 @@ class TestAutoSave:
         
         # Load and verify
         saved_config = Config.from_yaml(temp_config_file)
-        assert saved_config.http.timeout == 80
+        assert saved_config.backup.retention_count == 20
 
     @pytest.mark.asyncio
     async def test_save_without_config_path(self):
@@ -627,13 +621,13 @@ class TestUndoRedo:
     async def test_undo(self, config_manager: ConfigManager):
         """Test undoing configuration changes."""
         # Make changes
-        await config_manager.update("http.timeout", 60)
-        await config_manager.update("http.timeout", 70)
+        await config_manager.update("backup.retention_count", 10)
+        await config_manager.update("backup.retention_count", 15)
         
         # Undo one step
         success = await config_manager.undo(1)
         assert success
-        assert config_manager._config.http.timeout == 60
+        assert config_manager._config.backup.retention_count == 10
 
     @pytest.mark.asyncio
     async def test_undo_when_no_history(self, config_manager: ConfigManager):
@@ -645,28 +639,28 @@ class TestUndoRedo:
     async def test_redo(self, config_manager: ConfigManager):
         """Test redoing configuration changes."""
         # Make changes and undo
-        await config_manager.update("http.timeout", 60)
-        await config_manager.update("http.timeout", 70)
+        await config_manager.update("backup.retention_count", 10)
+        await config_manager.update("backup.retention_count", 15)
         await config_manager.undo(1)
         
         # Redo
         success = await config_manager.redo(1)
         assert success
-        assert config_manager._config.http.timeout == 70
+        assert config_manager._config.backup.retention_count == 15
 
     @pytest.mark.asyncio
     async def test_get_history(self, config_manager: ConfigManager):
         """Test getting configuration history."""
         # Make several changes
         for i in range(5):
-            await config_manager.update("http.timeout", 30 + i * 10)
+            await config_manager.update("backup.retention_count", 7 + i * 3)
         
         # Get history
         history = config_manager.get_history(limit=3)
         assert len(history) == 3
         
         # Should be newest first
-        assert history[0].config.http.timeout == 70
+        assert history[0].config.backup.retention_count == 19
 
 
 # ============================================================================
@@ -737,7 +731,7 @@ class TestConfigToYaml:
         sample_config.to_yaml(config_file)
         
         loaded_config = Config.from_yaml(config_file)
-        assert loaded_config.http.timeout == sample_config.http.timeout
+        assert loaded_config.backup.retention_count == sample_config.backup.retention_count
         assert loaded_config.logging.level == sample_config.logging.level
 
     def test_to_yaml_excludes_defaults(self, tmp_path: Path):

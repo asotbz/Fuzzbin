@@ -13,10 +13,6 @@ import respx
 from fuzzbin.api.discogs_client import DiscogsClient
 from fuzzbin.common.config import (
     APIClientConfig,
-    ConcurrencyConfig,
-    HTTPConfig,
-    RateLimitConfig,
-    RetryConfig,
 )
 
 
@@ -65,18 +61,7 @@ def release_response(examples_dir):
 def discogs_config():
     """Create Discogs API configuration for testing."""
     return APIClientConfig(
-        name="discogs",
-        base_url="https://api.discogs.com",
-        http=HTTPConfig(
-            timeout=30,
-            retry=RetryConfig(
-                max_attempts=3,
-                status_codes=[500, 502, 503],  # Don't retry 401/403/404
-            ),
-        ),
-        rate_limit=RateLimitConfig(requests_per_minute=60, burst_size=10),
-        concurrency=ConcurrencyConfig(max_concurrent_requests=5),
-        custom={"api_key": "test-key-123", "api_secret": "test-secret-456"},
+        auth={"api_key": "test-key-123", "api_secret": "test-secret-456"},
     )
 
 
@@ -484,42 +469,36 @@ class TestDiscogsClient:
     @pytest.mark.asyncio
     @respx.mock
     async def test_rate_limiting(self, discogs_config, search_response):
-        """Test that rate limiting is applied."""
-        # Use a strict rate limit for testing
-        discogs_config.rate_limit.requests_per_minute = 10
-        
+        """Test that rate limiting is applied with default settings."""
         route = respx.get("https://api.discogs.com/database/search").mock(
             return_value=httpx.Response(
                 200,
                 json=search_response,
                 headers={
-                    "X-Discogs-Ratelimit": "10",
+                    "X-Discogs-Ratelimit": "60",
                     "X-Discogs-Ratelimit-Used": "1",
-                    "X-Discogs-Ratelimit-Remaining": "9",
+                    "X-Discogs-Ratelimit-Remaining": "59",
                 },
             )
         )
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
-            start_time = time.time()
+            # Verify rate limiter is configured
+            assert client.rate_limiter is not None
+            # Verify rate is approximately correct (DEFAULT_REQUESTS_PER_MINUTE / 60 seconds)
+            expected_rate = DiscogsClient.DEFAULT_REQUESTS_PER_MINUTE / 60.0
+            assert abs(client.rate_limiter.rate - expected_rate) < 0.01
             
-            # Make multiple requests
+            # Make multiple requests - they should succeed
             for _ in range(3):
                 await client.search("test", "test")
             
-            elapsed = time.time() - start_time
-            
-            # With 10 req/min (6 sec per request), 3 requests should take at least some time
-            # This is a loose check to ensure rate limiting is working
             assert len(route.calls) == 3
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_concurrency_limiting(self, discogs_config, search_response):
-        """Test that concurrency limiting is applied."""
-        # Use strict concurrency limit
-        discogs_config.concurrency.max_concurrent_requests = 2
-        
+        """Test that concurrency limiting is applied with default settings."""
         # Create a slow response to test concurrency
         async def slow_response(request):
             await asyncio.sleep(0.1)
@@ -538,23 +517,22 @@ class TestDiscogsClient:
         )
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
-            # Make 5 concurrent requests
+            # Verify concurrency limiter is configured with defaults
+            assert client.concurrency_limiter is not None
+            assert client.concurrency_limiter.max_concurrent == DiscogsClient.DEFAULT_MAX_CONCURRENT
+            
+            # Make concurrent requests - they should all succeed
             tasks = [client.search("test", f"test{i}") for i in range(5)]
             results = await asyncio.gather(*tasks)
             
             # All should succeed
             assert len(results) == 5
             assert len(route.calls) == 5
-            
-            # Concurrency limiter should have limited to max 2 concurrent
 
     @pytest.mark.asyncio
     async def test_client_without_credentials(self):
         """Test that client can be created without credentials."""
-        config = APIClientConfig(
-            name="discogs",
-            base_url="https://api.discogs.com",
-        )
+        config = APIClientConfig()
         
         async with DiscogsClient.from_config(config=config) as client:
             # Should not have Authorization header

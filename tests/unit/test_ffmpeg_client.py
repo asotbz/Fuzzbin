@@ -21,31 +21,25 @@ class TestFFmpegClientConfig:
     """Tests for FFmpegClient configuration."""
 
     def test_default_config(self) -> None:
-        """Test FFmpegClient with default config."""
+        """Test FFmpegClient with default config uses class constants."""
         config = ThumbnailConfig()
         client = FFmpegClient.from_config(config)
 
-        assert client.config.width == 320
-        assert client.config.height == 180
-        assert client.config.quality == 5
-        assert client.config.default_timestamp == 5.0
-        assert client.config.max_file_size == 5 * 1024 * 1024
+        # ThumbnailConfig only exposes cache_dir; other settings use class defaults
+        assert client.config.cache_dir == ".thumbnails"
+        # Verify class defaults are used
+        assert client.DEFAULT_WIDTH == 320
+        assert client.DEFAULT_HEIGHT == 180
+        assert client.DEFAULT_QUALITY == 5
+        assert client.DEFAULT_TIMESTAMP == 5.0
+        assert client.DEFAULT_MAX_FILE_SIZE == 5 * 1024 * 1024
 
-    def test_custom_config(self) -> None:
-        """Test FFmpegClient with custom config."""
-        config = ThumbnailConfig(
-            width=640,
-            height=360,
-            quality=3,
-            default_timestamp=10.0,
-            max_file_size=1024 * 1024,
-        )
+    def test_custom_cache_dir(self) -> None:
+        """Test FFmpegClient with custom cache_dir."""
+        config = ThumbnailConfig(cache_dir="custom_thumbs")
         client = FFmpegClient.from_config(config)
 
-        assert client.config.width == 640
-        assert client.config.height == 360
-        assert client.config.quality == 3
-        assert client.config.default_timestamp == 10.0
+        assert client.config.cache_dir == "custom_thumbs"
 
 
 class TestFFmpegClientVerify:
@@ -90,15 +84,11 @@ class TestFFmpegClientExtractFrame:
 
     @pytest.fixture
     def mock_config(self) -> ThumbnailConfig:
-        """Provide mock thumbnail config."""
-        return ThumbnailConfig(
-            width=320,
-            height=180,
-            quality=5,
-            default_timestamp=5.0,
-            max_file_size=5 * 1024 * 1024,
-            timeout=30,
-        )
+        """Provide mock thumbnail config.
+        
+        Note: ThumbnailConfig only has cache_dir; other settings use class defaults.
+        """
+        return ThumbnailConfig()
 
     @pytest.fixture
     def client(self, mock_config: ThumbnailConfig) -> FFmpegClient:
@@ -208,11 +198,16 @@ class TestFFmpegClientExtractFrame:
     async def test_extract_frame_too_large(
         self, tmp_path: Path
     ) -> None:
-        """Test extract_frame raises when output exceeds max size."""
-        # Config with small max size (must be >= 1024)
-        config = ThumbnailConfig(max_file_size=1024)
+        """Test extract_frame raises when output exceeds max size.
+        
+        Note: max_file_size is now a class default (DEFAULT_MAX_FILE_SIZE = 5MB).
+        We mock it to test the validation logic.
+        """
+        config = ThumbnailConfig()
         client = FFmpegClient(config=config)
         client._verified = True
+        # Override the class default for testing
+        client.DEFAULT_MAX_FILE_SIZE = 1024  # 1KB for testing
 
         video_path = tmp_path / "video.mp4"
         video_path.write_bytes(b"fake video content")

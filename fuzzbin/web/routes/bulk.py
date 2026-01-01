@@ -120,11 +120,13 @@ class BulkOrganizeRequest(BaseModel):
 
 # ==================== Helper Functions ====================
 
+# Default max bulk items limit
+DEFAULT_MAX_BULK_ITEMS = 500
+
 
 async def _get_max_bulk_items() -> int:
     """Get configured max bulk items limit."""
-    config = fuzzbin.get_config()
-    return config.advanced.max_bulk_items
+    return DEFAULT_MAX_BULK_ITEMS
 
 
 def _validate_bulk_limit(count: int, max_items: int) -> None:
