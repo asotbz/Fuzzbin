@@ -31,7 +31,6 @@ describe('useSearchWizard', () => {
         title: '',
         artist: '',
         year: null,
-        initialStatus: 'discovered',
         skipExisting: true,
       })
     })
