@@ -57,8 +57,7 @@ export default function SpotifyImport() {
 
   // Configuration state
   const [playlistId, setPlaylistId] = useState('')
-  const [initialStatus, setInitialStatus] = useState<'discovered' | 'imported'>('discovered')
-  const [autoDownload, setAutoDownload] = useState(false)
+  const [autoDownload, setAutoDownload] = useState(true)
 
   // Preview/table state
   const [preview, setPreview] = useState<BatchPreviewResponse | null>(null)
@@ -169,12 +168,9 @@ export default function SpotifyImport() {
 
         toast.success('Import completed!', {
           description: `Imported ${result?.imported || 0} tracks${downloadJobs > 0 ? `. ${downloadJobs} download jobs queued.` : ''}`,
-          action: {
-            label: 'View Library',
-            onClick: () => navigate('/library'),
-          },
         })
         queryClient.invalidateQueries({ queryKey: videosKeys.all })
+        navigate('/library')
       } else if (status === 'failed') {
         toast.error('Import failed', {
           description: jobQuery.data?.error || 'Unknown error',
@@ -334,7 +330,7 @@ export default function SpotifyImport() {
     importMutation.mutate({
       playlist_id: playlistId.trim(),
       tracks,
-      initial_status: initialStatus,
+      initial_status: 'discovered',
       auto_download: autoDownload,
     })
   }
@@ -382,19 +378,6 @@ export default function SpotifyImport() {
                 placeholder="Enter Spotify playlist ID or URL"
                 disabled={!!preview}
               />
-            </div>
-
-            <div className="spotifyImportFormGroup">
-              <label className="spotifyImportLabel">Initial Status</label>
-              <select
-                className="spotifyImportSelect"
-                value={initialStatus}
-                onChange={(e) => setInitialStatus(e.target.value as 'discovered' | 'imported')}
-                disabled={!!preview}
-              >
-                <option value="discovered">Discovered</option>
-                <option value="imported">Imported</option>
-              </select>
             </div>
 
             <div className="spotifyImportFormGroup">
