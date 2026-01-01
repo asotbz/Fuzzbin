@@ -135,7 +135,7 @@ Tag management and video categorization
 - `GET` `/tags` — List tags
   - Get a paginated list of tags.
 - `POST` `/tags` — Create tag
-  - Create a new tag (name will be normalized to lowercase).
+  - Create a new tag (name will be normalized to lowercase if tags.normalize is enabled).
 - `GET` `/tags/{tag_id}` — Get tag by ID
   - Get detailed information about a specific tag.
 - `DELETE` `/tags/{tag_id}` — Delete tag

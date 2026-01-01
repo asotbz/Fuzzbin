@@ -602,7 +602,7 @@ export interface paths {
         put?: never;
         /**
          * Create tag
-         * @description Create a new tag (name will be normalized to lowercase).
+         * @description Create a new tag (name will be normalized to lowercase if tags.normalize is enabled).
          */
         post: operations["create_tag_tags_post"];
         delete?: never;

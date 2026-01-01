@@ -2916,7 +2916,7 @@
           "Tags"
         ],
         "summary": "Create tag",
-        "description": "Create a new tag (name will be normalized to lowercase).",
+        "description": "Create a new tag (name will be normalized to lowercase if tags.normalize is enabled).",
         "operationId": "create_tag_tags_post",
         "security": [
           {
