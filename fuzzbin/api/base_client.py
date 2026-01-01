@@ -86,7 +86,7 @@ class RateLimitedAPIClient(AsyncHTTPClient):
         """
         # Use default HTTP config if not provided through some mechanism
         http_config = HTTPConfig()
-        
+
         return cls(
             http_config=http_config,
             base_url="",  # Base URL must be set by subclass or caller

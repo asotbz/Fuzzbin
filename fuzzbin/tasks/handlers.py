@@ -512,7 +512,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     from fuzzbin.common.http_client import AsyncHTTPClient
 
                     file_manager = FileManager.from_config(
-                        config.file_manager,
+                        config.trash,
                         library_dir=config.library_dir or Path.cwd(),
                         config_dir=config.config_dir or Path.cwd() / "config",
                     )
@@ -1077,7 +1077,11 @@ async def handle_duplicate_resolution(job: Job) -> None:
     # Get repository and file manager
     config = fuzzbin.get_config()
     repository = await fuzzbin.get_repository()
-    file_manager = FileManager.from_config(config.file_manager)
+    file_manager = FileManager.from_config(
+        config.trash,
+        library_dir=config.library_dir or Path.cwd(),
+        config_dir=config.config_dir or Path.cwd() / "config",
+    )
 
     # Get videos to scan
     if scan_all:
@@ -2691,7 +2695,7 @@ async def handle_video_post_process(job: Job) -> None:
             library_dir = _get_default_library_dir()
 
         file_manager = FileManager.from_config(
-            config.file_manager,
+            config.trash,
             library_dir=library_dir,
             config_dir=config.config_dir or Path.cwd() / "config",
         )
@@ -2902,14 +2906,14 @@ async def handle_import_organize(job: Job) -> None:
         # Create parent directory if needed
         media_paths.video_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create or validate artist.nfo if pattern includes {artist}
+        # Create or validate artist.nfo if pattern includes {artist} and write_artist_nfo is enabled
         artist_dir = _get_artist_directory_from_pattern(
             config.organizer.path_pattern,
             media_paths.video_path,
             library_dir,
         )
 
-        if artist_dir is not None:
+        if artist_dir is not None and config.nfo.write_artist_nfo:
             # Get primary artist for this video
             artists = await repository.get_video_artists(video_id, role="primary")
             if not artists:
@@ -2970,6 +2974,12 @@ async def handle_import_organize(job: Job) -> None:
                     error=str(e),
                 )
                 raise
+        elif artist_dir is not None and not config.nfo.write_artist_nfo:
+            logger.debug(
+                "artist_nfo_skipped",
+                artist_dir=str(artist_dir),
+                reason="write_artist_nfo is disabled",
+            )
 
         # Move file from temp to final location
         shutil.move(str(temp_path), str(media_paths.video_path))
@@ -3042,14 +3052,14 @@ async def handle_import_nfo_generate(job: Job) -> None:
     """Handle NFO file generation for imported videos.
 
     Generates musicvideo.nfo file at the configured location and updates
-    video status to complete.
+    video status to complete. Respects nfo.write_musicvideo_nfo config flag.
 
     Job metadata parameters:
         video_id (int, required): Video database ID
 
     Job result on completion:
         video_id: Database video ID
-        nfo_path: Path to generated NFO file
+        nfo_path: Path to generated NFO file (or None if disabled)
 
     Args:
         job: Job instance with metadata containing NFO parameters
@@ -3074,16 +3084,28 @@ async def handle_import_nfo_generate(job: Job) -> None:
     job.update_progress(0, 2, "Initializing NFO generation...")
 
     repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
 
     # Check for cancellation
     if job.status == JobStatus.CANCELLED:
         return
 
-    job.update_progress(1, 2, "Generating NFO file...")
+    nfo_path = None
 
-    # Create NFO exporter and export
-    exporter = NFOExporter(repository)
-    nfo_path = await exporter.export_video_to_nfo(video_id)
+    # Only generate NFO if enabled in config
+    if config.nfo.write_musicvideo_nfo:
+        job.update_progress(1, 2, "Generating NFO file...")
+
+        # Create NFO exporter and export
+        exporter = NFOExporter(repository)
+        nfo_path = await exporter.export_video_to_nfo(video_id)
+    else:
+        job.update_progress(1, 2, "NFO generation disabled, skipping...")
+        logger.debug(
+            "nfo_generation_skipped",
+            video_id=video_id,
+            reason="write_musicvideo_nfo is disabled",
+        )
 
     # Update video status to complete
     await repository.update_video(video_id, status="complete")
@@ -3092,7 +3114,7 @@ async def handle_import_nfo_generate(job: Job) -> None:
     job.mark_completed(
         {
             "video_id": video_id,
-            "nfo_path": str(nfo_path),
+            "nfo_path": str(nfo_path) if nfo_path else None,
         }
     )
 
@@ -3100,7 +3122,7 @@ async def handle_import_nfo_generate(job: Job) -> None:
         "import_nfo_generate_job_completed",
         job_id=job.id,
         video_id=video_id,
-        nfo_path=str(nfo_path),
+        nfo_path=str(nfo_path) if nfo_path else None,
     )
 
 

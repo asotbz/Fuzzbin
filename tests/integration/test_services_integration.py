@@ -17,7 +17,7 @@ from typing import AsyncGenerator, Dict, Any
 import pytest
 import pytest_asyncio
 
-from fuzzbin.common.config import DatabaseConfig, FileManagerConfig, ThumbnailConfig
+from fuzzbin.common.config import DatabaseConfig, TrashConfig, ThumbnailConfig
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.core.file_manager import FileManager
 from fuzzbin.services import (
@@ -71,12 +71,12 @@ def database_config() -> DatabaseConfig:
 
 
 @pytest.fixture
-def file_manager_config(test_workspace: Path) -> FileManagerConfig:
-    """Create FileManager config for test workspace.
+def trash_config(test_workspace: Path) -> TrashConfig:
+    """Create TrashConfig for test workspace.
     
-    Note: FileManagerConfig only has trash_dir now.
+    Note: TrashConfig contains trash_dir and cleanup settings.
     """
-    return FileManagerConfig(
+    return TrashConfig(
         trash_dir="trash",  # Relative to library_dir
     )
 
@@ -121,12 +121,12 @@ async def repository(test_workspace: Path) -> AsyncGenerator[VideoRepository, No
 @pytest.fixture
 def file_manager(
     test_workspace: Path,
-    file_manager_config: FileManagerConfig,
+    trash_config: TrashConfig,
     thumbnail_config: ThumbnailConfig,
 ) -> FileManager:
     """Create a real FileManager for tests."""
     return FileManager(
-        config=file_manager_config,
+        config=trash_config,
         library_dir=test_workspace / "media",
         config_dir=test_workspace / "config",
         thumbnail_config=thumbnail_config,

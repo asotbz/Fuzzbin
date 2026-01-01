@@ -3,14 +3,14 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import structlog
 
 from .config import LoggingConfig
 
 
-def setup_logging(config: LoggingConfig) -> None:
+def setup_logging(config: LoggingConfig, config_dir: Optional[Path] = None) -> None:
     """
     Configure logging based on configuration.
 
@@ -19,11 +19,12 @@ def setup_logging(config: LoggingConfig) -> None:
 
     Args:
         config: LoggingConfig object with logging settings
+        config_dir: Directory for log file (if file logging enabled)
 
     Example:
         >>> from fuzzbin.common.config import LoggingConfig
         >>> config = LoggingConfig(level="DEBUG", format="text")
-        >>> setup_logging(config)
+        >>> setup_logging(config, Path("/config"))
     """
     log_level = getattr(logging, config.level.upper())
 
@@ -66,22 +67,26 @@ def setup_logging(config: LoggingConfig) -> None:
     # Setup handlers
     handlers = []
 
-    if "console" in config.handlers:
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level)
-        handlers.append(console_handler)
+    # Console handler is always enabled
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    handlers.append(console_handler)
 
-    if "file" in config.handlers and config.file:
-        # Create log directory if it doesn't exist
-        log_path = Path(config.file.path)
+    # File handler with daily rotation (if enabled)
+    if config.file and config.file.enabled and config_dir is not None:
+        log_path = config_dir / "fuzzbin.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.handlers.RotatingFileHandler(
-            filename=config.file.path,
-            maxBytes=config.file.max_bytes,
-            backupCount=config.file.backup_count,
+        # TimedRotatingFileHandler for daily rotation with 7-day retention
+        # Rotates at midnight local time, keeps 7 backup files
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+            filename=str(log_path),
+            when="midnight",
+            backupCount=7,
             encoding="utf-8",
         )
+        # Set suffix for rotated files: fuzzbin.log.2026-01-01
+        file_handler.suffix = "%Y-%m-%d"
         file_handler.setLevel(log_level)
         handlers.append(file_handler)
 

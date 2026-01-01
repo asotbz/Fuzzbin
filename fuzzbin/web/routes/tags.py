@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+import fuzzbin
 from fuzzbin.core.db import VideoRepository
 
 from ..dependencies import get_repository
@@ -75,14 +76,15 @@ async def get_tag(
     response_model=TagResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create tag",
-    description="Create a new tag (name will be normalized to lowercase).",
+    description="Create a new tag (name will be normalized to lowercase if tags.normalize is enabled).",
 )
 async def create_tag(
     tag: TagCreate,
     repo: VideoRepository = Depends(get_repository),
 ) -> TagResponse:
     """Create a new tag."""
-    tag_id = await repo.upsert_tag(tag.name)
+    config = fuzzbin.get_config()
+    tag_id = await repo.upsert_tag(tag.name, normalize=config.tags.normalize)
     row = await repo.get_tag_by_id(tag_id)
     return TagResponse.from_db_row(row)
 

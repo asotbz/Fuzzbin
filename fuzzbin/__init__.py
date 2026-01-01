@@ -14,7 +14,7 @@ from .common.config import (
     ThumbnailConfig,
     TagsConfig,
     AutoDecadeConfig,
-    FileManagerConfig,
+    TrashConfig,
     ConfigSafetyLevel,
     get_safety_level,
 )
@@ -159,7 +159,7 @@ __all__ = [
     "ThumbnailConfig",
     "TagsConfig",
     "AutoDecadeConfig",
-    "FileManagerConfig",
+    "TrashConfig",
     "ConfigSafetyLevel",
     "get_safety_level",
     "ConfigManager",
@@ -279,6 +279,9 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
     - Config paths (database, cache, thumbnails) are resolved against config_dir
     - Library paths (media, NFO, trash) are resolved against library_dir
 
+    First-Run Behavior:
+    - If no config.yaml exists, creates one from config.example.yaml template
+
     Args:
         config_path: Path to YAML configuration file
         config: Pre-loaded Config object (takes precedence over config_path)
@@ -290,6 +293,7 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
     """
     global _config, _repository, _config_manager
 
+    import shutil
     from fuzzbin.common.config import _get_default_config_dir
 
     if config is not None:
@@ -315,15 +319,34 @@ async def configure(config_path: Optional[Path] = None, config: Optional[Config]
         elif cwd_config_path.exists():
             _config = Config.from_yaml(cwd_config_path)
             config_path = cwd_config_path
-        elif _config is None:
-            # Use defaults only if not already configured
-            _config = Config()
+        else:
+            # First-run: copy config.example.yaml to config_dir as starting template
+            # Look for config.example.yaml in package directory or repo root
+            package_dir = Path(__file__).parent.parent  # fuzzbin package -> repo root
+            example_config_path = package_dir / "config.example.yaml"
+
+            if example_config_path.exists():
+                # Ensure config_dir exists
+                default_config_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copy example config as new config.yaml
+                shutil.copy(example_config_path, default_config_path)
+                logger.info(
+                    "config_created_from_template",
+                    config_path=str(default_config_path),
+                    template_path=str(example_config_path),
+                )
+                _config = Config.from_yaml(default_config_path)
+                config_path = default_config_path
+            elif _config is None:
+                # Use defaults only if not already configured and no template found
+                _config = Config()
 
     # Resolve paths (config_dir, library_dir) from environment or defaults
     _config.resolve_paths(create_dirs=True)
 
-    # Setup logging based on config
-    setup_logging(_config.logging)
+    # Setup logging based on config (pass config_dir for file logging)
+    setup_logging(_config.logging, config_dir=_config.config_dir)
 
     # Initialize database repository (only if not already initialized)
     if _repository is None:

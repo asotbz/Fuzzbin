@@ -79,6 +79,16 @@ export default function LoggingSettings({ config }: LoggingSettingsProps) {
           safetyLevel="safe"
           onChange={handleFieldChange}
         />
+
+        <SettingField
+          path="logging.file.enabled"
+          label="Enable File Logging"
+          description="Write logs to fuzzbin.log in config directory (daily rotation, 7-day retention)"
+          value={logging.file?.enabled}
+          type="boolean"
+          safetyLevel="safe"
+          onChange={handleFieldChange}
+        />
       </SettingSection>
 
       {conflictError && (

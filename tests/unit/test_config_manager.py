@@ -97,7 +97,7 @@ class TestSafetyLevel:
 
     def test_affects_state_fields(self):
         """Test that state-affecting fields are correctly categorized."""
-        assert get_safety_level("file_manager.trash_dir") == ConfigSafetyLevel.AFFECTS_STATE
+        assert get_safety_level("trash.trash_dir") == ConfigSafetyLevel.AFFECTS_STATE
         assert get_safety_level("library_dir") == ConfigSafetyLevel.AFFECTS_STATE
         assert get_safety_level("config_dir") == ConfigSafetyLevel.AFFECTS_STATE
         assert get_safety_level("backup.output_dir") == ConfigSafetyLevel.AFFECTS_STATE

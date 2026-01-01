@@ -167,20 +167,20 @@ export default function MediaSettings({ config, section }: MediaSettingsProps) {
       description="Kodi-compatible NFO metadata file settings"
     >
       <SettingField
-        path="nfo.enabled"
-        label="Enable NFO Generation"
-        description="Automatically create/update .nfo metadata files"
-        value={sectionConfig.enabled}
+        path="nfo.write_musicvideo_nfo"
+        label="Write Video NFO Files"
+        description="Generate &lt;basename&gt;.nfo files for each music video"
+        value={sectionConfig.write_musicvideo_nfo}
         type="boolean"
         safetyLevel="safe"
         onChange={handleFieldChange}
       />
 
       <SettingField
-        path="nfo.create_artist_nfo"
-        label="Create Artist NFO Files"
+        path="nfo.write_artist_nfo"
+        label="Write Artist NFO Files"
         description="Generate artist.nfo files in artist directories"
-        value={sectionConfig.create_artist_nfo}
+        value={sectionConfig.write_artist_nfo}
         type="boolean"
         safetyLevel="safe"
         onChange={handleFieldChange}

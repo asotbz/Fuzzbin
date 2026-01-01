@@ -102,22 +102,16 @@ class HTTPConfig(BaseModel):
 
 
 class FileLoggingConfig(BaseModel):
-    """Configuration for file-based logging."""
+    """Configuration for file-based logging.
 
-    path: str = Field(
-        default="logs/fuzzbin.log",
-        description="Path to log file",
-    )
-    max_bytes: int = Field(
-        default=10485760,  # 10MB
-        ge=1024,
-        description="Maximum size of log file before rotation",
-    )
-    backup_count: int = Field(
-        default=5,
-        ge=0,
-        le=50,
-        description="Number of backup log files to keep",
+    File logging uses daily rotation with 7-day retention.
+    Log files are stored as fuzzbin.log in config_dir, rotated daily
+    with format fuzzbin.log.YYYY-MM-DD.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable file logging (logs to fuzzbin.log in config_dir)",
     )
 
 
@@ -132,17 +126,13 @@ class LoggingConfig(BaseModel):
         default="json",
         description="Log format: json or text",
     )
-    handlers: List[str] = Field(
-        default_factory=lambda: ["console"],
-        description="Enabled log handlers: console, file",
-    )
-    file: Optional[FileLoggingConfig] = Field(
-        default=None,
-        description="File logging configuration (optional)",
+    file: FileLoggingConfig = Field(
+        default_factory=FileLoggingConfig,
+        description="File logging configuration",
     )
     third_party: Dict[str, str] = Field(
         default_factory=dict,
-        description="Log levels for third-party libraries",
+        description="Log levels for third-party libraries (advanced)",
     )
 
     @field_validator("level")
@@ -164,16 +154,6 @@ class LoggingConfig(BaseModel):
         if v_lower not in valid_formats:
             raise ValueError(f"Invalid format: {v}. Must be one of {valid_formats}")
         return v_lower
-
-    @field_validator("handlers")
-    @classmethod
-    def validate_handlers(cls, v: List[str]) -> List[str]:
-        """Validate handlers."""
-        valid_handlers = ["console", "file"]
-        for handler in v:
-            if handler not in valid_handlers:
-                raise ValueError(f"Invalid handler: {handler}. Must be one of {valid_handlers}")
-        return v
 
 
 class RateLimitConfig(BaseModel):
@@ -296,10 +276,7 @@ class APIClientConfig(BaseModel):
 
 
 class YTDLPConfig(BaseModel):
-    """Configuration for yt-dlp client.
-
-    For advanced configuration options (quiet, timeout), see docs/advanced-config.md.
-    """
+    """Configuration for yt-dlp client."""
 
     ytdlp_path: str = Field(
         default="yt-dlp",
@@ -367,6 +344,14 @@ class NFOConfig(BaseModel):
     featured_artists: Optional["FeaturedArtistConfig"] = Field(  # noqa: F821
         default=None,
         description="Featured artist handling configuration",
+    )
+    write_artist_nfo: bool = Field(
+        default=True,
+        description="Write artist.nfo files in each {artist} directory",
+    )
+    write_musicvideo_nfo: bool = Field(
+        default=True,
+        description="Write <basename>.nfo files for each music video",
     )
 
     def model_post_init(self, __context):
@@ -463,22 +448,6 @@ class TagsConfig(BaseModel):
     )
 
 
-class FileManagerConfig(BaseModel):
-    """Configuration for file management operations.
-
-    Controls file organization and soft delete/restore.
-    All file operations use aiofiles for non-blocking I/O.
-
-    For advanced configuration options (hash algorithm, verification),
-    see docs/advanced-config.md.
-    """
-
-    trash_dir: str = Field(
-        default=".trash",
-        description="Directory for soft-deleted files (relative to library_dir)",
-    )
-
-
 class BackupConfig(BaseModel):
     """Configuration for automatic system backups.
 
@@ -507,12 +476,16 @@ class BackupConfig(BaseModel):
 
 
 class TrashConfig(BaseModel):
-    """Configuration for automatic trash cleanup.
+    """Configuration for trash directory and automatic cleanup.
 
-    Deleted files are moved to the trash directory (configured in file_manager.trash_dir).
-    This config controls automatic cleanup of old items in the trash.
+    Deleted files are moved to the trash directory before permanent deletion.
+    The cleanup scheduler removes old items based on retention_days.
     """
 
+    trash_dir: str = Field(
+        default=".trash",
+        description="Directory for soft-deleted files (relative to library_dir)",
+    )
     enabled: bool = Field(
         default=True,
         description="Enable automatic scheduled trash cleanup",
@@ -645,17 +618,13 @@ class Config(BaseModel):
         default_factory=TagsConfig,
         description="Tag management and auto-tagging configuration",
     )
-    file_manager: FileManagerConfig = Field(
-        default_factory=FileManagerConfig,
-        description="File management and organization configuration",
-    )
     backup: BackupConfig = Field(
         default_factory=BackupConfig,
         description="Automatic backup configuration",
     )
     trash: TrashConfig = Field(
         default_factory=TrashConfig,
-        description="Automatic trash cleanup configuration",
+        description="Trash directory and automatic cleanup configuration",
     )
 
     def resolve_paths(self, create_dirs: bool = True) -> "Config":
@@ -765,12 +734,22 @@ class Config(BaseModel):
         Returns:
             Absolute path to trash directory
         """
-        trash_path = Path(self.file_manager.trash_dir)
+        trash_path = Path(self.trash.trash_dir)
         if trash_path.is_absolute():
             return trash_path
 
         library_dir = self.library_dir or _get_default_library_dir()
         return library_dir / trash_path
+
+    def get_log_file_path(self) -> Path:
+        """
+        Get absolute log file path, resolved against config_dir.
+
+        Returns:
+            Absolute path to log file (fuzzbin.log in config_dir)
+        """
+        config_dir = self.config_dir or _get_default_config_dir()
+        return config_dir / "fuzzbin.log"
 
     @staticmethod
     def _convert_paths_to_strings(data: Any) -> Any:
@@ -973,24 +952,22 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     # Safe fields - can change without side effects
     "logging.level": ConfigSafetyLevel.SAFE,
     "logging.format": ConfigSafetyLevel.SAFE,
-    "logging.handlers": ConfigSafetyLevel.SAFE,
+    "logging.file.enabled": ConfigSafetyLevel.SAFE,
     "logging.third_party": ConfigSafetyLevel.SAFE,
-    "logging.file.path": ConfigSafetyLevel.SAFE,
-    "logging.file.max_bytes": ConfigSafetyLevel.SAFE,
-    "logging.file.backup_count": ConfigSafetyLevel.SAFE,
-    "ytdlp.binary_path": ConfigSafetyLevel.SAFE,
-    "ytdlp.default_download_path": ConfigSafetyLevel.SAFE,
-    "ytdlp.format": ConfigSafetyLevel.SAFE,
-    "ytdlp.extract_audio": ConfigSafetyLevel.SAFE,
-    "ytdlp.audio_format": ConfigSafetyLevel.SAFE,
-    "ytdlp.additional_args": ConfigSafetyLevel.SAFE,
-    "ffprobe.binary_path": ConfigSafetyLevel.SAFE,
+    "ytdlp.ytdlp_path": ConfigSafetyLevel.SAFE,
+    "ytdlp.format_spec": ConfigSafetyLevel.SAFE,
+    "ytdlp.geo_bypass": ConfigSafetyLevel.SAFE,
+    "ffprobe.ffprobe_path": ConfigSafetyLevel.SAFE,
+    "ffprobe.timeout": ConfigSafetyLevel.SAFE,
     "nfo.*": ConfigSafetyLevel.SAFE,
     "organizer.*": ConfigSafetyLevel.SAFE,
     "tags.*": ConfigSafetyLevel.SAFE,
     "backup.enabled": ConfigSafetyLevel.SAFE,
     "backup.schedule": ConfigSafetyLevel.SAFE,
     "backup.retention_count": ConfigSafetyLevel.SAFE,
+    "trash.enabled": ConfigSafetyLevel.SAFE,
+    "trash.schedule": ConfigSafetyLevel.SAFE,
+    "trash.retention_days": ConfigSafetyLevel.SAFE,
     # Requires reload - need to recreate components
     "apis.*.auth.*": ConfigSafetyLevel.REQUIRES_RELOAD,
     # Affects state - changes persistent files/connections
@@ -998,7 +975,7 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     "library_dir": ConfigSafetyLevel.AFFECTS_STATE,
     # Note: database.* fields removed - database settings are not user-configurable
     "thumbnail.cache_dir": ConfigSafetyLevel.AFFECTS_STATE,
-    "file_manager.trash_dir": ConfigSafetyLevel.AFFECTS_STATE,
+    "trash.trash_dir": ConfigSafetyLevel.AFFECTS_STATE,
     "backup.output_dir": ConfigSafetyLevel.AFFECTS_STATE,
 }
 

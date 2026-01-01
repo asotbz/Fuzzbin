@@ -36,7 +36,7 @@ const CONFIG_SECTIONS: ConfigSection[] = [
   // Library Management
   { id: 'organizer', title: 'Organizer', group: 'Library Management' },
   { id: 'tags', title: 'Tags', group: 'Library Management' },
-  { id: 'file-manager', title: 'File Manager', group: 'Library Management' },
+  { id: 'trash', title: 'Trash', group: 'Library Management' },
 
   // System
   { id: 'backup', title: 'Backup', group: 'System' },
@@ -196,7 +196,7 @@ export default function SettingsPage() {
                 {/* Library Management */}
                 {activeSection === 'organizer' && <LibrarySettings config={activeConfig} section="organizer" />}
                 {activeSection === 'tags' && <LibrarySettings config={activeConfig} section="tags" />}
-                {activeSection === 'file-manager' && <LibrarySettings config={activeConfig} section="file-manager" />}
+                {activeSection === 'trash' && <LibrarySettings config={activeConfig} section="trash" />}
 
                 {/* System */}
                 {activeSection === 'backup' && <AdvancedSettings config={activeConfig} section="backup" />}

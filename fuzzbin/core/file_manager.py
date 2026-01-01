@@ -16,7 +16,7 @@ import aiofiles
 import aiofiles.os
 import structlog
 
-from ..common.config import FileManagerConfig, OrganizerConfig, ThumbnailConfig
+from ..common.config import TrashConfig, OrganizerConfig, ThumbnailConfig
 from ..parsers.models import MusicVideoNFO
 from .exceptions import InvalidPathError
 from .organizer import build_media_paths, MediaPaths
@@ -219,8 +219,8 @@ class FileManager:
     All file I/O uses aiofiles for non-blocking operations.
 
     Example:
-        >>> from fuzzbin.common.config import FileManagerConfig
-        >>> config = FileManagerConfig(trash_dir=".trash")
+        >>> from fuzzbin.common.config import TrashConfig
+        >>> config = TrashConfig(trash_dir=".trash")
         >>> fm = FileManager(
         ...     config,
         ...     library_dir=Path("/music_videos"),
@@ -244,7 +244,7 @@ class FileManager:
 
     def __init__(
         self,
-        config: FileManagerConfig,
+        config: TrashConfig,
         library_dir: Path,
         config_dir: Path,
         organizer_config: Optional[OrganizerConfig] = None,
@@ -254,7 +254,7 @@ class FileManager:
         Initialize file manager.
 
         Args:
-            config: FileManagerConfig with trash_dir setting
+            config: TrashConfig with trash_dir setting
             library_dir: Root directory for media files, NFOs, and trash
             config_dir: Directory for configuration, database, cache, and thumbnails
             organizer_config: Optional OrganizerConfig for path generation
@@ -284,7 +284,7 @@ class FileManager:
     @classmethod
     def from_config(
         cls,
-        file_manager_config: FileManagerConfig,
+        trash_config: TrashConfig,
         library_dir: Path,
         config_dir: Path,
         organizer_config: Optional[OrganizerConfig] = None,
@@ -294,7 +294,7 @@ class FileManager:
         Create FileManager from configuration.
 
         Args:
-            file_manager_config: File manager configuration
+            trash_config: Trash configuration with trash_dir
             library_dir: Root directory for media files, NFOs, and trash
             config_dir: Directory for configuration, database, cache, and thumbnails
             organizer_config: Optional organizer configuration
@@ -304,7 +304,7 @@ class FileManager:
             Configured FileManager instance
         """
         return cls(
-            config=file_manager_config,
+            config=trash_config,
             library_dir=library_dir,
             config_dir=config_dir,
             organizer_config=organizer_config,

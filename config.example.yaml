@@ -10,6 +10,7 @@
 #    - .cache/ (HTTP response caches)
 #    - .thumbnails/ (video thumbnails)
 #    - backups/ (database backups)
+#    - fuzzbin.log (when file logging is enabled)
 #
 # 2. library_dir: Video files, NFO metadata, and trash
 #    - Organized media files (per organizer.path_pattern)
@@ -47,6 +48,12 @@ logging:
   # Log format: json or text (default: json)
   # Use "text" for development, "json" for production
   format: json
+  
+  # File logging configuration
+  file:
+    # Enable logging to fuzzbin.log in config_dir (default: false)
+    # Uses daily rotation with 7-day retention
+    enabled: false
 
 # API client configurations
 # Environment variables take precedence over config file values.
@@ -102,6 +109,12 @@ thumbnail:
 
 # NFO file handling configuration
 nfo:
+  # Write artist.nfo files in each {artist} directory (default: true)
+  write_artist_nfo: true
+  
+  # Write <basename>.nfo files for each music video (default: true)
+  write_musicvideo_nfo: true
+  
   # Featured artist handling
   featured_artists:
     # Whether to append featured artists to artist or title field
@@ -125,40 +138,40 @@ organizer:
 
 # Tag management configuration
 tags:
-  # Normalize tag names to lowercase for consistency
+  # Normalize tag names to lowercase for consistency (default: true)
   normalize: true
   
   # Automatic decade tag configuration
   auto_decade:
+    # Enable automatic decade tag generation (default: true)
     enabled: true
+    
+    # Format string for decade tags (default: "{decade}s" -> "90s")
+    # Must contain {decade} placeholder
     format: "{decade}s"
 
-# File management configuration
-file_manager:
+# Trash directory and automatic cleanup configuration
+trash:
   # Directory for soft-deleted files (relative to library_dir)
   trash_dir: ".trash"
-
-# Automatic backup configuration
-backup:
-  # Whether automatic scheduled backups are enabled
-  enabled: true
   
-  # Cron expression for backup schedule (default: daily at 2 AM)
-  schedule: "0 2 * * *"
-  
-  # Number of backup archives to retain
-  retention_count: 7
-  
-  # Directory for backup archives (relative to config_dir)
-  output_dir: backups
-
-# Automatic trash cleanup configuration
-trash:
-  # Whether automatic scheduled trash cleanup is enabled
+  # Enable automatic scheduled trash cleanup (default: true)
   enabled: true
   
   # Cron expression for cleanup schedule (default: daily at 3 AM)
   schedule: "0 3 * * *"
   
-  # Delete items from trash older than this many days
+  # Delete items from trash older than this many days (default: 30)
   retention_days: 30
+
+# Automatic backup configuration
+backup:
+  # Whether automatic scheduled backups are enabled (default: true)
+  enabled: true
+  
+  # Cron expression for backup schedule (default: daily at 2 AM)
+  schedule: "0 2 * * *"
+  
+  # Number of backup archives to retain (default: 7)
+  retention_count: 7
+

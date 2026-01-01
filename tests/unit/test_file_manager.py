@@ -5,7 +5,7 @@ import pytest_asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fuzzbin.common.config import FileManagerConfig, OrganizerConfig
+from fuzzbin.common.config import TrashConfig, OrganizerConfig
 from fuzzbin.core.file_manager import (
     FileManager,
     FileManagerError,
@@ -22,22 +22,22 @@ from fuzzbin.core.organizer import MediaPaths
 from fuzzbin.parsers import MusicVideoNFO
 
 
-class TestFileManagerConfig:
-    """Tests for FileManagerConfig."""
+class TestTrashConfig:
+    """Tests for TrashConfig."""
 
     def test_default_values(self):
         """Test default configuration values.
         
-        Note: FileManagerConfig only exposes trash_dir now.
-        Other settings (hash_algorithm, verify_after_move, max_file_size, chunk_size)
-        use class defaults in FileManager.
+        Note: TrashConfig contains trash settings including cleanup schedule.
         """
-        config = FileManagerConfig()
+        config = TrashConfig()
         assert config.trash_dir == ".trash"
+        assert config.enabled is True
+        assert config.retention_days == 30
 
     def test_custom_trash_dir(self):
         """Test custom trash_dir configuration."""
-        config = FileManagerConfig(trash_dir=".deleted")
+        config = TrashConfig(trash_dir=".deleted")
         assert config.trash_dir == ".deleted"
 
 
@@ -46,7 +46,7 @@ class TestFileManagerInit:
 
     def test_basic_init(self, tmp_path):
         """Test basic initialization."""
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         fm = FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -60,7 +60,7 @@ class TestFileManagerInit:
 
     def test_init_with_organizer_config(self, tmp_path):
         """Test initialization with organizer config."""
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         org_config = OrganizerConfig(path_pattern="{artist}/{title}")
@@ -70,7 +70,7 @@ class TestFileManagerInit:
 
     def test_from_config(self, tmp_path):
         """Test factory method."""
-        config = FileManagerConfig(trash_dir=".deleted")
+        config = TrashConfig(trash_dir=".deleted")
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         fm = FileManager.from_config(config, library_dir=library_dir, config_dir=config_dir)
@@ -88,7 +88,7 @@ class TestComputeFileHash:
         
         Note: chunk_size is now a class default (DEFAULT_CHUNK_SIZE = 8192).
         """
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -131,7 +131,7 @@ class TestComputeFileHash:
         Note: max_file_size is now a class default (DEFAULT_MAX_FILE_SIZE = None).
         We override it on the instance to test the validation logic.
         """
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         fm = FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -152,7 +152,7 @@ class TestVerifyFileExists:
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -182,7 +182,7 @@ class TestMoveVideoAtomic:
         
         Note: verify_after_move is now a class default (DEFAULT_VERIFY_AFTER_MOVE = True).
         """
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -364,7 +364,7 @@ class TestSoftDelete:
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
-        config = FileManagerConfig(trash_dir=".trash")
+        config = TrashConfig(trash_dir=".trash")
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -424,7 +424,7 @@ class TestRestore:
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
-        config = FileManagerConfig(trash_dir=".trash")
+        config = TrashConfig(trash_dir=".trash")
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -499,7 +499,7 @@ class TestHardDelete:
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -556,7 +556,7 @@ class TestFindDuplicates:
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
-        config = FileManagerConfig()
+        config = TrashConfig()
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)
@@ -621,7 +621,7 @@ class TestVerifyLibrary:
     @pytest_asyncio.fixture
     async def file_manager(self, tmp_path):
         """Create file manager instance."""
-        config = FileManagerConfig(trash_dir=".trash")
+        config = TrashConfig(trash_dir=".trash")
         library_dir = tmp_path / "music_videos"
         config_dir = tmp_path / "config"
         return FileManager(config, library_dir=library_dir, config_dir=config_dir)

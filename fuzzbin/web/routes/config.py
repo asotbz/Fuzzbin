@@ -114,7 +114,11 @@ def _get_required_actions(path: str, safety_level: ConfigSafetyLevel) -> List[Re
                     description="Restart application to use new directory paths",
                 )
             )
-        elif path.startswith("file_manager.") or path.startswith("thumbnail.") or path.startswith("backup.output_dir"):
+        elif (
+            path.startswith("file_manager.")
+            or path.startswith("thumbnail.")
+            or path.startswith("backup.output_dir")
+        ):
             actions.append(
                 RequiredAction(
                     action_type="restart_file_manager",

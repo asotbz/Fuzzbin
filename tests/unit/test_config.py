@@ -62,8 +62,7 @@ class TestLoggingConfig:
         config = LoggingConfig()
         assert config.level == "INFO"
         assert config.format == "json"
-        assert config.handlers == ["console"]
-        assert config.file is None
+        assert config.file.enabled is False
 
     def test_level_validation(self):
         """Test log level validation."""
@@ -123,23 +122,15 @@ backup:
   output_dir: custom_backups
 logging:
   level: ERROR
-  handlers:
-    - console
-    - file
   file:
-    path: logs/test.log
-    max_bytes: 5242880
-    backup_count: 3
+    enabled: true
 """)
 
         config = Config.from_yaml(config_file)
         assert config.backup.retention_count == 14
         assert config.backup.output_dir == "custom_backups"
         assert config.logging.level == "ERROR"
-        assert "file" in config.logging.handlers
-        assert config.logging.file is not None
-        assert config.logging.file.path == "logs/test.log"
-        assert config.logging.file.max_bytes == 5242880
+        assert config.logging.file.enabled is True
 
     def test_partial_config(self):
         """Test that partial configuration uses defaults."""

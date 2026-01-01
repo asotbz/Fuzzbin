@@ -181,12 +181,11 @@ class SpotifyClient(RateLimitedAPIClient):
         # Create concurrency limiter with hardcoded defaults
         from ..common.concurrency_limiter import ConcurrencyLimiter
 
-        concurrency_limiter = ConcurrencyLimiter(
-            max_concurrent=cls.DEFAULT_MAX_CONCURRENT
-        )
+        concurrency_limiter = ConcurrencyLimiter(max_concurrent=cls.DEFAULT_MAX_CONCURRENT)
 
         # Use default HTTP config
         from ..common.config import HTTPConfig
+
         http_config = HTTPConfig()
 
         return cls(

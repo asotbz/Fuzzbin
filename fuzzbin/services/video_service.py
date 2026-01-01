@@ -310,6 +310,14 @@ class VideoService(BaseService):
                 nfo_file_path=nfo_file_path,
             )
 
+        # Auto-add decade tag if year provided and auto_decade enabled
+        if year:
+            config = self._get_config()
+            if config.tags.auto_decade.enabled:
+                await self.repository.auto_add_decade_tag(
+                    video_id, year, tag_format=config.tags.auto_decade.format
+                )
+
         self.logger.info("video_created", video_id=video_id, title=title)
         return await self.get_with_relationships(video_id)
 
@@ -396,6 +404,14 @@ class VideoService(BaseService):
         if kwargs:
             await self.repository.update_video(video_id, **kwargs)
             self.logger.info("video_updated", video_id=video_id, fields=list(kwargs.keys()))
+
+            # Auto-add decade tag if year was updated and auto_decade enabled
+            if "year" in kwargs and kwargs["year"]:
+                config = self._get_config()
+                if config.tags.auto_decade.enabled:
+                    await self.repository.auto_add_decade_tag(
+                        video_id, kwargs["year"], tag_format=config.tags.auto_decade.format
+                    )
 
         return await self.get_with_relationships(video_id)
 

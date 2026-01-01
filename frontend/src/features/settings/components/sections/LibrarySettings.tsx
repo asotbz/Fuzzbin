@@ -8,7 +8,7 @@ import type { ConfigConflictError } from '../../../../lib/api/endpoints/config'
 
 interface LibrarySettingsProps {
   config: any
-  section: 'organizer' | 'tags' | 'file-manager'
+  section: 'organizer' | 'tags' | 'trash'
 }
 
 export default function LibrarySettings({ config, section }: LibrarySettingsProps) {
@@ -44,7 +44,7 @@ export default function LibrarySettings({ config, section }: LibrarySettingsProp
 
   const organizer = config?.organizer || {}
   const tags = config?.tags || {}
-  const fileManager = config?.file_manager || {}
+  const trash = config?.trash || {}
 
   const renderOrganizerSettings = () => (
     <SettingSection
@@ -99,70 +99,83 @@ export default function LibrarySettings({ config, section }: LibrarySettingsProp
       description="Video metadata tagging configuration"
     >
       <SettingField
-        path="tags.auto_genre_tagging"
-        label="Auto Genre Tagging"
-        description="Automatically tag videos with genre metadata"
-        value={tags.auto_genre_tagging}
+        path="tags.normalize"
+        label="Normalize Tags"
+        description="Convert tags to lowercase for consistency"
+        value={tags.normalize}
         type="boolean"
         safetyLevel="safe"
         onChange={handleFieldChange}
       />
 
       <SettingField
-        path="tags.deduplicate"
-        label="Deduplicate Tags"
-        description="Remove duplicate tags automatically"
-        value={tags.deduplicate}
+        path="tags.auto_decade.enabled"
+        label="Auto Decade Tagging"
+        description="Automatically add decade tags based on release year"
+        value={tags.auto_decade?.enabled}
         type="boolean"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
+
+      <SettingField
+        path="tags.auto_decade.format"
+        label="Decade Tag Format"
+        description="Format for decade tags (must contain {decade})"
+        value={tags.auto_decade?.format}
+        type="text"
         safetyLevel="safe"
         onChange={handleFieldChange}
       />
     </SettingSection>
   )
 
-  const renderFileManagerSettings = () => (
+  const renderTrashSettings = () => (
     <SettingSection
-      title="File Manager"
-      description="File operations and trash management"
+      title="Trash Management"
+      description="Soft-delete and automatic cleanup settings"
     >
       <SettingField
-        path="file_manager.trash_dir"
+        path="trash.trash_dir"
         label="Trash Directory"
         description="Directory for deleted files (relative to library directory)"
-        value={fileManager.trash_dir}
+        value={trash.trash_dir}
         type="text"
         safetyLevel="affects_state"
         onChange={handleFieldChange}
       />
 
       <SettingField
-        path="file_manager.auto_empty_trash_days"
-        label="Auto-Empty Trash (Days)"
-        description="Automatically empty trash after N days (0 = disabled)"
-        value={fileManager.auto_empty_trash_days}
+        path="trash.enabled"
+        label="Enable Auto Cleanup"
+        description="Automatically clean up old items from trash"
+        value={trash.enabled}
+        type="boolean"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
+
+      <SettingField
+        path="trash.retention_days"
+        label="Retention Days"
+        description="Delete items from trash older than this many days"
+        value={trash.retention_days}
         type="number"
-        min={0}
+        min={1}
         max={365}
         safetyLevel="safe"
         onChange={handleFieldChange}
       />
 
-      <div style={{
-        padding: 'var(--space-3)',
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border-subtle)',
-        marginTop: 'var(--space-4)',
-        fontFamily: 'var(--font-body)',
-        fontSize: 'var(--text-sm)',
-        lineHeight: '1.6'
-      }}>
-        File integrity verification is enabled by default.
-        For advanced configuration, see <code style={{
-          background: 'rgba(0,0,0,0.2)',
-          padding: '2px 6px',
-          fontFamily: 'monospace'
-        }}>docs/advanced-config.md</code>
-      </div>
+      <SettingField
+        path="trash.schedule"
+        label="Cleanup Schedule"
+        description="Cron expression for cleanup schedule (e.g., '0 3 * * *' for daily at 3 AM)"
+        value={trash.schedule}
+        type="text"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
     </SettingSection>
   )
 
@@ -170,7 +183,7 @@ export default function LibrarySettings({ config, section }: LibrarySettingsProp
     <>
       {section === 'organizer' && renderOrganizerSettings()}
       {section === 'tags' && renderTagsSettings()}
-      {section === 'file-manager' && renderFileManagerSettings()}
+      {section === 'trash' && renderTrashSettings()}
 
       {conflictError && (
         <ConfirmChangeModal

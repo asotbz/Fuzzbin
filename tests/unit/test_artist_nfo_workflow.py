@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from fuzzbin.common.config import Config, OrganizerConfig
+from fuzzbin.common.config import Config, OrganizerConfig, NFOConfig
 from fuzzbin.parsers.artist_parser import ArtistNFOParser
 from fuzzbin.parsers.models import ArtistNFO
 from fuzzbin.tasks.handlers import _get_artist_directory_from_pattern
@@ -121,6 +121,8 @@ class TestArtistNfoWorkflow:
             path_pattern="{artist}/{title}",
             normalize_filenames=False,
         )
+        # Add nfo config for write_artist_nfo check
+        config.nfo = NFOConfig()
         return config
 
     async def test_create_new_artist_nfo(self, mock_repository, mock_config, tmp_path):
