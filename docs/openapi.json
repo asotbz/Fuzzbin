@@ -9416,6 +9416,19 @@
             "title": "Youtube Url",
             "description": "Optional YouTube URL to resolve via yt-dlp (used when source=youtube or to pin a specific video)"
           },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Pre-fetched metadata from search/preview step. If provided, skips re-fetching from source API. Expected fields: title, artist, year, director, genre, label, featured_artists"
+          },
           "initial_status": {
             "type": "string",
             "title": "Initial Status",
