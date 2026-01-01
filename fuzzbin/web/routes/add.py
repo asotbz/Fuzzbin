@@ -926,6 +926,7 @@ async def submit_single_import(
             "skip_existing": request.skip_existing,
             "initial_status": request.initial_status,
             "auto_download": request.auto_download,
+            "prefetched_metadata": request.metadata,
         },
     )
 

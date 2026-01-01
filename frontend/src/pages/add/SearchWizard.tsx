@@ -376,10 +376,81 @@ export default function SearchWizard() {
       return
     }
 
+    // Build pre-fetched metadata from wizard state and preview data
+    // This allows the backend to skip redundant API calls
+    const previewVideoData = wizard.previewData?.data as any || {}
+    const previewExtra = wizard.previewData?.extra as any || {}
+
+    // Build metadata object based on source type
+    const metadata: Record<string, unknown> = {
+      title: wizard.editedMetadata.title || undefined,
+      artist: wizard.editedMetadata.artist || undefined,
+      year: wizard.editedMetadata.year || undefined,
+      album: wizard.editedMetadata.album || undefined,
+      director: wizard.editedMetadata.directors || undefined,
+      label: wizard.editedMetadata.label || undefined,
+      youtube_id: wizard.editedMetadata.youtubeId || undefined,
+    }
+
+    // Add source-specific fields from preview data
+    if (wizard.selectedSource.source === 'imvdb') {
+      // IMVDb-specific fields
+      if (previewVideoData.directors?.length) {
+        metadata.director = previewVideoData.directors.map((d: any) => d.entity_name).filter(Boolean).join(', ')
+      }
+      if (previewVideoData.featured_artists?.length) {
+        metadata.featured_artists = previewVideoData.featured_artists.map((a: any) => a.name).filter(Boolean)
+      }
+      if (previewExtra.youtube_ids?.length) {
+        metadata.youtube_id = previewExtra.youtube_ids[0]
+      }
+
+      // Add Discogs genre/label data if available (from IMVDb + Discogs comparison)
+      if (discogsResults?.results?.length > 0) {
+        const discogsData = discogsResults.results[0]?.data || {}
+        if (discogsData.genres?.length) {
+          metadata.genre = discogsData.genres[0]
+        }
+        if (discogsData.labels?.length && !metadata.label) {
+          metadata.label = discogsData.labels[0].name
+        }
+      }
+    } else if (wizard.selectedSource.source.startsWith('discogs')) {
+      // Discogs-specific fields from preview
+      if (previewVideoData.genres?.length) {
+        metadata.genre = previewVideoData.genres[0]
+      }
+      if (previewVideoData.styles?.length) {
+        metadata.styles = previewVideoData.styles
+      }
+      if (previewVideoData.labels?.length) {
+        metadata.label = previewVideoData.labels[0].name
+      }
+      if (previewVideoData.artists?.length) {
+        metadata.artist = previewVideoData.artists.map((a: any) => a.name).join(', ')
+      }
+    } else if (wizard.selectedSource.source === 'youtube') {
+      // YouTube-specific fields
+      metadata.youtube_id = previewVideoData.id || wizard.selectedSource.id
+      metadata.title = previewVideoData.title || wizard.editedMetadata.title
+      metadata.artist = previewVideoData.channel || wizard.editedMetadata.artist
+      if (previewVideoData.duration) {
+        metadata.duration = previewVideoData.duration
+      }
+    }
+
+    // Clean undefined values
+    Object.keys(metadata).forEach(key => {
+      if (metadata[key] === undefined) {
+        delete metadata[key]
+      }
+    })
+
     const request: AddSingleImportRequest = {
       source: wizard.selectedSource.source as any,
       id: wizard.selectedSource.id,
       youtube_id: wizard.editedMetadata.youtubeId || undefined,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       initial_status: wizard.editedMetadata.initialStatus,
       skip_existing: wizard.editedMetadata.skipExisting,
       auto_download: wizard.editedMetadata.autoDownload,

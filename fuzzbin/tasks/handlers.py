@@ -1958,6 +1958,8 @@ async def handle_add_single_import(job: Job) -> None:
         youtube_url (str, optional): Optional URL to resolve via yt-dlp
         skip_existing (bool, optional): Skip if a matching record already exists (default True)
         initial_status (str, optional): Status for new/updated records (default 'discovered')
+        prefetched_metadata (dict, optional): Pre-fetched metadata to avoid redundant API calls.
+            Expected fields: title, artist, year, director, genre, label, featured_artists
     """
 
     source = job.metadata.get("source")
@@ -1970,6 +1972,7 @@ async def handle_add_single_import(job: Job) -> None:
     youtube_id_override = job.metadata.get("youtube_id")
     youtube_url = job.metadata.get("youtube_url")
     auto_download = job.metadata.get("auto_download", True)
+    prefetched_metadata = job.metadata.get("prefetched_metadata")
 
     logger.info(
         "add_single_import_job_starting",
@@ -1978,6 +1981,7 @@ async def handle_add_single_import(job: Job) -> None:
         item_id=item_id,
         skip_existing=skip_existing,
         initial_status=initial_status,
+        has_prefetched_metadata=prefetched_metadata is not None,
     )
 
     job.update_progress(0, 3, "Initializing import...")
@@ -1993,38 +1997,71 @@ async def handle_add_single_import(job: Job) -> None:
     youtube_id: str | None = None
     imvdb_video_id: str | None = None
 
-    if source == "imvdb":
-        imvdb_config = (config.apis or {}).get("imvdb")
-        if not imvdb_config:
-            raise ValueError("IMVDb API not configured")
+    # Use prefetched metadata if available to avoid redundant API calls
+    if prefetched_metadata:
+        logger.info(
+            "add_single_import_using_prefetched_metadata",
+            job_id=job.id,
+            source=source,
+            item_id=item_id,
+            fields=list(prefetched_metadata.keys()),
+        )
 
+    if source == "imvdb":
         try:
             vid = int(item_id)
         except Exception:
             raise ValueError(f"Invalid IMVDb id: {item_id}")
 
-        from fuzzbin.api.imvdb_client import IMVDbClient
+        imvdb_video_id = str(vid)
+        youtube_id = youtube_id_override
 
-        job.update_progress(1, 3, f"Fetching IMVDb video {vid}...")
-        async with IMVDbClient.from_config(imvdb_config) as client:
-            video = await client.get_video(vid)
+        # Use prefetched metadata if available, otherwise fetch from API
+        if prefetched_metadata:
+            job.update_progress(1, 3, "Using prefetched metadata...")
+            title = prefetched_metadata.get("title", str(vid))
+            artist = prefetched_metadata.get("artist")
+            year = prefetched_metadata.get("year")
+            director = prefetched_metadata.get("director")
+            genre = prefetched_metadata.get("genre")
+            featured_artists = prefetched_metadata.get("featured_artists")
 
-        imvdb_video_id = str(video.id)
-        youtube_id = youtube_id_override or _extract_youtube_id_from_imvdb_sources(video.sources)
+            # If no youtube_id override, try to get from prefetched metadata
+            if not youtube_id:
+                youtube_id = prefetched_metadata.get("youtube_id")
 
-        if skip_existing:
-            try:
-                existing = await repository.get_video_by_imvdb_id(imvdb_video_id)
-                video_id = int(existing["id"])
-                skipped = True
-            except Exception:
-                pass
+            # artists list for video_artists linking (from prefetched data)
+            primary_artists = [artist] if artist else []
+            featured_artists_list = []
+            if featured_artists:
+                if isinstance(featured_artists, str):
+                    featured_artists_list = [fa.strip() for fa in featured_artists.split(",") if fa.strip()]
+                elif isinstance(featured_artists, list):
+                    featured_artists_list = featured_artists
+        else:
+            # Fetch from IMVDb API
+            imvdb_config = (config.apis or {}).get("imvdb")
+            if not imvdb_config:
+                raise ValueError("IMVDb API not configured")
 
-        if not skipped:
+            from fuzzbin.api.imvdb_client import IMVDbClient
+
+            job.update_progress(1, 3, f"Fetching IMVDb video {vid}...")
+            async with IMVDbClient.from_config(imvdb_config) as client:
+                video = await client.get_video(vid)
+
+            youtube_id = youtube_id or _extract_youtube_id_from_imvdb_sources(video.sources)
+
             title = (video.song_title or str(video.id)).strip()
             artist = None
             if getattr(video, "artists", None):
                 artist = getattr(video.artists[0], "name", None)
+            year = getattr(video, "year", None)
+            director = (
+                getattr(video.directors[0], "entity_name", None)
+                if getattr(video, "directors", None)
+                else None
+            )
 
             # Try to get genre from Discogs via enrichment service
             genre: str | None = None
@@ -2059,16 +2096,25 @@ async def handle_add_single_import(job: Job) -> None:
                         error=str(e),
                     )
 
+            # Prepare artist lists for video_artists linking
+            primary_artists = [art.name for art in video.artists] if video.artists else []
+            featured_artists_list = [fa.name for fa in video.featured_artists] if video.featured_artists else []
+
+        if skip_existing:
+            try:
+                existing = await repository.get_video_by_imvdb_id(imvdb_video_id)
+                video_id = int(existing["id"])
+                skipped = True
+            except Exception:
+                pass
+
+        if not skipped:
             job.update_progress(2, 3, "Creating video record...")
             video_id = await repository.create_video(
                 title=title,
                 artist=artist,
-                year=getattr(video, "year", None),
-                director=(
-                    getattr(video.directors[0], "entity_name", None)
-                    if getattr(video, "directors", None)
-                    else None
-                ),
+                year=year,
+                director=director,
                 genre=genre,
                 imvdb_video_id=imvdb_video_id,
                 youtube_id=youtube_id,
@@ -2078,60 +2124,105 @@ async def handle_add_single_import(job: Job) -> None:
             created = True
 
             # Link primary artists to video_artists table
-            if video.artists:
-                for position, art in enumerate(video.artists):
-                    artist_id = await repository.upsert_artist(name=art.name)
-                    await repository.link_video_artist(
-                        video_id=video_id,
-                        artist_id=artist_id,
-                        role="primary",
-                        position=position,
-                    )
+            for position, art_name in enumerate(primary_artists):
+                artist_id = await repository.upsert_artist(name=art_name)
+                await repository.link_video_artist(
+                    video_id=video_id,
+                    artist_id=artist_id,
+                    role="primary",
+                    position=position,
+                )
 
             # Link featured artists to video_artists table
-            if video.featured_artists:
-                for position, featured_art in enumerate(video.featured_artists):
-                    artist_id = await repository.upsert_artist(name=featured_art.name)
-                    await repository.link_video_artist(
-                        video_id=video_id,
-                        artist_id=artist_id,
-                        role="featured",
-                        position=position,
-                    )
+            for position, featured_art_name in enumerate(featured_artists_list):
+                artist_id = await repository.upsert_artist(name=featured_art_name)
+                await repository.link_video_artist(
+                    video_id=video_id,
+                    artist_id=artist_id,
+                    role="featured",
+                    position=position,
+                )
 
     elif source in ("discogs_master", "discogs_release"):
-        discogs_config = (config.apis or {}).get("discogs")
-        if not discogs_config:
-            raise ValueError("Discogs API not configured")
-
         try:
             did = int(item_id)
         except Exception:
             raise ValueError(f"Invalid Discogs id: {item_id}")
 
-        from fuzzbin.api.discogs_client import DiscogsClient
+        youtube_id = youtube_id_override
 
-        job.update_progress(1, 3, f"Fetching Discogs {source} {did}...")
-        async with DiscogsClient.from_config(discogs_config) as client:
-            payload = await (
-                client.get_master(did) if source == "discogs_master" else client.get_release(did)
-            )
+        # Use prefetched metadata if available, otherwise fetch from API
+        if prefetched_metadata:
+            job.update_progress(1, 3, "Using prefetched metadata...")
+            title = prefetched_metadata.get("title", str(did))
+            artist = prefetched_metadata.get("artist")
+            year = prefetched_metadata.get("year")
+            genre = prefetched_metadata.get("genre")
+            label = prefetched_metadata.get("label")
 
-        if not isinstance(payload, dict):
-            raise ValueError("Unexpected Discogs response")
+            # If no youtube_id override, try to get from prefetched metadata
+            if not youtube_id:
+                youtube_id = prefetched_metadata.get("youtube_id")
+        else:
+            # Fetch from Discogs API
+            discogs_config = (config.apis or {}).get("discogs")
+            if not discogs_config:
+                raise ValueError("Discogs API not configured")
 
-        title = (payload.get("title") or str(did)).strip()
-        artists = payload.get("artists") or []
-        artist = None
-        if artists and isinstance(artists, list) and isinstance(artists[0], dict):
-            artist = artists[0].get("name")
+            from fuzzbin.api.discogs_client import DiscogsClient
 
-        year = payload.get("year")
-        if isinstance(year, str):
-            try:
-                year = int(year)
-            except Exception:
-                year = None
+            job.update_progress(1, 3, f"Fetching Discogs {source} {did}...")
+            async with DiscogsClient.from_config(discogs_config) as client:
+                payload = await (
+                    client.get_master(did) if source == "discogs_master" else client.get_release(did)
+                )
+
+            if not isinstance(payload, dict):
+                raise ValueError("Unexpected Discogs response")
+
+            title = (payload.get("title") or str(did)).strip()
+            artists = payload.get("artists") or []
+            artist = None
+            if artists and isinstance(artists, list) and isinstance(artists[0], dict):
+                artist = artists[0].get("name")
+
+            year = payload.get("year")
+            if isinstance(year, str):
+                try:
+                    year = int(year)
+                except Exception:
+                    year = None
+
+            # Extract and normalize genre from Discogs response
+            genre: str | None = None
+            genres_list = payload.get("genres", [])
+            if genres_list and isinstance(genres_list, list) and len(genres_list) > 0:
+                try:
+                    from fuzzbin.common.string_utils import normalize_genre
+
+                    raw_genre = genres_list[0]
+                    _, genre, _ = normalize_genre(raw_genre)
+                    logger.info(
+                        "add_single_import_genre_found",
+                        source=source,
+                        item_id=item_id,
+                        raw_genre=raw_genre,
+                        genre=genre,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "add_single_import_genre_normalize_failed",
+                        source=source,
+                        item_id=item_id,
+                        error=str(e),
+                    )
+
+            # Extract label from Discogs response
+            label: str | None = None
+            labels_list = payload.get("labels", [])
+            if labels_list and isinstance(labels_list, list) and len(labels_list) > 0:
+                if isinstance(labels_list[0], dict):
+                    label = labels_list[0].get("name")
 
         if skip_existing and title and artist:
             try:
@@ -2147,39 +2238,6 @@ async def handle_add_single_import(job: Job) -> None:
                     skipped = True
             except Exception:
                 pass
-
-        youtube_id = youtube_id_override
-
-        # Extract and normalize genre from Discogs response
-        genre: str | None = None
-        genres_list = payload.get("genres", [])
-        if genres_list and isinstance(genres_list, list) and len(genres_list) > 0:
-            try:
-                from fuzzbin.common.string_utils import normalize_genre
-
-                raw_genre = genres_list[0]
-                _, genre, _ = normalize_genre(raw_genre)
-                logger.info(
-                    "add_single_import_genre_found",
-                    source=source,
-                    item_id=item_id,
-                    raw_genre=raw_genre,
-                    genre=genre,
-                )
-            except Exception as e:
-                logger.warning(
-                    "add_single_import_genre_normalize_failed",
-                    source=source,
-                    item_id=item_id,
-                    error=str(e),
-                )
-
-        # Extract label from Discogs response
-        label: str | None = None
-        labels_list = payload.get("labels", [])
-        if labels_list and isinstance(labels_list, list) and len(labels_list) > 0:
-            if isinstance(labels_list[0], dict):
-                label = labels_list[0].get("name")
 
         if not skipped:
             job.update_progress(2, 3, "Creating video record...")
@@ -2197,27 +2255,30 @@ async def handle_add_single_import(job: Job) -> None:
             created = True
 
     elif source == "youtube":
-        from fuzzbin.clients.ytdlp_client import YTDLPClient
-        from fuzzbin.common.config import YTDLPConfig
-
-        ytdlp_config = config.ytdlp or YTDLPConfig()
         target = youtube_url or item_id
+        youtube_id = youtube_id_override
 
-        job.update_progress(1, 3, f"Fetching YouTube metadata for {target}...")
-        async with YTDLPClient.from_config(ytdlp_config) as client:
-            info = await client.get_video_info(target)
+        # Use prefetched metadata if available, otherwise fetch from yt-dlp
+        if prefetched_metadata:
+            job.update_progress(1, 3, "Using prefetched metadata...")
+            yt_title = prefetched_metadata.get("title", item_id)
+            yt_artist = prefetched_metadata.get("artist")
+            genre = prefetched_metadata.get("genre")
 
-        youtube_id = youtube_id_override or getattr(info, "id", None)
+            # If no youtube_id override, try to get from prefetched metadata or item_id
+            if not youtube_id:
+                youtube_id = prefetched_metadata.get("youtube_id") or item_id
+        else:
+            from fuzzbin.clients.ytdlp_client import YTDLPClient
+            from fuzzbin.common.config import YTDLPConfig
 
-        if skip_existing and youtube_id:
-            try:
-                existing = await repository.get_video_by_youtube_id(youtube_id)
-                video_id = int(existing["id"])
-                skipped = True
-            except Exception:
-                pass
+            ytdlp_config = config.ytdlp or YTDLPConfig()
 
-        if not skipped:
+            job.update_progress(1, 3, f"Fetching YouTube metadata for {target}...")
+            async with YTDLPClient.from_config(ytdlp_config) as client:
+                info = await client.get_video_info(target)
+
+            youtube_id = youtube_id or getattr(info, "id", None)
             yt_title = getattr(info, "title", None) or youtube_id or "YouTube Video"
             yt_artist = getattr(info, "channel", None)
 
@@ -2253,6 +2314,15 @@ async def handle_add_single_import(job: Job) -> None:
                         error=str(e),
                     )
 
+        if skip_existing and youtube_id:
+            try:
+                existing = await repository.get_video_by_youtube_id(youtube_id)
+                video_id = int(existing["id"])
+                skipped = True
+            except Exception:
+                pass
+
+        if not skipped:
             job.update_progress(2, 3, "Creating video record...")
             video_id = await repository.create_video(
                 title=yt_title,

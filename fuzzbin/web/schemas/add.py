@@ -285,6 +285,12 @@ class AddSingleImportRequest(BaseModel):
         description="Optional YouTube URL to resolve via yt-dlp (used when source=youtube or to pin a specific video)",
     )
 
+    # Pre-fetched metadata (avoids redundant API calls if already fetched during search/preview)
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Pre-fetched metadata from search/preview step. If provided, skips re-fetching from source API. Expected fields: title, artist, year, director, genre, label, featured_artists",
+    )
+
     initial_status: str = Field(
         default="discovered",
         description="Initial status for the created/updated video record",
