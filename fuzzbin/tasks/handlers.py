@@ -2024,6 +2024,8 @@ async def handle_add_single_import(job: Job) -> None:
             year = prefetched_metadata.get("year")
             director = prefetched_metadata.get("director")
             genre = prefetched_metadata.get("genre")
+            album = prefetched_metadata.get("album")
+            label = prefetched_metadata.get("label")
             featured_artists = prefetched_metadata.get("featured_artists")
 
             # If no youtube_id override, try to get from prefetched metadata
@@ -2062,6 +2064,8 @@ async def handle_add_single_import(job: Job) -> None:
                 if getattr(video, "directors", None)
                 else None
             )
+            album = None  # IMVDb doesn't provide album
+            label = None  # IMVDb doesn't provide label
 
             # Try to get genre from Discogs via enrichment service
             genre: str | None = None
@@ -2113,9 +2117,11 @@ async def handle_add_single_import(job: Job) -> None:
             video_id = await repository.create_video(
                 title=title,
                 artist=artist,
+                album=album,
                 year=year,
                 director=director,
                 genre=genre,
+                studio=label,
                 imvdb_video_id=imvdb_video_id,
                 youtube_id=youtube_id,
                 download_source=("youtube" if youtube_id else None),

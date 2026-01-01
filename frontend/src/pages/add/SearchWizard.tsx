@@ -45,6 +45,42 @@ export default function SearchWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on unmount
   }, [])
 
+  // Eagerly fetch YouTube metadata for all available sources when they become available
+  useEffect(() => {
+    const youtubeIds = wizard.availableYouTubeSources
+    if (youtubeIds.length === 0) return
+
+    // Fetch metadata for each YouTube ID that isn't already in cache
+    youtubeIds.forEach(async (ytId) => {
+      if (wizard.youtubeMetadataCache[ytId]) return // Already fetched
+
+      try {
+        const response = await getYouTubeMetadata({ youtube_id: ytId })
+        wizard.updateYouTubeMetadataCache(ytId, {
+          youtube_id: response.youtube_id,
+          available: response.available,
+          view_count: response.view_count,
+          duration: response.duration,
+          channel: response.channel,
+          title: response.title,
+          error: response.error,
+        })
+      } catch (error) {
+        console.error(`Failed to fetch YouTube metadata for ${ytId}:`, error)
+        wizard.updateYouTubeMetadataCache(ytId, {
+          youtube_id: ytId,
+          available: false,
+          view_count: null,
+          duration: null,
+          channel: null,
+          title: null,
+          error: 'Failed to fetch metadata',
+        })
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run when availableYouTubeSources changes
+  }, [wizard.availableYouTubeSources])
+
   // Step 1: Search mutation
   const searchMutation = useMutation({
     mutationFn: () =>
@@ -144,6 +180,7 @@ export default function SearchWizard() {
     let album: string | null = null
     let directors: string | null = null
     let label: string | null = null
+    let genre: string | null = null
     let youtubeId: string | null = null
 
     // Extract based on source
@@ -170,7 +207,7 @@ export default function SearchWizard() {
 
       // Fill in missing data from Discogs if available
       if (discogsData) {
-        // If IMVDb doesn't have album, use Discogs title
+        // If IMVDb doesn't have album, use Discogs title (which is the album name)
         if (!album && discogsData.title) {
           album = discogsData.title
         }
@@ -179,6 +216,11 @@ export default function SearchWizard() {
         // Take only the first label (parent/main label, not imprints)
         if (discogsData.labels && Array.isArray(discogsData.labels) && discogsData.labels.length > 0) {
           label = discogsData.labels[0].name || null
+        }
+
+        // Extract genre from Discogs (IMVDb doesn't have genres)
+        if (discogsData.genres && Array.isArray(discogsData.genres) && discogsData.genres.length > 0) {
+          genre = discogsData.genres[0]
         }
       }
     } else if (wizard.selectedSource?.source.startsWith('discogs')) {
@@ -194,6 +236,11 @@ export default function SearchWizard() {
       // Extract label from labels array (first label is parent/main label)
       if (videoData.labels && Array.isArray(videoData.labels) && videoData.labels.length > 0) {
         label = videoData.labels[0].name || null
+      }
+
+      // Extract genre from Discogs
+      if (videoData.genres && Array.isArray(videoData.genres) && videoData.genres.length > 0) {
+        genre = videoData.genres[0]
       }
     } else if (wizard.selectedSource?.source === 'youtube') {
       title = videoData.title || ''
@@ -212,8 +259,8 @@ export default function SearchWizard() {
       album,
       directors,
       label,
+      genre,
       youtubeId,
-      initialStatus: 'discovered',
       skipExisting: true,
       autoDownload: true,  // Default to auto-download enabled
     })
@@ -376,12 +423,12 @@ export default function SearchWizard() {
       return
     }
 
-    // Build pre-fetched metadata from wizard state and preview data
+    // Build pre-fetched metadata from wizard state (user-edited values take priority)
     // This allows the backend to skip redundant API calls
     const previewVideoData = wizard.previewData?.data as any || {}
     const previewExtra = wizard.previewData?.extra as any || {}
 
-    // Build metadata object based on source type
+    // Build metadata object from edited metadata (user edits have priority)
     const metadata: Record<string, unknown> = {
       title: wizard.editedMetadata.title || undefined,
       artist: wizard.editedMetadata.artist || undefined,
@@ -389,51 +436,58 @@ export default function SearchWizard() {
       album: wizard.editedMetadata.album || undefined,
       director: wizard.editedMetadata.directors || undefined,
       label: wizard.editedMetadata.label || undefined,
+      genre: wizard.editedMetadata.genre || undefined,
       youtube_id: wizard.editedMetadata.youtubeId || undefined,
     }
 
-    // Add source-specific fields from preview data
+    // Add source-specific fields from preview data (only if not already set by user)
     if (wizard.selectedSource.source === 'imvdb') {
       // IMVDb-specific fields
-      if (previewVideoData.directors?.length) {
+      if (!metadata.director && previewVideoData.directors?.length) {
         metadata.director = previewVideoData.directors.map((d: any) => d.entity_name).filter(Boolean).join(', ')
       }
       if (previewVideoData.featured_artists?.length) {
         metadata.featured_artists = previewVideoData.featured_artists.map((a: any) => a.name).filter(Boolean)
       }
-      if (previewExtra.youtube_ids?.length) {
+      if (!metadata.youtube_id && previewExtra.youtube_ids?.length) {
         metadata.youtube_id = previewExtra.youtube_ids[0]
       }
 
       // Add Discogs genre/label data if available (from IMVDb + Discogs comparison)
       if (discogsResults?.results?.length > 0) {
         const discogsData = discogsResults.results[0]?.data || {}
-        if (discogsData.genres?.length) {
+        if (!metadata.genre && discogsData.genres?.length) {
           metadata.genre = discogsData.genres[0]
         }
-        if (discogsData.labels?.length && !metadata.label) {
+        if (!metadata.label && discogsData.labels?.length) {
           metadata.label = discogsData.labels[0].name
         }
       }
     } else if (wizard.selectedSource.source.startsWith('discogs')) {
-      // Discogs-specific fields from preview
-      if (previewVideoData.genres?.length) {
+      // Discogs-specific fields from preview (only if not set by user)
+      if (!metadata.genre && previewVideoData.genres?.length) {
         metadata.genre = previewVideoData.genres[0]
       }
       if (previewVideoData.styles?.length) {
         metadata.styles = previewVideoData.styles
       }
-      if (previewVideoData.labels?.length) {
+      if (!metadata.label && previewVideoData.labels?.length) {
         metadata.label = previewVideoData.labels[0].name
       }
-      if (previewVideoData.artists?.length) {
+      if (!metadata.artist && previewVideoData.artists?.length) {
         metadata.artist = previewVideoData.artists.map((a: any) => a.name).join(', ')
       }
     } else if (wizard.selectedSource.source === 'youtube') {
       // YouTube-specific fields
-      metadata.youtube_id = previewVideoData.id || wizard.selectedSource.id
-      metadata.title = previewVideoData.title || wizard.editedMetadata.title
-      metadata.artist = previewVideoData.channel || wizard.editedMetadata.artist
+      if (!metadata.youtube_id) {
+        metadata.youtube_id = previewVideoData.id || wizard.selectedSource.id
+      }
+      if (!metadata.title) {
+        metadata.title = previewVideoData.title
+      }
+      if (!metadata.artist) {
+        metadata.artist = previewVideoData.channel
+      }
       if (previewVideoData.duration) {
         metadata.duration = previewVideoData.duration
       }
@@ -451,7 +505,7 @@ export default function SearchWizard() {
       id: wizard.selectedSource.id,
       youtube_id: wizard.editedMetadata.youtubeId || undefined,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      initial_status: wizard.editedMetadata.initialStatus,
+      initial_status: 'discovered',  // Always use discovered status
       skip_existing: wizard.editedMetadata.skipExisting,
       auto_download: wizard.editedMetadata.autoDownload,
     }
@@ -474,30 +528,62 @@ export default function SearchWizard() {
     return source
   }
 
-  // Build comparison fields for IMVDb vs Discogs
+  // Build comparison fields for IMVDb vs Discogs (always show when Discogs data available)
   const comparisonFields: ComparisonField[] = []
-  if (wizard.compareWithDiscogs && discogsResults && discogsResults.results?.length > 0) {
+  if (discogsResults && discogsResults.results?.length > 0) {
     const discogsData = discogsResults.results[0]?.data || {}
     const imvdbData = wizard.previewData?.data as any || {}
+
+    // Extract Discogs values
+    const discogsArtist = discogsData.artists?.map((a: any) => a.name).join(', ') || null
+    const discogsLabel = discogsData.labels?.[0]?.name || null
+    const discogsGenre = discogsData.genres?.[0] || null
+
+    // Extract IMVDb values
+    const imvdbDirectors = imvdbData.directors?.map((d: any) => d.entity_name).filter(Boolean).join(', ') || null
 
     comparisonFields.push(
       {
         key: 'title',
         label: 'Title',
         imvdbValue: imvdbData.song_title || null,
-        discogsValue: discogsData.title || null,
+        discogsValue: null, // Discogs doesn't have track title, only album title
       },
       {
         key: 'artist',
         label: 'Artist',
         imvdbValue: imvdbData.artists?.[0]?.name || null,
-        discogsValue: discogsData.artists?.map((a: any) => a.name).join(', ') || null,
+        discogsValue: discogsArtist,
       },
       {
         key: 'year',
         label: 'Year',
         imvdbValue: imvdbData.year?.toString() || null,
         discogsValue: discogsData.year?.toString() || null,
+      },
+      {
+        key: 'album',
+        label: 'Album',
+        imvdbValue: imvdbData.album || null,
+        discogsValue: discogsData.title || null, // Discogs title = album name
+      },
+      {
+        key: 'label',
+        label: 'Label',
+        imvdbValue: null, // IMVDb doesn't have label
+        discogsValue: discogsLabel,
+      },
+      {
+        key: 'genre',
+        label: 'Genre',
+        imvdbValue: null, // IMVDb doesn't have genre
+        discogsValue: discogsGenre,
+      },
+      {
+        key: 'director',
+        label: 'Director',
+        imvdbValue: imvdbDirectors,
+        discogsValue: null, // Discogs doesn't have director
       }
     )
   }
@@ -513,13 +599,27 @@ export default function SearchWizard() {
       const updates: Partial<typeof wizard.editedMetadata> = {}
 
       if (fieldKey === 'title') {
-        updates.title = source === 'imvdb' ? imvdbData.song_title : discogsData.title
+        // Title only comes from IMVDb (song_title)
+        updates.title = imvdbData.song_title || ''
       } else if (fieldKey === 'artist') {
         updates.artist = source === 'imvdb'
           ? imvdbData.artists?.[0]?.name
           : discogsData.artists?.map((a: any) => a.name).join(', ')
       } else if (fieldKey === 'year') {
         updates.year = source === 'imvdb' ? imvdbData.year : discogsData.year
+      } else if (fieldKey === 'album') {
+        updates.album = source === 'imvdb'
+          ? imvdbData.album
+          : discogsData.title // Discogs title = album name
+      } else if (fieldKey === 'label') {
+        // Label only comes from Discogs
+        updates.label = discogsData.labels?.[0]?.name || null
+      } else if (fieldKey === 'genre') {
+        // Genre only comes from Discogs
+        updates.genre = discogsData.genres?.[0] || null
+      } else if (fieldKey === 'director') {
+        // Director only comes from IMVDb
+        updates.directors = imvdbData.directors?.map((d: any) => d.entity_name).filter(Boolean).join(', ') || null
       }
 
       wizard.updateMetadata(updates)
@@ -649,8 +749,27 @@ export default function SearchWizard() {
 
             {previewQuery.data && (
               <div className="metadataEditor">
+                {/* Source Comparison (shown first, unfurled, for IMVDb sources with Discogs data) */}
+                {wizard.selectedSource?.source === 'imvdb' && discogsResults && comparisonFields.length > 0 && (
+                  <div className="metadataEditorSection">
+                    <SourceComparison
+                      fields={comparisonFields}
+                      selectedFields={selectedDiscogsFields}
+                      onFieldSelect={handleFieldSelect}
+                    />
+                  </div>
+                )}
+
+                {/* Separator when source comparison is shown */}
+                {wizard.selectedSource?.source === 'imvdb' && discogsResults && comparisonFields.length > 0 && (
+                  <div className="metadataEditorSeparator">
+                    <span>or manually edit below:</span>
+                  </div>
+                )}
+
+                {/* Unified Metadata Section */}
                 <div className="metadataEditorSection">
-                  <h3 className="metadataEditorSectionTitle">Basic Information</h3>
+                  <h3 className="metadataEditorSectionTitle">Metadata</h3>
 
                   <div className="metadataEditorFormGroup">
                     <label className="metadataEditorLabel">Title</label>
@@ -681,10 +800,6 @@ export default function SearchWizard() {
                       onChange={(e) => wizard.updateMetadata({ year: e.target.value ? parseInt(e.target.value) : null })}
                     />
                   </div>
-                </div>
-
-                <div className="metadataEditorSection">
-                  <h3 className="metadataEditorSectionTitle">Extended Metadata</h3>
 
                   <div className="metadataEditorFormGroup">
                     <label className="metadataEditorLabel">Album</label>
@@ -693,6 +808,27 @@ export default function SearchWizard() {
                       className="metadataEditorInput"
                       value={wizard.editedMetadata.album || ''}
                       onChange={(e) => wizard.updateMetadata({ album: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="metadataEditorFormGroup">
+                    <label className="metadataEditorLabel">Record Label</label>
+                    <input
+                      type="text"
+                      className="metadataEditorInput"
+                      value={wizard.editedMetadata.label || ''}
+                      onChange={(e) => wizard.updateMetadata({ label: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="metadataEditorFormGroup">
+                    <label className="metadataEditorLabel">Genre</label>
+                    <input
+                      type="text"
+                      className="metadataEditorInput"
+                      value={wizard.editedMetadata.genre || ''}
+                      onChange={(e) => wizard.updateMetadata({ genre: e.target.value })}
+                      placeholder="e.g., Rock, Pop, Hip Hop"
                     />
                   </div>
 
@@ -706,39 +842,7 @@ export default function SearchWizard() {
                       placeholder={wizard.selectedSource?.source === 'imvdb' ? 'From IMVDb' : 'Enter director name(s)'}
                     />
                   </div>
-
-                  <div className="metadataEditorFormGroup">
-                    <label className="metadataEditorLabel">Record Label</label>
-                    <input
-                      type="text"
-                      className="metadataEditorInput"
-                      value={wizard.editedMetadata.label || ''}
-                      onChange={(e) => wizard.updateMetadata({ label: e.target.value })}
-                    />
-                  </div>
                 </div>
-
-                {/* Source Comparison (only for IMVDb) */}
-                {wizard.selectedSource?.source === 'imvdb' && discogsResults && (
-                  <div className="metadataEditorSection">
-                    <label className="metadataEditorCheckbox">
-                      <input
-                        type="checkbox"
-                        checked={wizard.compareWithDiscogs}
-                        onChange={(e) => wizard.setCompareWithDiscogs(e.target.checked)}
-                      />
-                      <span>Show source comparison (Discogs data already merged)</span>
-                    </label>
-
-                    {wizard.compareWithDiscogs && comparisonFields.length > 0 && (
-                      <SourceComparison
-                        fields={comparisonFields}
-                        selectedFields={selectedDiscogsFields}
-                        onFieldSelect={handleFieldSelect}
-                      />
-                    )}
-                  </div>
-                )}
 
                 {/* Video Sources (YouTube IDs) */}
                 {wizard.previewData?.extra && (wizard.previewData.extra as any).youtube_ids?.length > 0 && (
@@ -748,65 +852,81 @@ export default function SearchWizard() {
                       Select the video source to use for this import.
                     </p>
 
-                    {/* Availability status banner */}
-                    {wizard.youtubeSourceInfo && !wizard.youtubeSourceInfo.available && (
-                      <div className="youtubeUnavailableBanner">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="bannerIcon">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="12" y1="8" x2="12" y2="12" />
-                          <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        <span className="bannerText">
-                          Selected video is unavailable: {wizard.youtubeSourceInfo.error || 'Video not accessible'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Availability info for selected video */}
-                    {wizard.youtubeSourceInfo?.available && (
-                      <div className="youtubeAvailableInfo">
-                        <span className="availableChannel">{wizard.youtubeSourceInfo.channel}</span>
-                        <span className="availableDuration">
-                          {wizard.youtubeSourceInfo.duration
-                            ? `${Math.floor(wizard.youtubeSourceInfo.duration / 60)}:${String(wizard.youtubeSourceInfo.duration % 60).padStart(2, '0')}`
-                            : ''}
-                        </span>
-                        <span className="availableViews">
-                          {wizard.youtubeSourceInfo.view_count
-                            ? `${(wizard.youtubeSourceInfo.view_count / 1000000).toFixed(1)}M views`
-                            : ''}
-                        </span>
-                      </div>
-                    )}
-
                     <div className="videoSourcesList">
-                      {((wizard.previewData.extra as any).youtube_ids as string[]).map((ytId) => (
-                        <label key={ytId} className="videoSourceOption">
-                          <input
-                            type="radio"
-                            name="youtubeId"
-                            value={ytId}
-                            checked={wizard.editedMetadata.youtubeId === ytId}
-                            onChange={() => {
-                              wizard.updateMetadata({ youtubeId: ytId })
-                              checkYouTubeAvailability(ytId)
-                            }}
-                          />
-                          <span className="videoSourceId">{ytId}</span>
-                          {wizard.youtubeSourceInfo?.youtube_id === ytId && (
-                            <span className={`videoSourceStatus ${wizard.youtubeSourceInfo.available ? 'available' : 'unavailable'}`}>
-                              {wizard.youtubeSourceInfo.available ? '✓ Available' : '✗ Unavailable'}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            className="videoSourcePreview"
-                            onClick={() => window.open(`https://youtube.com/watch?v=${ytId}`, '_blank')}
+                      {((wizard.previewData.extra as any).youtube_ids as string[]).map((ytId) => {
+                        const metadata = wizard.youtubeMetadataCache[ytId]
+                        const isLoading = !metadata
+                        const isAvailable = metadata?.available
+                        const isSelected = wizard.editedMetadata.youtubeId === ytId
+
+                        // Format duration
+                        const formatDuration = (seconds: number | null) => {
+                          if (!seconds) return ''
+                          const mins = Math.floor(seconds / 60)
+                          const secs = seconds % 60
+                          return `${mins}:${String(secs).padStart(2, '0')}`
+                        }
+
+                        // Format view count
+                        const formatViews = (views: number | null) => {
+                          if (!views) return ''
+                          if (views >= 1000000) return `${(views / 1000000).toFixed(1)}M views`
+                          if (views >= 1000) return `${(views / 1000).toFixed(0)}K views`
+                          return `${views} views`
+                        }
+
+                        return (
+                          <label
+                            key={ytId}
+                            className={`videoSourceOption ${isSelected ? 'videoSourceOptionSelected' : ''} ${!isAvailable && !isLoading ? 'videoSourceOptionUnavailable' : ''}`}
                           >
-                            Preview
-                          </button>
-                        </label>
-                      ))}
+                            <input
+                              type="radio"
+                              name="youtubeId"
+                              value={ytId}
+                              checked={isSelected}
+                              onChange={() => {
+                                wizard.updateMetadata({ youtubeId: ytId })
+                                // Also update the selected source info for the banner
+                                if (metadata) {
+                                  wizard.setYouTubeSourceInfo(metadata)
+                                }
+                              }}
+                            />
+                            <div className="videoSourceContent">
+                              <span className="videoSourceId">{ytId}</span>
+                              {isLoading ? (
+                                <span className="videoSourceMetadataLoading">Loading...</span>
+                              ) : metadata ? (
+                                <div className="videoSourceMetadata">
+                                  {metadata.channel && (
+                                    <span className="videoSourceChannel">{metadata.channel}</span>
+                                  )}
+                                  {metadata.duration && (
+                                    <span className="videoSourceDuration">{formatDuration(metadata.duration)}</span>
+                                  )}
+                                  {metadata.view_count && (
+                                    <span className="videoSourceViews">{formatViews(metadata.view_count)}</span>
+                                  )}
+                                  {!isAvailable && (
+                                    <span className="videoSourceUnavailable">Unavailable</span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              className="videoSourcePreview"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                window.open(`https://youtube.com/watch?v=${ytId}`, '_blank')
+                              }}
+                            >
+                              Preview
+                            </button>
+                          </label>
+                        )
+                      })}
                     </div>
 
                     {/* Search YouTube button */}
@@ -876,6 +996,12 @@ export default function SearchWizard() {
                       <dd>{wizard.editedMetadata.label}</dd>
                     </>
                   )}
+                  {wizard.editedMetadata.genre && (
+                    <>
+                      <dt>Genre</dt>
+                      <dd>{wizard.editedMetadata.genre}</dd>
+                    </>
+                  )}
                 </dl>
               </div>
 
@@ -886,47 +1012,17 @@ export default function SearchWizard() {
                   <dd>{getSourceLabel(wizard.selectedSource?.source || '')}</dd>
                   <dt>ID</dt>
                   <dd>{wizard.selectedSource?.id}</dd>
+                  {wizard.editedMetadata.youtubeId && (
+                    <>
+                      <dt>YouTube ID</dt>
+                      <dd>{wizard.editedMetadata.youtubeId}</dd>
+                    </>
+                  )}
                 </dl>
               </div>
             </div>
 
             <div className="configureForm">
-              <div className="configureFormGroup">
-                <label className="configureLabel">YouTube ID (Optional Override)</label>
-                <div className="youtubeIdInputGroup">
-                  <input
-                    type="text"
-                    className="configureInput"
-                    value={wizard.editedMetadata.youtubeId || ''}
-                    onChange={(e) => wizard.updateMetadata({ youtubeId: e.target.value })}
-                    placeholder="Enter YouTube video ID"
-                  />
-                  <button
-                    type="button"
-                    className="searchWizardButtonSecondary youtubeSearchButton"
-                    onClick={() => youtubeSearchMutation.mutate()}
-                    disabled={youtubeSearchMutation.isPending}
-                  >
-                    {youtubeSearchMutation.isPending ? 'Searching...' : 'Search YouTube'}
-                  </button>
-                </div>
-                <p className="configureHint">
-                  Override the YouTube video ID if needed. Leave blank to use the automatically detected ID.
-                </p>
-              </div>
-
-              <div className="configureFormGroup">
-                <label className="configureLabel">Initial Status</label>
-                <select
-                  className="configureSelect"
-                  value={wizard.editedMetadata.initialStatus}
-                  onChange={(e) => wizard.updateMetadata({ initialStatus: e.target.value as 'discovered' | 'imported' })}
-                >
-                  <option value="discovered">Discovered</option>
-                  <option value="imported">Imported</option>
-                </select>
-              </div>
-
               <div className="configureFormGroup">
                 <label className="configureCheckbox">
                   <input

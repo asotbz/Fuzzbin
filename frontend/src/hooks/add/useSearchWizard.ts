@@ -21,12 +21,12 @@ export interface MetadataFields {
   album: string | null
   directors: string | null
   label: string | null
+  genre: string | null
 
   // Video source
   youtubeId: string | null
 
   // Import config
-  initialStatus: 'discovered' | 'imported'
   skipExisting: boolean
   autoDownload: boolean  // Whether to queue download job on import
 }
@@ -38,10 +38,11 @@ interface WizardState {
   selectedSource: { source: string; id: string } | null
   previewData: AddPreviewResponse | null
   editedMetadata: MetadataFields
-  compareWithDiscogs: boolean
   // YouTube source info for availability checking
   youtubeSourceInfo: YouTubeSourceInfo | null
   availableYouTubeSources: string[]  // List of YouTube IDs from IMVDb sources
+  // YouTube metadata cache for all available sources
+  youtubeMetadataCache: Record<string, YouTubeSourceInfo>
 }
 
 const initialMetadata: MetadataFields = {
@@ -51,8 +52,8 @@ const initialMetadata: MetadataFields = {
   album: null,
   directors: null,
   label: null,
+  genre: null,
   youtubeId: null,
-  initialStatus: 'discovered',
   skipExisting: true,
   autoDownload: true,  // Default to download enabled
 }
@@ -64,9 +65,9 @@ const initialState: WizardState = {
   selectedSource: null,
   previewData: null,
   editedMetadata: initialMetadata,
-  compareWithDiscogs: false,
   youtubeSourceInfo: null,
   availableYouTubeSources: [],
+  youtubeMetadataCache: {},
 }
 
 export function useSearchWizard() {
@@ -128,10 +129,10 @@ export function useSearchWizard() {
     }))
   }
 
-  const setCompareWithDiscogs = (compare: boolean) => {
+  const updateYouTubeMetadataCache = (youtubeId: string, info: YouTubeSourceInfo) => {
     setState((prev) => ({
       ...prev,
-      compareWithDiscogs: compare,
+      youtubeMetadataCache: { ...prev.youtubeMetadataCache, [youtubeId]: info },
     }))
   }
 
@@ -168,9 +169,9 @@ export function useSearchWizard() {
     setPreviewData,
     updateMetadata,
     setMetadata,
-    setCompareWithDiscogs,
     setYouTubeSourceInfo,
     setAvailableYouTubeSources,
+    updateYouTubeMetadataCache,
     nextStep,
     prevStep,
     goToStep,

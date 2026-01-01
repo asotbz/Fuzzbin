@@ -290,6 +290,30 @@
   padding: var(--space-5);
 }
 
+.metadataEditorSeparator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: var(--space-5) 0;
+}
+
+.metadataEditorSeparator::before,
+.metadataEditorSeparator::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: var(--bg-surface-light);
+}
+
+.metadataEditorSeparator span {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
 .metadataEditorSectionTitle {
   font-family: var(--font-display);
   font-size: var(--text-lg);
@@ -383,17 +407,76 @@
   border-color: var(--channel-import);
 }
 
+.videoSourceOptionSelected {
+  border-color: var(--channel-import);
+  background: color-mix(in srgb, var(--channel-import) 10%, var(--bg-surface));
+}
+
+.videoSourceOptionUnavailable {
+  opacity: 0.6;
+}
+
 .videoSourceOption input[type="radio"] {
   width: 20px;
   height: 20px;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.videoSourceContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .videoSourceId {
-  flex: 1;
-  font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm);
   color: var(--text-primary);
+  word-break: break-all;
+}
+
+.videoSourceMetadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.videoSourceMetadata > span:not(:last-child)::after {
+  content: '•';
+  margin-left: var(--space-2);
+  color: var(--text-tertiary);
+}
+
+.videoSourceChannel {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.videoSourceDuration {
+  color: var(--text-secondary);
+}
+
+.videoSourceViews {
+  color: var(--text-tertiary);
+}
+
+.videoSourceUnavailable {
+  color: var(--status-error);
+  font-weight: 600;
+}
+
+.videoSourceMetadataLoading {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
 }
 
 .videoSourcePreview {
@@ -409,6 +492,7 @@
   color: var(--channel-import);
   cursor: pointer;
   transition: all 0.3s;
+  flex-shrink: 0;
 }
 
 .videoSourcePreview:hover {
