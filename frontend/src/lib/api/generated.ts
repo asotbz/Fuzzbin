@@ -2636,6 +2636,13 @@ export interface components {
              */
             youtube_url?: string | null;
             /**
+             * Metadata
+             * @description Pre-fetched metadata from search/preview step. If provided, skips re-fetching from source API. Expected fields: title, artist, year, director, genre, label, featured_artists
+             */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Initial Status
              * @description Initial status for the created/updated video record
              * @default discovered
