@@ -1,136 +1,225 @@
 # Fuzzbin AI Coding Agent Instructions
 
 ## Project Overview
-Fuzzbin is a production-ready async HTTP client library with automatic retry logic, rate limiting, response caching, and structured logging. It's designed for building robust API integrations with external services (Discogs, IMVDb, etc.).
+Fuzzbin is a music video library manager with a FastAPI backend, async job queue, SQLite database, and React frontend. It provides API integrations (Discogs, IMVDb, Spotify), file organization, NFO import/export, and real-time WebSocket updates.
 
 ## Architecture
 
-### Three-Layer Design
-1. **Common Layer** (`src/fuzzbin/common/`): Core HTTP client with retry logic, rate limiting, concurrency control, and caching
-2. **API Layer** (`src/fuzzbin/api/`): Service-specific clients extending `RateLimitedAPIClient`
-3. **Configuration** (`config.yaml`): Centralized YAML config with per-API settings
+### Five-Layer Design
+```
+fuzzbin/
+├── common/       # HTTP client, rate limiting, config, logging (shared utilities)
+├── api/          # External API clients (Discogs, IMVDb, Spotify)
+├── core/         # Database (SQLite/aiosqlite), event bus, file manager, organizer
+├── services/     # Business logic (VideoService, SearchService, ImportService)
+├── tasks/        # Background job queue with handlers for async operations
+├── web/          # FastAPI routes, middleware, WebSocket, schemas
+└── workflows/    # High-level orchestration (NFOImporter, SpotifyImporter)
+```
 
-### Key Components
-- **AsyncHTTPClient**: Base HTTP client with tenacity-based retry logic (retries 5xx + 408/429, skips other 4xx)
-- **RateLimitedAPIClient**: Extends AsyncHTTPClient with token bucket rate limiting and semaphore-based concurrency control
-- **Caching**: Uses Hishel with per-API SQLite databases (see `cache_config` in config.yaml)
-- **Config System**: Pydantic models with YAML loading and env var overrides (pattern: `{SERVICE}_API_KEY` env vars take precedence)
+### Key Data Flow
+1. **Web → Services**: Routes delegate to services for business logic
+2. **Services → Repository**: Services use `VideoRepository` for all DB operations
+3. **Background Jobs**: Long operations use `JobQueue` → handlers → services
+4. **Real-time Updates**: `EventBus` emits events → WebSocket `ConnectionManager` → clients
+
+### Critical Components
+- **VideoRepository** ([fuzzbin/core/db/](fuzzbin/core/db/)): Async SQLite with FTS5 search, soft delete, fluent query builder
+- **JobQueue** ([fuzzbin/tasks/queue.py](fuzzbin/tasks/queue.py)): Priority heap with cron scheduling, max_workers concurrency
+- **EventBus** ([fuzzbin/core/event_bus.py](fuzzbin/core/event_bus.py)): Debounced progress events (250ms) for WebSocket broadcast
+- **RateLimitedAPIClient** ([fuzzbin/api/base_client.py](fuzzbin/api/base_client.py)): Token bucket + semaphore + Hishel caching
+
+## Configuration
+
+### Two Root Directories
+- **config_dir**: Database, caches, thumbnails, backups (default: `~/Fuzzbin/config`)
+- **library_dir**: Video files, NFO metadata, trash (default: `~/Fuzzbin/music_videos`)
+
+### Environment Variables
+```bash
+FUZZBIN_CONFIG_DIR=/custom/config    # Override config_dir
+FUZZBIN_LIBRARY_DIR=/custom/videos   # Override library_dir
+FUZZBIN_DOCKER=1                     # Use Docker defaults (/config, /music_videos)
+IMVDB_APP_KEY=xxx                    # API keys override config.yaml
+DISCOGS_API_KEY=xxx / DISCOGS_API_SECRET=xxx
+SPOTIFY_CLIENT_ID=xxx / SPOTIFY_CLIENT_SECRET=xxx
+```
 
 ## Development Workflows
 
-### Running Tests
+### Setup
 ```bash
-# Run all tests with coverage
-pytest
-
-# Run specific test file
-pytest tests/unit/test_discogs_client.py
-
-# Run tests matching pattern
-pytest -k "test_rate_limiter"
-
-# Run with coverage report
-pytest --cov=fuzzbin --cov-report=html
+python -m venv .venv                 # Create virtual environment
+source .venv/bin/activate            # Activate venv (fish: source .venv/bin/activate.fish)
+pip install -e ".[dev]"              # Install with dev dependencies
 ```
 
-### Verification
+### Running
 ```bash
-# Quick sanity check (tests httpbin.org)
-python verify.py
+fuzzbin-api                          # Start FastAPI server (uvicorn)
+pytest                               # Run tests with coverage
+pytest tests/unit/test_discogs_client.py  # Run specific test
+pytest -k "test_rate_limiter"        # Pattern matching
 ```
 
-### Building
-```bash
-# Install in development mode
-pip install -e .
+### Test Structure
+- **Fixtures**: Shared in [tests/conftest.py](tests/conftest.py), module-specific in `tests/unit/conftest.py`
+- **Mock HTTP**: Use `respx` library for httpx mocking
+- **Async Tests**: `asyncio_mode = "auto"` in pyproject.toml (no decorator needed)
+- **Database Tests**: Use `test_db` fixture which provides isolated VideoRepository
 
-# Install with dev dependencies
-pip install -e ".[dev]"
+### Critical Test Pattern for API Clients
+```python
+@pytest.fixture(autouse=True)
+def clear_api_env_vars(monkeypatch):
+    """REQUIRED: Clear env vars to prevent real credentials interfering with mocks."""
+    monkeypatch.delenv("DISCOGS_API_KEY", raising=False)
+    monkeypatch.delenv("DISCOGS_API_SECRET", raising=False)
 ```
 
 ## Critical Patterns
 
-### API Client Creation Pattern
-All API clients follow this inheritance pattern:
-1. Extend `RateLimitedAPIClient` (never `AsyncHTTPClient` directly)
-2. Implement `from_config(cls, config: APIClientConfig)` class method
-3. Extract credentials from env vars (priority) OR config.custom dict
-4. Example: [imvdb_client.py](../src/fuzzbin/api/imvdb_client.py#L90-L145), [discogs_client.py](../src/fuzzbin/api/discogs_client.py#L112-L155)
-
-### Environment Variable Override Convention
-- Service-specific env vars ALWAYS override config.yaml values
-- Pattern: `{SERVICE}_API_KEY`, `{SERVICE}_API_SECRET`
-- Example: `IMVDB_APP_KEY`, `DISCOGS_API_KEY`, `DISCOGS_API_SECRET`
-- See [imvdb_client.py](../src/fuzzbin/api/imvdb_client.py#L67-L70)
-
-### Request Context Flow
+### Service Layer Pattern
+Services extend `BaseService` and receive `VideoRepository`:
 ```python
-# Rate limiter → Concurrency limiter → HTTP retry logic → Cache
-async with client.rate_limiter:      # Token bucket
-    async with client.concurrency_limiter:  # Semaphore
+class VideoService(BaseService):
+    def __init__(self, repository: VideoRepository, callback: Optional[ServiceCallback] = None):
+        super().__init__(repository, callback)
+```
+- Services raise `NotFoundError`, `ValidationError`, `ConflictError` (mapped to HTTP status by routes)
+- Use `ServiceCallback` protocol for progress/failure hooks in long operations
+
+### Background Job Handler Pattern
+Handlers in [fuzzbin/tasks/handlers.py](fuzzbin/tasks/handlers.py) follow this contract:
+```python
+async def handle_xxx(job: Job) -> None:
+    """
+    1. Read params from job.metadata
+    2. Call job.update_progress(current, total, message) periodically
+    3. Check job.status for cancellation
+    4. Call job.mark_completed(result) on success
+    5. Raise exception on failure (queue calls job.mark_failed())
+    """
+```
+
+### API Client Creation Pattern
+All API clients extend `RateLimitedAPIClient`:
+```python
+class DiscogsClient(RateLimitedAPIClient):
+    @classmethod
+    def from_config(cls, config: APIClientConfig) -> "DiscogsClient":
+        # 1. Check env vars first (DISCOGS_API_KEY, DISCOGS_API_SECRET)
+        # 2. Fall back to config.custom dict
+        # 3. Pass auth_headers to parent __init__
+```
+
+### Request Flow Through Limiters
+```python
+# Rate limiter → Concurrency limiter → HTTP retry → Cache
+async with client.rate_limiter:           # Token bucket
+    async with client.concurrency_limiter: # Semaphore
         response = await client._request(...)  # Tenacity retries + Hishel cache
 ```
 
-### Configuration Hierarchy
-- Global `http` config in config.yaml
-- Per-API overrides in `apis.{service}.http`
-- Caching per-API: `apis.{service}.cache` with isolated SQLite DBs
-- See [config.yaml](../config.yaml#L74-L245) for examples
+## Job Types Reference
+Key job types in `JobType` enum ([fuzzbin/tasks/models.py](fuzzbin/tasks/models.py)):
+- `IMPORT_NFO`: Import from NFO files with IMVDb/Discogs enrichment
+- `IMPORT_SPOTIFY`: Import from Spotify playlist
+- `DOWNLOAD_YOUTUBE`: Download video via yt-dlp
+- `VIDEO_POST_PROCESS`: FFProbe analysis, thumbnail generation, organize
+- `BACKUP`: Scheduled database backup
+- `TRASH_CLEANUP`: Automatic trash cleanup
 
-### Retry Logic Specifics
-- Retries: Network errors + status codes in `retry.status_codes` list
-- Default retries: `[408, 429, 500, 502, 503, 504]`
-- Custom per-API: See Discogs/IMVDb configs excluding 403/404 from retries
-- Implementation: [http_client.py](../src/fuzzbin/common/http_client.py#L158-L215)
+## Adding New Features
 
-## Testing Conventions
+### New API Integration
+1. Create `fuzzbin/api/{service}_client.py` extending `RateLimitedAPIClient`
+2. Implement `from_config()` with env var priority
+3. Add config section to `config.example.yaml` under `apis.{service}`
+4. Create parser in `fuzzbin/parsers/` for response models
+5. Add tests in `tests/unit/test_{service}_client.py`
+6. Export in `fuzzbin/__init__.py`
 
-### Test Structure
-- **Fixtures**: Shared in [tests/conftest.py](../tests/conftest.py), per-module in `tests/unit/conftest.py`
-- **Mock HTTP**: Use `respx` library, pattern in [test_discogs_client.py](../tests/unit/test_discogs_client.py#L70-L100)
-- **Real Response Files**: JSON examples in `examples/` directory (e.g., `discogs_search_response.json`)
-- **Async Tests**: Mark with `@pytest.mark.asyncio`, fixtures with `@pytest_asyncio.fixture`
+### New Background Job
+1. Add to `JobType` enum in [fuzzbin/tasks/models.py](fuzzbin/tasks/models.py)
+2. Create handler function in [fuzzbin/tasks/handlers.py](fuzzbin/tasks/handlers.py)
+3. Register in `register_all_handlers()` function
+4. Add API endpoint in appropriate route file to submit jobs
 
-### Test Organization
-- Group related tests in classes: `class TestDiscogsClient`
-- Test names: `test_{method_name}_{scenario}` (e.g., `test_from_config`)
-- Test env overrides: Use `monkeypatch` fixture, see [test_discogs_client.py](../tests/unit/test_discogs_client.py#L88-L93)
+### New Service
+1. Create `fuzzbin/services/{name}_service.py` extending `BaseService`
+2. Inject via FastAPI dependency in `fuzzbin/web/dependencies.py`
+3. Use in routes, never call repository directly from routes
 
-### Coverage Expectations
-- Target: High coverage for common/ and api/ layers
-- Exclude: `__pycache__`, `conftest.py` (see [pyproject.toml](../pyproject.toml#L54-L55))
-- HTML report: `htmlcov/index.html`
+## Frontend (React/TypeScript)
+
+### Stack
+- **Vite** build system with React 19
+- **TanStack Query** for server state management
+- **React Router** v7 for routing
+- **Vitest** + Testing Library for unit tests, **Playwright** for E2E
+
+### Commands
+```bash
+cd frontend
+npm run dev              # Start dev server (HMR)
+npm run build            # Type-check + production build
+npm run test             # Run Vitest in watch mode
+npm run test:e2e         # Run Playwright E2E tests
+npm run generate-types   # Generate API types from OpenAPI spec
+```
+
+### Type Generation
+API types are generated from [docs/openapi.json](docs/openapi.json):
+```bash
+./utils/generate_openapi_docs.sh  # Regenerate OpenAPI spec from FastAPI app
+npm run generate-types            # Creates src/lib/api/generated.ts
+```
+
+### Structure
+```
+frontend/src/
+├── api/          # API client hooks (TanStack Query)
+├── components/   # Reusable UI components
+├── features/     # Feature-specific components
+├── hooks/        # Custom React hooks
+├── lib/          # Utilities and generated types
+├── pages/        # Route page components
+└── mocks/        # MSW handlers for testing
+```
+
+## CLI Tools
+
+### Password Reset
+```bash
+fuzzbin-user set-password -u admin       # Interactive password prompt
+fuzzbin-user set-password -u admin -p newpass  # Direct password set
+fuzzbin-user list                        # List all users
+```
+
+## Database Migrations
+
+Migrations are in [fuzzbin/core/db/migrations/](fuzzbin/core/db/migrations/) as numbered SQL files:
+- `001_initial_schema.sql` - Core tables (videos, artists, albums, directors)
+- `002_create_fts_index.sql` - FTS5 full-text search
+- `004_add_users.sql` - Authentication tables
+- Migrations run automatically on startup
+
+## WebSocket Events
+
+Real-time job progress uses WebSocket. See [docs/websocket-spec.md](docs/websocket-spec.md) for:
+- Connection endpoint and authentication
+- Event types (`job.progress`, `job.completed`, `job.failed`)
+- Message payload schemas
 
 ## Logging Standards
-
-### Structured Logging with Structlog
-- Use JSON format in production, text in development
-- Logger creation: `logger = structlog.get_logger(__name__)`
-- Event naming: `snake_case` with context (e.g., `"rate_limiter_initialized"`, `"request_complete"`)
-- Bind context: `logger.bind(user_id=123)` for request tracing
-- Example: [rate_limiter.py](../src/fuzzbin/common/rate_limiter.py#L79-L82)
-
-### Third-Party Log Levels
-- Configure in config.yaml `logging.third_party`
-- httpx/httpcore: WARNING (reduce noise)
-- tenacity: INFO (see retry attempts)
-
-## Adding New API Integrations
-
-1. **Create client class** in `src/fuzzbin/api/{service}_client.py`
-2. **Extend RateLimitedAPIClient** with service-specific methods
-3. **Add config section** to config.yaml under `apis.{service}`
-4. **Environment variables**: Document in docstring, implement in `__init__`
-5. **Auth headers**: Set in `auth_headers` dict, passed to parent `__init__`
-6. **Rate limits**: Research API docs, configure `rate_limit` section
-7. **Cache settings**: Consider data freshness, set `cache.ttl` appropriately
-8. **Tests**: Create `test_{service}_client.py`, use example JSON responses
-9. **Export**: Add to `__all__` in [__init__.py](../src/fuzzbin/__init__.py)
+- Logger: `logger = structlog.get_logger(__name__)`
+- Events: `snake_case` (e.g., `"job_started"`, `"request_complete"`)
+- Context binding: `logger.bind(job_id=job.id, video_id=123)`
 
 ## Common Pitfalls
-
-- **Don't call AsyncHTTPClient directly for APIs**: Always use RateLimitedAPIClient for proper rate limiting
-- **Cache databases must be unique**: Each API needs its own SQLite file to avoid conflicts
-- **Context managers required**: Both rate_limiter and concurrency_limiter use `async with`
-- **Retry status codes**: Don't include auth errors (401/403) or not found (404) in retry lists
-- **User-Agent required**: Some APIs (Discogs) require User-Agent header with contact info
+- **Clear env vars in tests**: API client tests MUST clear credential env vars
+- **Unique cache databases**: Each API needs separate SQLite file in `.cache/`
+- **Don't retry auth errors**: Exclude 401/403/404 from `retry.status_codes`
+- **Async context managers**: Both `rate_limiter` and `concurrency_limiter` require `async with`
+- **Repository via fuzzbin module**: Use `await fuzzbin.get_repository()`, not direct instantiation
