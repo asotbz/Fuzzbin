@@ -339,6 +339,7 @@ class SpotifyTrackEnrichResponse(BaseModel):
         description="Match type: 'exact' or 'fuzzy'",
     )
     imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if match found")
+    imvdb_url: Optional[str] = Field(default=None, description="Full IMVDb video URL")
     youtube_ids: list[str] = Field(
         default_factory=list,
         description="YouTube video IDs extracted from IMVDb sources",
@@ -377,6 +378,7 @@ class SelectedTrackImport(BaseModel):
         description="Track metadata (title, artist, year, album, directors)"
     )
     imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if matched")
+    imvdb_url: Optional[str] = Field(default=None, description="Full IMVDb video URL")
     youtube_id: Optional[str] = Field(default=None, description="YouTube video ID")
     youtube_url: Optional[str] = Field(default=None, description="YouTube URL")
     thumbnail_url: Optional[str] = Field(

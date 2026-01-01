@@ -1261,6 +1261,7 @@ async def enrich_spotify_track(
                     match_found=True,
                     match_type=match_type,
                     imvdb_id=matched_video.id,
+                    imvdb_url=getattr(video, "url", None),
                     youtube_ids=youtube_ids,
                     metadata=metadata,
                     already_exists=existing_video is not None,

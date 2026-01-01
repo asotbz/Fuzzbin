@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Import wizard handles dynamic API responses */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -8,7 +8,7 @@ import { importSelectedTracks } from '../../lib/api/endpoints/spotify'
 import { getJob } from '../../lib/api/endpoints/jobs'
 import { jobsKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
-import { useJobWebSocket } from '../../lib/ws/useJobWebSocket'
+import { useJobEvents } from '../../lib/ws/useJobEvents'
 import SpotifyTrackTable, { type TrackRowState } from './components/SpotifyTrackTable'
 import MetadataEditor, { type EditedMetadata, extractYouTubeId } from './components/MetadataEditor'
 import YouTubeSearchModal from './components/YouTubeSearchModal'
@@ -46,6 +46,7 @@ interface EnrichedMetadata {
   featuredArtists?: string | null
   youtubeIds?: string[]
   imvdbId?: number | null
+  imvdbUrl?: string | null
   genre?: string | null
   genreNormalized?: string | null
 }
@@ -72,7 +73,14 @@ export default function SpotifyImport() {
   // Job state
   const [jobId, setJobId] = useState<string | null>(null)
 
-  const jobWs = useJobWebSocket(jobId, tokens.accessToken)
+  // Subscribe to job events for the active job
+  const jobIds = useMemo(() => (jobId ? [jobId] : null), [jobId])
+  const { connectionState: wsState, getJob: getJobFromWs } = useJobEvents(tokens.accessToken, {
+    jobIds,
+    includeActiveState: true,
+    autoConnect: Boolean(jobId),
+  })
+  const wsJobData = jobId ? getJobFromWs(jobId) : null
 
   // Preview mutation
   const previewMutation = useMutation({
@@ -123,29 +131,29 @@ export default function SpotifyImport() {
     refetchInterval: (query) => {
       const status = (query.state.data as GetJobResponse | undefined)?.status
       if (status && isTerminalJobStatus(status)) return false
-      if (jobWs.state === 'connected') return false
+      if (wsState === 'connected') return false
       return 1000
     },
   })
 
   // WebSocket updates
   useEffect(() => {
-    if (jobId && jobWs.lastUpdate) {
+    if (jobId && wsJobData) {
       queryClient.setQueryData<GetJobResponse>(jobsKeys.byId(jobId), (prev) => {
         if (!prev) return prev
         return {
           ...prev,
-          status: jobWs.lastUpdate!.status as GetJobResponse['status'],
-          progress: jobWs.lastUpdate!.progress,
-          current_step: jobWs.lastUpdate!.current_step,
-          processed_items: jobWs.lastUpdate!.processed_items,
-          total_items: jobWs.lastUpdate!.total_items,
-          error: (jobWs.lastUpdate!.error ?? null) as GetJobResponse['error'],
-          result: (jobWs.lastUpdate!.result ?? null) as GetJobResponse['result'],
+          status: wsJobData.status as GetJobResponse['status'],
+          progress: wsJobData.progress,
+          current_step: wsJobData.current_step,
+          processed_items: wsJobData.processed_items,
+          total_items: wsJobData.total_items,
+          error: (wsJobData.error ?? null) as GetJobResponse['error'],
+          result: (wsJobData.result ?? null) as GetJobResponse['result'],
         }
       })
     }
-  }, [jobId, jobWs.lastUpdate, queryClient])
+  }, [jobId, wsJobData, queryClient])
 
   // Job completion handling
   const hasShownToastRef = useRef(false)
@@ -156,7 +164,7 @@ export default function SpotifyImport() {
       return
     }
 
-    const wsStatus = jobWs.lastUpdate?.status
+    const wsStatus = wsJobData?.status
     const status = wsStatus ?? jobQuery.data?.status
 
     if (status && isTerminalJobStatus(status) && !hasShownToastRef.current) {
@@ -177,7 +185,7 @@ export default function SpotifyImport() {
         })
       }
     }
-  }, [jobId, jobWs.lastUpdate?.status, jobQuery.data?.status, jobQuery.data?.result, jobQuery.data?.error, navigate, queryClient])
+  }, [jobId, wsJobData?.status, jobQuery.data?.status, jobQuery.data?.result, jobQuery.data?.error, navigate, queryClient])
 
   const handleLoadPlaylist = (e: React.FormEvent) => {
     e.preventDefault()
@@ -254,6 +262,7 @@ export default function SpotifyImport() {
       }
       youtube_ids?: string[]
       imvdb_id?: number | null
+      imvdb_url?: string | null
       genre?: string | null
       genre_normalized?: string | null
     }
@@ -272,6 +281,7 @@ export default function SpotifyImport() {
         featuredArtists: enrichment.metadata?.featured_artists,
         youtubeIds: enrichment.youtube_ids,
         imvdbId: enrichment.imvdb_id,
+        imvdbUrl: enrichment.imvdb_url,
         genre: enrichment.genre,
         genreNormalized: enrichment.genre_normalized,
       })
@@ -321,6 +331,7 @@ export default function SpotifyImport() {
           spotify_track_id: track.spotify_track_id || trackId,
           metadata: finalMetadata,
           imvdb_id: enrichment?.imvdbId ?? null,
+          imvdb_url: enrichment?.imvdbUrl ?? null,
           youtube_id: youtubeId,
           youtube_url: youtubeId ? `https://youtube.com/watch?v=${youtubeId}` : null,
           thumbnail_url: null,
@@ -335,9 +346,9 @@ export default function SpotifyImport() {
     })
   }
 
-  const latestJobStatus = (jobWs.lastUpdate?.status ?? jobQuery.data?.status) as string | undefined
-  const progress = jobWs.lastUpdate?.progress ?? jobQuery.data?.progress ?? 0
-  const currentStep = jobWs.lastUpdate?.current_step ?? jobQuery.data?.current_step
+  const latestJobStatus = (wsJobData?.status ?? jobQuery.data?.status) as string | undefined
+  const progress = wsJobData?.progress ?? jobQuery.data?.progress ?? 0
+  const currentStep = wsJobData?.current_step ?? jobQuery.data?.current_step
 
   return (
     <div className="spotifyImport">
@@ -476,7 +487,7 @@ export default function SpotifyImport() {
                 </div>
               )}
 
-              {jobWs.state === 'connected' && (
+              {wsState === 'connected' && (
                 <div className="spotifyImportJobLive">Live updates connected</div>
               )}
             </div>

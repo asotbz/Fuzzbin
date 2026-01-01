@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { Video } from '../../../lib/api/types'
 import { videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
+import { apiJson } from '../../../api/client'
 import MetadataFetchModal from './MetadataFetchModal'
 import YouTubeSearchModal from '../../../pages/add/components/YouTubeSearchModal'
 import ConfirmDialog from './ConfirmDialog'
@@ -99,7 +100,7 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
   const label = editedLabel || '—'
   const status = typeof anyVideo.status === 'string' ? anyVideo.status : 'unknown'
 
-  const imvdbId = typeof anyVideo.imvdb_video_id === 'string' ? anyVideo.imvdb_video_id : null
+  const imvdbUrl = typeof anyVideo.imvdb_url === 'string' ? anyVideo.imvdb_url : null
   const youtubeId = typeof anyVideo.youtube_id === 'string' ? anyVideo.youtube_id : null
   const vimeoId = typeof anyVideo.vimeo_id === 'string' ? anyVideo.vimeo_id : null
 
@@ -120,18 +121,29 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
     mutationFn: async (data: Record<string, unknown>) => {
       if (!videoId) throw new Error('No video ID')
 
-      // TODO: Replace with actual API call when endpoint is available
-      // const response = await fetch(`/api/videos/${videoId}`, {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(data),
-      // })
-      // if (!response.ok) throw new Error('Failed to update video')
-      // return response.json()
+      // Call PATCH endpoint to update video metadata
+      const updated = await apiJson<Video>({
+        method: 'PATCH',
+        path: `/api/videos/${videoId}`,
+        body: data,
+      })
 
-      // Simulated API call for now
-      await new Promise(resolve => setTimeout(resolve, 500))
-      return { ...video, ...data }
+      // Auto-write NFO file after successful save
+      try {
+        await apiJson<{ exported_count: number }>({
+          method: 'POST',
+          path: '/api/exports/nfo',
+          body: {
+            video_ids: [videoId],
+            overwrite_existing: true,
+          },
+        })
+      } catch (nfoError) {
+        // Log but don't fail the save if NFO export fails
+        console.warn('Failed to export NFO:', nfoError)
+      }
+
+      return updated
     },
     onSuccess: () => {
       toast.success('Video updated successfully')
@@ -469,9 +481,9 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
           <section className="videoDetailsSection">
             <h3 className="videoDetailsSectionTitle">External Links</h3>
             <div className="videoDetailsLinks">
-              {imvdbId && (
+              {imvdbUrl && (
                 <a
-                  href={`https://imvdb.com/video/${imvdbId}`}
+                  href={imvdbUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="videoDetailsLinkButton"

@@ -252,8 +252,11 @@ async def update_video(
     repo: VideoRepository = Depends(get_repository),
 ) -> VideoResponse:
     """Update a video's metadata."""
-    # Verify video exists
-    await repo.get_video_by_id(video_id)
+    from fuzzbin.tasks.models import Job, JobType, JobPriority
+    from fuzzbin.tasks.queue import get_job_queue
+
+    # Get current video to check for changes that affect file paths
+    current_video = await repo.get_video_by_id(video_id)
 
     # Validate file paths if provided
     if video.video_file_path is not None or video.nfo_file_path is not None:
@@ -271,6 +274,40 @@ async def update_video(
     updates = video.to_repo_kwargs()
     if updates:
         await repo.update_video(video_id, **updates)
+
+    # Check if artist or title changed - queue file reorganization if so
+    # Only reorganize if there's an existing video file
+    if current_video.get("video_file_path"):
+        artist_changed = "artist" in updates and updates["artist"] != current_video.get("artist")
+        title_changed = "title" in updates and updates["title"] != current_video.get("title")
+
+        if artist_changed or title_changed:
+            queue = get_job_queue()
+            job = Job(
+                type=JobType.FILE_ORGANIZE,
+                metadata={
+                    "video_id": video_id,
+                    "video_ids": [video_id],
+                    "trigger": "metadata_update",
+                },
+                priority=JobPriority.NORMAL,
+            )
+            try:
+                await queue.submit(job)
+                logger.info(
+                    "file_organize_queued_for_metadata_change",
+                    video_id=video_id,
+                    job_id=job.id,
+                    artist_changed=artist_changed,
+                    title_changed=title_changed,
+                )
+            except Exception as e:
+                # Don't fail the update if we can't queue the organize job
+                logger.warning(
+                    "file_organize_queue_failed",
+                    video_id=video_id,
+                    error=str(e),
+                )
 
     # Fetch updated video with relationships
     row = await repo.get_video_by_id(video_id)
@@ -437,6 +474,54 @@ async def download_video(
     await queue.submit(job)
 
     return JobResponse.from_job(job)
+
+
+@router.get(
+    "/{video_id}/jobs",
+    response_model=List[JobResponse],
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
+    summary="Get jobs for video",
+    description="Get active and pending jobs associated with a specific video. "
+    "Returns jobs where metadata.video_id matches the requested video.",
+)
+async def get_video_jobs(
+    video_id: int,
+    include_completed: bool = Query(
+        default=False, description="Include completed/failed jobs (default: only active)"
+    ),
+    repository: VideoRepository = Depends(get_repository),
+) -> List[JobResponse]:
+    """Get jobs associated with a video.
+
+    Returns jobs where metadata.video_id matches the requested video ID.
+    By default, only returns active jobs (pending, waiting, running).
+    Set include_completed=true to also include terminal jobs.
+    """
+    from fuzzbin.tasks.queue import get_job_queue
+    from fuzzbin.tasks.models import JobStatus
+
+    # Verify video exists
+    await repository.get_video_by_id(video_id)
+
+    queue = get_job_queue()
+    all_jobs = await queue.list_jobs(limit=1000)
+
+    # Filter to jobs for this video
+    matching_jobs = []
+    active_statuses = {JobStatus.PENDING, JobStatus.WAITING, JobStatus.RUNNING}
+
+    for job in all_jobs:
+        job_video_id = job.metadata.get("video_id")
+        if job_video_id != video_id:
+            continue
+
+        # Filter by status if not including completed
+        if not include_completed and job.status not in active_statuses:
+            continue
+
+        matching_jobs.append(job)
+
+    return [JobResponse.from_job(job) for job in matching_jobs]
 
 
 @router.delete(

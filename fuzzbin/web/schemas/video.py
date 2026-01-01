@@ -38,6 +38,9 @@ class VideoCreate(VideoBase):
 
     # External IDs
     imvdb_video_id: Optional[str] = Field(default=None, max_length=50, description="IMVDb video ID")
+    imvdb_url: Optional[str] = Field(
+        default=None, max_length=500, description="Full IMVDb video URL"
+    )
     youtube_id: Optional[str] = Field(default=None, max_length=50, description="YouTube video ID")
     vimeo_id: Optional[str] = Field(default=None, max_length=50, description="Vimeo video ID")
 
@@ -58,6 +61,9 @@ class VideoUpdate(VideoBase):
     """Schema for updating an existing video (all fields optional)."""
 
     imvdb_video_id: Optional[str] = Field(default=None, max_length=50, description="IMVDb video ID")
+    imvdb_url: Optional[str] = Field(
+        default=None, max_length=500, description="Full IMVDb video URL"
+    )
     youtube_id: Optional[str] = Field(default=None, max_length=50, description="YouTube video ID")
     vimeo_id: Optional[str] = Field(default=None, max_length=50, description="Vimeo video ID")
     video_file_path: Optional[str] = Field(default=None, description="Absolute path to video file")
@@ -125,6 +131,7 @@ class VideoResponse(VideoBase):
 
     # External IDs
     imvdb_video_id: Optional[str] = None
+    imvdb_url: Optional[str] = None
     youtube_id: Optional[str] = None
     vimeo_id: Optional[str] = None
 

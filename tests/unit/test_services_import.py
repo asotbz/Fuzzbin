@@ -101,7 +101,8 @@ class TestNFOImport:
                 skipped_count=0,
                 failed_count=0,
             )
-            mock_instance.import_from_directory = AsyncMock(return_value=mock_result)
+            # Return tuple (result, imported_videos) to match NFOImporter interface
+            mock_instance.import_from_directory = AsyncMock(return_value=(mock_result, []))
             MockImporter.return_value = mock_instance
 
             result = await import_service.import_nfo_directory(tmp_path)
@@ -128,7 +129,8 @@ class TestNFOImport:
                 total_tracks=1,
                 imported_count=1,
             )
-            mock_instance.import_from_directory = AsyncMock(return_value=mock_result)
+            # Return tuple (result, imported_videos) to match NFOImporter interface
+            mock_instance.import_from_directory = AsyncMock(return_value=(mock_result, []))
             MockImporter.return_value = mock_instance
 
             results = await import_service.import_multiple_nfo_directories([dir1, dir2])
@@ -236,7 +238,8 @@ class TestCallbackIntegration:
                 total_tracks=1,
                 imported_count=1,
             )
-            mock_instance.import_from_directory = AsyncMock(return_value=mock_result)
+            # Return tuple (result, imported_videos) to match NFOImporter interface
+            mock_instance.import_from_directory = AsyncMock(return_value=(mock_result, []))
             MockImporter.return_value = mock_instance
 
             # Should not raise even without callback

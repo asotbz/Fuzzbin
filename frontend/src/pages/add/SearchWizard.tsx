@@ -452,6 +452,10 @@ export default function SearchWizard() {
       if (!metadata.youtube_id && previewExtra.youtube_ids?.length) {
         metadata.youtube_id = previewExtra.youtube_ids[0]
       }
+      // Include IMVDb URL for proper link generation
+      if (previewVideoData.url) {
+        metadata.imvdb_url = previewVideoData.url
+      }
 
       // Add Discogs genre/label data if available (from IMVDb + Discogs comparison)
       if (discogsResults?.results?.length > 0) {

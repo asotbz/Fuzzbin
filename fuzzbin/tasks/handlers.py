@@ -405,6 +405,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
         spotify_track_id = track_data.get("spotify_track_id")
         metadata = track_data.get("metadata", {})
         imvdb_id = track_data.get("imvdb_id")
+        imvdb_url = track_data.get("imvdb_url")
         youtube_id = track_data.get("youtube_id")
         youtube_url = track_data.get("youtube_url")
         thumbnail_url = track_data.get("thumbnail_url")
@@ -438,6 +439,8 @@ async def handle_spotify_batch_import(job: Job) -> None:
             # Add external IDs if available
             if imvdb_id:
                 video_data["imvdb_video_id"] = str(imvdb_id)
+            if imvdb_url:
+                video_data["imvdb_url"] = imvdb_url
             if youtube_id:
                 video_data["youtube_id"] = youtube_id
 
@@ -596,30 +599,88 @@ async def handle_spotify_batch_import(job: Job) -> None:
 async def handle_file_organize(job: Job) -> None:
     """Handle batch file organization job.
 
-    Placeholder for future implementation.
+    Organizes video files to their proper locations based on metadata.
+    Uses VideoService.organize() for each video.
 
     Job metadata parameters:
         video_ids (list[int], required): List of video IDs to organize
-        pattern (str, optional): Target path pattern
+        pattern (str, optional): Target path pattern (uses config default if not specified)
         normalize (bool, optional): Normalize filenames (default: False)
 
     Args:
         job: Job instance with metadata containing organization parameters
     """
-    # TODO: Implement when FileManager.organize_video() is available
+    import fuzzbin
+    from fuzzbin.services.video_service import VideoService
+
     video_ids = job.metadata.get("video_ids")
     if video_ids is None:
         raise ValueError("Missing required parameter: video_ids")
 
-    job.update_progress(0, max(len(video_ids), 1), "Starting file organization...")
+    total = len(video_ids)
+    if total == 0:
+        job.mark_completed(
+            {
+                "organized": 0,
+                "skipped": 0,
+                "errors": 0,
+                "total_videos": 0,
+            }
+        )
+        return
 
-    # Placeholder - mark completed immediately
+    job.update_progress(0, total, "Starting file organization...")
+
+    repository = await fuzzbin.get_repository()
+    video_service = VideoService(repository)
+
+    organized = 0
+    skipped = 0
+    errors = 0
+    error_details: list[dict] = []
+
+    for i, video_id in enumerate(video_ids):
+        if job.status == JobStatus.CANCELLED:
+            break
+
+        job.update_progress(i, total, f"Organizing video {video_id}...")
+
+        try:
+            result = await video_service.organize(video_id, dry_run=False)
+            if result.status == "moved":
+                organized += 1
+                logger.info(
+                    "file_organize_video_moved",
+                    job_id=job.id,
+                    video_id=video_id,
+                    target=result.target_video_path,
+                )
+            elif result.status == "already_organized":
+                skipped += 1
+                logger.debug(
+                    "file_organize_video_skipped",
+                    job_id=job.id,
+                    video_id=video_id,
+                    reason="already_organized",
+                )
+        except Exception as e:
+            errors += 1
+            error_details.append({"video_id": video_id, "error": str(e)})
+            logger.warning(
+                "file_organize_video_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+
+    job.update_progress(total, total, "File organization complete")
     job.mark_completed(
         {
-            "organized": 0,
-            "errors": 0,
-            "total_videos": len(video_ids),
-            "message": "File organization not yet implemented",
+            "organized": organized,
+            "skipped": skipped,
+            "errors": errors,
+            "total_videos": total,
+            "error_details": error_details if error_details else None,
         }
     )
 
@@ -2014,6 +2075,7 @@ async def handle_add_single_import(job: Job) -> None:
             raise ValueError(f"Invalid IMVDb id: {item_id}")
 
         imvdb_video_id = str(vid)
+        imvdb_url: str | None = None
         youtube_id = youtube_id_override
 
         # Use prefetched metadata if available, otherwise fetch from API
@@ -2027,6 +2089,7 @@ async def handle_add_single_import(job: Job) -> None:
             album = prefetched_metadata.get("album")
             label = prefetched_metadata.get("label")
             featured_artists = prefetched_metadata.get("featured_artists")
+            imvdb_url = prefetched_metadata.get("imvdb_url")
 
             # If no youtube_id override, try to get from prefetched metadata
             if not youtube_id:
@@ -2037,7 +2100,9 @@ async def handle_add_single_import(job: Job) -> None:
             featured_artists_list = []
             if featured_artists:
                 if isinstance(featured_artists, str):
-                    featured_artists_list = [fa.strip() for fa in featured_artists.split(",") if fa.strip()]
+                    featured_artists_list = [
+                        fa.strip() for fa in featured_artists.split(",") if fa.strip()
+                    ]
                 elif isinstance(featured_artists, list):
                     featured_artists_list = featured_artists
         else:
@@ -2053,6 +2118,7 @@ async def handle_add_single_import(job: Job) -> None:
                 video = await client.get_video(vid)
 
             youtube_id = youtube_id or _extract_youtube_id_from_imvdb_sources(video.sources)
+            imvdb_url = getattr(video, "url", None)
 
             title = (video.song_title or str(video.id)).strip()
             artist = None
@@ -2102,7 +2168,9 @@ async def handle_add_single_import(job: Job) -> None:
 
             # Prepare artist lists for video_artists linking
             primary_artists = [art.name for art in video.artists] if video.artists else []
-            featured_artists_list = [fa.name for fa in video.featured_artists] if video.featured_artists else []
+            featured_artists_list = (
+                [fa.name for fa in video.featured_artists] if video.featured_artists else []
+            )
 
         if skip_existing:
             try:
@@ -2123,6 +2191,7 @@ async def handle_add_single_import(job: Job) -> None:
                 genre=genre,
                 studio=label,
                 imvdb_video_id=imvdb_video_id,
+                imvdb_url=imvdb_url,
                 youtube_id=youtube_id,
                 download_source=("youtube" if youtube_id else None),
                 status=initial_status,
@@ -2180,7 +2249,9 @@ async def handle_add_single_import(job: Job) -> None:
             job.update_progress(1, 3, f"Fetching Discogs {source} {did}...")
             async with DiscogsClient.from_config(discogs_config) as client:
                 payload = await (
-                    client.get_master(did) if source == "discogs_master" else client.get_release(did)
+                    client.get_master(did)
+                    if source == "discogs_master"
+                    else client.get_release(did)
                 )
 
             if not isinstance(payload, dict):

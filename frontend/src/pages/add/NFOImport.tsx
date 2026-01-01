@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -6,7 +6,7 @@ import { addPreviewBatch, addNFOScan } from '../../lib/api/endpoints/add'
 import { getJob } from '../../lib/api/endpoints/jobs'
 import { jobsKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
-import { useJobWebSocket } from '../../lib/ws/useJobWebSocket'
+import { useJobEvents } from '../../lib/ws/useJobEvents'
 import type { BatchPreviewResponse, NFOScanResponse, GetJobResponse } from '../../lib/api/types'
 import './NFOImport.css'
 
@@ -26,7 +26,14 @@ export default function NFOImport() {
   const [preview, setPreview] = useState<BatchPreviewResponse | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
 
-  const jobWs = useJobWebSocket(jobId, tokens.accessToken)
+  // Subscribe to job events for the active job
+  const jobIds = useMemo(() => (jobId ? [jobId] : null), [jobId])
+  const { connectionState: wsState, getJob: getJobFromWs } = useJobEvents(tokens.accessToken, {
+    jobIds,
+    includeActiveState: true,
+    autoConnect: Boolean(jobId),
+  })
+  const wsJobData = jobId ? getJobFromWs(jobId) : null
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -70,7 +77,7 @@ export default function NFOImport() {
     refetchInterval: (query) => {
       const status = (query.state.data as GetJobResponse | undefined)?.status
       if (status && isTerminalJobStatus(status)) return false
-      if (jobWs.state === 'connected') return false
+      if (wsState === 'connected') return false
       return 1000
     },
   })
@@ -78,33 +85,32 @@ export default function NFOImport() {
   // Update job data from WebSocket
   useEffect(() => {
     if (!jobId) return
-    const update = jobWs.lastUpdate
-    if (!update) return
+    if (!wsJobData) return
 
     queryClient.setQueryData<GetJobResponse>(jobsKeys.byId(jobId), (prev) => {
       if (!prev) return prev
       return {
         ...prev,
-        status: update.status as GetJobResponse['status'],
-        progress: update.progress,
-        current_step: update.current_step,
-        processed_items: update.processed_items,
-        total_items: update.total_items,
-        error: (update.error ?? null) as GetJobResponse['error'],
-        result: (update.result ?? null) as GetJobResponse['result'],
+        status: wsJobData.status as GetJobResponse['status'],
+        progress: wsJobData.progress,
+        current_step: wsJobData.current_step,
+        processed_items: wsJobData.processed_items,
+        total_items: wsJobData.total_items,
+        error: (wsJobData.error ?? null) as GetJobResponse['error'],
+        result: (wsJobData.result ?? null) as GetJobResponse['result'],
       }
     })
-  }, [jobId, jobWs.lastUpdate, queryClient])
+  }, [jobId, wsJobData, queryClient])
 
   // Invalidate videos when job completes
   useEffect(() => {
     if (!jobId) return
-    const wsStatus = jobWs.lastUpdate?.status
+    const wsStatus = wsJobData?.status
     const status = wsStatus ?? jobQuery.data?.status
     if (!status || !isTerminalJobStatus(status)) return
 
     if (status === 'completed') {
-      const result = jobWs.lastUpdate?.result ?? jobQuery.data?.result
+      const result = wsJobData?.result ?? jobQuery.data?.result
       const postProcessJobs = (result as { post_process_jobs_queued?: number })?.post_process_jobs_queued ?? 0
       const description = postProcessJobs > 0
         ? `${postProcessJobs} video processing job${postProcessJobs === 1 ? '' : 's'} queued. Check Activity Monitor for progress.`
@@ -124,7 +130,7 @@ export default function NFOImport() {
 
     queryClient.invalidateQueries({ queryKey: videosKeys.all })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- jobQuery.data?.error only needed when status becomes 'failed'
-  }, [jobId, jobQuery.data?.status, jobWs.lastUpdate?.status, queryClient, navigate])
+  }, [jobId, jobQuery.data?.status, wsJobData?.status, queryClient, navigate])
 
   const handlePreview = (e: React.FormEvent) => {
     e.preventDefault()
@@ -150,9 +156,9 @@ export default function NFOImport() {
     })
   }
 
-  const latestJobStatus = (jobWs.lastUpdate?.status ?? jobQuery.data?.status) as string | undefined
-  const progress = jobWs.lastUpdate?.progress ?? jobQuery.data?.progress ?? 0
-  const currentStep = jobWs.lastUpdate?.current_step ?? jobQuery.data?.current_step
+  const latestJobStatus = (wsJobData?.status ?? jobQuery.data?.status) as string | undefined
+  const progress = wsJobData?.progress ?? jobQuery.data?.progress ?? 0
+  const currentStep = wsJobData?.current_step ?? jobQuery.data?.current_step
 
   return (
     <div className="nfoImport">
@@ -302,7 +308,7 @@ export default function NFOImport() {
                 </div>
               )}
 
-              {jobWs.state === 'connected' && (
+              {wsState === 'connected' && (
                 <div className="nfoImportJobLive">Live updates connected</div>
               )}
             </div>

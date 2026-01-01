@@ -147,8 +147,8 @@ describe('useSearchWizard', () => {
         album: 'Complete Album',
         directors: 'Test Director',
         label: 'Test Label',
+        genre: 'Rock',
         youtubeId: 'yt-123',
-        initialStatus: 'imported' as const,
         skipExisting: false,
         autoDownload: true,
       }
@@ -235,20 +235,6 @@ describe('useSearchWizard', () => {
     })
   })
 
-  describe('discogs comparison', () => {
-    it('toggles compare with discogs flag', () => {
-      const { result } = renderHook(() => useSearchWizard())
-
-      expect(result.current.compareWithDiscogs).toBe(false)
-
-      act(() => {
-        result.current.setCompareWithDiscogs(true)
-      })
-
-      expect(result.current.compareWithDiscogs).toBe(true)
-    })
-  })
-
   describe('reset', () => {
     it('resets wizard to initial state', () => {
       const { result } = renderHook(() => useSearchWizard())
@@ -259,7 +245,6 @@ describe('useSearchWizard', () => {
         result.current.nextStep()
         result.current.nextStep()
         result.current.updateMetadata({ title: 'Changed' })
-        result.current.setCompareWithDiscogs(true)
       })
 
       // Reset
@@ -270,7 +255,6 @@ describe('useSearchWizard', () => {
       expect(result.current.currentStep).toBe(0)
       expect(result.current.searchQuery).toEqual({ artist: '', trackTitle: '' })
       expect(result.current.editedMetadata.title).toBe('')
-      expect(result.current.compareWithDiscogs).toBe(false)
     })
   })
 })

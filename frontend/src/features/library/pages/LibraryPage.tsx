@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import VideoCard from '../../../components/video/VideoCard'
+import VideoCard, { type VideoCardJobStatus } from '../../../components/video/VideoCard'
 import VideoGrid from '../../../components/video/VideoGrid'
 import LibraryTable from '../components/LibraryTable'
 import MultiSelectToolbar from '../components/MultiSelectToolbar'
@@ -14,6 +14,8 @@ import { useFacets } from '../hooks/useFacets'
 import { useVideos } from '../hooks/useVideos'
 import { videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
+import { useJobEvents } from '../../../lib/ws/useJobEvents'
+import { useAuthTokens } from '../../../auth/useAuthTokens'
 import './LibraryPage.css'
 
 type FacetItem = { value: string; count: number }
@@ -188,8 +190,60 @@ export default function LibraryPage() {
   const videosQuery = useVideos(videosQueryParams)
 
   const respAny = videosQuery.data as unknown as Record<string, unknown> | undefined
-  const items = (respAny?.items as unknown as Video[] | undefined) ?? []
+  const items = useMemo(
+    () => (respAny?.items as unknown as Video[] | undefined) ?? [],
+    [respAny?.items]
+  )
   const totalPages = typeof respAny?.total_pages === 'number' ? respAny.total_pages : 1
+
+  // Extract video IDs from current page for WebSocket subscription
+  const pageVideoIds = useMemo(() => {
+    return items
+      .map((v) => (v as unknown as Record<string, unknown>).id)
+      .filter((id): id is number => typeof id === 'number')
+  }, [items])
+
+  // Subscribe to job events for videos on current page
+  const tokens = useAuthTokens()
+  const { jobs: wsJobs, hasActiveJobForVideo } = useJobEvents(tokens.accessToken, {
+    videoIds: pageVideoIds.length > 0 ? pageVideoIds : null,
+    includeActiveState: true,
+    autoConnect: pageVideoIds.length > 0,
+  })
+
+  // Build job status map for VideoCard components
+  const getJobStatusForVideo = useCallback((videoId: number): VideoCardJobStatus => {
+    const hasActive = hasActiveJobForVideo(videoId)
+    // Find the most relevant job for this video
+    let relevantJob = undefined
+    for (const job of wsJobs.values()) {
+      if (job.metadata?.video_id === videoId) {
+        relevantJob = job
+        break
+      }
+    }
+    return {
+      hasActiveJob: hasActive,
+      jobStatus: relevantJob?.status,
+      jobProgress: relevantJob?.progress,
+    }
+  }, [wsJobs, hasActiveJobForVideo])
+
+  // Refetch videos when a job completes or fails
+  useEffect(() => {
+    // Check for any terminal job events
+    for (const job of wsJobs.values()) {
+      const jobVideoId = job.metadata?.video_id
+      if (typeof jobVideoId !== 'number') continue
+      if (!pageVideoIds.includes(jobVideoId)) continue
+
+      if (job.status === 'completed' || job.status === 'failed') {
+        // Refetch to get updated video state
+        queryClient.invalidateQueries({ queryKey: videosKeys.all })
+        break
+      }
+    }
+  }, [wsJobs, pageVideoIds, queryClient])
 
   const canPrev = page > 1
   const canNext = page < totalPages
@@ -533,6 +587,7 @@ export default function LibraryPage() {
                         selected={selectedVideoIds.has(videoId)}
                         onToggleSelection={toggleSelection}
                         onClick={() => setDetailsModalVideo(v)}
+                        jobStatus={videoId ? getJobStatusForVideo(videoId) : undefined}
                       />
                     )
                   })}

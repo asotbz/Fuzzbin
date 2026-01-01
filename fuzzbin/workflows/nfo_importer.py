@@ -509,6 +509,9 @@ class NFOImporter:
                                             break
 
                                 video_data["imvdb_video_id"] = imvdb_video_id
+                                # Store the full IMVDb URL (requires slugs)
+                                if matched_video.url:
+                                    video_data["imvdb_url"] = matched_video.url
                                 if youtube_id:
                                     video_data["youtube_id"] = youtube_id
 
