@@ -1374,6 +1374,100 @@
         }
       }
     },
+    "/videos/{video_id}/jobs": {
+      "get": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Get jobs for video",
+        "description": "Get active and pending jobs associated with a specific video. Returns jobs where metadata.video_id matches the requested video.",
+        "operationId": "get_video_jobs_videos__video_id__jobs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          },
+          {
+            "name": "include_completed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include completed/failed jobs (default: only active)",
+              "default": false,
+              "title": "Include Completed"
+            },
+            "description": "Include completed/failed jobs (default: only active)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobResponse"
+                  },
+                  "title": "Response Get Video Jobs Videos  Video Id  Jobs Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/videos/{video_id}/permanent": {
       "delete": {
         "tags": [
@@ -15349,6 +15443,18 @@
             "title": "Imvdb Id",
             "description": "IMVDb video ID if matched"
           },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
+          },
           "youtube_id": {
             "anyOf": [
               {
@@ -15993,6 +16099,18 @@
             "title": "Imvdb Id",
             "description": "IMVDb video ID if match found"
           },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
+          },
           "youtube_ids": {
             "items": {
               "type": "string"
@@ -16604,6 +16722,19 @@
             "title": "Imvdb Video Id",
             "description": "IMVDb video ID"
           },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
+          },
           "youtube_id": {
             "anyOf": [
               {
@@ -16825,6 +16956,17 @@
               }
             ],
             "title": "Imvdb Video Id"
+          },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url"
           },
           "youtube_id": {
             "anyOf": [
@@ -17371,6 +17513,19 @@
             ],
             "title": "Imvdb Video Id",
             "description": "IMVDb video ID"
+          },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
           },
           "youtube_id": {
             "anyOf": [

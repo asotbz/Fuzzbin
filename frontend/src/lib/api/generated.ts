@@ -295,6 +295,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/videos/{video_id}/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get jobs for video
+         * @description Get active and pending jobs associated with a specific video. Returns jobs where metadata.video_id matches the requested video.
+         */
+        get: operations["get_video_jobs_videos__video_id__jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/videos/{video_id}/permanent": {
         parameters: {
             query?: never;
@@ -6170,6 +6190,11 @@ export interface components {
              */
             imvdb_id?: number | null;
             /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
+            /**
              * Youtube Id
              * @description YouTube video ID
              */
@@ -6577,6 +6602,11 @@ export interface components {
              */
             imvdb_id?: number | null;
             /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
+            /**
              * Youtube Ids
              * @description YouTube video IDs extracted from IMVDb sources
              */
@@ -6870,6 +6900,11 @@ export interface components {
              */
             imvdb_video_id?: string | null;
             /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
+            /**
              * Youtube Id
              * @description YouTube video ID
              */
@@ -6960,6 +6995,8 @@ export interface components {
             status_message?: string | null;
             /** Imvdb Video Id */
             imvdb_video_id?: string | null;
+            /** Imvdb Url */
+            imvdb_url?: string | null;
             /** Youtube Id */
             youtube_id?: string | null;
             /** Vimeo Id */
@@ -7143,6 +7180,11 @@ export interface components {
              * @description IMVDb video ID
              */
             imvdb_video_id?: string | null;
+            /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
             /**
              * Youtube Id
              * @description YouTube video ID
@@ -8212,6 +8254,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    get_video_jobs_videos__video_id__jobs_get: {
+        parameters: {
+            query?: {
+                /** @description Include completed/failed jobs (default: only active) */
+                include_completed?: boolean;
+            };
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"][];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Not Found - Resource does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

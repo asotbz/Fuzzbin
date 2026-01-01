@@ -78,6 +78,8 @@ Video CRUD operations and metadata management
   - Restore a soft-deleted video.
 - `POST` `/videos/{video_id}/download` — Queue video download
   - Queue download job for a video with a YouTube ID. Downloads to temp, organizes to configured path, and generates NFO.
+- `GET` `/videos/{video_id}/jobs` — Get jobs for video
+  - Get active and pending jobs associated with a specific video. Returns jobs where metadata.video_id matches the requested video.
 - `DELETE` `/videos/{video_id}/permanent` — Permanently delete video
   - Permanently delete a video. This cannot be undone.
 - `GET` `/videos/{video_id}/status-history` — Get status history

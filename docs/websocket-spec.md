@@ -225,6 +225,31 @@ Events are broadcast to subscribed clients. Job events require an active job sub
 }
 ```
 
+**Job Cancelled**:
+```json
+{
+  "event_type": "job_cancelled",
+  "timestamp": "2025-12-30T10:01:00Z",
+  "payload": {
+    "job_id": "550e8400-e29b-41d4-a716-446655440000",
+    "job_type": "download_youtube"
+  }
+}
+```
+
+**Job Timeout**:
+```json
+{
+  "event_type": "job_timeout",
+  "timestamp": "2025-12-30T10:01:00Z",
+  "payload": {
+    "job_id": "550e8400-e29b-41d4-a716-446655440000",
+    "job_type": "download_youtube",
+    "timeout_seconds": 3600
+  }
+}
+```
+
 **Config Changed**:
 ```json
 {
