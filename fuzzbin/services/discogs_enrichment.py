@@ -350,7 +350,9 @@ class DiscogsEnrichmentService:
                     "discogs_enrichment_text_search",
                     artist=artist_name,
                     track=normalized_track,
-                    original_track=track_title if normalized_track != track_title.lower().strip() else None,
+                    original_track=(
+                        track_title if normalized_track != track_title.lower().strip() else None
+                    ),
                     result_count=len(results),
                 )
 
