@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getApiBaseUrl, scheduleTokenRefresh } from '../api/client'
 import { setTokens } from '../auth/tokenStore'
 import { useAuthTokens } from '../auth/useAuthTokens'
@@ -11,13 +11,22 @@ type AccessTokenResponse = {
   expires_in: number
 }
 
+type LocationState = {
+  currentPassword?: string
+}
+
 export default function SetInitialPasswordPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const tokens = useAuthTokens()
 
+  // Get password from router state (passed from login page during first-run)
+  const statePassword = (location.state as LocationState)?.currentPassword ?? ''
+  const hasPrefilledPassword = statePassword.length > 0
+
   const [username, setUsername] = useState(searchParams.get('username') ?? '')
-  const [currentPassword, setCurrentPassword] = useState('')
+  const [currentPassword, setCurrentPassword] = useState(statePassword)
   const [newPassword, setNewPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,16 +101,26 @@ export default function SetInitialPasswordPage() {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="Username"
+          disabled={hasPrefilledPassword}
         />
 
-        <input
-          className="textInput"
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          placeholder="Current password"
-        />
+        {/* Hide current password field when pre-filled from login (first-run flow) */}
+        {!hasPrefilledPassword && (
+          <input
+            className="textInput"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+          />
+        )}
+
+        {hasPrefilledPassword && (
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 var(--space-3)' }}>
+            Choose a new password for your account
+          </p>
+        )}
 
         <input
           className="textInput"

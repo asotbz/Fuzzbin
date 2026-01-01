@@ -47,7 +47,9 @@ export default function LoginPage() {
       }
 
       if (resp.status === 403 && headerSaysRotation) {
-        navigate(`/set-initial-password?username=${encodeURIComponent(username)}`)
+        navigate(`/set-initial-password?username=${encodeURIComponent(username)}`, {
+          state: { currentPassword: password },
+        })
         return
       }
 
@@ -59,7 +61,9 @@ export default function LoginPage() {
 
           // Fallback when the rotation header isn't readable (CORS) or missing.
           if (resp.status === 403 && typeof data?.detail === 'string' && data.detail.includes('/auth/set-initial-password')) {
-            navigate(`/set-initial-password?username=${encodeURIComponent(username)}`)
+            navigate(`/set-initial-password?username=${encodeURIComponent(username)}`, {
+              state: { currentPassword: password },
+            })
             return
           }
         } catch {
