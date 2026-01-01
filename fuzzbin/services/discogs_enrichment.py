@@ -13,6 +13,7 @@ from rapidfuzz import fuzz
 from fuzzbin.api.discogs_client import DiscogsClient
 from fuzzbin.api.imvdb_client import IMVDbClient
 from fuzzbin.common.config import APIClientConfig
+from fuzzbin.common.string_utils import normalize_spotify_title
 
 logger = structlog.get_logger(__name__)
 
@@ -210,6 +211,13 @@ class DiscogsEnrichmentService:
         if not self.discogs_config:
             return self._empty_result()
 
+        # Normalize track title to remove version qualifiers like "- 2015 Remaster"
+        normalized_track = normalize_spotify_title(
+            track_title,
+            remove_version_qualifiers_flag=True,
+            remove_featured=True,
+        )
+
         track_matches: List[DiscogsTrackMatch] = []
 
         try:
@@ -255,7 +263,7 @@ class DiscogsEnrichmentService:
                     try:
                         master = await discogs_client.get_master(master_id)
                         match = self._match_tracklist(
-                            track_title=track_title,
+                            track_title=normalized_track,
                             tracklist=master.get("tracklist", []),
                             master_id=master_id,
                             album_title=master.get("title", ""),
@@ -267,6 +275,15 @@ class DiscogsEnrichmentService:
 
                         if match:
                             track_matches.append(match)
+                            # Early exit on high-confidence match (95+)
+                            if match.match_score >= 95:
+                                logger.debug(
+                                    "discogs_enrichment_early_exit",
+                                    master_id=master_id,
+                                    match_score=match.match_score,
+                                    track_title=match.track_title,
+                                )
+                                break
 
                     except Exception as e:
                         logger.debug(
@@ -308,6 +325,13 @@ class DiscogsEnrichmentService:
         if not self.discogs_config:
             return self._empty_result()
 
+        # Normalize track title to remove version qualifiers like "- 2015 Remaster"
+        normalized_track = normalize_spotify_title(
+            track_title,
+            remove_version_qualifiers_flag=True,
+            remove_featured=True,
+        )
+
         track_matches: List[DiscogsTrackMatch] = []
 
         try:
@@ -315,7 +339,7 @@ class DiscogsEnrichmentService:
                 # Search for masters containing this track
                 search_resp = await discogs_client.search(
                     artist=artist_name,
-                    track=track_title,
+                    track=normalized_track,
                     page=1,
                     per_page=10,
                 )
@@ -325,7 +349,8 @@ class DiscogsEnrichmentService:
                 logger.info(
                     "discogs_enrichment_text_search",
                     artist=artist_name,
-                    track=track_title,
+                    track=normalized_track,
+                    original_track=track_title if normalized_track != track_title.lower().strip() else None,
                     result_count=len(results),
                 )
 
@@ -338,7 +363,7 @@ class DiscogsEnrichmentService:
                     try:
                         master = await discogs_client.get_master(master_id)
                         match = self._match_tracklist(
-                            track_title=track_title,
+                            track_title=normalized_track,
                             tracklist=master.get("tracklist", []),
                             master_id=master_id,
                             album_title=master.get("title", ""),
@@ -350,6 +375,15 @@ class DiscogsEnrichmentService:
 
                         if match:
                             track_matches.append(match)
+                            # Early exit on high-confidence match (95+)
+                            if match.match_score >= 95:
+                                logger.debug(
+                                    "discogs_enrichment_early_exit",
+                                    master_id=master_id,
+                                    match_score=match.match_score,
+                                    track_title=match.track_title,
+                                )
+                                break
 
                     except Exception as e:
                         logger.debug(
