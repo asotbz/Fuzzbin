@@ -58,6 +58,8 @@ requirements.
 ## Videos
 Video CRUD operations and metadata management
 
+- `GET` `/videos/{video_id}/stream` — Stream video file
+  - Stream video file with HTTP Range support for seeking.
 - `GET` `/videos` — List videos
   - Get a paginated list of videos with optional filters and sorting.
 - `POST` `/videos` — Create video
@@ -86,8 +88,8 @@ Video CRUD operations and metadata management
   - Get the status change history for a video.
 - `GET` `/videos/{video_id}/thumbnail` — Get video thumbnail
   - Get or generate a thumbnail for a video.
-- `GET` `/videos/{video_id}/stream` — Stream video file
-  - Stream video file with HTTP Range support for seeking.
+- `POST` `/videos/{video_id}/refresh` — Refresh video properties and thumbnail
+  - Re-analyze video file with ffprobe and regenerate thumbnail.
 
 ## Artists
 Artist management and video associations
@@ -564,6 +566,8 @@ Import hub endpoints: batch preview and import job submission
   - Creates/updates a video record based on a selected search result (IMVDb/Discogs/YouTube).
 - `POST` `/add/spotify/enrich-track` — Enrich a Spotify track with IMVDb metadata
   - Search IMVDb for a track and return matched metadata including YouTube IDs.
+- `POST` `/add/spotify/enrich-track-discogs` — Enrich Spotify track with Discogs metadata
+  - Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.
 - `POST` `/add/youtube/search` — Search YouTube for videos
   - Search YouTube using yt-dlp for video results. Returns results in the same format as /add/search.
 - `POST` `/add/spotify/import-selected` — Import selected tracks from Spotify playlist

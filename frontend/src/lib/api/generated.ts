@@ -159,6 +159,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/videos/{video_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream video file
+         * @description Stream video file with HTTP Range support for seeking.
+         */
+        get: operations["stream_video_videos__video_id__stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/videos/bulk/update": {
         parameters: {
             query?: never;
@@ -515,20 +535,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/videos/{video_id}/stream": {
+    "/videos/{video_id}/refresh": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Stream video file
-         * @description Stream video file with HTTP Range support for seeking.
-         */
-        get: operations["stream_video_videos__video_id__stream_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Refresh video properties and thumbnail
+         * @description Re-analyze video file with ffprobe and regenerate thumbnail.
+         */
+        post: operations["refresh_video_videos__video_id__refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1457,6 +1477,26 @@ export interface paths {
          * @description Search IMVDb for a track and return matched metadata including YouTube IDs.
          */
         post: operations["enrich_spotify_track_add_spotify_enrich_track_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/add/spotify/enrich-track-discogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrich Spotify track with Discogs metadata
+         * @description Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.
+         */
+        post: operations["enrich_spotify_track_discogs_add_spotify_enrich_track_discogs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3834,6 +3874,88 @@ export interface components {
              * @default 0
              */
             have: number;
+        };
+        /**
+         * DiscogsEnrichRequest
+         * @description Request to enrich a Spotify track with Discogs metadata.
+         */
+        DiscogsEnrichRequest: {
+            /**
+             * Spotify Track Id
+             * @description Spotify track ID
+             */
+            spotify_track_id: string;
+            /**
+             * Track Title
+             * @description Track title
+             */
+            track_title: string;
+            /**
+             * Artist Name
+             * @description Artist name
+             */
+            artist_name: string;
+            /**
+             * Discogs Artist Id
+             * @description Discogs artist ID (if available from IMVDb entity). If provided, uses artist releases search; otherwise uses text search.
+             */
+            discogs_artist_id?: number | null;
+        };
+        /**
+         * DiscogsEnrichResponse
+         * @description Response after enriching a Spotify track with Discogs metadata.
+         */
+        DiscogsEnrichResponse: {
+            /**
+             * Spotify Track Id
+             * @description Spotify track ID
+             */
+            spotify_track_id: string;
+            /**
+             * Match Found
+             * @description Whether a Discogs match was found
+             */
+            match_found: boolean;
+            /**
+             * Discogs Artist Id
+             * @description Discogs artist ID
+             */
+            discogs_artist_id?: number | null;
+            /**
+             * Discogs Master Id
+             * @description Discogs master release ID if match found
+             */
+            discogs_master_id?: number | null;
+            /**
+             * Album
+             * @description Album title from Discogs
+             */
+            album?: string | null;
+            /**
+             * Label
+             * @description Record label from Discogs
+             */
+            label?: string | null;
+            /**
+             * Genre
+             * @description Genre from Discogs
+             */
+            genre?: string | null;
+            /**
+             * Year
+             * @description Release year from Discogs
+             */
+            year?: number | null;
+            /**
+             * Match Score
+             * @description Fuzzy match score (0-100)
+             */
+            match_score: number;
+            /**
+             * Match Method
+             * @description Method used to find match: 'artist_releases', 'text_search', or 'none'
+             */
+            match_method: string;
         };
         /**
          * DiscogsFormat
@@ -6622,6 +6744,16 @@ export interface components {
              */
             imvdb_url?: string | null;
             /**
+             * Imvdb Entity Id
+             * @description IMVDb entity ID for the primary artist
+             */
+            imvdb_entity_id?: number | null;
+            /**
+             * Discogs Artist Id
+             * @description Discogs artist ID from IMVDb entity (for Discogs enrichment)
+             */
+            discogs_artist_id?: number | null;
+            /**
              * Youtube Ids
              * @description YouTube video IDs extracted from IMVDb sources
              */
@@ -7677,6 +7809,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    stream_video_videos__video_id__stream_get: {
+        parameters: {
+            query?: {
+                /** @description JWT token for authentication (alternative to Authorization header) */
+                token?: string | null;
+            };
+            header?: {
+                Range?: string | null;
+            };
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full video file (no Range header) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "video/*": unknown;
+                };
+            };
+            /** @description Partial content (Range header provided) */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/*": unknown;
+                };
+            };
+            /** @description Video not found or no file associated */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requested range not satisfiable */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -8983,12 +9175,13 @@ export interface operations {
             };
         };
     };
-    stream_video_videos__video_id__stream_get: {
+    refresh_video_videos__video_id__refresh_post: {
         parameters: {
-            query?: never;
-            header?: {
-                Range?: string | null;
+            query?: {
+                /** @description Regenerate thumbnail from video file using ffmpeg */
+                regenerate_thumbnail?: boolean;
             };
+            header?: never;
             path: {
                 video_id: number;
             };
@@ -8996,34 +9189,49 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Full video file (no Range header) */
+            /** @description Video properties refreshed successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "video_id": 123,
+                     *       "media_info": {
+                     *         "duration": 240.5,
+                     *         "width": 1920,
+                     *         "height": 1080,
+                     *         "video_codec": "h264",
+                     *         "audio_codec": "aac"
+                     *       },
+                     *       "thumbnail_path": "/config/.thumbnails/123.jpg",
+                     *       "thumbnail_timestamp": 1704067200
+                     *     }
+                     */
                     "application/json": unknown;
-                    "video/*": unknown;
                 };
             };
-            /** @description Partial content (Range header provided) */
-            206: {
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "video/*": unknown;
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description Video not found or no file associated */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Requested range not satisfiable */
-            416: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9037,6 +9245,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Refresh failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11547,6 +11762,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpotifyTrackEnrichResponse"];
+                };
+            };
+            /** @description Bad Request - Invalid input or business rule violation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enrich_spotify_track_discogs_add_spotify_enrich_track_discogs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscogsEnrichRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscogsEnrichResponse"];
                 };
             };
             /** @description Bad Request - Invalid input or business rule violation */

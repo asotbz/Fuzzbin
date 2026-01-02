@@ -262,6 +262,94 @@
         }
       }
     },
+    "/videos/{video_id}/stream": {
+      "get": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Stream video file",
+        "description": "Stream video file with HTTP Range support for seeking.",
+        "operationId": "stream_video_videos__video_id__stream_get",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JWT token for authentication (alternative to Authorization header)",
+              "title": "Token"
+            },
+            "description": "JWT token for authentication (alternative to Authorization header)"
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full video file (no Range header)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "video/*": {}
+            }
+          },
+          "206": {
+            "description": "Partial content (Range header provided)",
+            "content": {
+              "video/*": {}
+            }
+          },
+          "404": {
+            "description": "Video not found or no file associated"
+          },
+          "416": {
+            "description": "Requested range not satisfiable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/videos/bulk/update": {
       "post": {
         "tags": [
@@ -2307,14 +2395,14 @@
         }
       }
     },
-    "/videos/{video_id}/stream": {
-      "get": {
+    "/videos/{video_id}/refresh": {
+      "post": {
         "tags": [
           "Videos"
         ],
-        "summary": "Stream video file",
-        "description": "Stream video file with HTTP Range support for seeking.",
-        "operationId": "stream_video_videos__video_id__stream_get",
+        "summary": "Refresh video properties and thumbnail",
+        "description": "Re-analyze video file with ffprobe and regenerate thumbnail.",
+        "operationId": "refresh_video_videos__video_id__refresh_post",
         "security": [
           {
             "HTTPBearer": []
@@ -2331,43 +2419,64 @@
             }
           },
           {
-            "name": "Range",
-            "in": "header",
+            "name": "regenerate_thumbnail",
+            "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Range"
-            }
+              "type": "boolean",
+              "description": "Regenerate thumbnail from video file using ffmpeg",
+              "default": true,
+              "title": "Regenerate Thumbnail"
+            },
+            "description": "Regenerate thumbnail from video file using ffmpeg"
           }
         ],
         "responses": {
           "200": {
-            "description": "Full video file (no Range header)",
+            "description": "Video properties refreshed successfully",
             "content": {
               "application/json": {
-                "schema": {}
-              },
-              "video/*": {}
+                "schema": {},
+                "example": {
+                  "video_id": 123,
+                  "media_info": {
+                    "duration": 240.5,
+                    "width": 1920,
+                    "height": 1080,
+                    "video_codec": "h264",
+                    "audio_codec": "aac"
+                  },
+                  "thumbnail_path": "/config/.thumbnails/123.jpg",
+                  "thumbnail_timestamp": 1704067200
+                }
+              }
             }
           },
-          "206": {
-            "description": "Partial content (Range header provided)",
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
             "content": {
-              "video/*": {}
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
             }
           },
           "404": {
             "description": "Video not found or no file associated"
           },
-          "416": {
-            "description": "Requested range not satisfiable"
+          "500": {
+            "description": "Refresh failed"
           },
           "422": {
             "description": "Validation Error",
@@ -6265,6 +6374,83 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SpotifyTrackEnrichResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/spotify/enrich-track-discogs": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Enrich Spotify track with Discogs metadata",
+        "description": "Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.",
+        "operationId": "enrich_spotify_track_discogs_add_spotify_enrich_track_discogs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscogsEnrichRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscogsEnrichResponse"
                 }
               }
             }
@@ -11483,6 +11669,154 @@
         "title": "DiscogsCommunity",
         "description": "Community stats for a release."
       },
+      "DiscogsEnrichRequest": {
+        "properties": {
+          "spotify_track_id": {
+            "type": "string",
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
+          "track_title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Track Title",
+            "description": "Track title"
+          },
+          "artist_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Artist Name",
+            "description": "Artist name"
+          },
+          "discogs_artist_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discogs Artist Id",
+            "description": "Discogs artist ID (if available from IMVDb entity). If provided, uses artist releases search; otherwise uses text search."
+          }
+        },
+        "type": "object",
+        "required": [
+          "spotify_track_id",
+          "track_title",
+          "artist_name"
+        ],
+        "title": "DiscogsEnrichRequest",
+        "description": "Request to enrich a Spotify track with Discogs metadata."
+      },
+      "DiscogsEnrichResponse": {
+        "properties": {
+          "spotify_track_id": {
+            "type": "string",
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
+          "match_found": {
+            "type": "boolean",
+            "title": "Match Found",
+            "description": "Whether a Discogs match was found"
+          },
+          "discogs_artist_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discogs Artist Id",
+            "description": "Discogs artist ID"
+          },
+          "discogs_master_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discogs Master Id",
+            "description": "Discogs master release ID if match found"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album",
+            "description": "Album title from Discogs"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Record label from Discogs"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre",
+            "description": "Genre from Discogs"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year from Discogs"
+          },
+          "match_score": {
+            "type": "number",
+            "title": "Match Score",
+            "description": "Fuzzy match score (0-100)"
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method",
+            "description": "Method used to find match: 'artist_releases', 'text_search', or 'none'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spotify_track_id",
+          "match_found",
+          "match_score",
+          "match_method"
+        ],
+        "title": "DiscogsEnrichResponse",
+        "description": "Response after enriching a Spotify track with Discogs metadata."
+      },
       "DiscogsFormat": {
         "properties": {
           "name": {
@@ -16172,6 +16506,30 @@
             ],
             "title": "Imvdb Url",
             "description": "Full IMVDb video URL"
+          },
+          "imvdb_entity_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Entity Id",
+            "description": "IMVDb entity ID for the primary artist"
+          },
+          "discogs_artist_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discogs Artist Id",
+            "description": "Discogs artist ID from IMVDb entity (for Discogs enrichment)"
           },
           "youtube_ids": {
             "items": {
