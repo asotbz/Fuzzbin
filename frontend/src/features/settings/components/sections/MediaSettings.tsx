@@ -46,68 +46,40 @@ export default function MediaSettings({ config, section }: MediaSettingsProps) {
 
   // Render based on section type
   const renderYtdlpSettings = () => (
-    <>
-      <SettingSection
-        title="yt-dlp Configuration"
-        description="YouTube downloader settings and options"
-      >
-        <SettingField
-          path="ytdlp.binary_path"
-          label="Binary Path"
-          description="Path to yt-dlp executable"
-          value={sectionConfig.binary_path}
-          type="text"
-          safetyLevel="safe"
-          onChange={handleFieldChange}
-        />
+    <SettingSection
+      title="yt-dlp Configuration"
+      description="YouTube downloader settings and options"
+    >
+      <SettingField
+        path="ytdlp.ytdlp_path"
+        label="Binary Path"
+        description="Path to yt-dlp executable"
+        value={sectionConfig.ytdlp_path}
+        type="text"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
 
-        <SettingField
-          path="ytdlp.default_download_path"
-          label="Default Download Path"
-          description="Default directory for downloads"
-          value={sectionConfig.default_download_path}
-          type="text"
-          safetyLevel="safe"
-          onChange={handleFieldChange}
-        />
+      <SettingField
+        path="ytdlp.format_spec"
+        label="Format Specification"
+        description="Default format specification for downloads"
+        value={sectionConfig.format_spec}
+        type="text"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
 
-        <SettingField
-          path="ytdlp.format"
-          label="Video Format"
-          description="Preferred video format selector"
-          value={sectionConfig.format}
-          type="text"
-          safetyLevel="safe"
-          onChange={handleFieldChange}
-        />
-
-        <SettingField
-          path="ytdlp.extract_audio"
-          label="Extract Audio"
-          description="Extract audio track separately"
-          value={sectionConfig.extract_audio}
-          type="boolean"
-          safetyLevel="safe"
-          onChange={handleFieldChange}
-        />
-
-        <SettingField
-          path="ytdlp.audio_format"
-          label="Audio Format"
-          description="Preferred audio format when extracting"
-          value={sectionConfig.audio_format}
-          type="select"
-          options={[
-            { label: 'MP3', value: 'mp3' },
-            { label: 'AAC', value: 'aac' },
-            { label: 'FLAC', value: 'flac' },
-            { label: 'Opus', value: 'opus' },
-          ]}
-          safetyLevel="safe"
-          onChange={handleFieldChange}
-        />
-      </SettingSection>
-    </>
+      <SettingField
+        path="ytdlp.geo_bypass"
+        label="Geo Bypass"
+        description="Bypass geographic restrictions"
+        value={sectionConfig.geo_bypass}
+        type="boolean"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
+    </SettingSection>
   )
 
   const renderFfprobeSettings = () => (
@@ -116,11 +88,23 @@ export default function MediaSettings({ config, section }: MediaSettingsProps) {
       description="Media file analysis tool settings"
     >
       <SettingField
-        path="ffprobe.binary_path"
+        path="ffprobe.ffprobe_path"
         label="Binary Path"
         description="Path to ffprobe executable"
-        value={sectionConfig.binary_path}
+        value={sectionConfig.ffprobe_path}
         type="text"
+        safetyLevel="safe"
+        onChange={handleFieldChange}
+      />
+
+      <SettingField
+        path="ffprobe.timeout"
+        label="Timeout"
+        description="Command execution timeout in seconds"
+        value={sectionConfig.timeout}
+        type="number"
+        min={5}
+        max={300}
         safetyLevel="safe"
         onChange={handleFieldChange}
       />

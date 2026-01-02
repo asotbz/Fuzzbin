@@ -52,19 +52,9 @@ export default function LibrarySettings({ config, section }: LibrarySettingsProp
       description="Automatic file organization and path patterns"
     >
       <SettingField
-        path="organizer.enabled"
-        label="Enable Auto-Organization"
-        description="Automatically organize imported files"
-        value={organizer.enabled}
-        type="boolean"
-        safetyLevel="safe"
-        onChange={handleFieldChange}
-      />
-
-      <SettingField
         path="organizer.path_pattern"
         label="Path Pattern"
-        description="Organization pattern (use {artist}, {title}, {year} placeholders)"
+        description="Organization pattern (use {artist}, {title}, {year}, {album}, {genre}, {director}, {studio}, {featured_artists} placeholders)"
         value={organizer.path_pattern}
         type="text"
         safetyLevel="safe"
@@ -72,20 +62,10 @@ export default function LibrarySettings({ config, section }: LibrarySettingsProp
       />
 
       <SettingField
-        path="organizer.create_artist_dirs"
-        label="Create Artist Directories"
-        description="Group videos by artist in separate directories"
-        value={organizer.create_artist_dirs}
-        type="boolean"
-        safetyLevel="safe"
-        onChange={handleFieldChange}
-      />
-
-      <SettingField
-        path="organizer.sanitize_filenames"
-        label="Sanitize Filenames"
-        description="Remove invalid characters from filenames"
-        value={organizer.sanitize_filenames}
+        path="organizer.normalize_filenames"
+        label="Normalize Filenames"
+        description="Apply filename normalization (lowercase, remove special chars)"
+        value={organizer.normalize_filenames}
         type="boolean"
         safetyLevel="safe"
         onChange={handleFieldChange}

@@ -90,7 +90,7 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
             description="IMVDb API authentication key"
             value={auth.app_key || ''}
             type="text"
-            safetyLevel="requires_reload"
+            safetyLevel="safe"
             onChange={handleFieldChange}
           />
         </SettingSection>
@@ -131,7 +131,7 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
             description="Discogs API key"
             value={auth.api_key || ''}
             type="text"
-            safetyLevel="requires_reload"
+            safetyLevel="safe"
             onChange={handleFieldChange}
           />
 
@@ -141,7 +141,7 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
             description="Discogs API secret"
             value={auth.api_secret || ''}
             type="text"
-            safetyLevel="requires_reload"
+            safetyLevel="safe"
             onChange={handleFieldChange}
           />
         </SettingSection>
@@ -182,7 +182,7 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
             description="Spotify Client ID"
             value={auth.client_id || ''}
             type="text"
-            safetyLevel="requires_reload"
+            safetyLevel="safe"
             onChange={handleFieldChange}
           />
 
@@ -192,7 +192,7 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
             description="Spotify Client Secret"
             value={auth.client_secret || ''}
             type="text"
-            safetyLevel="requires_reload"
+            safetyLevel="safe"
             onChange={handleFieldChange}
           />
         </SettingSection>

@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useConfig } from '../hooks/useConfig'
 import LoggingSettings from '../components/sections/LoggingSettings'
-import DatabaseSettings from '../components/sections/DatabaseSettings'
-import CacheSettings from '../components/sections/CacheSettings'
 import APISettings from '../components/sections/APISettings'
 import MediaSettings from '../components/sections/MediaSettings'
 import LibrarySettings from '../components/sections/LibrarySettings'
@@ -17,10 +15,9 @@ interface ConfigSection {
 }
 
 const CONFIG_SECTIONS: ConfigSection[] = [
-  // Core System
-  { id: 'logging', title: 'Logging', group: 'Core System' },
-  { id: 'database', title: 'Database', group: 'Core System' },
-  { id: 'cache', title: 'Cache', group: 'Core System' },
+  // System
+  { id: 'logging', title: 'Logging', group: 'System' },
+  { id: 'backup', title: 'Backup', group: 'System' },
 
   // API Integrations
   { id: 'api-imvdb', title: 'IMVDb', group: 'API Integrations' },
@@ -37,9 +34,6 @@ const CONFIG_SECTIONS: ConfigSection[] = [
   { id: 'organizer', title: 'Organizer', group: 'Library Management' },
   { id: 'tags', title: 'Tags', group: 'Library Management' },
   { id: 'trash', title: 'Trash', group: 'Library Management' },
-
-  // System
-  { id: 'backup', title: 'Backup', group: 'System' },
 ]
 
 export default function SettingsPage() {
@@ -177,10 +171,9 @@ export default function SettingsPage() {
 
             {configQuery.isSuccess && activeConfig && (
               <div className="settingsFields">
-                {/* Core System */}
+                {/* System */}
                 {activeSection === 'logging' && <LoggingSettings config={activeConfig} />}
-                {activeSection === 'database' && <DatabaseSettings config={activeConfig} />}
-                {activeSection === 'cache' && <CacheSettings config={activeConfig} />}
+                {activeSection === 'backup' && <AdvancedSettings config={activeConfig} section="backup" />}
 
                 {/* API Integrations */}
                 {activeSection === 'api-imvdb' && <APISettings config={activeConfig} apiName="imvdb" />}
@@ -197,9 +190,6 @@ export default function SettingsPage() {
                 {activeSection === 'organizer' && <LibrarySettings config={activeConfig} section="organizer" />}
                 {activeSection === 'tags' && <LibrarySettings config={activeConfig} section="tags" />}
                 {activeSection === 'trash' && <LibrarySettings config={activeConfig} section="trash" />}
-
-                {/* System */}
-                {activeSection === 'backup' && <AdvancedSettings config={activeConfig} section="backup" />}
               </div>
             )}
           </div>

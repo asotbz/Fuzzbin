@@ -7,12 +7,12 @@ interface SafetyBadgeProps {
 }
 
 export default function SafetyBadge({ level, className = '' }: SafetyBadgeProps) {
+  // Don't render badge for "safe" level - only show warnings
+  if (level === 'safe') {
+    return null
+  }
+
   const badges = {
-    safe: {
-      icon: '✓',
-      label: 'SAFE',
-      title: 'Changes apply immediately without side effects',
-    },
     requires_reload: {
       icon: '↻',
       label: 'RELOAD REQUIRED',
