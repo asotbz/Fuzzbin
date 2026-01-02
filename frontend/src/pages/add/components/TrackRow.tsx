@@ -119,9 +119,9 @@ export default function TrackRow({
   const displayDirectors: string | null | undefined = metadataOverride?.directors ?? (enrichmentData?.metadata?.directors as string | null | undefined)
   const displayFeaturedArtists: string | null | undefined =
     metadataOverride?.featuredArtists ?? (enrichmentData?.metadata?.featured_artists as string | null | undefined)
-  // Genre comes from Discogs via enrichment - prefer normalized version
+  // Genre comes from Spotify artist genres via enrichment - classified to a broad bucket
   const displayGenre: string | null | undefined =
-    metadataOverride?.genre ?? enrichmentData?.genre_normalized ?? enrichmentData?.genre
+    metadataOverride?.genre ?? enrichmentData?.genre ?? enrichmentData?.genre_normalized
 
   return (
     <div

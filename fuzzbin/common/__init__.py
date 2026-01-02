@@ -9,6 +9,13 @@ from .config import (
     ConcurrencyConfig,
     APIClientConfig,
 )
+from .genre_buckets import (
+    BUCKET_PATTERNS,
+    PRIORITY,
+    VALID_BUCKETS,
+    classify_genres,
+    classify_single_genre,
+)
 from .logging_config import setup_logging
 from .http_client import AsyncHTTPClient
 from .rate_limiter import RateLimiter
@@ -27,6 +34,11 @@ __all__ = [
     "RateLimitConfig",
     "ConcurrencyConfig",
     "APIClientConfig",
+    "BUCKET_PATTERNS",
+    "PRIORITY",
+    "VALID_BUCKETS",
+    "classify_genres",
+    "classify_single_genre",
     "setup_logging",
     "AsyncHTTPClient",
     "RateLimiter",

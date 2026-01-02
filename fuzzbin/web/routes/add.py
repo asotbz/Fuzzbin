@@ -26,7 +26,8 @@ from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.clients.ytdlp_client import YTDLPClient
 from fuzzbin.common.config import YTDLPConfig
-from fuzzbin.common.string_utils import normalize_genre, normalize_spotify_title
+from fuzzbin.common.genre_buckets import classify_genres
+from fuzzbin.common.string_utils import normalize_spotify_title
 from fuzzbin.tasks import Job, JobType, get_job_queue
 from fuzzbin.web.dependencies import get_current_user
 from fuzzbin.web.schemas.add import (
@@ -55,7 +56,6 @@ from fuzzbin.web.schemas.add import (
     normalize_spotify_playlist_id,
 )
 from fuzzbin.parsers.imvdb_parser import IMVDbParser
-from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
 from fuzzbin.web.schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from fuzzbin.web.schemas.imvdb import IMVDbVideoDetail
 from fuzzbin.web.schemas.scan import ImportMode, ScanJobResponse, ScanRequest
@@ -208,6 +208,27 @@ async def preview_batch(
                     albums_with_labels=sum(1 for label in album_labels.values() if label),
                 )
 
+            # Collect unique primary artist IDs to fetch genre information
+            artist_ids = list(
+                {track.artists[0].id for track in tracks if track.artists and track.artists[0].id}
+            )
+
+            # Fetch artist details including genres (batched up to 50 per request)
+            artist_genres: dict[str, list[str]] = {}
+            if artist_ids:
+                logger.info(
+                    "spotify_fetching_artist_genres",
+                    playlist_id=playlist_id,
+                    unique_artists=len(artist_ids),
+                )
+                artists = await spotify_client.get_artists(artist_ids)
+                artist_genres = {artist.id: artist.genres or [] for artist in artists}
+                logger.info(
+                    "spotify_artist_genres_fetched",
+                    playlist_id=playlist_id,
+                    artists_with_genres=sum(1 for genres in artist_genres.values() if genres),
+                )
+
     except HTTPException:
         raise
     except Exception as e:
@@ -281,6 +302,12 @@ async def preview_batch(
 
         # Limit returned items to first 100 to keep response lightweight
         if idx < 100:
+            # Get primary artist ID and genres
+            primary_artist_id = track.artists[0].id if track.artists else None
+            track_artist_genres = (
+                artist_genres.get(primary_artist_id, []) if primary_artist_id else []
+            )
+
             items.append(
                 BatchPreviewItem(
                     kind="spotify_track",
@@ -292,6 +319,8 @@ async def preview_batch(
                     already_exists=already_exists,
                     spotify_track_id=track.id,
                     spotify_playlist_id=playlist_id,
+                    spotify_artist_id=primary_artist_id,
+                    artist_genres=track_artist_genres if track_artist_genres else None,
                 )
             )
 
@@ -857,7 +886,6 @@ async def check_video_exists(
     Returns:
         {"exists": bool, "video_id": int | null, "title": str | null, "artist": str | null}
     """
-    fuzzbin_module = await get_fuzzbin_module()
     repository = await fuzzbin_module.get_repository()
 
     result = {
@@ -1210,51 +1238,46 @@ async def enrich_spotify_track(
                 )
                 raise
 
-            # Step 5: Enrich with Discogs genre
+            # Step 5: Classify genre from Spotify artist genres
             genre: Optional[str] = None
             genre_normalized: Optional[str] = None
             genre_is_mapped: Optional[bool] = None
+            source_genres: Optional[list[str]] = None
 
-            try:
-                discogs_config = _get_api_config("discogs")
-                if discogs_config and api_config:
-                    discogs_service = DiscogsEnrichmentService(
-                        imvdb_config=api_config,
-                        discogs_config=discogs_config,
+            if request.artist_genres:
+                source_genres = request.artist_genres
+                classified_genre, _ = classify_genres(request.artist_genres)
+                if classified_genre:
+                    genre = classified_genre
+                    genre_normalized = classified_genre  # Same value for backwards compatibility
+                    genre_is_mapped = True
+
+                    logger.info(
+                        "spotify_enrich_track_genre_classified",
+                        spotify_track_id=request.spotify_track_id,
+                        genre=genre,
+                        source_genres=source_genres,
                     )
-                    discogs_result = await discogs_service.enrich_from_imvdb_video(
-                        imvdb_video_id=matched_video.id,
-                        track_title=request.track_title,
-                        artist_name=request.artist,
+
+                    # Add genre to metadata dict
+                    metadata["genre"] = genre
+                    metadata["genre_normalized"] = genre_normalized
+                else:
+                    genre_is_mapped = False
+                    logger.debug(
+                        "spotify_enrich_track_genre_not_classified",
+                        spotify_track_id=request.spotify_track_id,
+                        source_genres=source_genres,
                     )
-
-                    if discogs_result.genre:
-                        genre = discogs_result.genre
-                        _, genre_normalized, genre_is_mapped = normalize_genre(genre)
-
-                        logger.info(
-                            "spotify_enrich_track_genre_found",
-                            spotify_track_id=request.spotify_track_id,
-                            genre=genre,
-                            genre_normalized=genre_normalized,
-                            genre_is_mapped=genre_is_mapped,
-                        )
-
-                        # Add genre to metadata dict
-                        metadata["genre"] = genre
-                        metadata["genre_normalized"] = genre_normalized
-
-            except Exception as e:
-                logger.warning(
-                    "spotify_enrich_track_genre_failed",
-                    spotify_track_id=request.spotify_track_id,
-                    error=str(e),
-                )
-                # Continue without genre - not critical
 
             # Build response
             try:
                 match_type = "exact" if getattr(matched_video, "is_exact_match", False) else "fuzzy"
+
+                # Extract thumbnail URL from IMVDb image (prefer original, fall back to large)
+                thumbnail_url = None
+                if video.image:
+                    thumbnail_url = video.image.get("o") or video.image.get("l")
 
                 response = SpotifyTrackEnrichResponse(
                     spotify_track_id=request.spotify_track_id,
@@ -1269,6 +1292,8 @@ async def enrich_spotify_track(
                     genre=genre,
                     genre_normalized=genre_normalized,
                     genre_is_mapped=genre_is_mapped,
+                    source_genres=source_genres,
+                    thumbnail_url=thumbnail_url,
                 )
 
                 logger.info(

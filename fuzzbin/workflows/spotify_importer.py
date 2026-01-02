@@ -1,5 +1,6 @@
 """Spotify playlist importer workflow for importing tracks into the database."""
 
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -7,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 import structlog
 
 from ..api.spotify_client import SpotifyClient
+from ..common.genre_buckets import classify_genres
 from ..common.string_utils import normalize_spotify_title
 from ..core.db.repository import VideoRepository
 from ..parsers.spotify_models import SpotifyTrack
@@ -129,11 +131,15 @@ class SpotifyPlaylistImporter:
             total_tracks=len(tracks),
         )
 
+        # Collect unique primary artist IDs and fetch their full details (including genres)
+        artist_genres_map = await self._fetch_artist_genres(tracks)
+
         # Import tracks
         result = await self._import_tracks(
             playlist_id=playlist_id,
             playlist_name=playlist.name,
             tracks=tracks,
+            artist_genres_map=artist_genres_map,
         )
 
         result.duration_seconds = time.time() - start_time
@@ -149,11 +155,57 @@ class SpotifyPlaylistImporter:
 
         return result
 
+    async def _fetch_artist_genres(self, tracks: List[SpotifyTrack]) -> Dict[str, List[str]]:
+        """
+        Fetch genres for all primary artists in the track list.
+
+        Collects unique primary artist IDs from all tracks and fetches their
+        full artist details (including genres) in batches of up to 50.
+
+        Args:
+            tracks: List of Spotify tracks
+
+        Returns:
+            Dictionary mapping artist ID to list of genre strings
+        """
+        # Collect unique primary artist IDs
+        artist_ids = []
+        seen = set()
+        for track in tracks:
+            if track.artists:
+                primary_artist_id = track.artists[0].id
+                if primary_artist_id not in seen:
+                    seen.add(primary_artist_id)
+                    artist_ids.append(primary_artist_id)
+
+        if not artist_ids:
+            return {}
+
+        self.logger.info(
+            "spotify_fetching_artist_genres",
+            artist_count=len(artist_ids),
+        )
+
+        # Fetch full artist details (includes genres)
+        artists = await self.spotify_client.get_artists(artist_ids)
+
+        # Build mapping
+        artist_genres_map = {artist.id: artist.genres for artist in artists}
+
+        self.logger.info(
+            "spotify_artist_genres_fetched",
+            artists_with_genres=sum(1 for g in artist_genres_map.values() if g),
+            total_artists=len(artist_genres_map),
+        )
+
+        return artist_genres_map
+
     async def _import_tracks(
         self,
         playlist_id: str,
         playlist_name: str,
         tracks: List[SpotifyTrack],
+        artist_genres_map: Dict[str, List[str]],
     ) -> ImportResult:
         """
         Import list of tracks into database.
@@ -162,6 +214,7 @@ class SpotifyPlaylistImporter:
             playlist_id: Spotify playlist ID
             playlist_name: Playlist name
             tracks: List of Spotify tracks to import
+            artist_genres_map: Mapping of artist ID to list of genres
 
         Returns:
             ImportResult with statistics
@@ -194,7 +247,7 @@ class SpotifyPlaylistImporter:
                         continue
 
                     # Import track
-                    video_id = await self._import_single_track(track)
+                    video_id = await self._import_single_track(track, artist_genres_map)
 
                     if video_id is not None:
                         result.imported_count += 1
@@ -230,12 +283,15 @@ class SpotifyPlaylistImporter:
 
         return result
 
-    async def _import_single_track(self, track: SpotifyTrack) -> Optional[int]:
+    async def _import_single_track(
+        self, track: SpotifyTrack, artist_genres_map: Dict[str, List[str]]
+    ) -> Optional[int]:
         """
         Import a single track into the database.
 
         Args:
             track: Spotify track to import
+            artist_genres_map: Mapping of artist ID to list of genres
 
         Returns:
             Video ID if successful, None if failed
@@ -243,8 +299,14 @@ class SpotifyPlaylistImporter:
         Raises:
             Exception: If import fails
         """
+        # Get primary artist's genres
+        artist_genres: List[str] = []
+        if track.artists:
+            primary_artist_id = track.artists[0].id
+            artist_genres = artist_genres_map.get(primary_artist_id, [])
+
         # Map track to video data
-        video_data = self._map_track_to_video_data(track)
+        video_data = self._map_track_to_video_data(track, artist_genres)
 
         # Create video record
         video_id = await self.repository.create_video(**video_data)
@@ -273,12 +335,15 @@ class SpotifyPlaylistImporter:
 
         return video_id
 
-    def _map_track_to_video_data(self, track: SpotifyTrack) -> Dict[str, Any]:
+    def _map_track_to_video_data(
+        self, track: SpotifyTrack, artist_genres: List[str]
+    ) -> Dict[str, Any]:
         """
         Map Spotify track to video database fields.
 
         Args:
             track: Spotify track
+            artist_genres: List of genre strings from the primary artist
 
         Returns:
             Dictionary suitable for repository.create_video()
@@ -288,12 +353,20 @@ class SpotifyPlaylistImporter:
         if track.album and track.album.release_date:
             year = SpotifyParser.extract_year_from_release_date(track.album.release_date)
 
+        # Classify genres to get broad bucket
+        bucket, _ = classify_genres(artist_genres)
+
+        # Serialize source genres as JSON if present
+        source_genres_json = json.dumps(artist_genres) if artist_genres else None
+
         # Map to video fields
         return {
             "title": track.name,
             "artist": track.artists[0].name if track.artists else None,
             "album": track.album.name if track.album else None,
             "year": year,
+            "genre": bucket,
+            "source_genres": source_genres_json,
             "status": self.initial_status,
             "download_source": "spotify",
         }

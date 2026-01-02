@@ -49,6 +49,8 @@ interface EnrichedMetadata {
   imvdbUrl?: string | null
   genre?: string | null
   genreNormalized?: string | null
+  sourceGenres?: string[] | null
+  thumbnailUrl?: string | null
 }
 
 export default function SpotifyImport() {
@@ -265,6 +267,8 @@ export default function SpotifyImport() {
       imvdb_url?: string | null
       genre?: string | null
       genre_normalized?: string | null
+      source_genres?: string[] | null
+      thumbnail_url?: string | null
     }
   ) => {
     const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
@@ -284,6 +288,8 @@ export default function SpotifyImport() {
         imvdbUrl: enrichment.imvdb_url,
         genre: enrichment.genre,
         genreNormalized: enrichment.genre_normalized,
+        sourceGenres: enrichment.source_genres,
+        thumbnailUrl: enrichment.thumbnail_url,
       })
       return newMap
     })
@@ -334,7 +340,7 @@ export default function SpotifyImport() {
           imvdb_url: enrichment?.imvdbUrl ?? null,
           youtube_id: youtubeId,
           youtube_url: youtubeId ? `https://youtube.com/watch?v=${youtubeId}` : null,
-          thumbnail_url: null,
+          thumbnail_url: enrichment?.thumbnailUrl ?? null,
         }
       })
 

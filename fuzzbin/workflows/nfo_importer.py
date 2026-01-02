@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import structlog
 
-from ..common.string_utils import normalize_genre
+from ..common.genre_buckets import classify_single_genre
 from ..core.db.repository import VideoRepository
 from ..parsers.models import MusicVideoNFO
 from ..parsers.musicvideo_parser import MusicVideoNFOParser
@@ -310,22 +310,26 @@ class NFOImporter:
 
         Note:
             - Maps all available fields from NFO to database schema
-            - Normalizes genre to primary category using normalize_genre()
+            - Classifies genre to a bucket using classify_single_genre()
             - Sets download_source to "nfo_import"
             - Stores nfo_file_path and video_file_path if provided
             - Excludes tags and collections (database is source of truth)
         """
-        # Normalize genre to primary category if present
-        normalized_genre: Optional[str] = None
+        # Classify genre to primary bucket if present
+        classified_genre: Optional[str] = None
         if nfo.genre:
-            original, normalized, is_mapped = normalize_genre(nfo.genre)
-            normalized_genre = normalized
-            if is_mapped and original != normalized:
-                self.logger.debug(
-                    "genre_normalized",
-                    original=original,
-                    normalized=normalized,
-                )
+            bucket, _ = classify_single_genre(nfo.genre)
+            if bucket:
+                classified_genre = bucket
+                if nfo.genre.lower() != bucket.lower():
+                    self.logger.debug(
+                        "genre_classified",
+                        original=nfo.genre,
+                        bucket=bucket,
+                    )
+            else:
+                # Genre didn't match any bucket - keep original
+                classified_genre = nfo.genre
 
         video_data = {
             "title": nfo.title,
@@ -333,7 +337,7 @@ class NFOImporter:
             "album": nfo.album,
             "year": nfo.year,
             "director": nfo.director,
-            "genre": normalized_genre,
+            "genre": classified_genre,
             "studio": nfo.studio,
             "status": self.initial_status,
             "download_source": "nfo_import",
@@ -568,8 +572,8 @@ class NFOImporter:
                     # Apply Discogs enrichment for missing fields
                     if discogs_result:
                         if discogs_result.genre and not video_data.get("genre"):
-                            _, normalized_genre, _ = normalize_genre(discogs_result.genre)
-                            video_data["genre"] = normalized_genre
+                            bucket, _ = classify_single_genre(discogs_result.genre)
+                            video_data["genre"] = bucket if bucket else discogs_result.genre
                         if discogs_result.album and not video_data.get("album"):
                             video_data["album"] = discogs_result.album
                         if discogs_result.label and not video_data.get("studio"):

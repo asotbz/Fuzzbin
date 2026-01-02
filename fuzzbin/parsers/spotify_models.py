@@ -12,6 +12,10 @@ class SpotifyArtist(BaseModel):
     name: str = Field(description="Artist name")
     uri: str = Field(description="Spotify URI")
     href: Optional[str] = Field(default=None, description="API endpoint URL")
+    genres: List[str] = Field(
+        default_factory=list,
+        description="Artist genres (only populated from full artist endpoint)",
+    )
 
     model_config = {
         "extra": "ignore",

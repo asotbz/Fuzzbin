@@ -187,6 +187,7 @@ export default function SpotifyTrackTable({
       album: track.album || undefined,
       year: track.year || undefined,
       label: track.label || undefined,
+      artist_genres: track.artist_genres || undefined,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEnrichingIndex, tracks, trackStates.size])
@@ -264,6 +265,7 @@ export default function SpotifyTrackTable({
       album: track.album || undefined,
       year: track.year || undefined,
       label: track.label || undefined,
+      artist_genres: track.artist_genres || undefined,
     })
 
     setRetryingTrack(null)

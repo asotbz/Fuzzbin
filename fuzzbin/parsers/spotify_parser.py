@@ -6,6 +6,7 @@ import structlog
 
 from .spotify_models import (
     SpotifyAlbum,
+    SpotifyArtist,
     SpotifyPlaylist,
     SpotifyPlaylistTracksResponse,
     SpotifyTrack,
@@ -68,6 +69,19 @@ class SpotifyParser:
             Validated SpotifyAlbum model
         """
         return SpotifyAlbum.model_validate(data)
+
+    @staticmethod
+    def parse_artist(data: Dict[str, Any]) -> SpotifyArtist:
+        """
+        Parse Spotify artist response (full details including genres).
+
+        Args:
+            data: Raw artist response from Spotify API
+
+        Returns:
+            Validated SpotifyArtist model with genres populated
+        """
+        return SpotifyArtist.model_validate(data)
 
     @staticmethod
     def extract_year_from_release_date(release_date: Optional[str]) -> Optional[int]:

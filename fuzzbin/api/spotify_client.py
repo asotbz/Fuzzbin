@@ -9,6 +9,7 @@ import structlog
 from .base_client import RateLimitedAPIClient
 from ..common.config import APIClientConfig
 from ..parsers.spotify_models import (
+    SpotifyArtist,
     SpotifyPlaylist,
     SpotifyPlaylistTracksResponse,
     SpotifyTrack,
@@ -499,3 +500,76 @@ class SpotifyClient(RateLimitedAPIClient):
         )
 
         return all_albums
+
+    async def get_artists(self, artist_ids: List[str]) -> List[SpotifyArtist]:
+        """
+        Get detailed information about multiple artists including genres.
+
+        Fetches artist metadata including genres for up to 50 artists per request.
+        Automatically batches larger requests.
+
+        Args:
+            artist_ids: List of Spotify artist IDs (max 50 per API call)
+
+        Returns:
+            List of SpotifyArtist objects containing:
+            - id: Artist ID
+            - name: Artist name
+            - genres: List of genre strings (e.g., ["prog rock", "art rock"])
+            - uri: Spotify URI
+            - href: API endpoint URL
+
+        Raises:
+            httpx.HTTPStatusError: If the API returns an error status
+            - 401: Invalid or expired access token
+            - 404: One or more artists not found
+
+        Example:
+            >>> artist_ids = ["0k17h0D3J5VfsdmQ1iZtE9", "3WrFJ7ztbogyGnTHbHJFl2"]
+            >>> artists = await client.get_artists(artist_ids)
+            >>> for artist in artists:
+            ...     print(f"{artist.name}: {', '.join(artist.genres)}")
+        """
+        if not artist_ids:
+            return []
+
+        # Spotify allows up to 50 artist IDs per request
+        MAX_IDS_PER_REQUEST = 50
+        all_artists: List[SpotifyArtist] = []
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_ids = []
+        for aid in artist_ids:
+            if aid not in seen:
+                seen.add(aid)
+                unique_ids.append(aid)
+
+        # Batch into groups of 50
+        for i in range(0, len(unique_ids), MAX_IDS_PER_REQUEST):
+            batch = unique_ids[i : i + MAX_IDS_PER_REQUEST]
+            ids_param = ",".join(batch)
+
+            self.logger.info(
+                "spotify_get_artists",
+                artist_count=len(batch),
+                batch_index=i // MAX_IDS_PER_REQUEST,
+            )
+
+            response = await self.get(f"/artists", params={"ids": ids_param})
+            response.raise_for_status()
+
+            data = response.json()
+            artists = data.get("artists", [])
+
+            for artist_data in artists:
+                if artist_data:  # API returns null for invalid IDs
+                    all_artists.append(SpotifyParser.parse_artist(artist_data))
+
+        self.logger.info(
+            "spotify_get_artists_complete",
+            requested=len(unique_ids),
+            fetched=len(all_artists),
+        )
+
+        return all_artists
