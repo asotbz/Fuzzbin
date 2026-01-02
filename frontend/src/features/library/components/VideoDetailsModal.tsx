@@ -316,6 +316,8 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     genre: string
     director: string
     label: string
+    imvdb_url: string
+    imvdb_video_id: string
   }>) => {
     // Apply fetched metadata to form state
     if (metadata.title !== undefined) setEditedTitle(metadata.title)
@@ -325,6 +327,14 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     if (metadata.genre !== undefined) setEditedGenre(metadata.genre)
     if (metadata.director !== undefined) setEditedDirector(metadata.director)
     if (metadata.label !== undefined) setEditedLabel(metadata.label)
+
+    // If IMVDb data is provided, save it directly (not editable in form)
+    if (metadata.imvdb_url || metadata.imvdb_video_id) {
+      const imvdbUpdates: Record<string, unknown> = {}
+      if (metadata.imvdb_url) imvdbUpdates.imvdb_url = metadata.imvdb_url
+      if (metadata.imvdb_video_id) imvdbUpdates.imvdb_video_id = metadata.imvdb_video_id
+      updateMutation.mutate(imvdbUpdates)
+    }
 
     // Switch to edit mode if not already editing
     if (!isEditing) {

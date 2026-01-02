@@ -23,6 +23,8 @@ interface MetadataUpdate {
   genre: string
   director: string
   studio: string
+  imvdb_url: string
+  imvdb_video_id: string
 }
 
 export default function MetadataFetchModal({
@@ -86,6 +88,7 @@ export default function MetadataFetchModal({
     if (!previewData) return
 
     const anyPreview = previewData as unknown as Record<string, unknown>
+    const previewDataObj = anyPreview.data as Record<string, unknown> | undefined
     const metadata: Partial<MetadataUpdate> = {}
 
     if (typeof anyPreview.title === 'string' && anyPreview.title.trim()) {
@@ -108,6 +111,18 @@ export default function MetadataFetchModal({
     }
     if (typeof anyPreview.studio === 'string' && anyPreview.studio.trim()) {
       metadata.studio = anyPreview.studio.trim()
+    }
+
+    // Extract IMVDb URL and ID from preview data (IMVDb-specific)
+    if (previewDataObj) {
+      if (typeof previewDataObj.url === 'string' && previewDataObj.url.trim()) {
+        metadata.imvdb_url = previewDataObj.url.trim()
+      }
+      if (typeof previewDataObj.id === 'number') {
+        metadata.imvdb_video_id = String(previewDataObj.id)
+      } else if (typeof previewDataObj.id === 'string' && previewDataObj.id.trim()) {
+        metadata.imvdb_video_id = previewDataObj.id.trim()
+      }
     }
 
     onApply(metadata)
