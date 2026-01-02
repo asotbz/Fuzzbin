@@ -124,7 +124,7 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
       // Call PATCH endpoint to update video metadata
       const updated = await apiJson<Video>({
         method: 'PATCH',
-        path: `/api/videos/${videoId}`,
+        path: `/videos/${videoId}`,
         body: data,
       })
 
@@ -132,7 +132,7 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
       try {
         await apiJson<{ exported_count: number }>({
           method: 'POST',
-          path: '/api/exports/nfo',
+          path: '/exports/nfo',
           body: {
             video_ids: [videoId],
             overwrite_existing: true,
@@ -185,20 +185,14 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
     mutationFn: async () => {
       if (!videoId || !youtubeId) throw new Error('No YouTube ID')
 
-      const response = await fetch(`/api/videos/${videoId}/download`, {
+      return await apiJson<{ id: string }>({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        path: `/videos/${videoId}/download`,
       })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to submit download')
-      }
-      return response.json()
     },
     onSuccess: (data) => {
-      toast.success('Download queued', {
-        description: `Job ID: ${data.job_id}`,
+      toast.success('Download queued successfully', {
+        description: data.id ? `Job ID: ${data.id}` : undefined,
       })
     },
     onError: (error) => {

@@ -16,6 +16,7 @@ import { videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
 import { useJobEvents } from '../../../lib/ws/useJobEvents'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
+import { getApiBaseUrl } from '../../../api/client'
 import './LibraryPage.css'
 
 type FacetItem = { value: string; count: number }
@@ -315,9 +316,12 @@ export default function LibraryPage() {
     const selectedIds = Array.from(selectedVideoIds)
 
     try {
-      const response = await fetch('/api/videos/bulk/download', {
+      const response = await fetch(`${getApiBaseUrl()}/videos/bulk/download`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens.accessToken && { Authorization: `Bearer ${tokens.accessToken}` }),
+        },
         body: JSON.stringify(selectedIds),
       })
 
@@ -535,26 +539,6 @@ export default function LibraryPage() {
                       </button>
                     )
                   })}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="sectionTitle">Directors</h3>
-                <div className="facetList">
-                  {facets.directors.slice(0, 12).map((d) => (
-                    <button
-                      key={`director:${d.value}`}
-                      type="button"
-                      className={`facetItem ${filters.director === d.value ? 'facetItemActive' : ''}`}
-                      onClick={() => {
-                        setFilters((prev) => ({ ...prev, director: toggle(prev.director, d.value) }))
-                        setPage(1)
-                      }}
-                    >
-                      {d.value}
-                      <span className="facetCount">{d.count}</span>
-                    </button>
-                  ))}
                 </div>
               </section>
             </div>

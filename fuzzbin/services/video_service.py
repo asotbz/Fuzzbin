@@ -177,7 +177,7 @@ class VideoService(BaseService):
             library_dir = self._get_library_dir()
             config_dir = self._get_config_dir()
             self._file_manager = FileManager(
-                config=config.file_manager,
+                config=config.trash,
                 library_dir=library_dir,
                 config_dir=config_dir,
                 organizer_config=config.organizer,

@@ -4,6 +4,8 @@ import './video.css'
 import type { Video } from '../../lib/api/types'
 import { videosKeys } from '../../lib/api/queryKeys'
 import type { JobStatus } from '../../lib/ws/useJobEvents'
+import { getApiBaseUrl } from '../../api/client'
+import { useVideoThumbnail } from '../../api/useVideoThumbnail'
 
 function formatDuration(seconds: unknown): string {
   const sec = typeof seconds === 'number' && Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : null
@@ -15,7 +17,7 @@ function formatDuration(seconds: unknown): string {
 
 async function submitDownloadJob(videoId: number, youtubeId: string): Promise<{ job_id: string }> {
   // Submit download job directly via backend API
-  const response = await fetch('/api/jobs', {
+  const response = await fetch(`${getApiBaseUrl()}/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -145,6 +147,9 @@ export default function VideoCard({
   const status = typeof anyVideo.status === 'string' ? anyVideo.status : null
   const youtubeId = typeof anyVideo.youtube_id === 'string' ? anyVideo.youtube_id : null
 
+  // Fetch thumbnail with authentication
+  const { thumbnailUrl } = useVideoThumbnail(videoId)
+
   // Check if there's an active job for this video
   const hasActiveJob = jobStatus?.hasActiveJob ?? false
 
@@ -197,7 +202,7 @@ export default function VideoCard({
       <div
         className="videoCardThumb"
         style={{
-          backgroundImage: videoId ? `url(/api/videos/${videoId}/thumbnail)` : undefined
+          backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : undefined
         }}
         aria-hidden="true"
       >

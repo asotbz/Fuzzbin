@@ -401,7 +401,8 @@ async def bulk_download_videos(
             skipped.append({"video_id": video_id, "reason": "Not found"})
             continue
 
-        youtube_id = getattr(video, "youtube_id", None)
+        # video is a dict, not an object
+        youtube_id = video.get("youtube_id")
         if not youtube_id:
             skipped.append({"video_id": video_id, "reason": "No YouTube ID"})
             continue

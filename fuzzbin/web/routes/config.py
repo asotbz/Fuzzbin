@@ -115,7 +115,7 @@ def _get_required_actions(path: str, safety_level: ConfigSafetyLevel) -> List[Re
                 )
             )
         elif (
-            path.startswith("file_manager.")
+            path.startswith("trash.")
             or path.startswith("thumbnail.")
             or path.startswith("backup.output_dir")
         ):

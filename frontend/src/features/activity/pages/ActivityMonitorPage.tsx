@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
 import { useActivityWebSocket, type JobData } from '../hooks/useActivityWebSocket'
 import { cancelJob } from '../../../lib/api/endpoints/jobs'
+import { getApiBaseUrl } from '../../../api/client'
 import JobCard from '../components/JobCard'
 import JobFilterBar from '../components/JobFilterBar'
 import './ActivityMonitorPage.css'
@@ -99,7 +100,7 @@ export default function ActivityMonitorPage() {
 
   const handleRetryJob = async (job: JobData) => {
     try {
-      const response = await fetch('/api/jobs', {
+      const response = await fetch(`${getApiBaseUrl()}/jobs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

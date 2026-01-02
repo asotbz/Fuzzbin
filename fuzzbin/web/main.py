@@ -418,7 +418,17 @@ ws://localhost:8000/ws/jobs/{job_id}
         )
 
     # Import and include routers
-    from .routes import artists, collections, search, tags, videos, auth, files, jobs, websocket
+    from .routes import (
+        artists,
+        collections,
+        search,
+        tags,
+        videos,
+        auth,
+        files,
+        jobs,
+        websocket,
+    )
     from .routes import (
         add,
         bulk,
@@ -433,7 +443,7 @@ ws://localhost:8000/ws/jobs/{job_id}
         ytdlp,
     )  # Phase 7 routes + config + ytdlp + external APIs + genres
 
-    # Auth routes (public - no authentication required)
+    # Auth routes (no authentication required)
     app.include_router(auth.router)
 
     # WebSocket routes (handle their own authentication if needed)
@@ -443,6 +453,9 @@ ws://localhost:8000/ws/jobs/{job_id}
     # The require_auth dependency will bypass auth check when auth_enabled=False
     protected_dependencies = [Depends(require_auth)]
 
+    # NOTE: bulk.router must be included BEFORE videos.router
+    # Otherwise /videos/bulk/* routes match /videos/{video_id} where video_id="bulk"
+    app.include_router(bulk.router, dependencies=protected_dependencies)
     app.include_router(videos.router, dependencies=protected_dependencies)
     app.include_router(artists.router, dependencies=protected_dependencies)
     app.include_router(collections.router, dependencies=protected_dependencies)
@@ -452,7 +465,6 @@ ws://localhost:8000/ws/jobs/{job_id}
     app.include_router(jobs.router, dependencies=protected_dependencies)
     app.include_router(add.router, dependencies=protected_dependencies)
     # Phase 7 routes
-    app.include_router(bulk.router, dependencies=protected_dependencies)
     app.include_router(imvdb.router, dependencies=protected_dependencies)
     app.include_router(discogs.router, dependencies=protected_dependencies)
     app.include_router(spotify.router, dependencies=protected_dependencies)

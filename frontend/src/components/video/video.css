@@ -1,6 +1,6 @@
 .videoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: var(--space-6);
 }
 
@@ -125,7 +125,7 @@
 
 .videoCardOverlayArtist {
   font-family: var(--font-ui);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: 700;
   color: var(--mtv-blue);
   text-transform: uppercase;
@@ -134,7 +134,7 @@
 
 .videoCardOverlayTitle {
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: 900;
   color: var(--text-on-dark);
   text-transform: uppercase;
