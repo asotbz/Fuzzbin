@@ -426,8 +426,8 @@ async def handle_spotify_batch_import(job: Job) -> None:
 
         try:
             # Prepare video data
-            # Use normalized genre if available (mapped to primary category like Rock, Pop, etc.)
-            genre_value = metadata.get("genre_normalized") or metadata.get("genre")
+            # Prefer genre field (contains user override) over genre_normalized (from enrichment)
+            genre_value = metadata.get("genre") or metadata.get("genre_normalized")
 
             video_data = {
                 "title": track_title,
