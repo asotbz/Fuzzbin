@@ -110,7 +110,9 @@ export default function TrackRow({
     track.title,
     enrichmentData?.metadata?.title as string | undefined
   )
-  const displayAlbum = getDisplayAlbumTitle(track.album ?? null)
+  const displayAlbum = getDisplayAlbumTitle(
+    metadataOverride?.album ?? (enrichmentData?.metadata?.album as string | null | undefined) ?? track.album ?? null
+  )
 
   // Get metadata from enrichment data or metadata override
   const displayArtist: string = metadataOverride?.artist || (enrichmentData?.metadata?.artist as string | undefined) || track.artist
