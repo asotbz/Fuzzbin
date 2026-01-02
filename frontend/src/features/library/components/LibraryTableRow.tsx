@@ -5,6 +5,7 @@ interface LibraryTableRowProps {
   selected: boolean
   onToggleSelection: (id: number) => void
   onVideoClick: (video: Video) => void
+  onPlayVideo?: (video: Video) => void
 }
 
 function formatDuration(seconds: unknown): string {
@@ -39,6 +40,7 @@ export default function LibraryTableRow({
   selected,
   onToggleSelection,
   onVideoClick,
+  onPlayVideo,
 }: LibraryTableRowProps) {
   const anyVideo = video as Record<string, unknown>
   const videoId = typeof anyVideo.id === 'number' ? anyVideo.id : 0
@@ -110,7 +112,20 @@ export default function LibraryTableRow({
         {duration}
       </div>
 
-      <div className="libraryTableCell">
+      <div className="libraryTableCell libraryTableActions">
+        {onPlayVideo && (
+          <button
+            className="libraryTableActionButton"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPlayVideo(video)
+            }}
+            aria-label="Play video"
+            title="Play video"
+          >
+            ▶
+          </button>
+        )}
         <button
           className="libraryTableActionButton"
           onClick={(e) => {

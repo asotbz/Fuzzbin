@@ -34,6 +34,52 @@
   position: relative;
 }
 
+/* Play button overlay - centered, shown on hover */
+.videoCardPlayOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  width: 64px;
+  height: 64px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 3px solid var(--mtv-pink);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease-out;
+  z-index: 20;
+}
+
+.videoCardPlayIcon {
+  width: 28px;
+  height: 28px;
+  color: var(--mtv-pink);
+  margin-left: 4px; /* Visual center adjustment for play triangle */
+}
+
+.videoCard:hover .videoCardPlayOverlay {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.videoCardPlayOverlay:hover {
+  background: var(--mtv-pink);
+  border-color: var(--mtv-pink);
+  box-shadow: 0 0 20px rgba(255, 0, 153, 0.6);
+}
+
+.videoCardPlayOverlay:hover .videoCardPlayIcon {
+  color: var(--text-on-dark);
+}
+
+.videoCardPlayOverlay:active {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+
 /* Top-left status container */
 .videoCardStatusContainer {
   position: absolute;

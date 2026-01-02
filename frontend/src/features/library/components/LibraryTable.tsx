@@ -9,6 +9,7 @@ interface LibraryTableProps {
   onSelectAll: () => void
   onClearAll: () => void
   onVideoClick: (video: Video) => void
+  onPlayVideo?: (video: Video) => void
 }
 
 export default function LibraryTable({
@@ -18,6 +19,7 @@ export default function LibraryTable({
   onSelectAll,
   onClearAll,
   onVideoClick,
+  onPlayVideo,
 }: LibraryTableProps) {
   const allSelected = videos.length > 0 && videos.every((v) => {
     const id = (v as unknown as Record<string, unknown>).id
@@ -66,6 +68,7 @@ export default function LibraryTable({
               selected={selectedIds.has(videoId)}
               onToggleSelection={onToggleSelection}
               onVideoClick={onVideoClick}
+              onPlayVideo={onPlayVideo}
             />
           )
         })}

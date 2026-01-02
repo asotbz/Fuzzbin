@@ -84,6 +84,14 @@ function AlertCircleIcon({ className }: { className?: string }) {
   )
 }
 
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  )
+}
+
 /** Get status icon for video status */
 function getStatusIcon(status: string | null, hasActiveJob: boolean) {
   // If there's an active job, show spinner
@@ -120,6 +128,8 @@ interface VideoCardProps {
   selected?: boolean
   onToggleSelection?: (id: number) => void
   onClick?: () => void
+  /** Callback when play button is clicked */
+  onPlay?: (video: Video) => void
   /** Job status info from WebSocket subscription */
   jobStatus?: VideoCardJobStatus
   /** Timestamp for thumbnail cache-busting (from WebSocket events) */
@@ -132,6 +142,7 @@ export default function VideoCard({
   selected = false,
   onToggleSelection,
   onClick,
+  onPlay,
   jobStatus,
   thumbnailTimestamp,
 }: VideoCardProps) {
@@ -209,6 +220,21 @@ export default function VideoCard({
         }}
         aria-hidden="true"
       >
+        {/* Center: Play button overlay (shown on hover) */}
+        {onPlay && (
+          <button
+            className="videoCardPlayOverlay"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPlay(video)
+            }}
+            aria-label={`Play ${title}`}
+            title="Play video"
+          >
+            <PlayIcon className="videoCardPlayIcon" />
+          </button>
+        )}
+
         {/* Top-left: Status indicator or spinner */}
         <div className="videoCardStatusContainer">
           {getStatusIcon(status, hasActiveJob)}

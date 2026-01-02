@@ -8,6 +8,7 @@ import LibraryTable from '../components/LibraryTable'
 import MultiSelectToolbar from '../components/MultiSelectToolbar'
 import BulkTagModal from '../components/BulkTagModal'
 import VideoDetailsModal from '../components/VideoDetailsModal'
+import VideoPlayerModal from '../components/VideoPlayerModal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { FacetsResponse, ListVideosQuery, SortOrder, Video } from '../../../lib/api/types'
 import { useFacets } from '../hooks/useFacets'
@@ -84,6 +85,7 @@ export default function LibraryPage() {
 
   // Modal state
   const [detailsModalVideo, setDetailsModalVideo] = useState<Video | null>(null)
+  const [playerVideo, setPlayerVideo] = useState<Video | null>(null)
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
@@ -577,6 +579,7 @@ export default function LibraryPage() {
                         selected={selectedVideoIds.has(videoId)}
                         onToggleSelection={toggleSelection}
                         onClick={() => setDetailsModalVideo(v)}
+                        onPlay={setPlayerVideo}
                         jobStatus={videoId ? getJobStatusForVideo(videoId) : undefined}
                         thumbnailTimestamp={videoId ? getThumbnailTimestamp(videoId) : undefined}
                       />
@@ -591,6 +594,7 @@ export default function LibraryPage() {
                   onSelectAll={selectAll}
                   onClearAll={clearSelection}
                   onVideoClick={(video) => setDetailsModalVideo(video)}
+                  onPlayVideo={setPlayerVideo}
                 />
               )}
 
@@ -641,6 +645,13 @@ export default function LibraryPage() {
               ? getThumbnailTimestamp((detailsModalVideo as Record<string, unknown>).id as number)
               : undefined
           }
+        />
+      )}
+
+      {playerVideo && (
+        <VideoPlayerModal
+          video={playerVideo}
+          onClose={() => setPlayerVideo(null)}
         />
       )}
 
