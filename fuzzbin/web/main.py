@@ -449,6 +449,9 @@ ws://localhost:8000/ws/jobs/{job_id}
     # WebSocket routes (handle their own authentication if needed)
     app.include_router(websocket.router)
 
+    # Video stream endpoint (handles auth internally via query param for <video> element)
+    app.include_router(videos.stream_router)
+
     # Protected routes - require authentication when auth_enabled=True
     # The require_auth dependency will bypass auth check when auth_enabled=False
     protected_dependencies = [Depends(require_auth)]

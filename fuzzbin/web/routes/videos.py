@@ -10,12 +10,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 import fuzzbin
+from fuzzbin.auth import decode_token
 from fuzzbin.common.path_security import PathSecurityError, validate_contained_path
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import VideoService
 from fuzzbin.services.base import NotFoundError, ServiceError, ValidationError
 
 from ..dependencies import get_repository, get_video_service
+from ..settings import get_settings
 from ..schemas.common import (
     AUTH_ERROR_RESPONSES,
     COMMON_ERROR_RESPONSES,
@@ -35,6 +37,8 @@ from ..schemas.video import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
+# Separate router for stream endpoint (handles auth internally via query param)
+stream_router = APIRouter(tags=["Videos"])
 
 # Valid sort fields for videos
 VALID_VIDEO_SORT_FIELDS = {
@@ -837,8 +841,8 @@ async def refresh_video(
         )
 
 
-@router.get(
-    "/{video_id}/stream",
+@stream_router.get(
+    "/videos/{video_id}/stream",
     summary="Stream video file",
     description="Stream video file with HTTP Range support for seeking.",
     responses={
@@ -857,6 +861,7 @@ async def refresh_video(
 async def stream_video(
     video_id: int,
     range: Optional[str] = Header(default=None, alias="Range"),
+    token: Optional[str] = Query(default=None, description="JWT token for authentication (alternative to Authorization header)"),
     repo: VideoRepository = Depends(get_repository),
 ) -> StreamingResponse:
     """
@@ -867,7 +872,36 @@ async def stream_video(
     - Byte range requests for seeking (Range: bytes=start-end)
     - Suffix ranges (Range: bytes=-500 for last 500 bytes)
     - Open-ended ranges (Range: bytes=500- for byte 500 to end)
+    
+    Authentication:
+    - Validates JWT token from query parameter (for <video> element compatibility)
+    - Only required when API authentication is enabled
     """
+    # Validate query parameter token if authentication is enabled
+    settings = get_settings()
+    if settings.auth_enabled:
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Decode and validate token
+        payload = decode_token(
+            token=token,
+            secret_key=settings.jwt_secret,
+            algorithm=settings.jwt_algorithm,
+            expected_type="access",
+        )
+        
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    
     # Get video and verify it has a file
     video = await repo.get_video_by_id(video_id)
     file_path_str = video.get("video_file_path")
