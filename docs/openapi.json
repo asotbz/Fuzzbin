@@ -262,6 +262,589 @@
         }
       }
     },
+    "/videos/bulk/update": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk update videos",
+        "description": "Update multiple videos with the same field values in a single transaction.",
+        "operationId": "bulk_update_videos_videos_bulk_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/delete": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk delete videos",
+        "description": "Delete multiple videos. Optionally also delete files from disk (moved to trash).",
+        "operationId": "bulk_delete_videos_videos_bulk_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/status": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk update status",
+        "description": "Update status for multiple videos in a single transaction.",
+        "operationId": "bulk_update_status_videos_bulk_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/tags": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk apply tags",
+        "description": "Apply tags to multiple videos. Can add to existing tags or replace them.",
+        "operationId": "bulk_apply_tags_videos_bulk_tags_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/collections": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk add to collection",
+        "description": "Add multiple videos to a collection in a single transaction.",
+        "operationId": "bulk_add_to_collection_videos_bulk_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/organize": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk update file paths",
+        "description": "Update file paths for multiple videos after file organization.",
+        "operationId": "bulk_organize_videos_videos_bulk_organize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkOrganizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/videos/bulk/download": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk download videos",
+        "description": "Queue download jobs for multiple videos with YouTube IDs. Skips videos without YouTube IDs.",
+        "operationId": "bulk_download_videos_videos_bulk_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "title": "Video Ids"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOperationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource already exists or state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/videos": {
       "get": {
         "tags": [
@@ -1621,6 +2204,109 @@
         }
       }
     },
+    "/videos/{video_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Get video thumbnail",
+        "description": "Get or generate a thumbnail for a video.",
+        "operationId": "get_video_thumbnail_videos__video_id__thumbnail_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          },
+          {
+            "name": "regenerate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force thumbnail regeneration",
+              "default": false,
+              "title": "Regenerate"
+            },
+            "description": "Force thumbnail regeneration"
+          },
+          {
+            "name": "timestamp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timestamp in seconds to extract frame from",
+              "title": "Timestamp"
+            },
+            "description": "Timestamp in seconds to extract frame from"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thumbnail image",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/jpeg": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found or no file associated"
+          },
+          "500": {
+            "description": "Thumbnail generation failed"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/videos/{video_id}/stream": {
       "get": {
         "tags": [
@@ -1682,89 +2368,6 @@
           },
           "416": {
             "description": "Requested range not satisfiable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/videos/{video_id}/thumbnail": {
-      "get": {
-        "tags": [
-          "Videos"
-        ],
-        "summary": "Get video thumbnail",
-        "description": "Get or generate a thumbnail image for a video.",
-        "operationId": "get_video_thumbnail_videos__video_id__thumbnail_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "video_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Video Id"
-            }
-          },
-          {
-            "name": "regenerate",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Force thumbnail regeneration",
-              "default": false,
-              "title": "Regenerate"
-            },
-            "description": "Force thumbnail regeneration"
-          },
-          {
-            "name": "timestamp",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Timestamp in seconds to extract frame from",
-              "title": "Timestamp"
-            },
-            "description": "Timestamp in seconds to extract frame from"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Thumbnail image",
-            "content": {
-              "application/json": {
-                "schema": {}
-              },
-              "image/jpeg": {}
-            }
-          },
-          "404": {
-            "description": "Video not found or no file associated"
-          },
-          "500": {
-            "description": "Thumbnail generation failed"
           },
           "422": {
             "description": "Validation Error",
@@ -5945,589 +6548,6 @@
         ]
       }
     },
-    "/videos/bulk/update": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk update videos",
-        "description": "Update multiple videos with the same field values in a single transaction.",
-        "operationId": "bulk_update_videos_videos_bulk_update_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/videos/bulk/delete": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk delete videos",
-        "description": "Delete multiple videos. Optionally also delete files from disk (moved to trash).",
-        "operationId": "bulk_delete_videos_videos_bulk_delete_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkDeleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/videos/bulk/status": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk update status",
-        "description": "Update status for multiple videos in a single transaction.",
-        "operationId": "bulk_update_status_videos_bulk_status_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/videos/bulk/tags": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk apply tags",
-        "description": "Apply tags to multiple videos. Can add to existing tags or replace them.",
-        "operationId": "bulk_apply_tags_videos_bulk_tags_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkTagsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/videos/bulk/collections": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk add to collection",
-        "description": "Add multiple videos to a collection in a single transaction.",
-        "operationId": "bulk_add_to_collection_videos_bulk_collections_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkCollectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found - Resource does not exist",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/videos/bulk/organize": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk update file paths",
-        "description": "Update file paths for multiple videos after file organization.",
-        "operationId": "bulk_organize_videos_videos_bulk_organize_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkOrganizeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/videos/bulk/download": {
-      "post": {
-        "tags": [
-          "Bulk Operations"
-        ],
-        "summary": "Bulk download videos",
-        "description": "Queue download jobs for multiple videos with YouTube IDs. Skips videos without YouTube IDs.",
-        "operationId": "bulk_download_videos_videos_bulk_download_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array",
-                "title": "Video Ids"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkOperationResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found - Resource does not exist",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict - Resource already exists or state conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error - Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/imvdb/search/videos": {
       "get": {
         "tags": [
@@ -8497,8 +8517,8 @@
         "tags": [
           "Genres"
         ],
-        "summary": "Normalize genre",
-        "description": "Normalize a genre string to a primary category. Genres like 'grunge', 'alternative rock', 'punk rock' map to 'Rock'. If no mapping exists, the original genre is passed through unchanged.",
+        "summary": "Classify genre",
+        "description": "Classify a genre string to a bucket category. Genres like 'grunge', 'alternative rock', 'punk rock' map to 'Rock'. If no mapping exists, the original genre is passed through unchanged.",
         "operationId": "normalize_genre_endpoint_genres_normalize_get",
         "security": [
           {
@@ -8512,10 +8532,10 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Genre string to normalize",
+              "description": "Genre string to classify",
               "title": "Genre"
             },
-            "description": "Genre string to normalize"
+            "description": "Genre string to classify"
           }
         ],
         "responses": {
@@ -8547,8 +8567,8 @@
         "tags": [
           "Genres"
         ],
-        "summary": "List genre categories",
-        "description": "Get the list of primary genre categories used for normalization.",
+        "summary": "List genre buckets",
+        "description": "Get the list of genre buckets used for classification.",
         "operationId": "list_genre_categories_genres_categories_get",
         "responses": {
           "200": {
@@ -8574,8 +8594,8 @@
         "tags": [
           "Genres"
         ],
-        "summary": "Normalize multiple genres",
-        "description": "Normalize multiple genre strings to primary categories in a single request.",
+        "summary": "Classify multiple genres",
+        "description": "Classify multiple genre strings to buckets in a single request.",
         "operationId": "normalize_genres_batch_genres_normalize_batch_post",
         "security": [
           {
@@ -8592,10 +8612,10 @@
               "items": {
                 "type": "string"
               },
-              "description": "List of genre strings to normalize",
+              "description": "List of genre strings to classify",
               "title": "Genres"
             },
-            "description": "List of genre strings to normalize"
+            "description": "List of genre strings to classify"
           }
         ],
         "responses": {
@@ -10091,6 +10111,33 @@
             ],
             "title": "Spotify Playlist Id",
             "description": "Spotify playlist ID"
+          },
+          "spotify_artist_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Artist Id",
+            "description": "Primary artist Spotify ID (for genre lookup)"
+          },
+          "artist_genres": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist Genres",
+            "description": "Genres from Spotify for the primary artist"
           },
           "nfo_path": {
             "anyOf": [
@@ -12655,7 +12702,7 @@
             },
             "type": "array",
             "title": "Categories",
-            "description": "List of primary genre categories"
+            "description": "List of genre buckets"
           }
         },
         "type": "object",
@@ -12675,12 +12722,12 @@
           "normalized": {
             "type": "string",
             "title": "Normalized",
-            "description": "Normalized primary genre category"
+            "description": "Classified genre bucket"
           },
           "is_mapped": {
             "type": "boolean",
             "title": "Is Mapped",
-            "description": "True if genre was mapped to a primary category, False if passed through unchanged"
+            "description": "True if genre was mapped to a bucket, False if passed through unchanged"
           }
         },
         "type": "object",
@@ -12690,7 +12737,7 @@
           "is_mapped"
         ],
         "title": "GenreNormalizeResponse",
-        "description": "Response for genre normalization."
+        "description": "Response for genre classification."
       },
       "HTTPValidationError": {
         "properties": {
@@ -16052,6 +16099,21 @@
             ],
             "title": "Label",
             "description": "Record label"
+          },
+          "artist_genres": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist Genres",
+            "description": "Genres from Spotify for the primary artist (used for genre classification)"
           }
         },
         "type": "object",
@@ -16153,7 +16215,7 @@
               }
             ],
             "title": "Genre",
-            "description": "Original genre from Discogs (if found)"
+            "description": "Classified genre bucket (Rock, Pop, Hip Hop/R&B, Metal, Electronic, Country)"
           },
           "genre_normalized": {
             "anyOf": [
@@ -16165,7 +16227,7 @@
               }
             ],
             "title": "Genre Normalized",
-            "description": "Normalized primary genre category (Rock, Pop, Hip Hop/R&B, etc.)"
+            "description": "Alias for genre (deprecated, use genre field)"
           },
           "genre_is_mapped": {
             "anyOf": [
@@ -16177,7 +16239,34 @@
               }
             ],
             "title": "Genre Is Mapped",
-            "description": "Whether genre was mapped to a primary category (False = passed through)"
+            "description": "Whether genre was classified to a bucket (True) or left empty (False)"
+          },
+          "source_genres": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Genres",
+            "description": "Original genres from Spotify artist profile"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "IMVDb image URL to use as thumbnail (original size)"
           }
         },
         "type": "object",

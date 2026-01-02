@@ -84,10 +84,10 @@ Video CRUD operations and metadata management
   - Permanently delete a video. This cannot be undone.
 - `GET` `/videos/{video_id}/status-history` — Get status history
   - Get the status change history for a video.
+- `GET` `/videos/{video_id}/thumbnail` — Get video thumbnail
+  - Get or generate a thumbnail for a video.
 - `GET` `/videos/{video_id}/stream` — Stream video file
   - Stream video file with HTTP Range support for seeking.
-- `GET` `/videos/{video_id}/thumbnail` — Get video thumbnail
-  - Get or generate a thumbnail image for a video.
 
 ## Artists
 Artist management and video associations
