@@ -1,9 +1,8 @@
 """IMVDb API client for music video database access."""
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-import httpx
 import structlog
 
 from .base_client import RateLimitedAPIClient

@@ -282,4 +282,3 @@ class MetricsCollector:
                 metrics.by_type[job_type].avg_duration_seconds = sum(durations) / len(durations)
 
         return metrics
-

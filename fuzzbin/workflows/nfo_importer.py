@@ -471,7 +471,6 @@ class NFOImporter:
 
         # Attempt IMVDb enrichment for missing fields
         imvdb_video_id: Optional[str] = None
-        imvdb_video_data: Optional[Any] = None
         youtube_id: Optional[str] = None
 
         if api_config:
@@ -497,7 +496,6 @@ class NFOImporter:
                                     threshold=0.8,
                                 )
                                 imvdb_video_id = str(matched_video.id)
-                                imvdb_video_data = matched_video
 
                                 # Extract fields from IMVDb if not in NFO
                                 if not video_data.get("year") and matched_video.year:

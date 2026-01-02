@@ -3,7 +3,7 @@
 from typing import AsyncGenerator, Optional
 
 import structlog
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 import fuzzbin
@@ -13,7 +13,6 @@ from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth import check_token_revoked_in_db, decode_token, UserInfo
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import ImportService, SearchService, VideoService
-from fuzzbin.services.base import ServiceCallback
 
 from .settings import APISettings, get_settings
 

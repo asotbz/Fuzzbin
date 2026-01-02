@@ -13,8 +13,7 @@ from pathlib import Path
 from typing import Annotated, List, Literal, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 import fuzzbin
@@ -25,7 +24,6 @@ from fuzzbin.core.db.exporter import NFOExporter
 
 from ..dependencies import get_repository, require_auth
 from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
-from ..schemas.video import VideoFilters
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/exports", tags=["Exports"])

@@ -13,7 +13,6 @@ from fuzzbin.auth import (
     TokenResponse,
     AccessTokenResponse,
     PasswordChangeRequest,
-    RefreshRequest,
     UserInfo,
     create_access_token,
     create_refresh_token,

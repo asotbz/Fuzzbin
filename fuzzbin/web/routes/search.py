@@ -8,7 +8,6 @@ from cachetools import TTLCache
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-import fuzzbin
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
 

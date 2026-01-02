@@ -4,8 +4,6 @@ These endpoints provide access to the Spotify Web API through the shared
 SpotifyClient, with proper rate limiting, caching, and authentication.
 """
 
-from typing import List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 import structlog
 

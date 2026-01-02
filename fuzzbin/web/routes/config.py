@@ -1,6 +1,6 @@
 """Configuration management endpoints."""
 
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, List
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status

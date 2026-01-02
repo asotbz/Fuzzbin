@@ -8,7 +8,6 @@ import structlog
 from ...parsers.artist_parser import ArtistNFOParser
 from ...parsers.models import ArtistNFO, MusicVideoNFO
 from ...parsers.musicvideo_parser import MusicVideoNFOParser
-from .exceptions import ArtistNotFoundError, VideoNotFoundError
 from .repository import VideoRepository
 
 logger = structlog.get_logger(__name__)

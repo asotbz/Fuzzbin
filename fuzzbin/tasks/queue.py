@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from fuzzbin.tasks.metrics import FailedJobAlert, JobMetrics, MetricsCollector
-from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
+from fuzzbin.tasks.models import Job, JobStatus, JobType
 
 if TYPE_CHECKING:
     from fuzzbin.core.event_bus import EventBus

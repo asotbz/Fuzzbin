@@ -2,7 +2,7 @@
 
 import re
 import unicodedata
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 
 def normalize_string(text: str) -> str:

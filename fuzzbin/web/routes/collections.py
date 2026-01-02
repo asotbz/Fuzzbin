@@ -11,7 +11,6 @@ from ..schemas.collection import (
     CollectionCreate,
     CollectionResponse,
     CollectionUpdate,
-    CollectionVideoAdd,
 )
 from ..schemas.common import PageParams, PaginatedResponse
 from ..schemas.video import VideoResponse

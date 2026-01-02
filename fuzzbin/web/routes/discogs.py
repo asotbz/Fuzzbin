@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query
 
 from fuzzbin.api.discogs_client import DiscogsClient
 
-from ..dependencies import get_discogs_client, require_auth
+from ..dependencies import get_discogs_client
 from ..schemas.discogs import (
     DiscogsArtistReleasesResponse,
     DiscogsMaster,

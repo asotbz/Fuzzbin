@@ -348,7 +348,7 @@ async def update_scheduled_task(
     """Update a scheduled task."""
     # Check task exists
     try:
-        existing = await repo.get_scheduled_task_by_id(task_id)
+        await repo.get_scheduled_task_by_id(task_id)
     except QueryError as e:
         if "not found" in str(e).lower():
             raise HTTPException(

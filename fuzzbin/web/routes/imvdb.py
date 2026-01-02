@@ -4,14 +4,12 @@ Provides endpoints for searching and retrieving music video metadata
 from the Internet Music Video Database (IMVDb).
 """
 
-from typing import Optional
-
 import structlog
 from fastapi import APIRouter, Depends, Query
 
 from fuzzbin.api.imvdb_client import IMVDbClient
 
-from ..dependencies import get_imvdb_client, require_auth
+from ..dependencies import get_imvdb_client
 from ..schemas.imvdb import (
     IMVDbEntityDetail,
     IMVDbEntitySearchResponse,

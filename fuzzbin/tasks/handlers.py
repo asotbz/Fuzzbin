@@ -411,7 +411,6 @@ async def handle_spotify_batch_import(job: Job) -> None:
         imvdb_id = track_data.get("imvdb_id")
         imvdb_url = track_data.get("imvdb_url")
         youtube_id = track_data.get("youtube_id")
-        youtube_url = track_data.get("youtube_url")
         thumbnail_url = track_data.get("thumbnail_url")
 
         track_title = metadata.get("title", "Unknown")
@@ -480,7 +479,6 @@ async def handle_spotify_batch_import(job: Job) -> None:
             else:
                 # Create new video
                 video_id = await repository.create_video(**video_data)
-                video = await repository.get_video_by_id(video_id)
                 logger.info(
                     "spotify_batch_import_track_created",
                     video_id=video_id,
@@ -734,9 +732,6 @@ async def handle_youtube_download(job: Job) -> None:
     Raises:
         ValueError: If required parameters are missing
     """
-    from fuzzbin.clients.ytdlp_client import YTDLPClient
-    from fuzzbin.core.exceptions import DownloadCancelledError
-    from fuzzbin.parsers.ytdlp_models import CancellationToken, DownloadHooks, DownloadProgress
 
     # Determine mode based on metadata
     url = job.metadata.get("url")

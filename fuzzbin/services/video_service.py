@@ -18,11 +18,10 @@ Example:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import structlog
 
-import fuzzbin
 from fuzzbin.core.db.repository import VideoRepository
 from fuzzbin.core.file_manager import (
     DuplicateCandidate,
@@ -34,7 +33,6 @@ from fuzzbin.core.file_manager import (
     LibraryReport,
     RollbackError,
 )
-from fuzzbin.core.organizer import MediaPaths
 from fuzzbin.parsers.models import MusicVideoNFO
 
 from .base import (
@@ -1219,7 +1217,6 @@ class VideoService(BaseService):
             Dict with repair counts
         """
         report = await self.verify_library()
-        file_manager = await self._get_file_manager()
 
         repaired_missing = 0
         repaired_nfos = 0

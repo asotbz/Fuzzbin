@@ -8,7 +8,7 @@ Provides REST API access to yt-dlp functionality:
 """
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -26,7 +26,6 @@ from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from ..schemas.jobs import JobResponse
 from ..schemas.ytdlp import (
     YTDLPDownloadRequest,
-    YTDLPSearchRequest,
     YTDLPSearchResponse,
     YTDLPVideoInfo,
     YTDLPVideoInfoResponse,

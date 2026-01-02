@@ -8,7 +8,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from fuzzbin.core.event_bus import EventBus
+    pass
 
 
 class JobType(str, Enum):

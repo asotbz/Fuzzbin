@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import getpass
 import sys
-from pathlib import Path
 
 import structlog
 

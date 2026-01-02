@@ -393,11 +393,6 @@ class SpotifyPlaylistImporter:
                 remove_version_qualifiers_flag=True,
                 remove_featured=True,
             )
-            normalized_artist = normalize_spotify_title(
-                track.artists[0].name,
-                remove_version_qualifiers_flag=False,
-                remove_featured=True,
-            )
 
             # Query by artist first (more selective)
             query = self.repository.query()

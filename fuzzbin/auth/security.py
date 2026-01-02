@@ -2,8 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 import bcrypt
 from jose import JWTError, jwt

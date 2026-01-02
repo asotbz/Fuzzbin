@@ -6,7 +6,7 @@ from typing import Any, Generic, Type, TypeVar
 from xml.dom import minidom
 
 import structlog
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 

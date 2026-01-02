@@ -1,14 +1,20 @@
 """Spotify Web API client for playlist and track metadata access."""
 
+from __future__ import annotations
+
 import os
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import httpx
+
+if TYPE_CHECKING:
+    from fuzzbin.auth.spotify_token_manager import SpotifyTokenManager
 import structlog
 
 from .base_client import RateLimitedAPIClient
 from ..common.config import APIClientConfig
 from ..parsers.spotify_models import (
+    SpotifyAlbum,
     SpotifyArtist,
     SpotifyPlaylist,
     SpotifyPlaylistTracksResponse,
@@ -483,7 +489,7 @@ class SpotifyClient(RateLimitedAPIClient):
                 batch_index=i // MAX_IDS_PER_REQUEST,
             )
 
-            response = await self.get(f"/albums", params={"ids": ids_param})
+            response = await self.get("/albums", params={"ids": ids_param})
             response.raise_for_status()
 
             data = response.json()
@@ -556,7 +562,7 @@ class SpotifyClient(RateLimitedAPIClient):
                 batch_index=i // MAX_IDS_PER_REQUEST,
             )
 
-            response = await self.get(f"/artists", params={"ids": ids_param})
+            response = await self.get("/artists", params={"ids": ids_param})
             response.raise_for_status()
 
             data = response.json()

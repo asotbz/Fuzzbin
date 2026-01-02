@@ -4,7 +4,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 import structlog
 
@@ -12,7 +12,6 @@ from ..common.config import YTDLPConfig
 from ..core.exceptions import (
     DownloadCancelledError,
     InvalidPathError,
-    YTDLPError,
     YTDLPExecutionError,
     YTDLPNotFoundError,
     YTDLPParseError,
@@ -639,7 +638,7 @@ class YTDLPClient:
                 try:
                     process.kill()
                     await process.wait()
-                except:
+                except Exception:
                     pass
 
     async def download(

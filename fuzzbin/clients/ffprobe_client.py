@@ -10,7 +10,6 @@ import structlog
 
 from ..common.config import FFProbeConfig
 from ..core.exceptions import (
-    FFProbeError,
     FFProbeExecutionError,
     FFProbeNotFoundError,
     FFProbeParseError,

@@ -29,7 +29,6 @@ from fuzzbin.workflows.spotify_importer import ImportResult, SpotifyPlaylistImpo
 
 from .base import (
     BaseService,
-    NotFoundError,
     ServiceCallback,
     ServiceError,
     ValidationError,
@@ -362,7 +361,7 @@ class ImportService(BaseService):
             NotImplementedError: This feature is not yet implemented
         """
         raise NotImplementedError(
-            "YouTube import is not yet implemented. " "Use the yt-dlp client directly for now."
+            "YouTube import is not yet implemented. Use the yt-dlp client directly for now."
         )
 
     # ==================== Batch Import ====================

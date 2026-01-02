@@ -1,7 +1,6 @@
 """Concurrency limiting using asyncio semaphores."""
 
 import asyncio
-from typing import Optional
 
 import structlog
 

@@ -6,16 +6,13 @@ import structlog
 
 from ..common.string_utils import normalize_for_matching
 from .discogs_models import (
-    DiscogsArtistRelease,
     DiscogsArtistReleasesResult,
     DiscogsMaster,
-    DiscogsPagination,
     DiscogsRelease,
     DiscogsSearchResult,
     DiscogsSearchResultItem,
     DiscogsVideo,
     EmptySearchResultsError,
-    MasterNotFoundError,
 )
 
 logger = structlog.get_logger(__name__)

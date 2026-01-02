@@ -1,7 +1,7 @@
 """Async HTTP client with automatic retry logic using httpx and tenacity."""
 
 from pathlib import Path
-from typing import Any, Optional, Dict, Callable, Union
+from typing import Any, Optional, Dict, Union
 
 import httpx
 import structlog

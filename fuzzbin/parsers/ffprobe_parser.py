@@ -1,9 +1,9 @@
 """Parser for ffprobe JSON output."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import structlog
 
-from .ffprobe_models import FFProbeMediaInfo, FFProbeVideoStream, FFProbeAudioStream
+from .ffprobe_models import FFProbeMediaInfo
 
 logger = structlog.get_logger(__name__)
 

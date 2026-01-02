@@ -6,7 +6,7 @@ from typing import AsyncIterator, List, Optional, Tuple
 
 import aiofiles
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 import fuzzbin
@@ -21,7 +21,6 @@ from ..schemas.common import (
     COMMON_ERROR_RESPONSES,
     PageParams,
     PaginatedResponse,
-    SortParams,
     VideoStatusHistoryEntry,
 )
 from ..schemas.jobs import JobResponse

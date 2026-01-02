@@ -13,14 +13,14 @@ from fastapi.openapi.utils import get_openapi
 import fuzzbin
 from fuzzbin.auth import is_default_password
 from fuzzbin.common.logging_config import setup_logging
-from fuzzbin.core import init_event_bus, get_event_bus, reset_event_bus
+from fuzzbin.core import init_event_bus, reset_event_bus
 from fuzzbin.tasks import init_job_queue, reset_job_queue, Job, JobType
 from fuzzbin.tasks.handlers import register_all_handlers
 
 from .dependencies import require_auth, get_api_settings
 from .middleware import RequestLoggingMiddleware, register_exception_handlers
 from .settings import get_settings, APISettings
-from .schemas.common import HealthCheckResponse, AUTH_ERROR_RESPONSES
+from .schemas.common import HealthCheckResponse
 
 logger = structlog.get_logger(__name__)
 

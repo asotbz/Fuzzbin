@@ -14,7 +14,7 @@ Single-video search/preview/import will be added in later iterations.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -43,7 +43,6 @@ from fuzzbin.web.schemas.add import (
     BatchPreviewRequest,
     BatchPreviewResponse,
     NFOScanResponse,
-    SelectedTrackImport,
     SpotifyBatchImportRequest,
     SpotifyBatchImportResponse,
     SpotifyImportRequest,
@@ -271,11 +270,6 @@ async def preview_batch(
             normalized_title = normalize_spotify_title(
                 title,
                 remove_version_qualifiers_flag=True,
-                remove_featured=True,
-            )
-            normalized_artist = normalize_spotify_title(
-                primary_artist,
-                remove_version_qualifiers_flag=False,
                 remove_featured=True,
             )
 

@@ -3,10 +3,9 @@
 from typing import Annotated, List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-import fuzzbin
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import VideoService

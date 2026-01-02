@@ -9,7 +9,6 @@ import structlog
 
 from ..common.config import ThumbnailConfig
 from ..core.exceptions import (
-    FFmpegError,
     FFmpegExecutionError,
     FFmpegNotFoundError,
     ThumbnailTooLargeError,

@@ -1,7 +1,7 @@
 """WebSocket endpoints for real-time updates with first-message authentication."""
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional, Set, Union
 
 import structlog
@@ -12,7 +12,6 @@ import fuzzbin
 from fuzzbin.auth import decode_token
 from fuzzbin.tasks import get_job_queue
 from fuzzbin.web.schemas.events import WebSocketEvent
-from fuzzbin.web.schemas.jobs import JobProgressUpdate
 from fuzzbin.web.settings import get_settings
 
 logger = structlog.get_logger(__name__)

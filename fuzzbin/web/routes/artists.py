@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, Query, status
 from fuzzbin.core.db import VideoRepository
 
 from ..dependencies import get_repository
-from ..schemas.artist import ArtistCreate, ArtistResponse, ArtistUpdate, ArtistVideoLink
+from ..schemas.artist import ArtistCreate, ArtistResponse, ArtistUpdate
 from ..schemas.common import PageParams, PaginatedResponse
-from ..schemas.video import VideoFilters, VideoResponse
+from ..schemas.video import VideoResponse
 
 router = APIRouter(prefix="/artists", tags=["Artists"])
 

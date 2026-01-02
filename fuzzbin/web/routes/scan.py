@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.tasks import Job, JobType, get_job_queue
@@ -24,7 +24,6 @@ from fuzzbin.web.schemas.scan import (
     ScanPreviewResponse,
     ScanRequest,
 )
-from fuzzbin.workflows.nfo_importer import NFOImporter
 
 import fuzzbin as fuzzbin_module
 

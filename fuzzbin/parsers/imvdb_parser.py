@@ -10,7 +10,6 @@ from .imvdb_models import (
     EmptySearchResultsError,
     IMVDbEntity,
     IMVDbEntitySearchResponse,
-    IMVDbEntitySearchResult,
     IMVDbEntityVideo,
     IMVDbPagination,
     IMVDbVideo,

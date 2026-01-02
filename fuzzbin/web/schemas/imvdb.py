@@ -22,7 +22,7 @@ class IMVDbImageSet(BaseModel):
     """Image URLs at various sizes."""
 
     o: Optional[str] = Field(default=None, description="Original size")
-    l: Optional[str] = Field(default=None, description="Large size")
+    large: Optional[str] = Field(default=None, alias="l", description="Large size")
     b: Optional[str] = Field(default=None, description="Banner size")
     t: Optional[str] = Field(default=None, description="Thumbnail size")
     s: Optional[str] = Field(default=None, description="Small size")

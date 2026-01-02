@@ -3,12 +3,12 @@
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, List, Any, Set, ClassVar
+from typing import Optional, Dict, List, Any, ClassVar
 import string
 
 import yaml
 from ruamel.yaml import YAML
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -410,7 +410,7 @@ class OrganizerConfig(BaseModel):
 
         if invalid_fields:
             raise ValueError(
-                f"Invalid pattern fields: {invalid_fields}. " f"Valid fields: {valid_fields}"
+                f"Invalid pattern fields: {invalid_fields}. Valid fields: {valid_fields}"
             )
 
 

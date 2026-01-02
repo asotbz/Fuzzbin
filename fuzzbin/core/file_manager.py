@@ -7,7 +7,6 @@ for non-blocking operations.
 
 import hashlib
 import os
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
@@ -18,7 +17,6 @@ import structlog
 
 from ..common.config import TrashConfig, OrganizerConfig, ThumbnailConfig
 from ..parsers.models import MusicVideoNFO
-from .exceptions import InvalidPathError
 from .organizer import build_media_paths, MediaPaths
 
 if TYPE_CHECKING:
@@ -1343,4 +1341,3 @@ class FileManager:
         )
 
         return report
-
