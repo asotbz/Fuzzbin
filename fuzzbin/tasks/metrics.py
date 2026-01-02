@@ -154,24 +154,6 @@ class MetricsCollector:
         self._failure_callbacks.append(callback)
         logger.info("failure_callback_registered", total=len(self._failure_callbacks))
 
-    def remove_failure_callback(
-        self,
-        callback: Callable[[FailedJobAlert], Coroutine[Any, Any, None]],
-    ) -> bool:
-        """Remove a failure callback.
-
-        Args:
-            callback: The callback to remove
-
-        Returns:
-            True if removed, False if not found
-        """
-        try:
-            self._failure_callbacks.remove(callback)
-            return True
-        except ValueError:
-            return False
-
     async def record_completion(self, job: Job) -> None:
         """Record a job completion for metrics.
 
@@ -301,10 +283,3 @@ class MetricsCollector:
 
         return metrics
 
-    def reset(self) -> None:
-        """Reset all collected metrics."""
-        self._completed_durations.clear()
-        self._type_durations.clear()
-        self._last_failure_at = None
-        self._last_completion_at = None
-        logger.info("metrics_reset")

@@ -198,7 +198,6 @@ class JobQueue:
         self.handlers: dict[JobType, Callable[[Job], Coroutine[Any, Any, None]]] = {}
         self.workers: list[asyncio.Task[None]] = []
         self.scheduler_task: asyncio.Task[None] | None = None
-        self.dependency_task: asyncio.Task[None] | None = None
         self.running = False
         self._lock = asyncio.Lock()
         self._metrics = MetricsCollector()
@@ -278,14 +277,6 @@ class JobQueue:
             >>> print(f"Avg duration: {metrics.avg_duration_seconds:.1f}s")
         """
         return self._metrics.calculate_metrics(self.jobs, self.queue.qsize())
-
-    def get_queue_depth(self) -> int:
-        """Get current queue depth (pending + waiting jobs).
-
-        Returns:
-            Number of jobs waiting to be processed
-        """
-        return self.queue.qsize()
 
     def register_handler(
         self,
@@ -424,40 +415,6 @@ class JobQueue:
         job.mark_cancelled()
         logger.info("job_cancelled", job_id=job_id)
         return True
-
-    async def clear_completed(self, max_age_seconds: int | None = None) -> int:
-        """Clear completed/failed/cancelled jobs from registry.
-
-        Args:
-            max_age_seconds: Only clear jobs older than this (optional)
-
-        Returns:
-            Number of jobs cleared
-        """
-        from datetime import datetime, timezone
-
-        async with self._lock:
-            now = datetime.now(timezone.utc)
-            to_remove = []
-
-            for job_id, job in self.jobs.items():
-                if not job.is_terminal:
-                    continue
-
-                if max_age_seconds is not None and job.completed_at:
-                    age = (now - job.completed_at).total_seconds()
-                    if age < max_age_seconds:
-                        continue
-
-                to_remove.append(job_id)
-
-            for job_id in to_remove:
-                del self.jobs[job_id]
-
-            if to_remove:
-                logger.info("jobs_cleared", count=len(to_remove))
-
-            return len(to_remove)
 
     async def _worker(self, worker_id: int) -> None:
         """Background worker coroutine.
@@ -676,10 +633,6 @@ class JobQueue:
         await asyncio.gather(*self.workers, return_exceptions=True)
         self.workers.clear()
         logger.info("job_queue_stopped")
-
-    async def wait_until_empty(self) -> None:
-        """Wait until all queued jobs are processed."""
-        await self.queue.join()
 
 
 # Global job queue instance

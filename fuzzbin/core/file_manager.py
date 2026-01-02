@@ -522,61 +522,6 @@ class FileManager:
 
         return False
 
-    async def cleanup_orphaned_thumbnails(
-        self,
-        repository: "VideoRepository",
-    ) -> List[Path]:
-        """
-        Remove thumbnails that don't have corresponding videos in database.
-
-        Scans the thumbnail cache directory and removes any thumbnails
-        where the video_id (derived from filename) doesn't exist in the database.
-
-        Args:
-            repository: VideoRepository instance
-
-        Returns:
-            List of deleted thumbnail paths
-        """
-        deleted: List[Path] = []
-
-        if not await self.verify_file_exists(self.thumbnail_cache_dir):
-            return deleted
-
-        # Scan thumbnail directory
-        for entry in os.scandir(self.thumbnail_cache_dir):
-            if not entry.is_file() or not entry.name.endswith(".jpg"):
-                continue
-
-            # Extract video_id from filename (e.g., "123.jpg" -> 123)
-            try:
-                video_id = int(entry.name[:-4])  # Remove .jpg extension
-            except ValueError:
-                # Not a valid thumbnail filename, skip
-                continue
-
-            # Check if video exists
-            try:
-                await repository.get_video_by_id(video_id, include_deleted=True)
-            except Exception:
-                # Video doesn't exist, delete orphaned thumbnail
-                thumb_path = Path(entry.path)
-                await aiofiles.os.remove(thumb_path)
-                deleted.append(thumb_path)
-                logger.info(
-                    "orphaned_thumbnail_deleted",
-                    video_id=video_id,
-                    thumb_path=str(thumb_path),
-                )
-
-        if deleted:
-            logger.info(
-                "orphaned_thumbnails_cleanup_complete",
-                deleted_count=len(deleted),
-            )
-
-        return deleted
-
     # ========== Video Format Validation ==========
 
     async def validate_video_format(
@@ -661,56 +606,6 @@ class FileManager:
         )
 
         return result
-
-    async def validate_and_update_video(
-        self,
-        video_id: int,
-        video_path: Path,
-        repository: "VideoRepository",
-    ) -> Dict[str, Any]:
-        """
-        Validate video and update database with extracted media info.
-
-        Combines validate_video_format with automatic database update.
-        Useful when importing or organizing videos.
-
-        Args:
-            video_id: Video ID in database
-            video_path: Path to video file
-            repository: VideoRepository for database updates
-
-        Returns:
-            Dictionary with extracted media info (same as validate_video_format)
-
-        Raises:
-            FileNotFoundError: If video file doesn't exist
-            FFProbeNotFoundError: If ffprobe binary not found
-            FFProbeExecutionError: If ffprobe command fails
-        """
-        media_info = await self.validate_video_format(video_path)
-
-        # Update database with extracted info
-        await repository.update_video(
-            video_id,
-            duration=media_info.get("duration"),
-            width=media_info.get("width"),
-            height=media_info.get("height"),
-            video_codec=media_info.get("video_codec"),
-            audio_codec=media_info.get("audio_codec"),
-            container_format=media_info.get("container_format"),
-            bitrate=media_info.get("bitrate"),
-            frame_rate=media_info.get("frame_rate"),
-            audio_channels=media_info.get("audio_channels"),
-            audio_sample_rate=media_info.get("audio_sample_rate"),
-        )
-
-        logger.info(
-            "video_metadata_updated",
-            video_id=video_id,
-            video_path=str(video_path),
-        )
-
-        return media_info
 
     # ========== Directory Management ==========
 
@@ -1344,9 +1239,6 @@ class FileManager:
         videos = await repository.query().execute()
         report.videos_checked = len(videos)
 
-        # Build set of valid video IDs for thumbnail check
-        valid_video_ids = {v["id"] for v in videos}
-
         # Check each video's files
         for video in videos:
             video_id = video["id"]
@@ -1452,39 +1344,3 @@ class FileManager:
 
         return report
 
-    async def repair_missing_file(
-        self,
-        video_id: int,
-        repository: "VideoRepository",
-    ) -> None:
-        """
-        Repair a missing file issue by updating video status.
-
-        Args:
-            video_id: Video ID with missing file
-            repository: VideoRepository instance
-        """
-        await repository.update_video(
-            video_id,
-            status="missing",
-        )
-        logger.info("repaired_missing_file", video_id=video_id)
-
-    async def repair_broken_nfo(
-        self,
-        video_id: int,
-        repository: "VideoRepository",
-    ) -> None:
-        """
-        Repair a broken NFO link by clearing the path.
-
-        Args:
-            video_id: Video ID with broken NFO
-            repository: VideoRepository instance
-        """
-        await repository.update_video(
-            video_id,
-            nfo_file_path=None,
-            nfo_file_path_relative=None,
-        )
-        logger.info("repaired_broken_nfo", video_id=video_id)

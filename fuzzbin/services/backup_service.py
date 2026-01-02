@@ -47,13 +47,6 @@ class BackupService:
         backup_dir: Directory where backup archives are stored
     """
 
-    # Files/directories to include in backup
-    BACKUP_ITEMS = {
-        "config": "config.yaml",
-        "database": "fuzzbin.db",
-        "thumbnails": ".thumbnails",
-    }
-
     def __init__(self, config: Any) -> None:
         """
         Initialize backup service.

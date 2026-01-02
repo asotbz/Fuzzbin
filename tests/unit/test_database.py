@@ -143,31 +143,6 @@ class TestDatabaseBasics:
         assert len(results) == 2
         assert results[0]["year"] <= results[1]["year"]
 
-    async def test_bulk_operations(self, test_repository: VideoRepository):
-        """Test bulk create and link operations."""
-        # Bulk create videos
-        videos = [
-            {"title": f"Video {i}", "artist": "Bulk Artist", "year": 2020 + i}
-            for i in range(5)
-        ]
-        video_ids = await test_repository.bulk_create_videos(videos)
-        assert len(video_ids) == 5
-
-        # Create artist
-        artist_id = await test_repository.upsert_artist(name="Bulk Artist")
-
-        # Bulk link
-        await test_repository.bulk_link_artists(
-            video_id=video_ids[0],
-            artist_links=[
-                {"artist_id": artist_id, "role": "primary", "position": 0},
-            ],
-        )
-
-        # Verify
-        artists = await test_repository.get_video_artists(video_ids[0])
-        assert len(artists) == 1
-
     async def test_count_query(self, test_repository: VideoRepository):
         """Test count queries."""
         # Create videos
@@ -306,7 +281,7 @@ class TestStatusTracking:
         assert history[0]["reason"] == "Added to download queue"
 
     async def test_status_transition_workflow(self, test_repository: VideoRepository):
-        """Test typical status workflow."""
+        """Test typical status workflow through standard update_status."""
         # Create as discovered
         video_id = await test_repository.create_video(
             title="Workflow Test",
@@ -320,54 +295,16 @@ class TestStatusTracking:
         # Start downloading
         await test_repository.update_status(video_id, "downloading")
 
-        # Mark as downloaded
-        await test_repository.mark_as_downloaded(
-            video_id,
-            file_path="/path/to/video.mp4",
-            file_size=12345678,
-            file_checksum="abc123",
-            download_source="youtube",
-        )
+        # Complete download
+        await test_repository.update_status(video_id, "downloaded")
 
         video = await test_repository.get_video_by_id(video_id)
         assert video["status"] == "downloaded"
-        assert video["video_file_path"] == "/path/to/video.mp4"
-        assert video["file_size"] == 12345678
-        assert video["file_checksum"] == "abc123"
-        assert video["download_source"] == "youtube"
 
         # Check complete history
         history = await test_repository.get_status_history(video_id)
         statuses = [h["new_status"] for h in reversed(history)]
         assert statuses == ["discovered", "queued", "downloading", "downloaded"]
-
-    async def test_mark_download_failed(self, test_repository: VideoRepository):
-        """Test marking download as failed."""
-        video_id = await test_repository.create_video(
-            title="Failed Download Test",
-            artist="Artist",
-            status="downloading",
-        )
-
-        await test_repository.mark_download_failed(
-            video_id,
-            error_message="Network timeout",
-        )
-
-        video = await test_repository.get_video_by_id(video_id)
-        assert video["status"] == "failed"
-        assert video["status_message"] == "Network timeout"
-        assert video["last_download_error"] == "Network timeout"
-        assert video["download_attempts"] == 1
-
-        # Try again and fail
-        await test_repository.mark_download_failed(
-            video_id,
-            error_message="Connection refused",
-        )
-
-        video = await test_repository.get_video_by_id(video_id)
-        assert video["download_attempts"] == 2
 
     async def test_query_by_status(self, test_repository: VideoRepository):
         """Test querying videos by status."""
@@ -391,21 +328,6 @@ class TestStatusTracking:
         downloaded = await test_repository.query().where_status("downloaded").execute()
         assert len(downloaded) == 1
         assert downloaded[0]["id"] == vid2
-
-    async def test_query_by_download_source(self, test_repository: VideoRepository):
-        """Test querying videos by download source."""
-        await test_repository.create_video(
-            title="YouTube Video", artist="A", download_source="youtube"
-        )
-        await test_repository.create_video(
-            title="Vimeo Video", artist="B", download_source="vimeo"
-        )
-
-        youtube_videos = (
-            await test_repository.query().where_download_source("youtube").execute()
-        )
-        assert len(youtube_videos) == 1
-        assert youtube_videos[0]["title"] == "YouTube Video"
 
     async def test_invalid_status(self, test_repository: VideoRepository):
         """Test that invalid status raises error."""

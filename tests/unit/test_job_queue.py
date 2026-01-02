@@ -291,30 +291,6 @@ class TestJobQueue:
         assert not queue.running
         assert len(queue.workers) == 0
 
-    @pytest.mark.asyncio
-    async def test_clear_completed(self, queue: JobQueue):
-        """Test clearing completed jobs."""
-        queue.register_handler(JobType.IMPORT_NFO, dummy_handler)
-
-        # Create some jobs in various states
-        job1 = Job(type=JobType.IMPORT_NFO)
-        job1.mark_completed({})
-        queue.jobs[job1.id] = job1
-
-        job2 = Job(type=JobType.IMPORT_NFO)
-        job2.mark_failed("error")
-        queue.jobs[job2.id] = job2
-
-        job3 = Job(type=JobType.IMPORT_NFO)  # Still pending
-        queue.jobs[job3.id] = job3
-
-        cleared = await queue.clear_completed()
-
-        assert cleared == 2  # Only completed and failed
-        assert job1.id not in queue.jobs
-        assert job2.id not in queue.jobs
-        assert job3.id in queue.jobs  # Pending job remains
-
 
 class TestGlobalJobQueue:
     """Tests for global job queue functions."""
@@ -735,20 +711,6 @@ class TestJobMetrics:
         assert JobType.FILE_ORGANIZE in metrics.by_type
         assert metrics.by_type[JobType.IMPORT_NFO].completed == 2
         assert metrics.by_type[JobType.FILE_ORGANIZE].completed == 1
-
-    @pytest.mark.asyncio
-    async def test_queue_depth(self, queue: JobQueue):
-        """Test queue depth tracking."""
-        queue.register_handler(JobType.IMPORT_NFO, slow_handler)
-
-        # Don't start queue - just submit jobs
-        await queue.submit(Job(type=JobType.IMPORT_NFO))
-        await queue.submit(Job(type=JobType.IMPORT_NFO))
-
-        assert queue.get_queue_depth() == 2
-
-        metrics = queue.get_metrics()
-        assert metrics.queue_depth == 2
 
 
 class TestFailedJobAlerts:

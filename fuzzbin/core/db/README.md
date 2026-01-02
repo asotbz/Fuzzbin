@@ -105,9 +105,6 @@ database:
 # Find by external ID
 video = await repo.get_video_by_youtube_id("hTWKbfoikeg")
 video = await repo.get_video_by_imvdb_id("nv001")
-
-# Find by file path
-video = await repo.get_video_by_path("/path/to/video.mp4")
 ```
 
 ### Fluent Query Builder
@@ -154,26 +151,6 @@ videos = await repo.search_videos('"official video"')
 # Field-specific search
 videos = await repo.search_videos("director:smith")
 videos = await repo.search_videos("genre:rock AND artist:nirvana")
-```
-
-## Bulk Operations
-
-```python
-# Bulk create videos
-video_data = [
-    {"title": "Video 1", "artist": "Artist A", "year": 2020},
-    {"title": "Video 2", "artist": "Artist A", "year": 2021},
-]
-video_ids = await repo.bulk_create_videos(video_data)
-
-# Bulk link artists
-await repo.bulk_link_artists(
-    video_id=video_id,
-    artist_links=[
-        {"artist_id": 10, "role": "primary", "position": 0},
-        {"artist_id": 20, "role": "featured", "position": 1},
-    ]
-)
 ```
 
 ## Transactions

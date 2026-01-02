@@ -80,90 +80,10 @@ class VideoQuery:
         self._params.append(youtube_id)
         return self
 
-    def where_vimeo_id(self, vimeo_id: str) -> "VideoQuery":
-        """Filter by Vimeo video ID."""
-        self._where_clauses.append("v.vimeo_id = ?")
-        self._params.append(vimeo_id)
-        return self
-
-    def where_file_path(self, path: str) -> "VideoQuery":
-        """Filter by video file path (exact match)."""
-        self._where_clauses.append("v.video_file_path = ?")
-        self._params.append(path)
-        return self
-
     def where_status(self, status: str) -> "VideoQuery":
         """Filter by video status."""
         self._where_clauses.append("v.status = ?")
         self._params.append(status)
-        return self
-
-    def where_download_source(self, source: str) -> "VideoQuery":
-        """Filter by download source (youtube, vimeo, etc.)."""
-        self._where_clauses.append("v.download_source = ?")
-        self._params.append(source)
-        return self
-
-    def where_duration_range(
-        self, min_seconds: Optional[float] = None, max_seconds: Optional[float] = None
-    ) -> "VideoQuery":
-        """
-        Filter by video duration range.
-
-        Args:
-            min_seconds: Minimum duration in seconds (inclusive)
-            max_seconds: Maximum duration in seconds (inclusive)
-
-        Example:
-            .where_duration_range(60, 300)  # Between 1 and 5 minutes
-            .where_duration_range(min_seconds=180)  # At least 3 minutes
-        """
-        if min_seconds is not None:
-            self._where_clauses.append("v.duration >= ?")
-            self._params.append(min_seconds)
-        if max_seconds is not None:
-            self._where_clauses.append("v.duration <= ?")
-            self._params.append(max_seconds)
-        return self
-
-    def where_min_resolution(self, min_width: int, min_height: int) -> "VideoQuery":
-        """
-        Filter by minimum resolution.
-
-        Args:
-            min_width: Minimum width in pixels
-            min_height: Minimum height in pixels
-
-        Example:
-            .where_min_resolution(1920, 1080)  # At least 1080p
-            .where_min_resolution(1280, 720)   # At least 720p
-        """
-        self._where_clauses.append("v.width >= ? AND v.height >= ?")
-        self._params.extend([min_width, min_height])
-        return self
-
-    def where_codec(
-        self,
-        video_codec: Optional[str] = None,
-        audio_codec: Optional[str] = None,
-    ) -> "VideoQuery":
-        """
-        Filter by video and/or audio codec.
-
-        Args:
-            video_codec: Video codec name (e.g., 'h264', 'hevc', 'vp9')
-            audio_codec: Audio codec name (e.g., 'aac', 'mp3', 'opus')
-
-        Example:
-            .where_codec(video_codec='h264')
-            .where_codec(video_codec='hevc', audio_codec='aac')
-        """
-        if video_codec is not None:
-            self._where_clauses.append("v.video_codec = ?")
-            self._params.append(video_codec)
-        if audio_codec is not None:
-            self._where_clauses.append("v.audio_codec = ?")
-            self._params.append(audio_codec)
         return self
 
     def where_collection(self, collection_name: str) -> "VideoQuery":
@@ -255,61 +175,6 @@ class VideoQuery:
         self._params.append(tag_id)
         return self
 
-    def where_any_tags(self, tag_names: List[str]) -> "VideoQuery":
-        """
-        Filter by videos having ANY of the specified tags (OR condition).
-
-        Args:
-            tag_names: List of tag names (case-insensitive)
-
-        Example:
-            .where_any_tags(["rock", "pop"])  # Videos with rock OR pop
-        """
-        if not tag_names:
-            return self
-
-        placeholders = ",".join("?" * len(tag_names))
-        self._where_clauses.append(
-            f"""
-            EXISTS (
-                SELECT 1 FROM video_tags vt
-                JOIN tags t ON vt.tag_id = t.id
-                WHERE vt.video_id = v.id 
-                AND LOWER(t.name) IN ({placeholders})
-            )
-        """
-        )
-        self._params.extend([name.lower() for name in tag_names])
-        return self
-
-    def where_all_tags(self, tag_names: List[str]) -> "VideoQuery":
-        """
-        Filter by videos having ALL of the specified tags (AND condition).
-
-        Args:
-            tag_names: List of tag names (case-insensitive)
-
-        Example:
-            .where_all_tags(["rock", "90s"])  # Videos with both rock AND 90s
-        """
-        if not tag_names:
-            return self
-
-        # Add separate EXISTS clause for each tag to ensure ALL are present
-        for tag_name in tag_names:
-            self._where_clauses.append(
-                """
-                EXISTS (
-                    SELECT 1 FROM video_tags vt
-                    JOIN tags t ON vt.tag_id = t.id
-                    WHERE vt.video_id = v.id 
-                    AND LOWER(t.name) = LOWER(?)
-                )
-            """
-            )
-            self._params.append(tag_name)
-        return self
-
     def search(self, query: str) -> "VideoQuery":
         """
         Full-text search using FTS5.
@@ -354,30 +219,6 @@ class VideoQuery:
             return self
 
         self._order_by_clause = f"v.{field} {direction}"
-        return self
-
-    def order_by_collection_position(self, collection_id: int) -> "VideoQuery":
-        """
-        Order results by position within a collection.
-
-        Args:
-            collection_id: Collection ID
-
-        Note:
-            This should be used with where_collection_id() filter.
-            Videos not in the collection will be excluded.
-
-        Example:
-            .where_collection_id(5).order_by_collection_position(5)
-        """
-        # This requires a JOIN with video_collections table
-        # The _build_query method will need to handle this specially
-        # For now, we'll store it and handle in query building
-        self._order_by_clause = f"""
-            (SELECT vc.position FROM video_collections vc 
-             WHERE vc.video_id = v.id AND vc.collection_id = {collection_id}),
-            v.title
-        """
         return self
 
     def limit(self, count: int) -> "VideoQuery":

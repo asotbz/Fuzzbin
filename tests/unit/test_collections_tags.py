@@ -36,22 +36,6 @@ class TestCollections:
         collection = await test_repository.get_collection_by_id(collection_id)
         assert collection["description"] == "Updated description"
 
-    async def test_get_collection_by_name(self, test_repository: VideoRepository):
-        """Test getting collection by name."""
-        await test_repository.upsert_collection(name="Rock Classics")
-
-        collection = await test_repository.get_collection_by_name("Rock Classics")
-        assert collection is not None
-        assert collection["name"] == "Rock Classics"
-
-        # Case-insensitive
-        collection = await test_repository.get_collection_by_name("rock classics")
-        assert collection is not None
-
-        # Non-existent
-        collection = await test_repository.get_collection_by_name("Does Not Exist")
-        assert collection is None
-
     async def test_list_collections(self, test_repository: VideoRepository):
         """Test listing collections."""
         # Create multiple collections
@@ -64,25 +48,6 @@ class TestCollections:
         names = [c["name"] for c in collections]
         assert "90s Hits" in names
         assert "Alternative Rock" in names
-
-    async def test_soft_delete_collection(self, test_repository: VideoRepository):
-        """Test soft deleting a collection."""
-        collection_id = await test_repository.upsert_collection(name="Temporary")
-
-        # Soft delete
-        await test_repository.delete_collection(collection_id)
-
-        # Not in default list
-        collections = await test_repository.list_collections()
-        names = [c["name"] for c in collections]
-        assert "Temporary" not in names
-
-        # Can retrieve with include_deleted
-        collection = await test_repository.get_collection_by_id(
-            collection_id, include_deleted=True
-        )
-        assert collection["is_deleted"] == 1
-        assert collection["deleted_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -107,27 +72,6 @@ class TestVideoCollections:
         assert len(collections) == 1
         assert collections[0]["name"] == "My Playlist"
         assert collections[0]["position"] == 0
-
-    async def test_unlink_video_from_collection(self, test_repository: VideoRepository):
-        """Test unlinking a video from a collection."""
-        video_id = await test_repository.create_video(
-            title="Test Video", artist="Test Artist"
-        )
-        collection_id = await test_repository.upsert_collection(name="Temp Collection")
-
-        # Link
-        await test_repository.link_video_collection(video_id, collection_id)
-
-        # Verify linked
-        collections = await test_repository.get_video_collections(video_id)
-        assert len(collections) == 1
-
-        # Unlink
-        await test_repository.unlink_video_collection(video_id, collection_id)
-
-        # Verify unlinked
-        collections = await test_repository.get_video_collections(video_id)
-        assert len(collections) == 0
 
     async def test_get_collection_videos(self, test_repository: VideoRepository):
         """Test getting all videos in a collection."""
@@ -206,22 +150,6 @@ class TestTags:
         tag_id2 = await test_repository.upsert_tag(name="ALTERNATIVE ROCK", normalize=True)
         assert tag_id1 == tag_id2
 
-    async def test_get_tag_by_name(self, test_repository: VideoRepository):
-        """Test getting tag by name."""
-        await test_repository.upsert_tag(name="indie")
-
-        tag = await test_repository.get_tag_by_name("indie")
-        assert tag is not None
-        assert tag["name"] == "indie"
-
-        # Case-insensitive with normalization
-        tag = await test_repository.get_tag_by_name("INDIE")
-        assert tag is not None
-
-        # Non-existent
-        tag = await test_repository.get_tag_by_name("doesnotexist")
-        assert tag is None
-
     async def test_list_tags(self, test_repository: VideoRepository):
         """Test listing tags."""
         # Create multiple tags
@@ -296,86 +224,10 @@ class TestVideoTags:
         await test_repository.remove_video_tag(video_id, tag_id)
 
         # Tag should be auto-deleted when usage_count reaches 0
-        tag = await test_repository.get_tag_by_name("popular")
-        assert tag is None
-
-    async def test_tag_auto_delete_on_zero_usage(self, test_repository: VideoRepository):
-        """Test that tags are automatically deleted when no longer used."""
-        video_id1 = await test_repository.create_video(title="Video 1", artist="Artist")
-        video_id2 = await test_repository.create_video(title="Video 2", artist="Artist")
-        tag_id = await test_repository.upsert_tag(name="shared")
-
-        # Add to both videos
-        await test_repository.add_video_tag(video_id1, tag_id)
-        await test_repository.add_video_tag(video_id2, tag_id)
-
-        # Usage count should be 2
-        tag = await test_repository.get_tag_by_id(tag_id)
-        assert tag["usage_count"] == 2
-
-        # Remove from first video
-        await test_repository.remove_video_tag(video_id1, tag_id)
-        tag = await test_repository.get_tag_by_id(tag_id)
-        assert tag["usage_count"] == 1
-
-        # Remove from second video
-        await test_repository.remove_video_tag(video_id2, tag_id)
-
-        # Tag should be deleted
-        tag = await test_repository.get_tag_by_name("shared")
-        assert tag is None
-
-    async def test_bulk_add_video_tags(self, test_repository: VideoRepository):
-        """Test adding multiple tags at once."""
-        video_id = await test_repository.create_video(title="Test", artist="Artist")
-
-        tag_names = ["rock", "alternative", "90s"]
-        tag_ids = await test_repository.bulk_add_video_tags(
-            video_id, tag_names, source="manual"
-        )
-
-        assert len(tag_ids) == 3
-
-        # Verify all tags added
-        tags = await test_repository.get_video_tags(video_id)
-        assert len(tags) == 3
-        tag_names_result = [t["name"] for t in tags]
-        assert "rock" in tag_names_result
-        assert "alternative" in tag_names_result
-        assert "90s" in tag_names_result
-
-    async def test_replace_video_tags(self, test_repository: VideoRepository):
-        """Test replacing all tags for a video."""
-        video_id = await test_repository.create_video(title="Test", artist="Artist")
-
-        # Add initial tags
-        await test_repository.bulk_add_video_tags(video_id, ["old1", "old2"])
-
-        # Verify initial tags
-        tags = await test_repository.get_video_tags(video_id)
-        assert len(tags) == 2
-
-        # Replace with new tags
-        new_tag_ids = await test_repository.replace_video_tags(
-            video_id, ["new1", "new2", "new3"]
-        )
-        assert len(new_tag_ids) == 3
-
-        # Verify only new tags exist
-        tags = await test_repository.get_video_tags(video_id)
-        assert len(tags) == 3
-        tag_names = [t["name"] for t in tags]
-        assert "new1" in tag_names
-        assert "new2" in tag_names
-        assert "new3" in tag_names
-        assert "old1" not in tag_names
-        assert "old2" not in tag_names
-
-        # Old tags should be auto-deleted (zero usage)
-        old_tag1 = await test_repository.get_tag_by_name("old1")
-        old_tag2 = await test_repository.get_tag_by_name("old2")
-        assert old_tag1 is None
-        assert old_tag2 is None
+        # We verify by trying to get it - it should raise TagNotFoundError
+        from fuzzbin.core.db import TagNotFoundError
+        with pytest.raises(TagNotFoundError):
+            await test_repository.get_tag_by_id(tag_id)
 
     async def test_get_tag_videos(self, test_repository: VideoRepository):
         """Test getting all videos with a specific tag."""
@@ -481,9 +333,19 @@ class TestTagQueries:
         video_id2 = await test_repository.create_video(title="Video 2", artist="Artist")
         video_id3 = await test_repository.create_video(title="Video 3", artist="Artist")
 
-        await test_repository.bulk_add_video_tags(video_id1, ["rock", "alternative"])
-        await test_repository.bulk_add_video_tags(video_id2, ["pop", "electronic"])
-        await test_repository.bulk_add_video_tags(video_id3, ["rock", "grunge"])
+        # Add tags manually
+        rock_id = await test_repository.upsert_tag("rock")
+        alt_id = await test_repository.upsert_tag("alternative")
+        pop_id = await test_repository.upsert_tag("pop")
+        electronic_id = await test_repository.upsert_tag("electronic")
+        grunge_id = await test_repository.upsert_tag("grunge")
+
+        await test_repository.add_video_tag(video_id1, rock_id)
+        await test_repository.add_video_tag(video_id1, alt_id)
+        await test_repository.add_video_tag(video_id2, pop_id)
+        await test_repository.add_video_tag(video_id2, electronic_id)
+        await test_repository.add_video_tag(video_id3, rock_id)
+        await test_repository.add_video_tag(video_id3, grunge_id)
 
         # Query by tag
         results = await test_repository.query().where_tag("rock").execute()
@@ -491,45 +353,6 @@ class TestTagQueries:
         titles = [v["title"] for v in results]
         assert "Video 1" in titles
         assert "Video 3" in titles
-
-    async def test_where_any_tags(self, test_repository: VideoRepository):
-        """Test filtering videos having ANY of the specified tags."""
-        video_id1 = await test_repository.create_video(title="Video 1", artist="Artist")
-        video_id2 = await test_repository.create_video(title="Video 2", artist="Artist")
-        video_id3 = await test_repository.create_video(title="Video 3", artist="Artist")
-
-        await test_repository.bulk_add_video_tags(video_id1, ["rock"])
-        await test_repository.bulk_add_video_tags(video_id2, ["pop"])
-        await test_repository.bulk_add_video_tags(video_id3, ["jazz"])
-
-        # Videos with rock OR pop
-        results = await test_repository.query().where_any_tags(["rock", "pop"]).execute()
-        assert len(results) == 2
-        titles = [v["title"] for v in results]
-        assert "Video 1" in titles
-        assert "Video 2" in titles
-        assert "Video 3" not in titles
-
-    async def test_where_all_tags(self, test_repository: VideoRepository):
-        """Test filtering videos having ALL of the specified tags."""
-        video_id1 = await test_repository.create_video(title="Video 1", artist="Artist")
-        video_id2 = await test_repository.create_video(title="Video 2", artist="Artist")
-        video_id3 = await test_repository.create_video(title="Video 3", artist="Artist")
-
-        await test_repository.bulk_add_video_tags(video_id1, ["rock", "90s", "grunge"])
-        await test_repository.bulk_add_video_tags(video_id2, ["rock", "90s"])
-        await test_repository.bulk_add_video_tags(video_id3, ["rock"])
-
-        # Videos with both rock AND 90s AND grunge
-        results = (
-            await test_repository.query().where_all_tags(["rock", "90s", "grunge"]).execute()
-        )
-        assert len(results) == 1
-        assert results[0]["title"] == "Video 1"
-
-        # Videos with both rock AND 90s
-        results = await test_repository.query().where_all_tags(["rock", "90s"]).execute()
-        assert len(results) == 2
 
     async def test_where_collection(self, test_repository: VideoRepository):
         """Test filtering videos by collection."""
@@ -559,9 +382,18 @@ class TestTagQueries:
         video_id2 = await test_repository.create_video(title="Rock 00s", artist="Artist", year=2005)
         video_id3 = await test_repository.create_video(title="Pop 90s", artist="Artist", year=1998)
 
-        await test_repository.bulk_add_video_tags(video_id1, ["rock", "90s"])
-        await test_repository.bulk_add_video_tags(video_id2, ["rock", "00s"])
-        await test_repository.bulk_add_video_tags(video_id3, ["pop", "90s"])
+        # Add tags manually
+        rock_id = await test_repository.upsert_tag("rock")
+        nineties_id = await test_repository.upsert_tag("90s")
+        zeroes_id = await test_repository.upsert_tag("00s")
+        pop_id = await test_repository.upsert_tag("pop")
+
+        await test_repository.add_video_tag(video_id1, rock_id)
+        await test_repository.add_video_tag(video_id1, nineties_id)
+        await test_repository.add_video_tag(video_id2, rock_id)
+        await test_repository.add_video_tag(video_id2, zeroes_id)
+        await test_repository.add_video_tag(video_id3, pop_id)
+        await test_repository.add_video_tag(video_id3, nineties_id)
 
         await test_repository.link_video_collection(video_id1, collection_id)
         await test_repository.link_video_collection(video_id2, collection_id)
@@ -592,7 +424,13 @@ class TestNFOExportWithTags:
             artist="Test Artist",
             year=1995,
         )
-        await test_repository.bulk_add_video_tags(video_id, ["rock", "alternative", "90s"])
+        # Add tags manually
+        rock_id = await test_repository.upsert_tag("rock")
+        alt_id = await test_repository.upsert_tag("alternative")
+        nineties_id = await test_repository.upsert_tag("90s")
+        await test_repository.add_video_tag(video_id, rock_id)
+        await test_repository.add_video_tag(video_id, alt_id)
+        await test_repository.add_video_tag(video_id, nineties_id)
 
         # Export to NFO
         exporter = NFOExporter(test_repository)
