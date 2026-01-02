@@ -1436,6 +1436,19 @@ async def enrich_spotify_track_discogs(
                 track_title=request.track_title,
             )
 
+        # Classify Discogs genre through the same genre classifier used for Spotify/IMVDb
+        classified_genre = None
+        if result.genre:
+            # Pass Discogs genre as a single-item list to the classifier
+            classified_genre, _ = classify_genres([result.genre])
+            if classified_genre:
+                logger.debug(
+                    "discogs_genre_classified",
+                    spotify_track_id=request.spotify_track_id,
+                    original_genre=result.genre,
+                    classified_genre=classified_genre,
+                )
+
         # Build response
         response = DiscogsEnrichResponse(
             spotify_track_id=request.spotify_track_id,
@@ -1444,7 +1457,7 @@ async def enrich_spotify_track_discogs(
             discogs_master_id=result.discogs_master_id,
             album=result.album,
             label=result.label,
-            genre=result.genre,
+            genre=classified_genre or result.genre,  # Use classified genre if available
             year=result.year,
             match_score=result.match_score,
             match_method=result.match_method,
