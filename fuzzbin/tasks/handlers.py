@@ -955,8 +955,14 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                         skipped += 1
                         continue
 
-                    # Check if video has a YouTube URL (video is a dict)
+                    # Check if video has a YouTube URL or ID (video is a dict)
+                    # First try explicit URL fields, then construct from youtube_id
                     youtube_url = video.get("youtube_url") or video.get("download_url")
+                    if not youtube_url:
+                        youtube_id = video.get("youtube_id")
+                        if youtube_id:
+                            youtube_url = f"https://www.youtube.com/watch?v={youtube_id}"
+
                     video_title = video.get("title", f"Video {video_id}")
                     if not youtube_url:
                         logger.debug(
@@ -968,7 +974,7 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                         continue
 
                     # Check if already downloaded
-                    file_path = video.get("file_path")
+                    file_path = video.get("video_file_path")
                     if file_path and Path(file_path).exists():
                         logger.debug(
                             "video_already_downloaded",
@@ -1022,7 +1028,7 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                     )
 
                     # Update database with file path
-                    await repository.update_video(video_id, file_path=str(result.file_path))
+                    await repository.update_video(video_id, video_file_path=str(result.file_path))
 
                     downloaded += 1
                     logger.info(
