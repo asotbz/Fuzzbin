@@ -432,6 +432,10 @@ async def _authenticate_websocket(
         await websocket.close(code=WS_CLOSE_AUTH_TIMEOUT, reason="Auth timeout")
         logger.warning("websocket_auth_timeout")
         return None
+    except WebSocketDisconnect:
+        # Client disconnected before sending auth message - this is normal
+        logger.debug("websocket_auth_client_disconnected")
+        return None
 
     # Parse the message
     try:
