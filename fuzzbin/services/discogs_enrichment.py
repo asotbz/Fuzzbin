@@ -218,6 +218,13 @@ class DiscogsEnrichmentService:
             remove_featured=True,
         )
 
+        logger.info(
+            "discogs_enrichment_artist_releases_start",
+            discogs_artist_id=discogs_artist_id,
+            original_track=track_title,
+            normalized_track=normalized_track,
+        )
+
         track_matches: List[DiscogsTrackMatch] = []
 
         try:
@@ -253,6 +260,13 @@ class DiscogsEnrichmentService:
 
                 # Filter to masters only (more reliable metadata)
                 masters = [r for r in all_releases if r.get("type") == "master"]
+
+                logger.info(
+                    "discogs_enrichment_master_releases",
+                    discogs_artist_id=discogs_artist_id,
+                    master_count=len(masters),
+                    will_check=min(len(masters), 20),
+                )
 
                 # For each master, fetch details and match tracklist
                 for release in masters[:20]:  # Limit to first 20 masters
@@ -301,6 +315,17 @@ class DiscogsEnrichmentService:
             )
             return self._empty_result()
 
+        # Log match results with best score
+        best_score = max([m.match_score for m in track_matches], default=0.0)
+        logger.info(
+            "discogs_enrichment_artist_releases_complete",
+            discogs_artist_id=discogs_artist_id,
+            matches_found=len(track_matches),
+            best_score=best_score,
+            threshold=self.match_threshold,
+            confident_match=best_score >= self.match_threshold,
+        )
+
         # Sort matches by score and return best
         return self._build_result_from_matches(
             track_matches=track_matches,
@@ -330,6 +355,13 @@ class DiscogsEnrichmentService:
             track_title,
             remove_version_qualifiers_flag=True,
             remove_featured=True,
+        )
+
+        logger.info(
+            "discogs_enrichment_text_search_start",
+            artist=artist_name,
+            original_track=track_title,
+            normalized_track=normalized_track,
         )
 
         track_matches: List[DiscogsTrackMatch] = []
@@ -403,6 +435,18 @@ class DiscogsEnrichmentService:
                 error=str(e),
             )
             return self._empty_result()
+
+        # Log match results with best score
+        best_score = max([m.match_score for m in track_matches], default=0.0)
+        logger.info(
+            "discogs_enrichment_text_search_complete",
+            artist=artist_name,
+            normalized_track=normalized_track,
+            matches_found=len(track_matches),
+            best_score=best_score,
+            threshold=self.match_threshold,
+            confident_match=best_score >= self.match_threshold,
+        )
 
         return self._build_result_from_matches(
             track_matches=track_matches,

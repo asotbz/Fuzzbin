@@ -242,7 +242,8 @@ class DiscogsClient(RateLimitedAPIClient):
         """
         Search for master releases by artist and track title.
 
-        Always searches for type=master,format=album as per requirements.
+        Tries type=master,format=album first, then falls back to just type=master
+        if no results are found.
 
         Args:
             artist: Artist name to search for
@@ -265,6 +266,7 @@ class DiscogsClient(RateLimitedAPIClient):
             ...     if result['type'] == 'master':
             ...         print(f"  Master ID: {result['id']}")
         """
+        # First try with format=album (most restrictive)
         params = {
             "type": "master",
             "format": "album",
@@ -280,11 +282,57 @@ class DiscogsClient(RateLimitedAPIClient):
             track=track,
             page=page,
             per_page=per_page,
+            search_type="master+album",
         )
 
         response = await self.get("/database/search", params=params)
         response.raise_for_status()
-        return response.json()
+        
+        result = response.json()
+        
+        # Log the actual request and response for debugging
+        self.logger.info(
+            "discogs_search_response",
+            request_url=str(response.url),
+            status_code=response.status_code,
+            result_count=len(result.get("results", [])),
+            pagination=result.get("pagination", {}),
+            search_type="master+album",
+        )
+        
+        # If no results with format=album, try without format constraint
+        if len(result.get("results", [])) == 0:
+            self.logger.info(
+                "discogs_search_retry",
+                artist=artist,
+                track=track,
+                reason="no_results_with_album_format",
+                search_type="master_only",
+            )
+            
+            params_retry = {
+                "type": "master",
+                "artist": artist,
+                "track": track,
+                "page": page,
+                "per_page": per_page,
+            }
+            
+            response = await self.get("/database/search", params=params_retry)
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            self.logger.info(
+                "discogs_search_response",
+                request_url=str(response.url),
+                status_code=response.status_code,
+                result_count=len(result.get("results", [])),
+                pagination=result.get("pagination", {}),
+                search_type="master_only",
+            )
+        
+        return result
 
     async def get_artist_releases(
         self,
