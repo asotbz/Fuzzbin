@@ -28,6 +28,10 @@ export default function VideoPlayerModal({ video, onClose }: VideoPlayerModalPro
     const video = videoRef.current
     if (!video) return
 
+    // Don't handle keyboard shortcuts if video controls have focus
+    // (let browser's native controls handle spacebar)
+    if (e.target === video) return
+
     switch (e.key) {
       case 'Escape':
         onClose()
