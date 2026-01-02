@@ -211,9 +211,7 @@ def clear_api_env_vars(monkeypatch):
 ### Migrations
 
 Migrations in `fuzzbin/core/db/migrations/` as numbered SQL files:
-- `001_initial_schema.sql` - Core tables (videos, artists, albums, directors)
-- `002_create_fts_index.sql` - FTS5 full-text search
-- `004_add_users.sql` - Authentication tables
+- `001_initial_schema.sql` - Complete schema including all tables, indexes, triggers, FTS5 full-text search, and seed data
 - Run automatically on startup
 
 ### Full-Text Search
