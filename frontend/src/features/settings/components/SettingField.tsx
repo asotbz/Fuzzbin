@@ -52,7 +52,7 @@ export default function SettingField({
     const timer = setTimeout(() => {
       onChange(path, localValue)
       setIsDirty(false)
-    }, 300)
+    }, 1500)
 
     return () => clearTimeout(timer)
   }, [localValue, isDirty, onChange, path])
