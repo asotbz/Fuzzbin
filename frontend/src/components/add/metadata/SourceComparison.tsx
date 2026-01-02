@@ -59,7 +59,7 @@ export default function SourceComparison({
             >
               <div className="sourceComparisonFieldLabel">
                 {field.label}
-                {isDifferent && (
+                {isDifferent && field.imvdbValue && field.discogsValue && (
                   <span className="sourceComparisonDiffBadge">Different</span>
                 )}
               </div>

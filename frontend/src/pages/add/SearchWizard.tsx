@@ -372,6 +372,35 @@ export default function SearchWizard() {
         selections.year = 'imvdb'
       }
 
+      // Album
+      const imvdbAlbum = imvdbData.album || null
+      const discogsAlbum = discogsData.title || null
+      if (imvdbAlbum && !discogsAlbum) {
+        selections.album = 'imvdb'
+      } else if (!imvdbAlbum && discogsAlbum) {
+        selections.album = 'discogs'
+      } else if (imvdbAlbum && discogsAlbum) {
+        selections.album = 'imvdb'
+      }
+
+      // Label (only Discogs has this)
+      const discogsLabel = discogsData.labels?.[0]?.name || null
+      if (discogsLabel) {
+        selections.label = 'discogs'
+      }
+
+      // Genre (only Discogs has this)
+      const discogsGenre = discogsData.genres?.[0] || null
+      if (discogsGenre) {
+        selections.genre = 'discogs'
+      }
+
+      // Director (only IMVDb has this)
+      const imvdbDirectors = imvdbData.directors?.map((d: any) => d.entity_name).filter(Boolean).join(', ') || null
+      if (imvdbDirectors) {
+        selections.director = 'imvdb'
+      }
+
        
       setSelectedDiscogsFields(selections)
     }
