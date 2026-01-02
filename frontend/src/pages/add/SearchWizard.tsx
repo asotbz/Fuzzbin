@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Wizard handles dynamic API responses */
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { addSearch, addPreview, addImport, checkVideoExists, getYouTubeMetadata } from '../../lib/api/endpoints/add'
-import { addKeys } from '../../lib/api/queryKeys'
+import { addKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useSearchWizard } from '../../hooks/add/useSearchWizard'
 import WizardStepper from '../../components/add/wizard/WizardStepper'
 import SourceComparison, { type ComparisonField } from '../../components/add/metadata/SourceComparison'
@@ -15,6 +15,7 @@ const STEPS = ['Search', 'Select', 'Edit', 'Submit']
 
 export default function SearchWizard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const wizard = useSearchWizard()
   const [artist, setArtist] = useState('')
   const [trackTitle, setTrackTitle] = useState('')
@@ -301,6 +302,8 @@ export default function SearchWizard() {
         description: `Job ID: ${data.job_id}`,
         duration: 5000,
       })
+      // Invalidate videos query so library shows new video
+      queryClient.invalidateQueries({ queryKey: videosKeys.all })
       // Navigate back to library after submission
       navigate('/library')
     },
