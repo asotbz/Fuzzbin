@@ -28,6 +28,7 @@ from fuzzbin.clients.ytdlp_client import YTDLPClient
 from fuzzbin.common.config import YTDLPConfig
 from fuzzbin.common.genre_buckets import classify_genres
 from fuzzbin.common.string_utils import normalize_spotify_title
+from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
 from fuzzbin.tasks import Job, JobType, get_job_queue
 from fuzzbin.web.dependencies import get_current_user
 from fuzzbin.web.schemas.add import (
@@ -42,6 +43,8 @@ from fuzzbin.web.schemas.add import (
     BatchPreviewItem,
     BatchPreviewRequest,
     BatchPreviewResponse,
+    DiscogsEnrichRequest,
+    DiscogsEnrichResponse,
     NFOScanResponse,
     SpotifyBatchImportRequest,
     SpotifyBatchImportResponse,
@@ -1086,6 +1089,39 @@ async def enrich_spotify_track(
                 )
                 raise
 
+            # Fetch IMVDb entity to get Discogs artist ID
+            imvdb_entity_id: Optional[int] = None
+            discogs_artist_id: Optional[int] = None
+
+            if video.artists and len(video.artists) > 0:
+                primary_artist_name = video.artists[0].name
+
+                try:
+                    entity_search = await imvdb_client.search_entities(
+                        artist_name=primary_artist_name,
+                        page=1,
+                        per_page=1,
+                    )
+
+                    if entity_search.results:
+                        entity = entity_search.results[0]
+                        imvdb_entity_id = entity.id
+                        discogs_artist_id = entity.discogs_id
+
+                        logger.debug(
+                            "imvdb_entity_found",
+                            video_id=matched_video.id,
+                            entity_id=imvdb_entity_id,
+                            discogs_artist_id=discogs_artist_id,
+                        )
+                except Exception as e:
+                    logger.debug(
+                        "imvdb_entity_search_failed",
+                        video_id=matched_video.id,
+                        artist_name=primary_artist_name,
+                        error=str(e),
+                    )
+
             # Extract YouTube IDs from sources
             try:
                 youtube_ids: list[str] = []
@@ -1279,6 +1315,8 @@ async def enrich_spotify_track(
                     match_type=match_type,
                     imvdb_id=matched_video.id,
                     imvdb_url=getattr(video, "url", None),
+                    imvdb_entity_id=imvdb_entity_id,
+                    discogs_artist_id=discogs_artist_id,
                     youtube_ids=youtube_ids,
                     metadata=metadata,
                     already_exists=existing_video is not None,
@@ -1324,6 +1362,122 @@ async def enrich_spotify_track(
         return SpotifyTrackEnrichResponse(
             spotify_track_id=request.spotify_track_id,
             match_found=False,
+        )
+
+
+@router.post(
+    "/spotify/enrich-track-discogs",
+    response_model=DiscogsEnrichResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Enrich Spotify track with Discogs metadata",
+    description="Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.",
+)
+async def enrich_spotify_track_discogs(
+    request: DiscogsEnrichRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> DiscogsEnrichResponse:
+    """
+    Enrich a Spotify track with Discogs metadata (album, label, genre).
+
+    Searches Discogs for the earliest album appearance of the track.
+    If discogs_artist_id is provided, searches artist releases (more accurate).
+    Otherwise, uses text search with artist name + track title.
+    """
+    user_label = current_user.username if current_user else "anonymous"
+
+    # Get API configs
+    imvdb_config = _get_api_config("imvdb")
+    discogs_config = _get_api_config("discogs")
+
+    if not discogs_config:
+        logger.warning(
+            "discogs_enrich_skipped",
+            reason="Discogs API is not configured",
+            spotify_track_id=request.spotify_track_id,
+            user=user_label,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Discogs API is not configured",
+        )
+
+    # Initialize enrichment service
+    service = DiscogsEnrichmentService(
+        imvdb_config=imvdb_config,
+        discogs_config=discogs_config,
+    )
+
+    try:
+        # Choose enrichment method based on whether Discogs artist ID is available
+        if request.discogs_artist_id:
+            # Use artist ID search (more accurate - finds earliest release)
+            logger.info(
+                "discogs_enrich_via_artist_id",
+                spotify_track_id=request.spotify_track_id,
+                discogs_artist_id=request.discogs_artist_id,
+                track_title=request.track_title,
+                user=user_label,
+            )
+            result = await service.enrich_from_discogs_artist(
+                discogs_artist_id=request.discogs_artist_id,
+                track_title=request.track_title,
+            )
+        else:
+            # Fall back to text search
+            logger.info(
+                "discogs_enrich_via_text_search",
+                spotify_track_id=request.spotify_track_id,
+                artist_name=request.artist_name,
+                track_title=request.track_title,
+                user=user_label,
+            )
+            result = await service._enrich_via_text_search(
+                artist_name=request.artist_name,
+                track_title=request.track_title,
+            )
+
+        # Build response
+        response = DiscogsEnrichResponse(
+            spotify_track_id=request.spotify_track_id,
+            match_found=result.confident_match,
+            discogs_artist_id=result.discogs_artist_id,
+            discogs_master_id=result.discogs_master_id,
+            album=result.album,
+            label=result.label,
+            genre=result.genre,
+            year=result.year,
+            match_score=result.match_score,
+            match_method=result.match_method,
+        )
+
+        logger.info(
+            "discogs_enrich_complete",
+            spotify_track_id=request.spotify_track_id,
+            match_found=result.confident_match,
+            match_score=result.match_score,
+            match_method=result.match_method,
+            album=result.album,
+            label=result.label,
+            genre=result.genre,
+            user=user_label,
+        )
+
+        return response
+
+    except Exception as e:
+        logger.error(
+            "discogs_enrich_failed",
+            spotify_track_id=request.spotify_track_id,
+            error=str(e),
+            user=user_label,
+            exc_info=True,
+        )
+        # Return no match on error
+        return DiscogsEnrichResponse(
+            spotify_track_id=request.spotify_track_id,
+            match_found=False,
+            match_score=0.0,
+            match_method="none",
         )
 
 

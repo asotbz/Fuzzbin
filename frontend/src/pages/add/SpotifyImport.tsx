@@ -51,6 +51,11 @@ interface EnrichedMetadata {
   genreNormalized?: string | null
   sourceGenres?: string[] | null
   thumbnailUrl?: string | null
+  // Discogs enrichment data (overrides IMVDb/Spotify)
+  discogsAlbum?: string | null
+  discogsLabel?: string | null
+  discogsGenre?: string | null
+  discogsYear?: number | null
 }
 
 export default function SpotifyImport() {
@@ -295,6 +300,36 @@ export default function SpotifyImport() {
     })
   }
 
+  const handleDiscogsEnrichmentComplete = (
+    track: BatchPreviewItem,
+    discogsData: {
+      match_found: boolean
+      album?: string | null
+      label?: string | null
+      genre?: string | null
+      year?: number | null
+    }
+  ) => {
+    if (!discogsData.match_found) {
+      return
+    }
+
+    const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
+
+    setEnrichmentData((prev) => {
+      const newMap = new Map(prev)
+      const existing = newMap.get(trackId) || {}
+      newMap.set(trackId, {
+        ...existing,
+        discogsAlbum: discogsData.album,
+        discogsLabel: discogsData.label,
+        discogsGenre: discogsData.genre,
+        discogsYear: discogsData.year,
+      })
+      return newMap
+    })
+  }
+
   const handleImport = () => {
     if (!preview || selectedTrackIds.size === 0) {
       toast.error('Please select tracks to import')
@@ -314,15 +349,16 @@ export default function SpotifyImport() {
 
         // Priority: User override > Enrichment data > Original Spotify data
         // For genre: prefer normalized version from enrichment (maps to primary categories like Rock, Pop, etc.)
+        // Discogs data overrides IMVDb/Spotify for album, label, genre, and year
         const finalMetadata = {
           title: override?.title ?? enrichment?.title ?? track.title,
           artist: override?.artist ?? enrichment?.artist ?? track.artist,
-          year: override?.year ?? enrichment?.year ?? track.year,
-          album: override?.album ?? enrichment?.album ?? track.album,
-          label: override?.label ?? enrichment?.label ?? track.label,
+          year: override?.year ?? enrichment?.discogsYear ?? enrichment?.year ?? track.year,
+          album: override?.album ?? enrichment?.discogsAlbum ?? enrichment?.album ?? track.album,
+          label: override?.label ?? enrichment?.discogsLabel ?? enrichment?.label ?? track.label,
           directors: override?.directors ?? enrichment?.directors ?? null,
           featured_artists: override?.featuredArtists ?? enrichment?.featuredArtists ?? null,
-          genre: override?.genre ?? enrichment?.genreNormalized ?? enrichment?.genre ?? null,
+          genre: override?.genre ?? enrichment?.discogsGenre ?? enrichment?.genreNormalized ?? enrichment?.genre ?? null,
           genre_normalized: enrichment?.genreNormalized ?? null,
         }
 
@@ -447,6 +483,7 @@ export default function SpotifyImport() {
                 onSearchYouTube={(track) => setSearchingTrack(track)}
                 onSelectionChange={(selectedIds) => setSelectedTrackIds(selectedIds)}
                 onEnrichmentComplete={handleEnrichmentComplete}
+                onDiscogsEnrichmentComplete={handleDiscogsEnrichmentComplete}
               />
             </div>
 

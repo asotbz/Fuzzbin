@@ -6,10 +6,13 @@ import type {
   SpotifyTrackEnrichResponse,
   YouTubeMetadataResponse,
 } from '../../../lib/api/types'
+import type { DiscogsEnrichResponse } from '../../../lib/api/endpoints/spotify'
 
 export interface TrackRowState {
   enrichmentStatus: 'pending' | 'loading' | 'success' | 'error' | 'no_match'
   enrichmentData?: SpotifyTrackEnrichResponse
+  discogsEnrichmentStatus?: 'pending' | 'loading' | 'success' | 'error' | 'no_match'
+  discogsEnrichmentData?: DiscogsEnrichResponse
   selected: boolean
 }
 
@@ -34,6 +37,7 @@ interface TrackRowProps {
   onSearchYouTube: () => void
   onPreviewYouTube: (youtubeId: string) => void
   onRetryIMVDb: () => void
+  onEnrichDiscogs?: () => void
 }
 
 export default function TrackRow({
@@ -45,8 +49,9 @@ export default function TrackRow({
   onSearchYouTube,
   onPreviewYouTube,
   onRetryIMVDb,
+  onEnrichDiscogs,
 }: TrackRowProps) {
-  const { enrichmentStatus, enrichmentData, selected } = state
+  const { enrichmentStatus, enrichmentData, discogsEnrichmentStatus, discogsEnrichmentData, selected } = state
 
   // Get YouTube ID from metadata override (if user selected alternate) or enrichment data
   const youtubeId =
@@ -110,20 +115,32 @@ export default function TrackRow({
     track.title,
     enrichmentData?.metadata?.title as string | undefined
   )
+  
+  // Discogs enrichment data overrides IMVDb enrichment for album, label, genre
+  const discogsAlbum = discogsEnrichmentData?.album
+  const discogsLabel = discogsEnrichmentData?.label
+  const discogsGenre = discogsEnrichmentData?.genre
+  const discogsYear = discogsEnrichmentData?.year
+  
   const displayAlbum = getDisplayAlbumTitle(
-    metadataOverride?.album ?? (enrichmentData?.metadata?.album as string | null | undefined) ?? track.album ?? null
+    metadataOverride?.album ?? 
+    discogsAlbum ?? 
+    (enrichmentData?.metadata?.album as string | null | undefined) ?? 
+    track.album ?? 
+    null
   )
 
   // Get metadata from enrichment data or metadata override
+  // Precedence: User override > Discogs enrichment > IMVDb enrichment > Spotify original
   const displayArtist: string = metadataOverride?.artist || (enrichmentData?.metadata?.artist as string | undefined) || track.artist
-  const displayYear: number | null | undefined = metadataOverride?.year ?? (enrichmentData?.metadata?.year as number | null | undefined) ?? track.year
-  const displayLabel: string | null | undefined = metadataOverride?.label ?? (enrichmentData?.metadata?.label as string | null | undefined) ?? track.label
+  const displayYear: number | null | undefined = metadataOverride?.year ?? discogsYear ?? (enrichmentData?.metadata?.year as number | null | undefined) ?? track.year
+  const displayLabel: string | null | undefined = metadataOverride?.label ?? discogsLabel ?? (enrichmentData?.metadata?.label as string | null | undefined) ?? track.label
   const displayDirectors: string | null | undefined = metadataOverride?.directors ?? (enrichmentData?.metadata?.directors as string | null | undefined)
   const displayFeaturedArtists: string | null | undefined =
     metadataOverride?.featuredArtists ?? (enrichmentData?.metadata?.featured_artists as string | null | undefined)
-  // Genre comes from Spotify artist genres via enrichment - classified to a broad bucket
+  // Genre comes from Discogs (preferred), then Spotify artist genres via enrichment - classified to a broad bucket
   const displayGenre: string | null | undefined =
-    metadataOverride?.genre ?? enrichmentData?.genre ?? enrichmentData?.genre_normalized
+    metadataOverride?.genre ?? discogsGenre ?? enrichmentData?.genre ?? enrichmentData?.genre_normalized
 
   return (
     <div
@@ -216,6 +233,18 @@ export default function TrackRow({
                 )}
                 {enrichmentData?.already_exists && (
                   <span className="trackRowBadge trackRowBadgeExists">Exists</span>
+                )}
+                {/* Discogs enrichment status */}
+                {discogsEnrichmentStatus === 'loading' && (
+                  <span className="trackRowStatusText">Discogs...</span>
+                )}
+                {discogsEnrichmentStatus === 'success' && discogsEnrichmentData?.match_found && (
+                  <span className="trackRowBadge trackRowBadgeDiscogs" title={`Album: ${discogsEnrichmentData.album || 'N/A'}\nLabel: ${discogsEnrichmentData.label || 'N/A'}\nGenre: ${discogsEnrichmentData.genre || 'N/A'}`}>
+                    Discogs
+                  </span>
+                )}
+                {discogsEnrichmentStatus === 'no_match' && (
+                  <span className="trackRowStatusText">Discogs: No match</span>
                 )}
               </>
             )}
@@ -339,6 +368,25 @@ export default function TrackRow({
               <path d="M23 20v-6h-6" />
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
             </svg>
+          </button>
+        )}
+        {/* Discogs enrichment button - show only after successful IMVDb match */}
+        {enrichmentStatus === 'success' && !track.already_exists && onEnrichDiscogs && (
+          <button
+            type="button"
+            className="trackRowActionButton"
+            onClick={onEnrichDiscogs}
+            disabled={discogsEnrichmentStatus === 'loading'}
+            title="Enrich with Discogs"
+          >
+            {discogsEnrichmentStatus === 'loading' ? (
+              <div className="trackRowSpinner" />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            )}
           </button>
         )}
       </div>

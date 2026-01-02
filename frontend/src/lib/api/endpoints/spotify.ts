@@ -15,6 +15,32 @@ import type {
 } from '../types'
 
 /**
+ * Request to enrich a Spotify track with Discogs metadata.
+ */
+export interface DiscogsEnrichRequest {
+  spotify_track_id: string
+  track_title: string
+  artist_name: string
+  discogs_artist_id?: number | null
+}
+
+/**
+ * Response after enriching a Spotify track with Discogs metadata.
+ */
+export interface DiscogsEnrichResponse {
+  spotify_track_id: string
+  match_found: boolean
+  discogs_artist_id?: number | null
+  discogs_master_id?: number | null
+  album?: string | null
+  label?: string | null
+  genre?: string | null
+  year?: number | null
+  match_score: number
+  match_method: string
+}
+
+/**
  * Enrich a single Spotify track with IMVDb metadata.
  *
  * Searches IMVDb for the track, applies fuzzy matching, extracts YouTube IDs,
@@ -86,6 +112,26 @@ export async function getYouTubeMetadata(
   return apiJson<YouTubeMetadataResponse>({
     method: 'POST',
     path: '/add/youtube/metadata',
+    body: request,
+  })
+}
+
+/**
+ * Enrich a single Spotify track with Discogs metadata.
+ *
+ * Searches Discogs for the track to find album, label, and genre information
+ * from the earliest album appearance. Prefers artist ID search when available
+ * for more accurate results.
+ *
+ * @param request - Discogs enrichment request with artist, title, and optional Discogs ID
+ * @returns Enrichment response with album, label, genre from Discogs
+ */
+export async function enrichSpotifyTrackDiscogs(
+  request: DiscogsEnrichRequest
+): Promise<DiscogsEnrichResponse> {
+  return apiJson<DiscogsEnrichResponse>({
+    method: 'POST',
+    path: '/add/spotify/enrich-track-discogs',
     body: request,
   })
 }

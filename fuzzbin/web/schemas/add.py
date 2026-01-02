@@ -351,6 +351,14 @@ class SpotifyTrackEnrichResponse(BaseModel):
     )
     imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if match found")
     imvdb_url: Optional[str] = Field(default=None, description="Full IMVDb video URL")
+    imvdb_entity_id: Optional[int] = Field(
+        default=None,
+        description="IMVDb entity ID for the primary artist",
+    )
+    discogs_artist_id: Optional[int] = Field(
+        default=None,
+        description="Discogs artist ID from IMVDb entity (for Discogs enrichment)",
+    )
     youtube_ids: list[str] = Field(
         default_factory=list,
         description="YouTube video IDs extracted from IMVDb sources",
@@ -467,3 +475,38 @@ class YouTubeMetadataResponse(BaseModel):
     channel: Optional[str] = Field(default=None, description="Channel name")
     title: Optional[str] = Field(default=None, description="Video title")
     error: Optional[str] = Field(default=None, description="Error message if unavailable")
+
+
+class DiscogsEnrichRequest(BaseModel):
+    """Request to enrich a Spotify track with Discogs metadata."""
+
+    spotify_track_id: str = Field(description="Spotify track ID")
+    track_title: str = Field(min_length=1, max_length=200, description="Track title")
+    artist_name: str = Field(min_length=1, max_length=200, description="Artist name")
+    discogs_artist_id: Optional[int] = Field(
+        default=None,
+        description="Discogs artist ID (if available from IMVDb entity). If provided, uses artist releases search; otherwise uses text search.",
+    )
+
+
+class DiscogsEnrichResponse(BaseModel):
+    """Response after enriching a Spotify track with Discogs metadata."""
+
+    spotify_track_id: str = Field(description="Spotify track ID")
+    match_found: bool = Field(description="Whether a Discogs match was found")
+    discogs_artist_id: Optional[int] = Field(
+        default=None,
+        description="Discogs artist ID",
+    )
+    discogs_master_id: Optional[int] = Field(
+        default=None,
+        description="Discogs master release ID if match found",
+    )
+    album: Optional[str] = Field(default=None, description="Album title from Discogs")
+    label: Optional[str] = Field(default=None, description="Record label from Discogs")
+    genre: Optional[str] = Field(default=None, description="Genre from Discogs")
+    year: Optional[int] = Field(default=None, description="Release year from Discogs")
+    match_score: float = Field(description="Fuzzy match score (0-100)")
+    match_method: str = Field(
+        description="Method used to find match: 'artist_releases', 'text_search', or 'none'",
+    )

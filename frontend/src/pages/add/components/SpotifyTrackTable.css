@@ -28,7 +28,7 @@
 /* Table Header */
 .spotifyTrackTableHeader {
   display: grid;
-  grid-template-columns: 40px 2fr 1.5fr 1fr 120px;
+  grid-template-columns: 40px 2fr 1.5fr 1fr 180px;
   gap: var(--space-4);
   padding: var(--space-4);
   background: var(--bg-accent);
@@ -86,7 +86,7 @@
 /* Track Row */
 .trackRow {
   display: grid;
-  grid-template-columns: 40px 2fr 1.5fr 1fr 120px;
+  grid-template-columns: 40px 2fr 1.5fr 1fr 180px;
   gap: var(--space-4);
   padding: var(--space-4);
   background: var(--bg-base);
@@ -305,6 +305,13 @@
   background: rgba(0, 240, 255, 0.1);
   border: 1px solid rgba(0, 240, 255, 0.3);
   color: var(--channel-library, #00f0ff);
+}
+
+.trackRowBadgeDiscogs {
+  background: rgba(138, 43, 226, 0.1);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  color: #8a2be2;
+  cursor: help;
 }
 
 .trackRowYoutube {

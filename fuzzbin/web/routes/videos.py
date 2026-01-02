@@ -861,7 +861,10 @@ async def refresh_video(
 async def stream_video(
     video_id: int,
     range: Optional[str] = Header(default=None, alias="Range"),
-    token: Optional[str] = Query(default=None, description="JWT token for authentication (alternative to Authorization header)"),
+    token: Optional[str] = Query(
+        default=None,
+        description="JWT token for authentication (alternative to Authorization header)",
+    ),
     repo: VideoRepository = Depends(get_repository),
 ) -> StreamingResponse:
     """
@@ -872,7 +875,7 @@ async def stream_video(
     - Byte range requests for seeking (Range: bytes=start-end)
     - Suffix ranges (Range: bytes=-500 for last 500 bytes)
     - Open-ended ranges (Range: bytes=500- for byte 500 to end)
-    
+
     Authentication:
     - Validates JWT token from query parameter (for <video> element compatibility)
     - Only required when API authentication is enabled
@@ -886,7 +889,7 @@ async def stream_video(
                 detail="Authentication required",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         # Decode and validate token
         payload = decode_token(
             token=token,
@@ -894,14 +897,14 @@ async def stream_video(
             algorithm=settings.jwt_algorithm,
             expected_type="access",
         )
-        
+
         if not payload:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-    
+
     # Get video and verify it has a file
     video = await repo.get_video_by_id(video_id)
     file_path_str = video.get("video_file_path")
