@@ -483,6 +483,8 @@ async def _authenticate_websocket(
     # Verify user exists and is active
     try:
         repo = await fuzzbin.get_repository()
+        if repo._connection is None:
+            raise RuntimeError("Database connection not initialized")
         cursor = await repo._connection.execute(
             "SELECT id, is_active FROM users WHERE id = ?",
             (user_id,),

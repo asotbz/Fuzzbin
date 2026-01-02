@@ -1,6 +1,6 @@
 """Pydantic models for ffprobe JSON output."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
@@ -20,25 +20,25 @@ class FFProbeFormat(BaseModel):
 
     @field_validator("size", "bit_rate", mode="before")
     @classmethod
-    def parse_string_int(cls, v):
+    def parse_string_int(cls, v: Any) -> Optional[int]:
         """Convert string integers to int."""
         if isinstance(v, str):
             try:
                 return int(v)
             except ValueError:
                 return None
-        return v
+        return v if v is None else int(v) if v is None else int(v)
 
     @field_validator("duration", mode="before")
     @classmethod
-    def parse_string_float(cls, v):
+    def parse_string_float(cls, v: Any) -> Optional[float]:
         """Convert string floats to float."""
         if isinstance(v, str):
             try:
                 return float(v)
             except ValueError:
                 return None
-        return v
+        return v if v is None else float(v)
 
 
 class FFProbeVideoStream(BaseModel):
@@ -68,25 +68,25 @@ class FFProbeVideoStream(BaseModel):
 
     @field_validator("bit_rate", "nb_frames", mode="before")
     @classmethod
-    def parse_string_int(cls, v):
+    def parse_string_int(cls, v: Any) -> Optional[int]:
         """Convert string integers to int."""
         if isinstance(v, str):
             try:
                 return int(v)
             except ValueError:
                 return None
-        return v
+        return v if v is None else int(v)
 
     @field_validator("duration", mode="before")
     @classmethod
-    def parse_string_float(cls, v):
+    def parse_string_float(cls, v: Any) -> Optional[float]:
         """Convert string floats to float."""
         if isinstance(v, str):
             try:
                 return float(v)
             except ValueError:
                 return None
-        return v
+        return v if v is None else float(v)
 
     def get_frame_rate_as_float(self) -> Optional[float]:
         """
@@ -132,33 +132,33 @@ class FFProbeAudioStream(BaseModel):
 
     @field_validator("bit_rate", "nb_frames", mode="before")
     @classmethod
-    def parse_string_int(cls, v):
+    def parse_string_int(cls, v: Any) -> Optional[int]:
         """Convert string integers to int."""
         if isinstance(v, str):
             try:
                 return int(v)
             except ValueError:
                 return None
-        return v
+        return v if v is None else int(v)
 
     @field_validator("duration", mode="before")
     @classmethod
-    def parse_string_float(cls, v):
+    def parse_string_float(cls, v: Any) -> Optional[float]:
         """Convert string floats to float."""
         if isinstance(v, str):
             try:
                 return float(v)
             except ValueError:
                 return None
-        return v
+        return v if v is None else float(v)
 
     @field_validator("sample_rate", mode="before")
     @classmethod
-    def ensure_string(cls, v):
+    def ensure_string(cls, v: Any) -> str:
         """Ensure sample_rate is a string."""
         if isinstance(v, int):
             return str(v)
-        return v
+        return str(v)
 
     def get_sample_rate_as_int(self) -> Optional[int]:
         """

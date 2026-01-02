@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 
@@ -140,7 +140,7 @@ class RateLimiter:
         await self.acquire()
         return self
 
-    async def __aexit__(self, *args: any) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         """Context manager exit."""
         pass
 

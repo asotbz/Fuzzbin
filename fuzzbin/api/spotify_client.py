@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import httpx
@@ -125,7 +126,9 @@ class SpotifyClient(RateLimitedAPIClient):
     DEFAULT_MAX_CONCURRENT = 5
 
     @classmethod
-    def from_config(cls, config: APIClientConfig) -> "SpotifyClient":
+    def from_config(
+        cls, config: APIClientConfig, config_dir: Optional[Path] = None
+    ) -> "SpotifyClient":
         """
         Create Spotify client from APIClientConfig.
 
@@ -219,12 +222,12 @@ class SpotifyClient(RateLimitedAPIClient):
             return {"Authorization": f"Bearer {token}"}
         return {}
 
-    async def get(self, path: str, **kwargs) -> httpx.Response:
+    async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         """
         Override GET to inject fresh token when using token manager.
 
         Args:
-            path: API endpoint path
+            url: API endpoint URL
             **kwargs: Additional arguments for the request
 
         Returns:
@@ -234,14 +237,14 @@ class SpotifyClient(RateLimitedAPIClient):
             headers = kwargs.get("headers", {})
             headers.update(await self._get_auth_headers())
             kwargs["headers"] = headers
-        return await super().get(path, **kwargs)
+        return await super().get(url, **kwargs)
 
-    async def post(self, path: str, **kwargs) -> httpx.Response:
+    async def post(self, url: str, **kwargs: Any) -> httpx.Response:
         """
         Override POST to inject fresh token when using token manager.
 
         Args:
-            path: API endpoint path
+            url: API endpoint URL
             **kwargs: Additional arguments for the request
 
         Returns:
@@ -251,7 +254,7 @@ class SpotifyClient(RateLimitedAPIClient):
             headers = kwargs.get("headers", {})
             headers.update(await self._get_auth_headers())
             kwargs["headers"] = headers
-        return await super().post(path, **kwargs)
+        return await super().post(url, **kwargs)
 
     async def get_playlist(self, playlist_id: str) -> SpotifyPlaylist:
         """

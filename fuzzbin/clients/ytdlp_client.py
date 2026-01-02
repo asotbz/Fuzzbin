@@ -251,6 +251,10 @@ class YTDLPClient:
 
         # Parse newline-delimited JSON (one JSON object per line)
         results = []
+        if isinstance(output, dict):
+            # If yt-dlp returned a single dict, wrap it in a list
+            return [output]
+
         for line in output.strip().split("\n"):
             if not line.strip():
                 continue

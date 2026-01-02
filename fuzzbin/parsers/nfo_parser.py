@@ -136,6 +136,8 @@ class NFOParser(Generic[T]):
             # Use minidom for pretty-printing
             dom = minidom.parseString(xml_string)
             # Get pretty XML without extra blank lines
+            if dom.documentElement is None:
+                raise ValueError("Failed to parse XML: no document element")
             pretty_lines = []
             for line in dom.documentElement.toprettyxml(indent="    ").split("\n"):
                 if line.strip():  # Skip empty lines

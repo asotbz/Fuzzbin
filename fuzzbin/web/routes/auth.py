@@ -114,6 +114,12 @@ async def login(
             headers={"Retry-After": str(retry_after)},
         )
 
+    if repo._connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection not initialized",
+        )
+
     # Look up user (including password_must_change flag)
     cursor = await repo._connection.execute(
         "SELECT id, username, password_hash, is_active, password_must_change FROM users WHERE username = ?",

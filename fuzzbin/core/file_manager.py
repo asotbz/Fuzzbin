@@ -1223,10 +1223,12 @@ class FileManager:
                 confidence += 0.1
 
             # Boost confidence for matching album
+            album_val = row_dict.get("album")
             if (
                 video.get("album")
-                and row_dict.get("album")
-                and video.get("album").lower() == row_dict.get("album", "").lower()
+                and album_val
+                and isinstance(album_val, str)
+                and video.get("album").lower() == album_val.lower()
             ):
                 confidence += 0.1
 

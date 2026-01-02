@@ -1,7 +1,7 @@
 """Database connection management."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import aiosqlite
 import structlog
@@ -96,6 +96,6 @@ class DatabaseConnection:
         """Context manager entry."""
         return await self.connect()
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         await self.close()

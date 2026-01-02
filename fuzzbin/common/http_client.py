@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any, Optional, Dict, Union
+from typing_extensions import Self
 
 import httpx
 import structlog
@@ -109,7 +110,7 @@ class AsyncHTTPClient:
         self._storage: Optional[Any] = None  # Hishel storage for cache management
         self.logger = logger.bind(component="http_client")
 
-    async def __aenter__(self) -> "AsyncHTTPClient":
+    async def __aenter__(self) -> Self:
         """Enter async context manager."""
         limits = httpx.Limits(
             max_connections=self.config.max_connections,
@@ -393,6 +394,8 @@ class AsyncHTTPClient:
             reraise=True,
         )
         async def _request() -> httpx.Response:
+            if self._client is None:
+                raise RuntimeError("HTTP client not initialized")
             response = await self._client.request(method, url, **kwargs)
 
             # Log cache status

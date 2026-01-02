@@ -113,7 +113,7 @@ class IMVDbParser:
         )
 
     @staticmethod
-    def parse_entity_search_results(data: Dict[str, Any]):
+    def parse_entity_search_results(data: Dict[str, Any]) -> "IMVDbEntitySearchResponse":
         """
         Parse IMVDb entity search results response into validated model.
 

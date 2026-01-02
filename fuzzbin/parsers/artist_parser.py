@@ -9,7 +9,7 @@ from .nfo_parser import NFOParser
 class ArtistNFOParser(NFOParser[ArtistNFO]):
     """Parser for artist.nfo files."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize artist NFO parser."""
         super().__init__(model_class=ArtistNFO, root_element="artist")
 

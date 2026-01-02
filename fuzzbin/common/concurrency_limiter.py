@@ -1,6 +1,7 @@
 """Concurrency limiting using asyncio semaphores."""
 
 import asyncio
+from typing import Any
 
 import structlog
 
@@ -92,7 +93,7 @@ class ConcurrencyLimiter:
         await self.acquire()
         return self
 
-    async def __aexit__(self, *args: any) -> None:
+    async def __aexit__(self, *args: Any) -> None:
         """Context manager exit - release the slot."""
         self.release()
 

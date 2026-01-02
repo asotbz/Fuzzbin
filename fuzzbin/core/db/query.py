@@ -10,7 +10,7 @@ logger = structlog.get_logger(__name__)
 class VideoQuery:
     """Fluent query builder for searching videos."""
 
-    def __init__(self, connection):
+    def __init__(self, connection: Any) -> None:
         """
         Initialize query builder.
 

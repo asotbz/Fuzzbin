@@ -78,7 +78,7 @@ class ConfigSnapshot:
     timestamp: datetime
     description: str  # Human-readable change description
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Deep copy config to prevent mutation."""
         # Create immutable copy by round-tripping through Pydantic
         self.config = Config.model_validate(self.config.model_dump())
@@ -681,7 +681,7 @@ class ConfigManager:
                 pass
 
         # Schedule new save
-        async def save_after_delay():
+        async def save_after_delay() -> None:
             await asyncio.sleep(self._save_debounce_seconds)
             await self.save()
 

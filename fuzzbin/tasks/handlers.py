@@ -303,6 +303,8 @@ async def handle_spotify_import(job: Job) -> None:
     repository = await fuzzbin.get_repository()
 
     # Check if Spotify is configured
+    if config.apis is None:
+        raise RuntimeError("API configuration not available")
     spotify_config = config.apis.get("spotify")
     if not spotify_config:
         raise RuntimeError("Spotify API not configured in config.yaml")
@@ -1927,6 +1929,8 @@ async def handle_import(job: Job) -> None:
         video_ids = job.metadata.get("video_ids", [])
         search_queries = job.metadata.get("search_queries", [])
 
+        if config.apis is None:
+            raise RuntimeError("API configuration not available")
         imvdb_config = config.apis.get("imvdb")
         if not imvdb_config:
             raise ValueError("IMVDb API not configured")

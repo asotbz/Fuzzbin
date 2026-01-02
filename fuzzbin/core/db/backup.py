@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import aiosqlite
 import structlog
@@ -154,7 +154,7 @@ class DatabaseBackup:
             ) from e
 
     @staticmethod
-    def list_backups(backup_dir: Path) -> List[Dict[str, any]]:
+    def list_backups(backup_dir: Path) -> List[Dict[str, Any]]:
         """
         List available backups in directory.
 

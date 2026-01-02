@@ -354,7 +354,7 @@ class NFOConfig(BaseModel):
         description="Write <basename>.nfo files for each music video",
     )
 
-    def model_post_init(self, __context):
+    def model_post_init(self, __context: Any) -> None:
         """Initialize featured_artists with default if not provided."""
         if self.featured_artists is None:
             from ..parsers.models import FeaturedArtistConfig
@@ -653,6 +653,11 @@ class Config(BaseModel):
 
         # Create directories if requested
         if create_dirs:
+            if self.config_dir is None or self.library_dir is None:
+                raise RuntimeError(
+                    "config_dir and library_dir must be set before creating directories"
+                )
+
             self.config_dir.mkdir(parents=True, exist_ok=True)
             self.library_dir.mkdir(parents=True, exist_ok=True)
 

@@ -1,6 +1,7 @@
 """Discogs API client for music release database access."""
 
 import os
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
@@ -120,7 +121,9 @@ class DiscogsClient(RateLimitedAPIClient):
     DEFAULT_MAX_CONCURRENT = 5
 
     @classmethod
-    def from_config(cls, config: APIClientConfig) -> "DiscogsClient":
+    def from_config(
+        cls, config: APIClientConfig, config_dir: Optional[Path] = None
+    ) -> "DiscogsClient":
         """
         Create Discogs client from APIClientConfig.
 

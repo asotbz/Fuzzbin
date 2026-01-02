@@ -1,6 +1,7 @@
 """IMVDb API client for music video database access."""
 
 import os
+from pathlib import Path
 from typing import Any, Optional
 
 import structlog
@@ -106,7 +107,9 @@ class IMVDbClient(RateLimitedAPIClient):
     DEFAULT_MAX_CONCURRENT = 10
 
     @classmethod
-    def from_config(cls, config: APIClientConfig) -> "IMVDbClient":
+    def from_config(
+        cls, config: APIClientConfig, config_dir: Optional[Path] = None
+    ) -> "IMVDbClient":
         """
         Create IMVDb client from APIClientConfig.
 
@@ -115,6 +118,7 @@ class IMVDbClient(RateLimitedAPIClient):
 
         Args:
             config: API client configuration (only auth field is used)
+            config_dir: Optional directory for cache storage
 
         Returns:
             Configured IMVDbClient instance

@@ -46,6 +46,9 @@ async def set_password(username: str, password: str | None = None) -> bool:
     # Update in database
     repo = await fuzzbin.get_repository()
 
+    if repo._connection is None:
+        raise RuntimeError("Database connection not initialized")
+
     # Check if user exists
     cursor = await repo._connection.execute("SELECT id FROM users WHERE username = ?", (username,))
     row = await cursor.fetchone()
@@ -74,6 +77,9 @@ async def list_users() -> None:
 
     await fuzzbin.configure()
     repo = await fuzzbin.get_repository()
+
+    if repo._connection is None:
+        raise RuntimeError("Database connection not initialized")
 
     cursor = await repo._connection.execute(
         "SELECT id, username, is_active, created_at, last_login_at FROM users"

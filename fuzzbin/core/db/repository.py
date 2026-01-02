@@ -56,7 +56,7 @@ class VideoRepository:
     @classmethod
     async def from_config(
         cls,
-        config,
+        config: Any,
         config_dir: Optional[Path] = None,
         library_dir: Optional[Path] = None,
     ) -> "VideoRepository":
@@ -120,12 +120,12 @@ class VideoRepository:
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         await self.close()
 
     @asynccontextmanager
-    async def transaction(self):
+    async def transaction(self) -> Any:
         """
         Explicit transaction context manager.
 
@@ -185,7 +185,7 @@ class VideoRepository:
         vimeo_id: Optional[str] = None,
         status: str = "discovered",
         download_source: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> int:
         """
         Create a new video record.
@@ -405,7 +405,7 @@ class VideoRepository:
 
         return dict(row)
 
-    async def update_video(self, video_id: int, **updates) -> None:
+    async def update_video(self, video_id: int, **updates: Any) -> None:
         """
         Update video record.
 
@@ -677,6 +677,38 @@ class VideoRepository:
 
         return await q.execute()
 
+    async def list_videos(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        include_deleted: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        List all videos with optional pagination.
+
+        Args:
+            limit: Maximum number of videos to return
+            offset: Number of videos to skip
+            include_deleted: Include soft-deleted videos
+
+        Returns:
+            List of video dicts
+
+        Example:
+            >>> videos = await repo.list_videos(limit=100, offset=0)
+            >>> for video in videos:
+            ...     print(video['title'])
+        """
+        q = self.query()
+
+        if not include_deleted:
+            q = q.where_not_deleted()
+
+        if limit:
+            q = q.limit(limit).offset(offset)
+
+        return await q.execute()
+
     # ==================== Artist CRUD Methods ====================
 
     async def upsert_artist(
@@ -838,6 +870,112 @@ class VideoRepository:
 
         return [dict(row) for row in rows]
 
+    async def update_artist(self, artist_id: int, **updates: Any) -> None:
+        """
+        Update artist record.
+
+        Args:
+            artist_id: Artist ID
+            **updates: Fields to update
+
+        Raises:
+            QueryError: If artist not found or update fails
+
+        Example:
+            >>> await repo.update_artist(1, biography="New bio", image_url="http://...")
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify artist exists
+        await self.get_artist_by_id(artist_id)
+
+        now = datetime.now(timezone.utc).isoformat()
+        updates["updated_at"] = now
+
+        set_clause = ", ".join(f"{key} = ?" for key in updates.keys())
+        values = list(updates.values())
+        values.append(artist_id)
+
+        await self._connection.execute(
+            f"UPDATE artists SET {set_clause} WHERE id = ?",
+            values,
+        )
+        await self._connection.commit()
+
+    async def soft_delete_artist(self, artist_id: int) -> None:
+        """
+        Soft delete artist record.
+
+        Args:
+            artist_id: Artist ID
+
+        Raises:
+            QueryError: If artist not found
+
+        Example:
+            >>> await repo.soft_delete_artist(1)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify artist exists
+        await self.get_artist_by_id(artist_id)
+
+        now = datetime.now(timezone.utc).isoformat()
+        await self._connection.execute(
+            "UPDATE artists SET is_deleted = 1, deleted_at = ? WHERE id = ?",
+            (now, artist_id),
+        )
+        await self._connection.commit()
+
+    async def get_artist_videos(
+        self,
+        artist_id: int,
+        role: Optional[str] = None,
+        include_deleted: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all videos for an artist.
+
+        Args:
+            artist_id: Artist ID
+            role: Optional role filter ('primary' or 'featured')
+            include_deleted: Include soft-deleted videos
+
+        Returns:
+            List of video dicts with role and position
+
+        Example:
+            >>> videos = await repo.get_artist_videos(1, role="primary")
+            >>> for video in videos:
+            ...     print(f"{video['title']} - {video['role']}")
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = """
+            SELECT v.*, va.role, va.position
+            FROM videos v
+            JOIN video_artists va ON v.id = va.video_id
+            WHERE va.artist_id = ?
+        """
+        params = [artist_id]
+
+        if not include_deleted:
+            query += " AND v.is_deleted = 0"
+
+        if role:
+            query += " AND va.role = ?"
+            params.append(role)
+
+        query += " ORDER BY v.year DESC, v.title"
+
+        cursor = await self._connection.execute(query, params)
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
     # ==================== Video-Artist Relationship Methods ====================
 
     async def link_video_artist(
@@ -934,6 +1072,30 @@ class VideoRepository:
                 error=str(e),
             )
             raise QueryError(f"Failed to unlink video artists: {e}") from e
+
+    async def unlink_video_artist(
+        self,
+        video_id: int,
+        artist_id: int,
+    ) -> None:
+        """
+        Remove link between a video and a specific artist.
+
+        Args:
+            video_id: Video ID
+            artist_id: Artist ID to unlink
+
+        Example:
+            >>> await repo.unlink_video_artist(video_id=1, artist_id=5)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        await self._connection.execute(
+            "DELETE FROM video_artists WHERE video_id = ? AND artist_id = ?",
+            (video_id, artist_id),
+        )
+        await self._connection.commit()
 
     async def get_video_artists(
         self, video_id: int, role: Optional[str] = None
@@ -1085,6 +1247,65 @@ class VideoRepository:
 
         return [dict(row) for row in rows]
 
+    async def update_collection(self, collection_id: int, **updates: Any) -> None:
+        """
+        Update collection record.
+
+        Args:
+            collection_id: Collection ID
+            **updates: Fields to update
+
+        Raises:
+            QueryError: If collection not found or update fails
+
+        Example:
+            >>> await repo.update_collection(1, description="Updated description")
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify collection exists
+        await self.get_collection_by_id(collection_id)
+
+        now = datetime.now(timezone.utc).isoformat()
+        updates["updated_at"] = now
+
+        set_clause = ", ".join(f"{key} = ?" for key in updates.keys())
+        values = list(updates.values())
+        values.append(collection_id)
+
+        await self._connection.execute(
+            f"UPDATE collections SET {set_clause} WHERE id = ?",
+            values,
+        )
+        await self._connection.commit()
+
+    async def soft_delete_collection(self, collection_id: int) -> None:
+        """
+        Soft delete collection.
+
+        Args:
+            collection_id: Collection ID
+
+        Raises:
+            QueryError: If collection not found
+
+        Example:
+            >>> await repo.soft_delete_collection(1)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify collection exists
+        await self.get_collection_by_id(collection_id)
+
+        now = datetime.now(timezone.utc).isoformat()
+        await self._connection.execute(
+            "UPDATE collections SET is_deleted = 1, deleted_at = ? WHERE id = ?",
+            (now, collection_id),
+        )
+        await self._connection.commit()
+
     # ==================== Video-Collection Relationship Methods ====================
 
     async def link_video_collection(
@@ -1174,6 +1395,30 @@ class VideoRepository:
         rows = await cursor.fetchall()
 
         return [dict(row) for row in rows]
+
+    async def remove_video_from_collection(
+        self,
+        video_id: int,
+        collection_id: int,
+    ) -> None:
+        """
+        Remove video from collection.
+
+        Args:
+            video_id: Video ID
+            collection_id: Collection ID to remove from
+
+        Example:
+            >>> await repo.remove_video_from_collection(video_id=1, collection_id=2)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        await self._connection.execute(
+            "DELETE FROM video_collections WHERE video_id = ? AND collection_id = ?",
+            (video_id, collection_id),
+        )
+        await self._connection.commit()
 
     # ==================== Tag CRUD Methods ====================
 
@@ -1275,6 +1520,102 @@ class VideoRepository:
             query += " ORDER BY name"
 
         cursor = await self._connection.execute(query, (min_usage_count,))
+        rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def delete_tag(self, tag_id: int) -> None:
+        """
+        Delete a tag (hard delete).
+
+        Args:
+            tag_id: Tag ID
+
+        Raises:
+            QueryError: If tag not found
+
+        Example:
+            >>> await repo.delete_tag(1)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify tag exists
+        await self.get_tag_by_id(tag_id)
+
+        # Delete tag (cascade will remove video_tags entries)
+        await self._connection.execute(
+            "DELETE FROM tags WHERE id = ?",
+            (tag_id,),
+        )
+        await self._connection.commit()
+
+    async def set_video_tags(
+        self,
+        video_id: int,
+        tag_names: List[str],
+        source: str = "manual",
+        replace_existing: bool = True,
+    ) -> None:
+        """
+        Set tags on a video, optionally replacing existing ones.
+
+        Args:
+            video_id: Video ID
+            tag_names: List of tag names to add
+            source: Tag source ('manual' or 'auto')
+            replace_existing: Replace existing tags (default: True)
+
+        Example:
+            >>> await repo.set_video_tags(1, ["rock", "80s"], source="auto")
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Verify video exists
+        await self.get_video_by_id(video_id)
+
+        # Remove existing tags if replacing
+        if replace_existing:
+            await self._connection.execute(
+                "DELETE FROM video_tags WHERE video_id = ?",
+                (video_id,),
+            )
+
+        # Add new tags
+        for tag_name in tag_names:
+            tag_id = await self.upsert_tag(tag_name)
+            await self.add_video_tag(video_id, tag_id, source=source)
+
+    async def get_videos_by_tag(self, tag_name: str) -> List[Dict[str, Any]]:
+        """
+        Get all videos with a specific tag name.
+
+        Args:
+            tag_name: Tag name
+
+        Returns:
+            List of video dicts
+
+        Example:
+            >>> videos = await repo.get_videos_by_tag("rock")
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Normalize tag name for lookup
+        normalized_name = tag_name.lower().strip()
+
+        query = """
+            SELECT v.*, vt.source, vt.added_at
+            FROM videos v
+            JOIN video_tags vt ON v.id = vt.video_id
+            JOIN tags t ON vt.tag_id = t.id
+            WHERE t.name = ? AND v.is_deleted = 0
+            ORDER BY v.title
+        """
+
+        cursor = await self._connection.execute(query, (normalized_name,))
         rows = await cursor.fetchall()
 
         return [dict(row) for row in rows]
@@ -1472,6 +1813,9 @@ class VideoRepository:
 
         now = datetime.now(timezone.utc).isoformat()
 
+        if self._connection is None:
+            raise RuntimeError("Database connection not initialized")
+
         try:
             # Update video status
             await self._connection.execute(
@@ -1502,7 +1846,8 @@ class VideoRepository:
             )
 
         except Exception as e:
-            await self._connection.rollback()
+            if self._connection is not None:
+                await self._connection.rollback()
             logger.error(
                 "status_update_failed",
                 video_id=video_id,
@@ -1643,6 +1988,9 @@ class VideoRepository:
         now = datetime.now(timezone.utc).isoformat()
         metadata_json = self._serialize_json(metadata) if metadata else None
 
+        if self._connection is None:
+            raise RuntimeError("Database connection not initialized")
+
         await self._connection.execute(
             """
             INSERT INTO video_status_history 
@@ -1697,7 +2045,7 @@ class VideoRepository:
                 updates={"genre": "Rock", "studio": "Universal"}
             )
         """
-        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+        result: dict[str, Any] = {"success_ids": [], "failed_ids": [], "errors": {}}
 
         if not video_ids:
             return result
@@ -1737,7 +2085,7 @@ class VideoRepository:
         Returns:
             Dict with 'success_ids', 'failed_ids', and 'errors'
         """
-        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+        result: dict[str, Any] = {"success_ids": [], "failed_ids": [], "errors": {}}
 
         if not video_ids:
             return result
@@ -1785,7 +2133,7 @@ class VideoRepository:
         Returns:
             Dict with 'success_ids', 'failed_ids', and 'errors'
         """
-        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+        result: dict[str, Any] = {"success_ids": [], "failed_ids": [], "errors": {}}
 
         if not video_ids:
             return result
@@ -1833,7 +2181,7 @@ class VideoRepository:
         Returns:
             Dict with 'success_ids', 'failed_ids', and 'errors'
         """
-        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+        result: dict[str, Any] = {"success_ids": [], "failed_ids": [], "errors": {}}
 
         if not video_ids or not tag_names:
             return result
@@ -1851,6 +2199,9 @@ class VideoRepository:
                 try:
                     # Verify video exists
                     await self.get_video_by_id(video_id)
+
+                    if self._connection is None:
+                        raise RuntimeError("Database connection not initialized")
 
                     if replace:
                         # Remove existing tags
@@ -1903,7 +2254,7 @@ class VideoRepository:
         Returns:
             Dict with 'success_ids', 'failed_ids', and 'errors'
         """
-        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+        result: dict[str, Any] = {"success_ids": [], "failed_ids": [], "errors": {}}
 
         if not video_ids:
             return result
@@ -1958,7 +2309,7 @@ class VideoRepository:
                 {"video_id": 2, "video_file_path": "/new/path/video2.mp4", "nfo_file_path": "/new/path/video2.nfo"},
             ])
         """
-        result = {"success_ids": [], "failed_ids": [], "errors": {}}
+        result: dict[str, Any] = {"success_ids": [], "failed_ids": [], "errors": {}}
 
         if not video_updates:
             return result
@@ -2020,7 +2371,7 @@ class VideoRepository:
 
         deleted_filter = "" if include_deleted else "AND v.is_deleted = 0"
 
-        facets = {
+        facets: dict[str, list[Any]] = {
             "tags": [],
             "genres": [],
             "years": [],
@@ -2337,7 +2688,7 @@ class VideoRepository:
     async def update_scheduled_task(
         self,
         task_id: int,
-        **updates,
+        **updates: Any,
     ) -> None:
         """
         Update a scheduled task.

@@ -127,6 +127,12 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    if repo._connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection not initialized",
+        )
+
     # Verify user exists and is active in database
     cursor = await repo._connection.execute(
         "SELECT id, username, is_active, last_login_at FROM users WHERE id = ?",
@@ -308,6 +314,11 @@ async def get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
 
     if _imvdb_client is None:
         config = fuzzbin.get_config()
+        if config.apis is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API configuration not available",
+            )
         api_config = config.apis.get("imvdb")
 
         if not api_config:
@@ -351,6 +362,11 @@ async def get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
 
     if _discogs_client is None:
         config = fuzzbin.get_config()
+        if config.apis is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API configuration not available",
+            )
         api_config = config.apis.get("discogs")
 
         if not api_config:
@@ -397,6 +413,11 @@ async def get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
 
     if _spotify_client is None:
         config = fuzzbin.get_config()
+        if config.apis is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API configuration not available",
+            )
         api_config = config.apis.get("spotify")
 
         if not api_config:
