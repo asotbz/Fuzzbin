@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import AsyncIterator, List, Optional, Tuple
 
 import aiofiles
+import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
@@ -31,6 +32,8 @@ from ..schemas.video import (
     VideoStatusUpdate,
     VideoUpdate,
 )
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 
@@ -455,7 +458,7 @@ async def download_video(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Video {video_id} not found"
         )
 
-    youtube_id = getattr(video, "youtube_id", None)
+    youtube_id = video.get("youtube_id")
     if not youtube_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Video does not have a YouTube ID"
@@ -473,7 +476,7 @@ async def download_video(
     )
     await queue.submit(job)
 
-    return JobResponse.from_job(job)
+    return JobResponse.model_validate(job)
 
 
 @router.get(
@@ -521,7 +524,7 @@ async def get_video_jobs(
 
         matching_jobs.append(job)
 
-    return [JobResponse.from_job(job) for job in matching_jobs]
+    return [JobResponse.model_validate(job) for job in matching_jobs]
 
 
 @router.delete(
@@ -672,6 +675,73 @@ async def _stream_file_range(
 
 
 @router.get(
+    "/{video_id}/thumbnail",
+    summary="Get video thumbnail",
+    description="Get or generate a thumbnail for a video.",
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        200: {
+            "description": "Thumbnail image",
+            "content": {"image/jpeg": {}},
+        },
+        404: {"description": "Video not found or no file associated"},
+        500: {"description": "Thumbnail generation failed"},
+    },
+)
+async def get_video_thumbnail(
+    video_id: int,
+    regenerate: bool = Query(default=False, description="Force thumbnail regeneration"),
+    timestamp: Optional[float] = Query(
+        default=None, description="Timestamp in seconds to extract frame from"
+    ),
+    video_service: VideoService = Depends(get_video_service),
+) -> StreamingResponse:
+    """
+    Get or generate a thumbnail for a video.
+
+    Returns a JPEG thumbnail extracted from the video file. Thumbnails
+    are cached in the thumbnail cache directory for subsequent requests.
+
+    Requires authentication.
+    """
+    try:
+        thumb_path = await video_service.get_thumbnail(
+            video_id=video_id,
+            timestamp=timestamp,
+            regenerate=regenerate,
+        )
+
+        # Stream the thumbnail
+        thumb_size = thumb_path.stat().st_size
+
+        return StreamingResponse(
+            _stream_file_range(thumb_path, 0, thumb_size - 1),
+            status_code=status.HTTP_200_OK,
+            media_type="image/jpeg",
+            headers={
+                "Content-Length": str(thumb_size),
+                "Cache-Control": "private, max-age=86400, stale-while-revalidate=3600",
+            },
+        )
+
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.message),
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.message),
+        )
+    except ServiceError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e.message),
+        )
+
+
+@router.get(
     "/{video_id}/stream",
     summary="Stream video file",
     description="Stream video file with HTTP Range support for seeking.",
@@ -761,66 +831,3 @@ async def stream_video(
         media_type=content_type,
         headers=headers,
     )
-
-
-@router.get(
-    "/{video_id}/thumbnail",
-    summary="Get video thumbnail",
-    description="Get or generate a thumbnail image for a video.",
-    responses={
-        200: {
-            "description": "Thumbnail image",
-            "content": {"image/jpeg": {}},
-        },
-        404: {"description": "Video not found or no file associated"},
-        500: {"description": "Thumbnail generation failed"},
-    },
-)
-async def get_video_thumbnail(
-    video_id: int,
-    regenerate: bool = Query(default=False, description="Force thumbnail regeneration"),
-    timestamp: Optional[float] = Query(
-        default=None, description="Timestamp in seconds to extract frame from"
-    ),
-    video_service: VideoService = Depends(get_video_service),
-) -> StreamingResponse:
-    """
-    Get or generate a thumbnail for a video.
-
-    Returns a JPEG thumbnail extracted from the video file. Thumbnails
-    are cached in the thumbnail cache directory for subsequent requests.
-
-    Use regenerate=true to force a new thumbnail to be generated.
-    """
-    try:
-        thumb_path = await video_service.get_thumbnail(
-            video_id=video_id,
-            timestamp=timestamp,
-            regenerate=regenerate,
-        )
-
-        # Stream the thumbnail
-        thumb_size = thumb_path.stat().st_size
-
-        return StreamingResponse(
-            _stream_file_range(thumb_path, 0, thumb_size - 1),
-            status_code=status.HTTP_200_OK,
-            media_type="image/jpeg",
-            headers={"Content-Length": str(thumb_size)},
-        )
-
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e.message),
-        )
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e.message),
-        )
-    except ServiceError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e.message),
-        )
