@@ -568,20 +568,19 @@ class ConfigManager:
         # Get safety level
         safety_level = get_safety_level(path)
 
-        # Handle client reload for REQUIRES_RELOAD fields
-        if safety_level == ConfigSafetyLevel.REQUIRES_RELOAD:
-            # Check if this is an API client config change
-            if path.startswith("apis."):
-                parts = path.split(".")
-                if len(parts) >= 2:
-                    api_name = parts[1]
-                    if api_name in self._clients:
-                        try:
-                            await self._reload_client(api_name)
-                        except ClientReloadError:
-                            # Rollback config on client reload failure
-                            self._set_nested(self._config, path, old_value)
-                            raise
+        # Handle client reload for API config changes
+        # Check if this is an API client config change (auth, rate_limit, etc.)
+        if path.startswith("apis."):
+            parts = path.split(".")
+            if len(parts) >= 2:
+                api_name = parts[1]
+                if api_name in self._clients:
+                    try:
+                        await self._reload_client(api_name)
+                    except ClientReloadError:
+                        # Rollback config on client reload failure
+                        self._set_nested(self._config, path, old_value)
+                        raise
 
         # Save snapshot to history
         desc = description or f"Changed {path}: {old_value} → {value}"

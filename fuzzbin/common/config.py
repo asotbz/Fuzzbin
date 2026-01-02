@@ -968,8 +968,8 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     "trash.enabled": ConfigSafetyLevel.SAFE,
     "trash.schedule": ConfigSafetyLevel.SAFE,
     "trash.retention_days": ConfigSafetyLevel.SAFE,
-    # Requires reload - need to recreate components
-    "apis.*.auth.*": ConfigSafetyLevel.REQUIRES_RELOAD,
+    # API auth - safe because ConfigManager auto-reloads clients with rollback on failure
+    "apis.*.auth.*": ConfigSafetyLevel.SAFE,
     # Affects state - changes persistent files/connections
     "config_dir": ConfigSafetyLevel.AFFECTS_STATE,
     "library_dir": ConfigSafetyLevel.AFFECTS_STATE,
