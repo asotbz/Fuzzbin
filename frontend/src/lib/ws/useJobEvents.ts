@@ -267,7 +267,7 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
         break
       }
     }
-  }, [jobs])
+  }, [jobs, handleVideoUpdateEvent])
 
   const connect = useCallback(() => {
     if (!accessToken) {
