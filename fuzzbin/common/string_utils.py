@@ -2,248 +2,7 @@
 
 import re
 import unicodedata
-from typing import Dict, List, Optional, Tuple
-
-
-# Primary genre mapping table
-# Maps Discogs genres/styles to primary categories
-# Unmapped genres pass through unchanged
-PRIMARY_GENRE_MAP: Dict[str, str] = {
-    # Rock variants
-    "rock": "Rock",
-    "alternative rock": "Rock",
-    "indie rock": "Rock",
-    "hard rock": "Rock",
-    "soft rock": "Rock",
-    "progressive rock": "Rock",
-    "prog rock": "Rock",
-    "classic rock": "Rock",
-    "punk rock": "Rock",
-    "punk": "Rock",
-    "post-punk": "Rock",
-    "new wave": "Rock",
-    "grunge": "Rock",
-    "garage rock": "Rock",
-    "psychedelic rock": "Rock",
-    "art rock": "Rock",
-    "glam rock": "Rock",
-    "blues rock": "Rock",
-    "southern rock": "Rock",
-    "roots rock": "Rock",
-    "heartland rock": "Rock",
-    "arena rock": "Rock",
-    "power pop": "Rock",
-    "britpop": "Rock",
-    "shoegaze": "Rock",
-    "emo": "Rock",
-    "post-rock": "Rock",
-    "stoner rock": "Rock",
-    "noise rock": "Rock",
-    # Pop variants
-    "pop": "Pop",
-    "pop rock": "Pop",
-    "synth-pop": "Pop",
-    "synthpop": "Pop",
-    "electropop": "Pop",
-    "dance-pop": "Pop",
-    "teen pop": "Pop",
-    "bubblegum": "Pop",
-    "adult contemporary": "Pop",
-    "soft pop": "Pop",
-    "indie pop": "Pop",
-    "chamber pop": "Pop",
-    "dream pop": "Pop",
-    "europop": "Pop",
-    "k-pop": "Pop",
-    "j-pop": "Pop",
-    "latin pop": "Pop",
-    # Hip Hop / R&B variants
-    "hip hop": "Hip Hop/R&B",
-    "hip-hop": "Hip Hop/R&B",
-    "rap": "Hip Hop/R&B",
-    "r&b": "Hip Hop/R&B",
-    "rnb": "Hip Hop/R&B",
-    "rhythm & blues": "Hip Hop/R&B",
-    "rhythm and blues": "Hip Hop/R&B",
-    "soul": "Hip Hop/R&B",
-    "neo soul": "Hip Hop/R&B",
-    "neo-soul": "Hip Hop/R&B",
-    "funk": "Hip Hop/R&B",
-    "contemporary r&b": "Hip Hop/R&B",
-    "urban": "Hip Hop/R&B",
-    "gangsta rap": "Hip Hop/R&B",
-    "trap": "Hip Hop/R&B",
-    "boom bap": "Hip Hop/R&B",
-    "conscious hip hop": "Hip Hop/R&B",
-    "alternative hip hop": "Hip Hop/R&B",
-    "dirty south": "Hip Hop/R&B",
-    "crunk": "Hip Hop/R&B",
-    "g-funk": "Hip Hop/R&B",
-    "new jack swing": "Hip Hop/R&B",
-    "quiet storm": "Hip Hop/R&B",
-    "motown": "Hip Hop/R&B",
-    "disco": "Hip Hop/R&B",
-    # Country variants
-    "country": "Country",
-    "country rock": "Country",
-    "country pop": "Country",
-    "alt-country": "Country",
-    "alternative country": "Country",
-    "americana": "Country",
-    "bluegrass": "Country",
-    "honky tonk": "Country",
-    "outlaw country": "Country",
-    "nashville sound": "Country",
-    "bro-country": "Country",
-    "country & western": "Country",
-    "western": "Country",
-    "folk rock": "Country",
-    # Electronic variants
-    "electronic": "Electronic",
-    "electronica": "Electronic",
-    "edm": "Electronic",
-    "house": "Electronic",
-    "deep house": "Electronic",
-    "tech house": "Electronic",
-    "progressive house": "Electronic",
-    "techno": "Electronic",
-    "trance": "Electronic",
-    "drum and bass": "Electronic",
-    "dnb": "Electronic",
-    "dubstep": "Electronic",
-    "ambient": "Electronic",
-    "idm": "Electronic",
-    "industrial": "Electronic",
-    "ebm": "Electronic",
-    "synthwave": "Electronic",
-    "retrowave": "Electronic",
-    "chillwave": "Electronic",
-    "vaporwave": "Electronic",
-    "downtempo": "Electronic",
-    "trip hop": "Electronic",
-    "trip-hop": "Electronic",
-    "breakbeat": "Electronic",
-    "big beat": "Electronic",
-    "uk garage": "Electronic",
-    "2-step": "Electronic",
-    "grime": "Electronic",
-    "future bass": "Electronic",
-    # Metal variants
-    "metal": "Metal",
-    "heavy metal": "Metal",
-    "thrash metal": "Metal",
-    "death metal": "Metal",
-    "black metal": "Metal",
-    "doom metal": "Metal",
-    "power metal": "Metal",
-    "progressive metal": "Metal",
-    "nu metal": "Metal",
-    "nu-metal": "Metal",
-    "metalcore": "Metal",
-    "deathcore": "Metal",
-    "symphonic metal": "Metal",
-    "gothic metal": "Metal",
-    "folk metal": "Metal",
-    "speed metal": "Metal",
-    "hair metal": "Metal",
-    "glam metal": "Metal",
-    "groove metal": "Metal",
-    "sludge metal": "Metal",
-    "post-metal": "Metal",
-    "djent": "Metal",
-    # Jazz variants
-    "jazz": "Jazz",
-    "smooth jazz": "Jazz",
-    "jazz fusion": "Jazz",
-    "fusion": "Jazz",
-    "bebop": "Jazz",
-    "hard bop": "Jazz",
-    "cool jazz": "Jazz",
-    "free jazz": "Jazz",
-    "latin jazz": "Jazz",
-    "acid jazz": "Jazz",
-    "nu jazz": "Jazz",
-    "swing": "Jazz",
-    "big band": "Jazz",
-    "vocal jazz": "Jazz",
-    "contemporary jazz": "Jazz",
-    # Classical variants
-    "classical": "Classical",
-    "baroque": "Classical",
-    "romantic": "Classical",
-    "modern classical": "Classical",
-    "contemporary classical": "Classical",
-    "orchestral": "Classical",
-    "opera": "Classical",
-    "choral": "Classical",
-    "chamber music": "Classical",
-    "symphony": "Classical",
-    "concerto": "Classical",
-    "minimalism": "Classical",
-    "neo-classical": "Classical",
-    "neoclassical": "Classical",
-    # Folk variants
-    "folk": "Folk",
-    "traditional folk": "Folk",
-    "contemporary folk": "Folk",
-    "acoustic": "Folk",
-    "singer-songwriter": "Folk",
-    "singer/songwriter": "Folk",
-    "world": "Folk",
-    "world music": "Folk",
-    "celtic": "Folk",
-    "irish folk": "Folk",
-    "british folk": "Folk",
-    "appalachian": "Folk",
-    "traditional": "Folk",
-    "ethnic": "Folk",
-    "roots": "Folk",
-    # Reggae variants (map to Other for now, could be its own category)
-    "reggae": "Other",
-    "ska": "Other",
-    "dub": "Other",
-    "dancehall": "Other",
-    "roots reggae": "Other",
-    # Blues variants
-    "blues": "Other",
-    "delta blues": "Other",
-    "chicago blues": "Other",
-    "electric blues": "Other",
-    "acoustic blues": "Other",
-    # Latin variants
-    "latin": "Other",
-    "salsa": "Other",
-    "merengue": "Other",
-    "bachata": "Other",
-    "reggaeton": "Other",
-    "cumbia": "Other",
-    "bossa nova": "Other",
-    "samba": "Other",
-    "tango": "Other",
-    # Gospel/Religious
-    "gospel": "Other",
-    "christian": "Other",
-    "christian rock": "Other",
-    "ccm": "Other",
-    "worship": "Other",
-    # Soundtrack/Score
-    "soundtrack": "Other",
-    "score": "Other",
-    "film score": "Other",
-    "video game music": "Other",
-    # Miscellaneous
-    "experimental": "Other",
-    "avant-garde": "Other",
-    "spoken word": "Other",
-    "comedy": "Other",
-    "children's": "Other",
-    "holiday": "Other",
-    "christmas": "Other",
-    "new age": "Other",
-    "easy listening": "Other",
-    "lounge": "Other",
-    "exotica": "Other",
-}
+from typing import List, Optional, Tuple
 
 
 def normalize_string(text: str) -> str:
@@ -573,20 +332,23 @@ def normalize_genre(genre: str) -> Tuple[str, str, bool]:
     """
     Normalize a genre string to a primary category.
 
-    Uses PRIMARY_GENRE_MAP to map Discogs genres/styles to one of the
-    primary categories: Rock, Pop, Hip Hop/R&B, Country, Electronic,
-    Jazz, Classical, Metal, Folk, Other.
+    .. deprecated::
+        Use classify_single_genre() from genre_buckets module directly.
+        This function is retained for backward compatibility.
+
+    Uses regex-based bucket classification to map genres/styles to one of the
+    primary categories: Metal, Hip Hop/R&B, Country, Pop, Electronic, Rock.
 
     Unmapped genres pass through unchanged, preserving specificity.
 
     Args:
-        genre: Genre string from Discogs or other source
+        genre: Genre string from Discogs, Spotify, or other source
 
     Returns:
         Tuple of (original, normalized, is_mapped) where:
         - original: The input genre string (stripped)
         - normalized: The primary category or original if unmapped
-        - is_mapped: True if genre was found in mapping table
+        - is_mapped: True if genre was mapped to a bucket
 
     Example:
         >>> normalize_genre("Alternative Rock")
@@ -598,35 +360,28 @@ def normalize_genre(genre: str) -> Tuple[str, str, bool]:
         >>> normalize_genre("  Hip Hop  ")
         ('Hip Hop', 'Hip Hop/R&B', True)
     """
-    original = genre.strip()
-    lookup_key = original.lower()
+    from .genre_buckets import classify_single_genre
 
-    if lookup_key in PRIMARY_GENRE_MAP:
-        return (original, PRIMARY_GENRE_MAP[lookup_key], True)
+    original = genre.strip()
+    bucket, _ = classify_single_genre(original)
+
+    if bucket:
+        return (original, bucket, True)
 
     return (original, original, False)
 
 
 def get_primary_genre_categories() -> List[str]:
     """
-    Get the list of primary genre categories.
+    Get the list of primary genre categories (bucket names).
 
     Returns:
-        List of primary genre category names in display order
+        List of primary genre category names in priority order
 
     Example:
         >>> get_primary_genre_categories()
-        ['Rock', 'Pop', 'Hip Hop/R&B', 'Country', 'Electronic', 'Jazz', 'Classical', 'Metal', 'Folk', 'Other']
+        ['Metal', 'Hip Hop/R&B', 'Country', 'Pop', 'Electronic', 'Rock']
     """
-    return [
-        "Rock",
-        "Pop",
-        "Hip Hop/R&B",
-        "Country",
-        "Electronic",
-        "Jazz",
-        "Classical",
-        "Metal",
-        "Folk",
-        "Other",
-    ]
+    from .genre_buckets import PRIORITY
+
+    return list(PRIORITY)
