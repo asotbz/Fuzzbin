@@ -76,6 +76,13 @@ class BatchPreviewItem(BaseModel):
     # Source-specific identifiers (optional)
     spotify_track_id: Optional[str] = Field(default=None, description="Spotify track ID")
     spotify_playlist_id: Optional[str] = Field(default=None, description="Spotify playlist ID")
+    spotify_artist_id: Optional[str] = Field(
+        default=None, description="Primary artist Spotify ID (for genre lookup)"
+    )
+    artist_genres: Optional[list[str]] = Field(
+        default=None,
+        description="Genres from Spotify for the primary artist",
+    )
 
     nfo_path: Optional[str] = Field(default=None, description="NFO file path (nfo mode)")
 
@@ -327,6 +334,10 @@ class SpotifyTrackEnrichRequest(BaseModel):
     album: Optional[str] = Field(default=None, description="Album name")
     year: Optional[int] = Field(default=None, description="Release year")
     label: Optional[str] = Field(default=None, description="Record label")
+    artist_genres: Optional[list[str]] = Field(
+        default=None,
+        description="Genres from Spotify for the primary artist (used for genre classification)",
+    )
 
 
 class SpotifyTrackEnrichResponse(BaseModel):
@@ -358,15 +369,23 @@ class SpotifyTrackEnrichResponse(BaseModel):
     )
     genre: Optional[str] = Field(
         default=None,
-        description="Original genre from Discogs (if found)",
+        description="Classified genre bucket (Rock, Pop, Hip Hop/R&B, Metal, Electronic, Country)",
     )
     genre_normalized: Optional[str] = Field(
         default=None,
-        description="Normalized primary genre category (Rock, Pop, Hip Hop/R&B, etc.)",
+        description="Alias for genre (deprecated, use genre field)",
     )
     genre_is_mapped: Optional[bool] = Field(
         default=None,
-        description="Whether genre was mapped to a primary category (False = passed through)",
+        description="Whether genre was classified to a bucket (True) or left empty (False)",
+    )
+    source_genres: Optional[list[str]] = Field(
+        default=None,
+        description="Original genres from Spotify artist profile",
+    )
+    thumbnail_url: Optional[str] = Field(
+        default=None,
+        description="IMVDb image URL to use as thumbnail (original size)",
     )
 
 
