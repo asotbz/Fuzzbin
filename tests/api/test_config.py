@@ -64,7 +64,7 @@ class TestGetConfigField:
     def test_get_field_returns_safety_level(self, test_app: TestClient) -> None:
         """GET /config/field includes safety level."""
         # Test a field that affects state
-        response = test_app.get("/config/field/file_manager.trash_dir")
+        response = test_app.get("/config/field/trash.trash_dir")
         assert response.status_code == 200
 
         data = response.json()
@@ -106,7 +106,7 @@ class TestUpdateConfig:
         """PATCH /config with affects_state field returns 409 without force."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"file_manager.trash_dir": ".new_trash"}},
+            json={"updates": {"trash.trash_dir": ".new_trash"}},
         )
         assert response.status_code == 409
 
@@ -121,12 +121,12 @@ class TestUpdateConfig:
     ) -> None:
         """PATCH /config with affects_state field succeeds with force=true."""
         # Get original
-        original_response = test_app.get("/config/field/file_manager.trash_dir")
+        original_response = test_app.get("/config/field/trash.trash_dir")
         original_value = original_response.json()["value"]
 
         response = test_app.patch(
             "/config",
-            json={"updates": {"file_manager.trash_dir": ".forced_trash"}, "force": True},
+            json={"updates": {"trash.trash_dir": ".forced_trash"}, "force": True},
         )
         assert response.status_code == 200
 
@@ -137,7 +137,7 @@ class TestUpdateConfig:
         # Restore
         test_app.patch(
             "/config",
-            json={"updates": {"file_manager.trash_dir": original_value}, "force": True},
+            json={"updates": {"trash.trash_dir": original_value}, "force": True},
         )
 
     def test_update_multiple_fields(self, test_app: TestClient) -> None:
@@ -306,7 +306,7 @@ class TestSafetyLevel:
 
     def test_get_safety_affects_state_field(self, test_app: TestClient) -> None:
         """GET /config/safety for affects_state field returns correct level."""
-        response = test_app.get("/config/safety/file_manager.trash_dir")
+        response = test_app.get("/config/safety/trash.trash_dir")
         assert response.status_code == 200
 
         data = response.json()
@@ -352,7 +352,7 @@ class TestConflictResponse:
         """409 response includes all required fields."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"file_manager.trash_dir": ".conflict_trash"}},
+            json={"updates": {"trash.trash_dir": ".conflict_trash"}},
         )
         assert response.status_code == 409
 
@@ -377,7 +377,7 @@ class TestConflictResponse:
         """409 response includes appropriate required_actions."""
         response = test_app.patch(
             "/config",
-            json={"updates": {"file_manager.trash_dir": ".conflict_trash"}},
+            json={"updates": {"trash.trash_dir": ".conflict_trash"}},
         )
         assert response.status_code == 409
 

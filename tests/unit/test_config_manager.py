@@ -83,17 +83,9 @@ class TestSafetyLevel:
         assert get_safety_level("logging.level") == ConfigSafetyLevel.SAFE
         assert get_safety_level("backup.retention_count") == ConfigSafetyLevel.SAFE
         assert get_safety_level("backup.schedule") == ConfigSafetyLevel.SAFE
-
-    def test_requires_reload_fields(self):
-        """Test that reload-required fields are correctly categorized."""
-        assert (
-            get_safety_level("apis.discogs.auth.api_key")
-            == ConfigSafetyLevel.REQUIRES_RELOAD
-        )
-        assert (
-            get_safety_level("apis.imvdb.auth.app_key")
-            == ConfigSafetyLevel.REQUIRES_RELOAD
-        )
+        # API auth is safe because ConfigManager auto-reloads clients
+        assert get_safety_level("apis.discogs.auth.api_key") == ConfigSafetyLevel.SAFE
+        assert get_safety_level("apis.imvdb.auth.app_key") == ConfigSafetyLevel.SAFE
 
     def test_affects_state_fields(self):
         """Test that state-affecting fields are correctly categorized."""
@@ -110,11 +102,8 @@ class TestSafetyLevel:
         # organizer.* should match any organizer field
         assert get_safety_level("organizer.path_pattern") == ConfigSafetyLevel.SAFE
         
-        # apis.*.auth.* should match any API auth field
-        assert (
-            get_safety_level("apis.spotify.auth.client_id")
-            == ConfigSafetyLevel.REQUIRES_RELOAD
-        )
+        # apis.*.auth.* should match any API auth field (safe - auto-reload)
+        assert get_safety_level("apis.spotify.auth.client_id") == ConfigSafetyLevel.SAFE
 
     def test_default_safe_for_unknown_fields(self):
         """Test that unknown fields default to SAFE."""

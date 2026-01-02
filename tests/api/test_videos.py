@@ -595,13 +595,13 @@ class TestVideoStream:
 
 
 class TestVideoThumbnail:
-    """Tests for GET /videos/{video_id}/thumbnail endpoint."""
+    """Tests for GET /public/videos/{video_id}/thumbnail endpoint."""
 
     def test_thumbnail_video_not_found(
         self, test_app: TestClient
     ) -> None:
         """Test thumbnail returns 404 for non-existent video."""
-        response = test_app.get("/videos/99999/thumbnail")
+        response = test_app.get("/public/videos/99999/thumbnail")
 
         assert response.status_code == 404
 
@@ -613,7 +613,7 @@ class TestVideoThumbnail:
         create_response = test_app.post("/videos", json=sample_video_data)
         video_id = create_response.json()["id"]
 
-        response = test_app.get(f"/videos/{video_id}/thumbnail")
+        response = test_app.get(f"/public/videos/{video_id}/thumbnail")
 
         assert response.status_code == 404
         assert "No video file" in response.json()["detail"]
@@ -624,7 +624,7 @@ class TestVideoThumbnail:
         """Test thumbnail returns 404 when video file doesn't exist on disk."""
         video_id = video_with_missing_file["id"]
 
-        response = test_app.get(f"/videos/{video_id}/thumbnail")
+        response = test_app.get(f"/public/videos/{video_id}/thumbnail")
 
         assert response.status_code == 404
         assert "not found on disk" in response.json()["detail"]

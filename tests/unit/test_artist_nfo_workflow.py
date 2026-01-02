@@ -307,8 +307,20 @@ class TestArtistNfoWorkflow:
         """Test error when video has no primary artist but pattern requires {artist}."""
         from fuzzbin.tasks.handlers import handle_import_organize
 
-        # Mock repository to return no primary artists
+        # Mock repository to return no primary artists AND no artist field on video
         mock_repository.get_video_artists = AsyncMock(return_value=[])
+        mock_repository.get_video_by_id = AsyncMock(
+            return_value={
+                "id": 1,
+                "title": "Smells Like Teen Spirit",
+                "artist": None,  # No artist field either
+                "album": "Nevermind",
+                "year": 1991,
+                "director": "Samuel Bayer",
+                "genre": "Rock",
+                "studio": "DGC",
+            }
+        )
 
         # Create temp video file
         temp_dir = tmp_path / "temp"
@@ -332,8 +344,9 @@ class TestArtistNfoWorkflow:
         ):
             mock_queue.return_value.submit = AsyncMock()
 
-            # Should raise ValueError
-            with pytest.raises(ValueError, match="has no primary artist"):
+            # Should raise MissingFieldError because artist is required by pattern
+            from fuzzbin.core.exceptions import MissingFieldError
+            with pytest.raises(MissingFieldError, match="artist.*required by pattern"):
                 await handle_import_organize(job)
 
         # Verify temp file was cleaned up
