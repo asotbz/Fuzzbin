@@ -22,6 +22,10 @@ from fuzzbin.workflows.nfo_importer import NFOImporter
 
 logger = structlog.get_logger(__name__)
 
+# Global semaphore to limit concurrent yt-dlp downloads to 1
+# This prevents bandwidth saturation and respects the 300s timeout per download
+_download_semaphore = asyncio.Semaphore(1)
+
 
 def _get_artist_directory_from_pattern(
     pattern: str,
@@ -484,6 +488,16 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     artist=track_artist,
                 )
 
+            # Link primary artist to video
+            if track_artist:
+                primary_artist_id = await repository.upsert_artist(name=track_artist)
+                await repository.link_video_artist(
+                    video_id=video_id,
+                    artist_id=primary_artist_id,
+                    role="primary",
+                    position=0,
+                )
+
             # Handle featured artists if present
             featured_artists_str = metadata.get("featured_artists")
             if featured_artists_str:
@@ -757,102 +771,115 @@ async def _handle_direct_url_download(job: Job, url: str, output_path: str) -> N
     format_spec = job.metadata.get("format_spec")
 
     logger.info(
-        "youtube_direct_download_starting",
+        "youtube_direct_download_waiting_for_semaphore",
         job_id=job.id,
         url=url,
-        output_path=output_path,
     )
 
-    # Create cancellation token that checks job status
-    cancellation_token = CancellationToken()
-
-    # Progress hook with cancellation check
-    def on_progress(progress: DownloadProgress) -> None:
-        # Check job status and signal cancellation if needed
-        if job.status == JobStatus.CANCELLED:
-            cancellation_token.cancel()
-            return
-
-        # Calculate download-specific values
-        download_speed: float | None = None
-        eta_seconds: int | None = None
-
-        speed_str = ""
-        if progress.speed_bytes_per_sec:
-            download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
-            speed_str = f" at {download_speed:.1f} MB/s"
-
-        eta_str = ""
-        if progress.eta_seconds:
-            eta_seconds = progress.eta_seconds
-            eta_str = f" (ETA: {eta_seconds}s)"
-
-        # Update job progress with download-specific metadata
-        # This will trigger event bus emission via the callback
-        job.update_progress(
-            processed=int(progress.percent),
-            total=100,
-            step=f"Downloading: {progress.percent:.1f}%{speed_str}{eta_str}",
-            download_speed=download_speed,
-            eta_seconds=eta_seconds,
-        )
-
-    hooks = DownloadHooks(on_progress=on_progress)
-
-    # Get config
-    config = fuzzbin.get_config()
-    ytdlp_config = config.ytdlp if hasattr(config, "ytdlp") else None
-
-    # Ensure output directory exists
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        async with (
-            YTDLPClient.from_config(ytdlp_config) if ytdlp_config else YTDLPClient()
-        ) as client:
-            result = await client.download(
-                url=url,
-                output_path=output_file,
-                format_spec=format_spec,
-                hooks=hooks,
-                cancellation_token=cancellation_token,
-            )
-
-        # Check for cancellation after download
-        if job.status == JobStatus.CANCELLED:
-            logger.info("youtube_direct_download_cancelled", job_id=job.id)
-            return
-
-        # Mark completed
-        job.mark_completed(
-            {
-                "url": url,
-                "file_path": str(result.file_path),
-                "file_size": result.file_size,
-            }
-        )
-
+    # Acquire download semaphore to limit concurrent downloads
+    async with _download_semaphore:
         logger.info(
-            "youtube_direct_download_completed",
-            job_id=job.id,
-            file_path=str(result.file_path),
-            file_size=result.file_size,
-        )
-
-    except DownloadCancelledError:
-        logger.info("youtube_direct_download_cancelled", job_id=job.id)
-        # Job already marked as cancelled by queue
-        return
-
-    except Exception as e:
-        logger.error(
-            "youtube_direct_download_failed",
+            "youtube_direct_download_starting",
             job_id=job.id,
             url=url,
-            error=str(e),
+            output_path=output_path,
         )
-        raise
+
+        # Check for cancellation before starting
+        if job.status == JobStatus.CANCELLED:
+            logger.info("youtube_direct_download_cancelled_before_start", job_id=job.id)
+            return
+
+        # Create cancellation token that checks job status
+        cancellation_token = CancellationToken()
+
+        # Progress hook with cancellation check
+        def on_progress(progress: DownloadProgress) -> None:
+            # Check job status and signal cancellation if needed
+            if job.status == JobStatus.CANCELLED:
+                cancellation_token.cancel()
+                return
+
+            # Calculate download-specific values
+            download_speed: float | None = None
+            eta_seconds: int | None = None
+
+            speed_str = ""
+            if progress.speed_bytes_per_sec:
+                download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
+                speed_str = f" at {download_speed:.1f} MB/s"
+
+            eta_str = ""
+            if progress.eta_seconds:
+                eta_seconds = progress.eta_seconds
+                eta_str = f" (ETA: {eta_seconds}s)"
+
+            # Update job progress with download-specific metadata
+            # This will trigger event bus emission via the callback
+            job.update_progress(
+                processed=int(progress.percent),
+                total=100,
+                step=f"Downloading: {progress.percent:.1f}%{speed_str}{eta_str}",
+                download_speed=download_speed,
+                eta_seconds=eta_seconds,
+            )
+
+        hooks = DownloadHooks(on_progress=on_progress)
+
+        # Get config
+        config = fuzzbin.get_config()
+        ytdlp_config = config.ytdlp if hasattr(config, "ytdlp") else None
+
+        # Ensure output directory exists
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            async with (
+                YTDLPClient.from_config(ytdlp_config) if ytdlp_config else YTDLPClient()
+            ) as client:
+                result = await client.download(
+                    url=url,
+                    output_path=output_file,
+                    format_spec=format_spec,
+                    hooks=hooks,
+                    cancellation_token=cancellation_token,
+                )
+
+            # Check for cancellation after download
+            if job.status == JobStatus.CANCELLED:
+                logger.info("youtube_direct_download_cancelled", job_id=job.id)
+                return
+
+            # Mark completed
+            job.mark_completed(
+                {
+                    "url": url,
+                    "file_path": str(result.file_path),
+                    "file_size": result.file_size,
+                }
+            )
+
+            logger.info(
+                "youtube_direct_download_completed",
+                job_id=job.id,
+                file_path=str(result.file_path),
+                file_size=result.file_size,
+            )
+
+        except DownloadCancelledError:
+            logger.info("youtube_direct_download_cancelled", job_id=job.id)
+            # Job already marked as cancelled by queue
+            return
+
+        except Exception as e:
+            logger.error(
+                "youtube_direct_download_failed",
+                job_id=job.id,
+                url=url,
+                error=str(e),
+            )
+            raise
 
 
 async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
@@ -910,101 +937,114 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                 logger.info("youtube_download_job_cancelled", job_id=job.id)
                 return
 
-            job.update_progress(idx - 1, len(video_ids), f"Processing video {video_id}...")
+            job.update_progress(
+                idx - 1, len(video_ids), f"Waiting for download slot ({video_id})..."
+            )
 
-            try:
-                # Get video from database
-                video = await repository.get_video(video_id)
-                if not video:
-                    logger.warning("video_not_found", video_id=video_id)
-                    skipped += 1
-                    continue
+            # Acquire semaphore to limit concurrent downloads
+            async with _download_semaphore:
+                # Check for cancellation after acquiring semaphore
+                if job.status == JobStatus.CANCELLED:
+                    logger.info("youtube_download_job_cancelled", job_id=job.id)
+                    return
 
-                # Check if video has a YouTube URL
-                youtube_url = getattr(video, "youtube_url", None) or getattr(
-                    video, "download_url", None
-                )
-                if not youtube_url:
-                    logger.debug(
-                        "video_no_youtube_url",
+                job.update_progress(idx - 1, len(video_ids), f"Processing video {video_id}...")
+
+                try:
+                    # Get video from database
+                    video = await repository.get_video_by_id(video_id)
+                    if not video:
+                        logger.warning("video_not_found", video_id=video_id)
+                        skipped += 1
+                        continue
+
+                    # Check if video has a YouTube URL (video is a dict)
+                    youtube_url = video.get("youtube_url") or video.get("download_url")
+                    video_title = video.get("title", f"Video {video_id}")
+                    if not youtube_url:
+                        logger.debug(
+                            "video_no_youtube_url",
+                            video_id=video_id,
+                            title=video_title,
+                        )
+                        skipped += 1
+                        continue
+
+                    # Check if already downloaded
+                    file_path = video.get("file_path")
+                    if file_path and Path(file_path).exists():
+                        logger.debug(
+                            "video_already_downloaded",
+                            video_id=video_id,
+                            file_path=file_path,
+                        )
+                        skipped += 1
+                        continue
+
+                    # Create progress hook for this video
+                    def on_progress(progress: DownloadProgress) -> None:
+                        if job.status == JobStatus.CANCELLED:
+                            raise asyncio.CancelledError("Job cancelled")
+
+                        # Calculate download-specific values
+                        download_speed: float | None = None
+                        eta_seconds: int | None = None
+
+                        if progress.speed_bytes_per_sec:
+                            download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
+                        if progress.eta_seconds:
+                            eta_seconds = progress.eta_seconds
+
+                        # Calculate overall progress across all videos
+                        percent = progress.percent / 100.0
+                        overall_processed = int((current_video_idx - 1 + percent) * 100)
+
+                        # Update job with download progress
+                        job.update_progress(
+                            processed=overall_processed,
+                            total=len(video_ids) * 100,
+                            step=f"Downloading {video_title}: {progress.percent:.1f}%",
+                            download_speed=download_speed,
+                            eta_seconds=eta_seconds,
+                        )
+
+                    hooks = DownloadHooks(on_progress=on_progress)
+
+                    # Generate output filename
+                    safe_title = "".join(
+                        c if c.isalnum() or c in " -_" else "_" for c in video_title
+                    )
+                    output_file = output_path / f"{safe_title}.mp4"
+
+                    # Download video
+                    result = await client.download(
+                        url=youtube_url,
+                        output_path=output_file,
+                        format_spec=format_spec,
+                        hooks=hooks,
+                    )
+
+                    # Update database with file path
+                    await repository.update_video(video_id, file_path=str(result.file_path))
+
+                    downloaded += 1
+                    logger.info(
+                        "video_downloaded",
                         video_id=video_id,
-                        title=video.title,
+                        file_path=str(result.file_path),
+                        file_size=result.file_size,
                     )
-                    skipped += 1
-                    continue
 
-                # Check if already downloaded
-                if video.file_path and Path(video.file_path).exists():
-                    logger.debug(
-                        "video_already_downloaded",
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    failed += 1
+                    failed_videos.append({"video_id": video_id, "error": str(e)})
+                    logger.error(
+                        "video_download_failed",
                         video_id=video_id,
-                        file_path=video.file_path,
+                        error=str(e),
                     )
-                    skipped += 1
-                    continue
-
-                # Create progress hook for this video
-                def on_progress(progress: DownloadProgress) -> None:
-                    if job.status == JobStatus.CANCELLED:
-                        raise asyncio.CancelledError("Job cancelled")
-
-                    # Calculate download-specific values
-                    download_speed: float | None = None
-                    eta_seconds: int | None = None
-
-                    if progress.speed_bytes_per_sec:
-                        download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
-                    if progress.eta_seconds:
-                        eta_seconds = progress.eta_seconds
-
-                    # Calculate overall progress across all videos
-                    percent = progress.percent / 100.0
-                    overall_processed = int((current_video_idx - 1 + percent) * 100)
-
-                    # Update job with download progress
-                    job.update_progress(
-                        processed=overall_processed,
-                        total=len(video_ids) * 100,
-                        step=f"Downloading {video.title}: {progress.percent:.1f}%",
-                        download_speed=download_speed,
-                        eta_seconds=eta_seconds,
-                    )
-
-                hooks = DownloadHooks(on_progress=on_progress)
-
-                # Generate output filename
-                safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in video.title)
-                output_file = output_path / f"{safe_title}.mp4"
-
-                # Download video
-                result = await client.download(
-                    url=youtube_url,
-                    output_path=output_file,
-                    format_spec=format_spec,
-                    hooks=hooks,
-                )
-
-                # Update database with file path
-                await repository.update_video(video_id, file_path=str(result.file_path))
-
-                downloaded += 1
-                logger.info(
-                    "video_downloaded",
-                    video_id=video_id,
-                    file_path=str(result.file_path),
-                    file_size=result.file_size,
-                )
-
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                failed += 1
-                failed_videos.append({"video_id": video_id, "error": str(e)})
-                logger.error(
-                    "video_download_failed",
-                    video_id=video_id,
-                    error=str(e),
-                )
 
     # Check for cancellation
     if job.status == JobStatus.CANCELLED:
@@ -1126,7 +1166,7 @@ async def handle_duplicate_resolution(job: Job) -> None:
 
             if duplicates:
                 # Get the original video
-                original = await repository.get_video(video_id)
+                original = await repository.get_video_by_id(video_id)
                 if not original:
                     continue
 
@@ -1154,8 +1194,8 @@ async def handle_duplicate_resolution(job: Job) -> None:
                 # Apply resolution strategy if not dry_run
                 if not dry_run and strategy != "report_only":
                     # Determine which to keep based on strategy
-                    all_videos_in_group = [await repository.get_video(video_id)] + [
-                        await repository.get_video(d.video_id) for d in duplicates
+                    all_videos_in_group = [await repository.get_video_by_id(video_id)] + [
+                        await repository.get_video_by_id(d.video_id) for d in duplicates
                     ]
                     all_videos_in_group = [v for v in all_videos_in_group if v]
 
@@ -1291,7 +1331,7 @@ async def handle_metadata_enrich(job: Job) -> None:
 
             try:
                 # Get video
-                video = await repository.get_video(video_id)
+                video = await repository.get_video_by_id(video_id)
                 if not video:
                     skipped += 1
                     continue
@@ -2143,7 +2183,7 @@ async def handle_add_single_import(job: Job) -> None:
             if discogs_config and artist:
                 try:
                     from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
-                    from fuzzbin.common.string_utils import normalize_genre
+                    from fuzzbin.common.genre_buckets import classify_single_genre
 
                     discogs_service = DiscogsEnrichmentService(
                         imvdb_config=imvdb_config,
@@ -2155,7 +2195,8 @@ async def handle_add_single_import(job: Job) -> None:
                         artist_name=artist,
                     )
                     if discogs_result.genre:
-                        _, genre, _ = normalize_genre(discogs_result.genre)
+                        bucket, _ = classify_single_genre(discogs_result.genre)
+                        genre = bucket if bucket else discogs_result.genre
                         logger.info(
                             "add_single_import_genre_found",
                             source="imvdb",
@@ -2274,15 +2315,16 @@ async def handle_add_single_import(job: Job) -> None:
                 except Exception:
                     year = None
 
-            # Extract and normalize genre from Discogs response
+            # Extract and classify genre from Discogs response
             genre: str | None = None
             genres_list = payload.get("genres", [])
             if genres_list and isinstance(genres_list, list) and len(genres_list) > 0:
                 try:
-                    from fuzzbin.common.string_utils import normalize_genre
+                    from fuzzbin.common.genre_buckets import classify_single_genre
 
                     raw_genre = genres_list[0]
-                    _, genre, _ = normalize_genre(raw_genre)
+                    bucket, _ = classify_single_genre(raw_genre)
+                    genre = bucket if bucket else raw_genre
                     logger.info(
                         "add_single_import_genre_found",
                         source=source,
@@ -2292,7 +2334,7 @@ async def handle_add_single_import(job: Job) -> None:
                     )
                 except Exception as e:
                     logger.warning(
-                        "add_single_import_genre_normalize_failed",
+                        "add_single_import_genre_classify_failed",
                         source=source,
                         item_id=item_id,
                         error=str(e),
@@ -2369,7 +2411,7 @@ async def handle_add_single_import(job: Job) -> None:
             if discogs_config and yt_title and yt_artist:
                 try:
                     from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
-                    from fuzzbin.common.string_utils import normalize_genre
+                    from fuzzbin.common.genre_buckets import classify_single_genre
 
                     discogs_service = DiscogsEnrichmentService(
                         imvdb_config=None,
@@ -2380,7 +2422,8 @@ async def handle_add_single_import(job: Job) -> None:
                         track_title=yt_title,
                     )
                     if discogs_result.genre:
-                        _, genre, _ = normalize_genre(discogs_result.genre)
+                        bucket, _ = classify_single_genre(discogs_result.genre)
+                        genre = bucket if bucket else discogs_result.genre
                         logger.info(
                             "add_single_import_genre_found",
                             source="youtube",
@@ -2915,16 +2958,28 @@ async def handle_import_organize(job: Job) -> None:
 
         if artist_dir is not None and config.nfo.write_artist_nfo:
             # Get primary artist for this video
+            # First try linked artists, then fall back to video.artist field
             artists = await repository.get_video_artists(video_id, role="primary")
-            if not artists:
+
+            if artists:
+                primary_artist = artists[0]
+                primary_artist_id = primary_artist["id"]
+                primary_artist_name = primary_artist["name"]
+            elif video.get("artist"):
+                # Fall back to video.artist field - upsert to get artist ID
+                primary_artist_name = video["artist"]
+                primary_artist_id = await repository.upsert_artist(name=primary_artist_name)
+                # Also link the artist to the video for future lookups
+                await repository.link_video_artist(
+                    video_id=video_id,
+                    artist_id=primary_artist_id,
+                    role="primary",
+                )
+            else:
                 raise ValueError(
                     f"Video {video_id} has no primary artist but path pattern "
                     f"'{config.organizer.path_pattern}' requires {{artist}}"
                 )
-
-            primary_artist = artists[0]
-            primary_artist_id = primary_artist["id"]
-            primary_artist_name = primary_artist["name"]
 
             # Check if artist.nfo exists
             artist_nfo_path = artist_dir / "artist.nfo"
