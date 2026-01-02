@@ -35,6 +35,14 @@ export interface JobState {
   eta_seconds?: number // ETA for download jobs
 }
 
+export interface VideoUpdateEvent {
+  video_id: number
+  fields_changed: string[]
+  thumbnail_timestamp?: number
+}
+
+export type VideoUpdateCallback = (event: VideoUpdateEvent) => void
+
 export interface UseJobEventsOptions {
   /** Filter to specific job IDs */
   jobIds?: string[] | null
@@ -46,6 +54,8 @@ export interface UseJobEventsOptions {
   includeActiveState?: boolean
   /** Whether to auto-connect on mount (default: true) */
   autoConnect?: boolean
+  /** Callback invoked when a video_updated event is received */
+  onVideoUpdate?: VideoUpdateCallback
 }
 
 interface WSEvent {
@@ -68,6 +78,15 @@ function isValidJobState(data: unknown): data is Partial<JobState> & { job_id: s
   return typeof any.job_id === 'string'
 }
 
+function isValidVideoUpdateEvent(data: unknown): data is VideoUpdateEvent {
+  if (!data || typeof data !== 'object') return false
+  const any = data as Record<string, unknown>
+  return (
+    typeof any.video_id === 'number' &&
+    Array.isArray(any.fields_changed)
+  )
+}
+
 export function useJobEvents(accessToken: string | null, options: UseJobEventsOptions = {}) {
   const {
     jobIds = null,
@@ -75,11 +94,19 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
     videoIds = null,
     includeActiveState = true,
     autoConnect = true,
+    onVideoUpdate,
   } = options
 
   const [connectionState, setConnectionState] = useState<WSConnectionState>('idle')
   const [jobs, setJobs] = useState<Map<string, JobState>>(new Map())
   const [lastError, setLastError] = useState<string | null>(null)
+  
+  // Track video update timestamps for cache-busting
+  const [videoThumbnailTimestamps, setVideoThumbnailTimestamps] = useState<Map<number, number>>(new Map())
+
+  // Store callback in ref to avoid recreating handlers
+  const onVideoUpdateRef = useRef(onVideoUpdate)
+  onVideoUpdateRef.current = onVideoUpdate
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -95,8 +122,41 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
     return `${base}/ws/events`
   }, [])
 
+  const handleVideoUpdateEvent = useCallback((payload: Record<string, unknown>) => {
+    if (!isValidVideoUpdateEvent(payload)) return
+
+    const event: VideoUpdateEvent = {
+      video_id: payload.video_id as number,
+      fields_changed: payload.fields_changed as string[],
+      thumbnail_timestamp: typeof payload.thumbnail_timestamp === 'number' 
+        ? payload.thumbnail_timestamp 
+        : undefined,
+    }
+
+    // Update thumbnail timestamp map for cache-busting
+    if (event.thumbnail_timestamp && event.fields_changed.includes('thumbnail')) {
+      setVideoThumbnailTimestamps((prev) => {
+        const next = new Map(prev)
+        next.set(event.video_id, event.thumbnail_timestamp!)
+        return next
+      })
+    }
+
+    // Invoke callback if provided
+    if (onVideoUpdateRef.current) {
+      onVideoUpdateRef.current(event)
+    }
+  }, [])
+
   const handleJobEvent = useCallback((event: WSEvent) => {
     const { event_type, timestamp, payload } = event
+
+    // Handle video_updated events separately
+    if (event_type === 'video_updated') {
+      handleVideoUpdateEvent(payload)
+      return
+    }
+
     const jobId = payload.job_id as string | undefined
 
     if (!jobId) return
@@ -446,6 +506,11 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
     return false
   }, [jobs])
 
+  // Get thumbnail timestamp for a video (for cache-busting)
+  const getThumbnailTimestamp = useCallback((videoId: number): number | undefined => {
+    return videoThumbnailTimestamps.get(videoId)
+  }, [videoThumbnailTimestamps])
+
   return {
     connectionState,
     jobs,
@@ -456,5 +521,7 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
     getJob,
     getJobsForVideo,
     hasActiveJobForVideo,
+    videoThumbnailTimestamps,
+    getThumbnailTimestamp,
   }
 }

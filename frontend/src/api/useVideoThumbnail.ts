@@ -1,14 +1,22 @@
-import { useQuery } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useCallback } from 'react'
 import { getApiBaseUrl, APIError } from './client'
 import { getTokens } from '../auth/tokenStore'
 
 /**
  * Fetches a video thumbnail with authentication and returns a blob URL.
  * Includes automatic retry on 401 via the standard token refresh flow.
+ * 
+ * @param videoId - Video ID
+ * @param cacheBustTimestamp - Optional timestamp to bypass browser cache
  */
-async function fetchThumbnailBlob(videoId: number): Promise<string> {
-  const url = `${getApiBaseUrl()}/videos/${videoId}/thumbnail`
+async function fetchThumbnailBlob(videoId: number, cacheBustTimestamp?: number): Promise<string> {
+  let url = `${getApiBaseUrl()}/videos/${videoId}/thumbnail`
+  
+  // Add cache-busting query param if timestamp provided
+  if (cacheBustTimestamp) {
+    url += `?t=${cacheBustTimestamp}`
+  }
   
   const tokens = getTokens()
   const headers: Record<string, string> = {}
@@ -37,6 +45,8 @@ async function fetchThumbnailBlob(videoId: number): Promise<string> {
 interface UseVideoThumbnailOptions {
   /** Whether to enable the query */
   enabled?: boolean
+  /** Timestamp for cache-busting (e.g., from video_updated WebSocket event) */
+  cacheBustTimestamp?: number
 }
 
 interface UseVideoThumbnailResult {
@@ -48,6 +58,8 @@ interface UseVideoThumbnailResult {
   isError: boolean
   /** The error object if loading failed */
   error: Error | null
+  /** Force refetch the thumbnail (for manual refresh) */
+  refetch: () => void
 }
 
 /**
@@ -57,25 +69,28 @@ interface UseVideoThumbnailResult {
  * - Authenticated fetch via Bearer token
  * - Blob URL creation and cleanup to prevent memory leaks
  * - Caching via TanStack Query
+ * - Cache-busting via optional timestamp parameter
  * 
  * @param videoId - The ID of the video to fetch the thumbnail for
- * @param options - Optional configuration
- * @returns Object with thumbnailUrl, loading state, and error info
+ * @param options - Optional configuration including cacheBustTimestamp
+ * @returns Object with thumbnailUrl, loading state, error info, and refetch function
  */
 export function useVideoThumbnail(
   videoId: number | null | undefined,
   options: UseVideoThumbnailOptions = {}
 ): UseVideoThumbnailResult {
-  const { enabled = true } = options
+  const { enabled = true, cacheBustTimestamp } = options
+  const queryClient = useQueryClient()
   
   // Track blob URLs for cleanup
   const blobUrlRef = useRef<string | null>(null)
 
+  // Include cacheBustTimestamp in query key so changes trigger refetch
   const query = useQuery({
-    queryKey: ['video-thumbnail', videoId],
+    queryKey: ['video-thumbnail', videoId, cacheBustTimestamp],
     queryFn: async () => {
       if (!videoId) throw new Error('No video ID')
-      return fetchThumbnailBlob(videoId)
+      return fetchThumbnailBlob(videoId, cacheBustTimestamp)
     },
     enabled: enabled && videoId != null,
     staleTime: 1000 * 60 * 60, // 1 hour - thumbnails rarely change
@@ -112,10 +127,22 @@ export function useVideoThumbnail(
     }
   }, [query.data])
 
+  // Manual refetch that invalidates cache
+  const refetch = useCallback(() => {
+    if (videoId != null) {
+      // Invalidate all thumbnail queries for this video (any timestamp)
+      queryClient.invalidateQueries({ 
+        queryKey: ['video-thumbnail', videoId],
+        exact: false,
+      })
+    }
+  }, [videoId, queryClient])
+
   return {
     thumbnailUrl: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,
+    refetch,
   }
 }

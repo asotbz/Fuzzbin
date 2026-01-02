@@ -14,7 +14,7 @@ import { useFacets } from '../hooks/useFacets'
 import { useVideos } from '../hooks/useVideos'
 import { videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
-import { useJobEvents } from '../../../lib/ws/useJobEvents'
+import { useJobEvents, type VideoUpdateEvent } from '../../../lib/ws/useJobEvents'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
 import { getApiBaseUrl } from '../../../api/client'
 import './LibraryPage.css'
@@ -206,10 +206,16 @@ export default function LibraryPage() {
 
   // Subscribe to job events for videos on current page
   const tokens = useAuthTokens()
-  const { jobs: wsJobs, hasActiveJobForVideo } = useJobEvents(tokens.accessToken, {
+  const { jobs: wsJobs, hasActiveJobForVideo, getThumbnailTimestamp } = useJobEvents(tokens.accessToken, {
     videoIds: pageVideoIds.length > 0 ? pageVideoIds : null,
     includeActiveState: true,
     autoConnect: pageVideoIds.length > 0,
+    onVideoUpdate: useCallback((event: VideoUpdateEvent) => {
+      // Invalidate videos query to refresh metadata (duration, codec, etc.)
+      if (pageVideoIds.includes(event.video_id)) {
+        queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      }
+    }, [pageVideoIds, queryClient]),
   })
 
   // Build job status map for VideoCard components
@@ -572,6 +578,7 @@ export default function LibraryPage() {
                         onToggleSelection={toggleSelection}
                         onClick={() => setDetailsModalVideo(v)}
                         jobStatus={videoId ? getJobStatusForVideo(videoId) : undefined}
+                        thumbnailTimestamp={videoId ? getThumbnailTimestamp(videoId) : undefined}
                       />
                     )
                   })}
@@ -629,6 +636,11 @@ export default function LibraryPage() {
         <VideoDetailsModal
           video={detailsModalVideo}
           onClose={() => setDetailsModalVideo(null)}
+          thumbnailTimestamp={
+            typeof (detailsModalVideo as Record<string, unknown>).id === 'number'
+              ? getThumbnailTimestamp((detailsModalVideo as Record<string, unknown>).id as number)
+              : undefined
+          }
         />
       )}
 

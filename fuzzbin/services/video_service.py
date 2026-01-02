@@ -1175,6 +1175,257 @@ class VideoService(BaseService):
             force=regenerate,
         )
 
+    async def generate_prioritized_thumbnail(
+        self,
+        video_id: int,
+        imvdb_id: Optional[int] = None,
+        ytdlp_thumbnail_url: Optional[str] = None,
+        video_path: Optional[Path] = None,
+        duration: Optional[float] = None,
+        force_ffmpeg: bool = False,
+    ) -> Path:
+        """
+        Generate thumbnail using prioritized sources.
+
+        Attempts to get thumbnail from external sources first, falling back
+        to ffmpeg extraction from the video file.
+
+        Priority order:
+        1. IMVDb original image (if imvdb_id provided, fetches image URL)
+        2. yt-dlp thumbnail URL (if provided)
+        3. ffmpeg extraction at 20% of video duration
+
+        Args:
+            video_id: Video ID for caching
+            imvdb_id: Optional IMVDb video ID to fetch image URL from
+            ytdlp_thumbnail_url: Optional yt-dlp thumbnail URL
+            video_path: Path to video file for ffmpeg fallback
+            duration: Video duration in seconds (for 20% timestamp calculation)
+            force_ffmpeg: If True, skip external sources and use ffmpeg only
+
+        Returns:
+            Path to the generated/cached thumbnail
+
+        Raises:
+            ServiceError: If thumbnail generation fails from all sources
+        """
+        import fuzzbin
+
+        file_manager = await self._get_file_manager()
+
+        # If forcing ffmpeg, skip external sources
+        if force_ffmpeg:
+            if not video_path:
+                raise ValidationError(
+                    "video_path required when force_ffmpeg=True",
+                    field="video_path",
+                )
+            self.logger.info(
+                "thumbnail_priority_ffmpeg_forced",
+                video_id=video_id,
+            )
+            return await file_manager.generate_thumbnail(
+                video_id=video_id,
+                video_path=video_path,
+                duration=duration,
+                force=True,
+            )
+
+        # Try IMVDb original image first
+        if imvdb_id:
+            try:
+                config = fuzzbin.get_config()
+                imvdb_config = config.apis.get("imvdb") if config.apis else None
+
+                if imvdb_config:
+                    from fuzzbin.api.imvdb_client import IMVDbClient
+
+                    async with IMVDbClient.from_config(imvdb_config) as client:
+                        video_data = await client.get_video(imvdb_id)
+                        # Extract thumbnail URL (prefer original, fall back to large)
+                        if video_data.image:
+                            imvdb_url = video_data.image.get("o") or video_data.image.get("l")
+                            if imvdb_url:
+                                self.logger.info(
+                                    "thumbnail_priority_trying_imvdb",
+                                    video_id=video_id,
+                                    imvdb_id=imvdb_id,
+                                    url=imvdb_url,
+                                )
+                                return await file_manager.download_external_thumbnail(
+                                    video_id=video_id,
+                                    url=imvdb_url,
+                                    force=True,
+                                )
+            except Exception as e:
+                self.logger.warning(
+                    "thumbnail_priority_imvdb_failed",
+                    video_id=video_id,
+                    imvdb_id=imvdb_id,
+                    error=str(e),
+                )
+
+        # Try yt-dlp thumbnail URL
+        if ytdlp_thumbnail_url:
+            try:
+                self.logger.info(
+                    "thumbnail_priority_trying_ytdlp",
+                    video_id=video_id,
+                    url=ytdlp_thumbnail_url,
+                )
+                return await file_manager.download_external_thumbnail(
+                    video_id=video_id,
+                    url=ytdlp_thumbnail_url,
+                    force=True,
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "thumbnail_priority_ytdlp_failed",
+                    video_id=video_id,
+                    url=ytdlp_thumbnail_url,
+                    error=str(e),
+                )
+
+        # Fall back to ffmpeg extraction
+        if video_path and video_path.exists():
+            try:
+                self.logger.info(
+                    "thumbnail_priority_using_ffmpeg",
+                    video_id=video_id,
+                    video_path=str(video_path),
+                    duration=duration,
+                )
+                return await file_manager.generate_thumbnail(
+                    video_id=video_id,
+                    video_path=video_path,
+                    duration=duration,
+                    force=True,
+                )
+            except Exception as e:
+                self.logger.error(
+                    "thumbnail_priority_ffmpeg_failed",
+                    video_id=video_id,
+                    error=str(e),
+                )
+                raise ServiceError(f"Failed to generate thumbnail: {e}") from e
+
+        raise ServiceError("No thumbnail source available: no IMVDb ID, yt-dlp URL, or video file")
+
+    async def refresh_video_properties(
+        self,
+        video_id: int,
+        regenerate_thumbnail: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Refresh video file properties using ffprobe and regenerate thumbnail.
+
+        Runs ffprobe to re-analyze the video file and updates database with
+        technical metadata (duration, resolution, codecs). Optionally regenerates
+        the thumbnail using ffmpeg extraction.
+
+        Args:
+            video_id: Video ID to refresh
+            regenerate_thumbnail: If True, regenerate thumbnail via ffmpeg
+
+        Returns:
+            Dict with refreshed properties:
+            - media_info: Extracted metadata from ffprobe
+            - thumbnail_path: Path to regenerated thumbnail (if requested)
+            - thumbnail_timestamp: Unix timestamp for cache-busting
+
+        Raises:
+            NotFoundError: If video not found or no video file
+            ServiceError: If ffprobe analysis fails
+        """
+        import time
+
+        video = await self.get_by_id(video_id)
+        video_path_str = video.get("video_file_path")
+
+        if not video_path_str:
+            raise NotFoundError(
+                "No video file associated with this video",
+                resource_type="video_file",
+                resource_id=str(video_id),
+            )
+
+        video_path = Path(video_path_str)
+        if not video_path.exists():
+            raise NotFoundError(
+                "Video file not found on disk",
+                resource_type="file",
+                resource_id=video_path_str,
+            )
+
+        file_manager = await self._get_file_manager()
+        result: Dict[str, Any] = {
+            "media_info": {},
+            "thumbnail_path": None,
+            "thumbnail_timestamp": None,
+        }
+
+        # Run ffprobe to extract media info
+        try:
+            media_info = await file_manager.validate_video_format(video_path)
+            result["media_info"] = media_info
+
+            # Update database with media info
+            await self.repository.update_video(
+                video_id,
+                duration=media_info.get("duration"),
+                width=media_info.get("width"),
+                height=media_info.get("height"),
+                video_codec=media_info.get("video_codec"),
+                audio_codec=media_info.get("audio_codec"),
+                container_format=media_info.get("container_format"),
+                bitrate=media_info.get("bitrate"),
+                frame_rate=media_info.get("frame_rate"),
+                audio_channels=media_info.get("audio_channels"),
+                audio_sample_rate=media_info.get("audio_sample_rate"),
+            )
+
+            self.logger.info(
+                "video_properties_refreshed",
+                video_id=video_id,
+                duration=media_info.get("duration"),
+                resolution=f"{media_info.get('width')}x{media_info.get('height')}",
+            )
+        except Exception as e:
+            self.logger.error(
+                "video_properties_refresh_ffprobe_failed",
+                video_id=video_id,
+                error=str(e),
+            )
+            raise ServiceError(f"Failed to analyze video: {e}") from e
+
+        # Regenerate thumbnail if requested
+        if regenerate_thumbnail:
+            try:
+                duration = media_info.get("duration")
+                thumb_path = await file_manager.generate_thumbnail(
+                    video_id=video_id,
+                    video_path=video_path,
+                    duration=duration,
+                    force=True,
+                )
+                result["thumbnail_path"] = str(thumb_path)
+                result["thumbnail_timestamp"] = int(time.time())
+
+                self.logger.info(
+                    "video_thumbnail_regenerated",
+                    video_id=video_id,
+                    thumbnail_path=str(thumb_path),
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "video_thumbnail_regeneration_failed",
+                    video_id=video_id,
+                    error=str(e),
+                )
+                # Don't fail the whole operation if thumbnail fails
+
+        return result
+
     # ==================== Library Operations ====================
 
     async def verify_library(self) -> LibraryReport:

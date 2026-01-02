@@ -5,14 +5,24 @@ import type { Video } from '../../../lib/api/types'
 import { videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
 import { apiJson } from '../../../api/client'
+import { useVideoThumbnail } from '../../../api/useVideoThumbnail'
 import MetadataFetchModal from './MetadataFetchModal'
 import YouTubeSearchModal from '../../../pages/add/components/YouTubeSearchModal'
 import ConfirmDialog from './ConfirmDialog'
 import './VideoDetailsModal.css'
 
+interface RefreshResponse {
+  video_id: number
+  media_info: Record<string, unknown>
+  thumbnail_path: string | null
+  thumbnail_timestamp: number | null
+}
+
 interface VideoDetailsModalProps {
   video: Video
   onClose: () => void
+  /** Timestamp for thumbnail cache-busting (from WebSocket events) */
+  thumbnailTimestamp?: number
 }
 
 function formatDuration(seconds: unknown): string {
@@ -67,15 +77,28 @@ function getTagLabels(video: Video): string[] {
     .filter((t): t is string => Boolean(t))
 }
 
-export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalProps) {
+export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }: VideoDetailsModalProps) {
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [fetchModalSource, setFetchModalSource] = useState<'imvdb' | 'discogs_master' | null>(null)
   const [youtubeSearchOpen, setYoutubeSearchOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [localThumbnailTimestamp, setLocalThumbnailTimestamp] = useState<number | undefined>(thumbnailTimestamp)
 
   const anyVideo = video as Record<string, unknown>
   const videoId = typeof anyVideo.id === 'number' ? anyVideo.id : null
+
+  // Use the latest timestamp from WebSocket or local refresh
+  const effectiveThumbnailTimestamp = thumbnailTimestamp ?? localThumbnailTimestamp
+
+  // Thumbnail hook with cache-busting
+  const { thumbnailUrl, isLoading: thumbnailLoading, refetch: refetchThumbnail } = useVideoThumbnail(
+    videoId,
+    { 
+      enabled: !!videoId,
+      cacheBustTimestamp: effectiveThumbnailTimestamp,
+    }
+  )
 
   // Form state
   const [editedTitle, setEditedTitle] = useState(
@@ -197,6 +220,36 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
     },
     onError: (error) => {
       toast.error('Failed to queue download', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    },
+  })
+
+  // Refresh video properties and thumbnail mutation
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      if (!videoId) throw new Error('No video ID')
+
+      return await apiJson<RefreshResponse>({
+        method: 'POST',
+        path: `/videos/${videoId}/refresh?regenerate_thumbnail=true`,
+      })
+    },
+    onSuccess: (data) => {
+      // Update local timestamp for immediate cache-bust
+      if (data.thumbnail_timestamp) {
+        setLocalThumbnailTimestamp(data.thumbnail_timestamp)
+      }
+      // Refetch thumbnail with new timestamp
+      refetchThumbnail()
+      // Invalidate video queries to get updated metadata
+      queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      toast.success('Video refreshed', {
+        description: 'File properties and thumbnail updated',
+      })
+    },
+    onError: (error) => {
+      toast.error('Failed to refresh video', {
         description: error instanceof Error ? error.message : 'Unknown error',
       })
     },
@@ -533,7 +586,39 @@ export default function VideoDetailsModal({ video, onClose }: VideoDetailsModalP
           {/* File Information */}
           {videoFilePath && (
             <section className="videoDetailsSection">
-              <h3 className="videoDetailsSectionTitle">File Information</h3>
+              <div className="videoDetailsSectionHeader">
+                <h3 className="videoDetailsSectionTitle">File Information</h3>
+                <button
+                  type="button"
+                  className="videoDetailsRefreshButton"
+                  onClick={() => refreshMutation.mutate()}
+                  disabled={refreshMutation.isPending || isEditing}
+                  title="Refresh file properties and regenerate thumbnail"
+                >
+                  {refreshMutation.isPending ? (
+                    <span className="videoDetailsRefreshSpinner">⟳</span>
+                  ) : (
+                    '⟳'
+                  )}
+                  {refreshMutation.isPending ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+              
+              {/* Thumbnail Preview */}
+              <div className="videoDetailsThumbnailPreview">
+                {thumbnailLoading ? (
+                  <div className="videoDetailsThumbnailPlaceholder">Loading...</div>
+                ) : thumbnailUrl ? (
+                  <img
+                    src={thumbnailUrl}
+                    alt={`Thumbnail for ${title}`}
+                    className="videoDetailsThumbnailImage"
+                  />
+                ) : (
+                  <div className="videoDetailsThumbnailPlaceholder">No thumbnail</div>
+                )}
+              </div>
+
               <div className="videoDetailsGrid">
                 <div className="videoDetailsField videoDetailsFieldFull">
                   <label className="videoDetailsLabel">File Path</label>

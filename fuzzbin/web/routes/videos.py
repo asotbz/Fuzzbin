@@ -740,6 +740,103 @@ async def get_video_thumbnail(
         )
 
 
+@router.post(
+    "/{video_id}/refresh",
+    summary="Refresh video properties and thumbnail",
+    description="Re-analyze video file with ffprobe and regenerate thumbnail.",
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        200: {
+            "description": "Video properties refreshed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "video_id": 123,
+                        "media_info": {
+                            "duration": 240.5,
+                            "width": 1920,
+                            "height": 1080,
+                            "video_codec": "h264",
+                            "audio_codec": "aac",
+                        },
+                        "thumbnail_path": "/config/.thumbnails/123.jpg",
+                        "thumbnail_timestamp": 1704067200,
+                    }
+                }
+            },
+        },
+        404: {"description": "Video not found or no file associated"},
+        500: {"description": "Refresh failed"},
+    },
+)
+async def refresh_video(
+    video_id: int,
+    regenerate_thumbnail: bool = Query(
+        default=True,
+        description="Regenerate thumbnail from video file using ffmpeg",
+    ),
+    video_service: VideoService = Depends(get_video_service),
+):
+    """
+    Refresh video file properties and optionally regenerate thumbnail.
+
+    Runs ffprobe to re-analyze the video file and update technical metadata
+    (duration, resolution, codecs). When regenerate_thumbnail is True,
+    extracts a new thumbnail frame at 20% of video duration.
+
+    Emits a video_updated WebSocket event with thumbnail_timestamp for
+    client-side cache invalidation.
+
+    Requires authentication.
+    """
+    from fuzzbin.core.event_bus import get_event_bus
+
+    try:
+        result = await video_service.refresh_video_properties(
+            video_id=video_id,
+            regenerate_thumbnail=regenerate_thumbnail,
+        )
+
+        # Emit video_updated event for real-time UI updates
+        fields_changed = ["file_properties"]
+        if regenerate_thumbnail and result.get("thumbnail_path"):
+            fields_changed.append("thumbnail")
+
+        try:
+            event_bus = get_event_bus()
+            await event_bus.emit_video_updated(
+                video_id=video_id,
+                fields_changed=fields_changed,
+                thumbnail_timestamp=result.get("thumbnail_timestamp"),
+            )
+        except RuntimeError:
+            # Event bus not initialized (e.g., in tests)
+            pass
+
+        return {
+            "video_id": video_id,
+            "media_info": result.get("media_info", {}),
+            "thumbnail_path": result.get("thumbnail_path"),
+            "thumbnail_timestamp": result.get("thumbnail_timestamp"),
+        }
+
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.message),
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e.message),
+        )
+    except ServiceError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e.message),
+        )
+
+
 @router.get(
     "/{video_id}/stream",
     summary="Stream video file",

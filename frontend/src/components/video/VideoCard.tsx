@@ -122,6 +122,8 @@ interface VideoCardProps {
   onClick?: () => void
   /** Job status info from WebSocket subscription */
   jobStatus?: VideoCardJobStatus
+  /** Timestamp for thumbnail cache-busting (from WebSocket events) */
+  thumbnailTimestamp?: number
 }
 
 export default function VideoCard({
@@ -131,6 +133,7 @@ export default function VideoCard({
   onToggleSelection,
   onClick,
   jobStatus,
+  thumbnailTimestamp,
 }: VideoCardProps) {
   const queryClient = useQueryClient()
   const [showRetrySuccess, setShowRetrySuccess] = useState(false)
@@ -147,8 +150,8 @@ export default function VideoCard({
   const status = typeof anyVideo.status === 'string' ? anyVideo.status : null
   const youtubeId = typeof anyVideo.youtube_id === 'string' ? anyVideo.youtube_id : null
 
-  // Fetch thumbnail with authentication
-  const { thumbnailUrl } = useVideoThumbnail(videoId)
+  // Fetch thumbnail with authentication and cache-busting
+  const { thumbnailUrl } = useVideoThumbnail(videoId, { cacheBustTimestamp: thumbnailTimestamp })
 
   // Check if there's an active job for this video
   const hasActiveJob = jobStatus?.hasActiveJob ?? false

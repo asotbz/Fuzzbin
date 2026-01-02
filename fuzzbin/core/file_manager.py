@@ -429,11 +429,99 @@ class FileManager:
             self._ffmpeg_client = FFmpegClient.from_config(self.thumbnail_config)
         return self._ffmpeg_client
 
+    async def download_external_thumbnail(
+        self,
+        video_id: int,
+        url: str,
+        force: bool = False,
+    ) -> Path:
+        """
+        Download thumbnail from external URL and cache it.
+
+        Fetches an image from a remote URL (e.g., IMVDb or yt-dlp thumbnail)
+        and saves it to the thumbnail cache directory.
+
+        Args:
+            video_id: Video ID (used for cache filename)
+            url: URL of the thumbnail image to download
+            force: If True, overwrite existing cached thumbnail
+
+        Returns:
+            Path to the downloaded thumbnail
+
+        Raises:
+            FileManagerError: If download fails or response is not an image
+        """
+        import httpx
+
+        thumb_path = self.get_thumbnail_path(video_id)
+
+        # Return cached thumbnail if exists and not forcing
+        if not force and await self.thumbnail_exists(video_id):
+            logger.debug(
+                "external_thumbnail_cache_hit",
+                video_id=video_id,
+                thumb_path=str(thumb_path),
+            )
+            return thumb_path
+
+        # Ensure cache directory exists
+        await self._ensure_directory(self.thumbnail_cache_dir)
+
+        logger.info(
+            "external_thumbnail_download_start",
+            video_id=video_id,
+            url=url,
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, follow_redirects=True)
+                response.raise_for_status()
+
+                # Verify content type is an image
+                content_type = response.headers.get("content-type", "")
+                if not content_type.startswith("image/"):
+                    raise FileManagerError(f"Invalid content type for thumbnail: {content_type}")
+
+                # Write to cache
+                async with aiofiles.open(thumb_path, "wb") as f:
+                    await f.write(response.content)
+
+            logger.info(
+                "external_thumbnail_download_complete",
+                video_id=video_id,
+                thumb_path=str(thumb_path),
+                size=thumb_path.stat().st_size,
+            )
+
+            return thumb_path
+
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "external_thumbnail_download_http_error",
+                video_id=video_id,
+                url=url,
+                status_code=e.response.status_code,
+            )
+            raise FileManagerError(
+                f"Failed to download thumbnail: HTTP {e.response.status_code}"
+            ) from e
+        except httpx.RequestError as e:
+            logger.error(
+                "external_thumbnail_download_request_error",
+                video_id=video_id,
+                url=url,
+                error=str(e),
+            )
+            raise FileManagerError(f"Failed to download thumbnail: {e}") from e
+
     async def generate_thumbnail(
         self,
         video_id: int,
         video_path: Path,
         timestamp: Optional[float] = None,
+        duration: Optional[float] = None,
         force: bool = False,
     ) -> Path:
         """
@@ -446,7 +534,8 @@ class FileManager:
         Args:
             video_id: Video ID (used for cache filename)
             video_path: Path to source video file
-            timestamp: Time in seconds to extract frame (default: config.default_timestamp)
+            timestamp: Time in seconds to extract frame (default: 20% of duration)
+            duration: Video duration in seconds, used to calculate default timestamp
             force: If True, regenerate even if cached thumbnail exists
 
         Returns:
@@ -486,6 +575,7 @@ class FileManager:
                 video_path=video_path,
                 output_path=thumb_path,
                 timestamp=timestamp,
+                duration=duration,
             )
 
         logger.info(

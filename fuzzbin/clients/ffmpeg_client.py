@@ -142,6 +142,7 @@ class FFmpegClient:
         video_path: Path,
         output_path: Path,
         timestamp: Optional[float] = None,
+        duration: Optional[float] = None,
         width: Optional[int] = None,
         height: Optional[int] = None,
     ) -> Path:
@@ -154,7 +155,8 @@ class FFmpegClient:
         Args:
             video_path: Path to source video file
             output_path: Path for output JPEG file
-            timestamp: Time in seconds to extract frame from (default: config.default_timestamp)
+            timestamp: Time in seconds to extract frame from (default: 20% of duration, or 5s)
+            duration: Video duration in seconds, used to calculate default timestamp
             width: Output width in pixels (default: config.width)
             height: Output height in pixels (default: config.height)
 
@@ -172,7 +174,7 @@ class FFmpegClient:
             ...     thumb = await client.extract_frame(
             ...         video_path=Path("video.mp4"),
             ...         output_path=Path(".thumbnails/1.jpg"),
-            ...         timestamp=5.0,
+            ...         duration=240.0,  # 4 minutes -> extracts at 48s
             ...     )
         """
         await self._verify_binary()
@@ -180,8 +182,12 @@ class FFmpegClient:
         if not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        # Use hardcoded defaults if not specified
-        timestamp = timestamp if timestamp is not None else self.DEFAULT_TIMESTAMP
+        # Calculate timestamp: explicit value > 20% of duration > default fallback
+        if timestamp is None:
+            if duration is not None and duration > 0:
+                timestamp = duration * 0.2
+            else:
+                timestamp = self.DEFAULT_TIMESTAMP
         width = width or self.DEFAULT_WIDTH
         height = height or self.DEFAULT_HEIGHT
 

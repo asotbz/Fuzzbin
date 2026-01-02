@@ -361,6 +361,94 @@
   cursor: not-allowed;
 }
 
+/* Section Header with Refresh Button */
+.videoDetailsSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.videoDetailsSectionHeader .videoDetailsSectionTitle {
+  margin-bottom: 0;
+}
+
+/* Refresh Button */
+.videoDetailsRefreshButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 2px solid var(--mtv-green);
+  color: var(--mtv-green);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.videoDetailsRefreshButton:hover:not(:disabled) {
+  background: var(--mtv-green);
+  color: var(--bg-base);
+  transform: translateY(-1px);
+}
+
+.videoDetailsRefreshButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.videoDetailsRefreshSpinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Thumbnail Preview */
+.videoDetailsThumbnailPreview {
+  margin-bottom: var(--space-4);
+  display: flex;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-subtle);
+  padding: var(--space-3);
+}
+
+.videoDetailsThumbnailImage {
+  max-width: 320px;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 2px solid var(--border-default);
+}
+
+.videoDetailsThumbnailPlaceholder {
+  width: 320px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-base);
+  border: 2px dashed var(--border-subtle);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .videoDetailsModal {
@@ -386,5 +474,17 @@
 
   .videoDetailsFieldFull {
     grid-column: 1;
+  }
+  
+  .videoDetailsSectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+  
+  .videoDetailsThumbnailImage,
+  .videoDetailsThumbnailPlaceholder {
+    max-width: 100%;
+    width: 100%;
   }
 }

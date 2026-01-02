@@ -337,6 +337,39 @@ class EventBus:
         # Flush the progress (will pop from dict)
         await self._flush_progress(job_id)
 
+    async def emit_video_updated(
+        self,
+        video_id: int,
+        fields_changed: list[str],
+        thumbnail_timestamp: int | None = None,
+    ) -> None:
+        """Emit a video updated event for real-time UI updates.
+
+        Used to notify clients when video metadata or thumbnail has changed,
+        enabling cache invalidation and UI refresh.
+
+        Args:
+            video_id: ID of the updated video
+            fields_changed: List of field names that changed (e.g., ["thumbnail", "file_properties"])
+            thumbnail_timestamp: Unix timestamp for cache-busting when thumbnail changed
+        """
+        payload: dict[str, Any] = {
+            "video_id": video_id,
+            "fields_changed": fields_changed,
+        }
+
+        # Include timestamp for cache-busting when thumbnail is updated
+        if thumbnail_timestamp is not None and "thumbnail" in fields_changed:
+            payload["thumbnail_timestamp"] = thumbnail_timestamp
+
+        event = self._create_event("video_updated", payload)
+        await self._broadcast(event)
+        logger.debug(
+            "event_bus_video_updated",
+            video_id=video_id,
+            fields_changed=fields_changed,
+        )
+
     async def shutdown(self) -> None:
         """Shutdown the event bus, cancelling all pending flush tasks."""
         async with self._lock:

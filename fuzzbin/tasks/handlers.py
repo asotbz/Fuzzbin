@@ -2706,11 +2706,19 @@ async def handle_video_post_process(job: Job) -> None:
 
     import fuzzbin
     from fuzzbin.core.file_manager import FileManager
+    from fuzzbin.services.video_service import VideoService
 
     job.update_progress(0, 4, "Initializing post-processing...")
 
     repository = await fuzzbin.get_repository()
     config = fuzzbin.get_config()
+
+    # Get video record to retrieve imvdb_id for thumbnail priority
+    video_record = await repository.get_video_by_id(video_id)
+    imvdb_id = video_record.get("imvdb_id") if video_record else None
+
+    # Get yt-dlp thumbnail URL from job metadata if provided
+    ytdlp_thumbnail_url = job.metadata.get("ytdlp_thumbnail_url")
 
     # Check for cancellation
     if job.status == JobStatus.CANCELLED:
@@ -2777,12 +2785,18 @@ async def handle_video_post_process(job: Job) -> None:
 
         job.update_progress(2, 4, "Generating thumbnail...")
 
-        # Generate thumbnail from video
+        # Generate thumbnail using priority: IMVDb > yt-dlp > ffmpeg
         try:
-            thumbnail_path = await file_manager.generate_thumbnail(
+            video_service = VideoService(repository=repository, file_manager=file_manager)
+            duration = media_info.get("duration")
+
+            thumbnail_path = await video_service.generate_prioritized_thumbnail(
                 video_id=video_id,
+                imvdb_id=imvdb_id,
+                ytdlp_thumbnail_url=ytdlp_thumbnail_url,
                 video_path=temp_path,
-                force=True,  # Always generate for new imports
+                duration=duration,
+                force_ffmpeg=False,  # Try external sources first
             )
             logger.info(
                 "video_post_process_thumbnail_complete",
