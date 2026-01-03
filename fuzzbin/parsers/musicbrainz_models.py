@@ -135,6 +135,37 @@ class MusicBrainzReleaseEvent(BaseModel):
     }
 
 
+class MusicBrainzLabel(BaseModel):
+    """Model for MusicBrainz label."""
+
+    id: str = Field(description="Label MBID")
+    name: str = Field(description="Label name")
+    sort_name: Optional[str] = Field(default=None, alias="sort-name", description="Sort name")
+    type: Optional[str] = Field(default=None, description="Label type")
+    disambiguation: Optional[str] = Field(default=None, description="Disambiguation comment")
+
+    model_config = {
+        "extra": "ignore",
+        "validate_assignment": True,
+        "populate_by_name": True,
+    }
+
+
+class MusicBrainzLabelInfo(BaseModel):
+    """Model for MusicBrainz label info on a release."""
+
+    catalog_number: Optional[str] = Field(
+        default=None, alias="catalog-number", description="Catalog number"
+    )
+    label: Optional[MusicBrainzLabel] = Field(default=None, description="Label details")
+
+    model_config = {
+        "extra": "ignore",
+        "validate_assignment": True,
+        "populate_by_name": True,
+    }
+
+
 class MusicBrainzTrack(BaseModel):
     """Model for MusicBrainz track in a media."""
 
@@ -200,6 +231,9 @@ class MusicBrainzRelease(BaseModel):
         default=None, description="Media in this release"
     )
     tags: Optional[List[MusicBrainzTag]] = Field(default=None, description="Release tags")
+    label_info: Optional[List["MusicBrainzLabelInfo"]] = Field(
+        default=None, alias="label-info", description="Label information"
+    )
 
     model_config = {
         "extra": "ignore",

@@ -48,14 +48,7 @@ interface EnrichedMetadata {
   imvdbId?: number | null
   imvdbUrl?: string | null
   genre?: string | null
-  genreNormalized?: string | null
-  sourceGenres?: string[] | null
   thumbnailUrl?: string | null
-  // Discogs enrichment data (overrides IMVDb/Spotify)
-  discogsAlbum?: string | null
-  discogsLabel?: string | null
-  discogsGenre?: string | null
-  discogsYear?: number | null
 }
 
 export default function SpotifyImport() {
@@ -256,23 +249,19 @@ export default function SpotifyImport() {
   const handleEnrichmentComplete = (
     track: BatchPreviewItem,
     enrichment: {
-      metadata?: {
-        title?: string
-        artist?: string
-        year?: number | null
-        album?: string | null
-        label?: string | null
-        directors?: string | null
-        featured_artists?: string | null
-        genre?: string | null
-        genre_normalized?: string | null
-      }
+      title?: string
+      artist?: string
+      year?: number | null
+      album?: string | null
+      label?: string | null
+      directors?: string | null
+      featured_artists?: string | null
       youtube_ids?: string[]
-      imvdb_id?: number | null
-      imvdb_url?: string | null
+      imvdb?: {
+        imvdb_id?: number | null
+        imvdb_url?: string | null
+      }
       genre?: string | null
-      genre_normalized?: string | null
-      source_genres?: string[] | null
       thumbnail_url?: string | null
     }
   ) => {
@@ -281,50 +270,18 @@ export default function SpotifyImport() {
     setEnrichmentData((prev) => {
       const newMap = new Map(prev)
       newMap.set(trackId, {
-        title: enrichment.metadata?.title,
-        artist: enrichment.metadata?.artist,
-        year: enrichment.metadata?.year,
-        album: enrichment.metadata?.album,
-        label: enrichment.metadata?.label,
-        directors: enrichment.metadata?.directors,
-        featuredArtists: enrichment.metadata?.featured_artists,
+        title: enrichment.title,
+        artist: enrichment.artist,
+        year: enrichment.year,
+        album: enrichment.album,
+        label: enrichment.label,
+        directors: enrichment.directors,
+        featuredArtists: enrichment.featured_artists,
         youtubeIds: enrichment.youtube_ids,
-        imvdbId: enrichment.imvdb_id,
-        imvdbUrl: enrichment.imvdb_url,
+        imvdbId: enrichment.imvdb?.imvdb_id,
+        imvdbUrl: enrichment.imvdb?.imvdb_url,
         genre: enrichment.genre,
-        genreNormalized: enrichment.genre_normalized,
-        sourceGenres: enrichment.source_genres,
         thumbnailUrl: enrichment.thumbnail_url,
-      })
-      return newMap
-    })
-  }
-
-  const handleDiscogsEnrichmentComplete = (
-    track: BatchPreviewItem,
-    discogsData: {
-      match_found: boolean
-      album?: string | null
-      label?: string | null
-      genre?: string | null
-      year?: number | null
-    }
-  ) => {
-    if (!discogsData.match_found) {
-      return
-    }
-
-    const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
-
-    setEnrichmentData((prev) => {
-      const newMap = new Map(prev)
-      const existing = newMap.get(trackId) || {}
-      newMap.set(trackId, {
-        ...existing,
-        discogsAlbum: discogsData.album,
-        discogsLabel: discogsData.label,
-        discogsGenre: discogsData.genre,
-        discogsYear: discogsData.year,
       })
       return newMap
     })
@@ -347,19 +304,16 @@ export default function SpotifyImport() {
         const override = metadataOverrides.get(trackId)
         const enrichment = enrichmentData.get(trackId)
 
-        // Priority: User override > Enrichment data > Original Spotify data
-        // For genre: prefer normalized version from enrichment (maps to primary categories like Rock, Pop, etc.)
-        // Discogs data overrides IMVDb/Spotify for album, label, genre, and year
+        // Priority: User override > Enrichment data (MusicBrainz/IMVDb) > Original Spotify data
         const finalMetadata = {
           title: override?.title ?? enrichment?.title ?? track.title,
           artist: override?.artist ?? enrichment?.artist ?? track.artist,
-          year: override?.year ?? enrichment?.discogsYear ?? enrichment?.year ?? track.year,
-          album: override?.album ?? enrichment?.discogsAlbum ?? enrichment?.album ?? track.album,
-          label: override?.label ?? enrichment?.discogsLabel ?? enrichment?.label ?? track.label,
+          year: override?.year ?? enrichment?.year ?? track.year,
+          album: override?.album ?? enrichment?.album ?? track.album,
+          label: override?.label ?? enrichment?.label ?? track.label,
           directors: override?.directors ?? enrichment?.directors ?? null,
           featured_artists: override?.featuredArtists ?? enrichment?.featuredArtists ?? null,
-          genre: override?.genre ?? enrichment?.discogsGenre ?? enrichment?.genreNormalized ?? enrichment?.genre ?? null,
-          genre_normalized: enrichment?.genreNormalized ?? null,
+          genre: override?.genre ?? enrichment?.genre ?? null,
         }
 
         // For YouTube ID, prefer user override, then enrichment (first available ID)
@@ -483,7 +437,6 @@ export default function SpotifyImport() {
                 onSearchYouTube={(track) => setSearchingTrack(track)}
                 onSelectionChange={(selectedIds) => setSelectedTrackIds(selectedIds)}
                 onEnrichmentComplete={handleEnrichmentComplete}
-                onDiscogsEnrichmentComplete={handleDiscogsEnrichmentComplete}
               />
             </div>
 

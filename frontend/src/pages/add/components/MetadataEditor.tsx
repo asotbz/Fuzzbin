@@ -57,37 +57,28 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
 
   // Initialize form with priority: currentOverride > enrichmentData > track
   const [title, setTitle] = useState<string>(
-    currentOverride?.title || (enrichmentData?.metadata?.title as string | undefined) || track.title
+    currentOverride?.title || enrichmentData?.title || track.title
   )
   const [artist, setArtist] = useState<string>(
-    currentOverride?.artist || (enrichmentData?.metadata?.artist as string | undefined) || track.artist
+    currentOverride?.artist || enrichmentData?.artist || track.artist
   )
   const [year, setYear] = useState<string>(
-    String(
-      currentOverride?.year ?? (enrichmentData?.metadata?.year as number | null | undefined) ?? track.year ?? ''
-    )
+    String(currentOverride?.year ?? enrichmentData?.year ?? track.year ?? '')
   )
   const [album, setAlbum] = useState<string>(
-    currentOverride?.album ||
-      (enrichmentData?.metadata?.album as string | null | undefined) ||
-      getDisplayAlbumTitle(track.album ?? null) ||
-      ''
+    currentOverride?.album || enrichmentData?.album || getDisplayAlbumTitle(track.album ?? null) || ''
   )
   const [label, setLabel] = useState<string>(
-    currentOverride?.label || (enrichmentData?.metadata?.label as string | null | undefined) || track.label || ''
+    currentOverride?.label || enrichmentData?.label || track.label || ''
   )
   const [directors, setDirectors] = useState<string>(
-    currentOverride?.directors || (enrichmentData?.metadata?.directors as string | null | undefined) || ''
+    currentOverride?.directors || enrichmentData?.directors || ''
   )
   const [featuredArtists, setFeaturedArtists] = useState<string>(
-    currentOverride?.featuredArtists || (enrichmentData?.metadata?.featured_artists as string | null | undefined) || ''
+    currentOverride?.featuredArtists || enrichmentData?.featured_artists || ''
   )
-  // Genre: prefer normalized version from enrichment
   const [genre, setGenre] = useState<string>(
-    currentOverride?.genre ||
-      enrichmentData?.genre_normalized ||
-      enrichmentData?.genre ||
-      ''
+    currentOverride?.genre || enrichmentData?.genre || ''
   )
   const [youtubeUrl, setYoutubeUrl] = useState<string>(() => {
     // Priority: currentOverride > enrichmentData > empty
@@ -108,6 +99,23 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
       setYoutubeUrlError('Invalid YouTube URL or ID')
     } else {
       setYoutubeUrlError(null)
+    }
+  }
+
+  const handleRestoreCanonical = () => {
+    if (!enrichmentData) return
+    
+    // Restore canonical values from enrichment data
+    if (enrichmentData.title) setTitle(enrichmentData.title)
+    if (enrichmentData.artist) setArtist(enrichmentData.artist)
+    if (enrichmentData.year !== undefined) setYear(String(enrichmentData.year ?? ''))
+    if (enrichmentData.album !== undefined) setAlbum(enrichmentData.album ?? '')
+    if (enrichmentData.label !== undefined) setLabel(enrichmentData.label ?? '')
+    if (enrichmentData.directors !== undefined) setDirectors(enrichmentData.directors ?? '')
+    if (enrichmentData.featured_artists !== undefined) setFeaturedArtists(enrichmentData.featured_artists ?? '')
+    if (enrichmentData.genre !== undefined) setGenre(enrichmentData.genre ?? '')
+    if (enrichmentData.youtube_ids && enrichmentData.youtube_ids.length > 0) {
+      setYoutubeUrl(`https://youtube.com/watch?v=${enrichmentData.youtube_ids[0]}`)
     }
   }
 
@@ -145,21 +153,56 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
         </div>
 
         <div className="metadataEditorBody">
-          {/* Show comparison if we have IMVDb data */}
-          {enrichmentData?.match_found && (
+          {/* Show comparison if we have enrichment data */}
+          {enrichmentData && (
             <div className="metadataEditorComparison">
               <div className="metadataEditorComparisonHeader">
                 <div className="metadataEditorComparisonLabel">Spotify</div>
-                <div className="metadataEditorComparisonLabel">IMVDb</div>
+                <div className="metadataEditorComparisonLabel">MusicBrainz + IMVDb</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div>{track.title}</div>
-                <div>{(enrichmentData.metadata?.title as string | undefined) || '-'}</div>
+                <div><strong>Title:</strong> {track.title}</div>
+                <div><strong>Title:</strong> {enrichmentData.title || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div>{track.artist}</div>
-                <div>{(enrichmentData.metadata?.artist as string | undefined) || '-'}</div>
+                <div><strong>Artist:</strong> {track.artist}</div>
+                <div><strong>Artist:</strong> {enrichmentData.artist || '-'}</div>
               </div>
+              <div className="metadataEditorComparisonRow">
+                <div><strong>Album:</strong> {track.album || '-'}</div>
+                <div><strong>Album:</strong> {enrichmentData.album || '-'}</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div><strong>Year:</strong> {track.year || '-'}</div>
+                <div><strong>Year:</strong> {enrichmentData.year || '-'}</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div><strong>Label:</strong> {track.label || '-'}</div>
+                <div><strong>Label:</strong> {enrichmentData.label || '-'}</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div><strong>Genre:</strong> {'-'}</div>
+                <div><strong>Genre:</strong> {enrichmentData.genre || '-'}</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div><strong>Directors:</strong> {'-'}</div>
+                <div><strong>Directors:</strong> {enrichmentData.directors || '-'}</div>
+              </div>
+              <div className="metadataEditorComparisonRow">
+                <div><strong>Featured Artists:</strong> {'-'}</div>
+                <div><strong>Featured Artists:</strong> {enrichmentData.featured_artists || '-'}</div>
+              </div>
+              {enrichmentData.title && enrichmentData.artist && (
+                <div className="metadataEditorActions">
+                  <button
+                    type="button"
+                    className="metadataEditorButton"
+                    onClick={handleRestoreCanonical}
+                  >
+                    Restore from Enrichment Data
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -260,13 +303,36 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
 
             <div className="metadataEditorFormGroup">
               <label className="metadataEditorLabel">YouTube URL or ID</label>
-              <input
-                type="text"
-                className={`metadataEditorInput ${youtubeUrlError ? 'metadataEditorInputError' : ''}`}
-                value={youtubeUrl}
-                onChange={(e) => handleYouTubeUrlChange(e.target.value)}
-                placeholder="https://youtube.com/watch?v=... or video ID"
-              />
+              {enrichmentData?.youtube_ids && enrichmentData.youtube_ids.length > 1 ? (
+                <select
+                  className="metadataEditorInput"
+                  value={extractYouTubeId(youtubeUrl) || ''}
+                  onChange={(e) => {
+                    const selectedId = e.target.value
+                    if (selectedId) {
+                      setYoutubeUrl(`https://youtube.com/watch?v=${selectedId}`)
+                      setYoutubeUrlError(null)
+                    } else {
+                      setYoutubeUrl('')
+                    }
+                  }}
+                >
+                  <option value="">Select a YouTube video</option>
+                  {enrichmentData.youtube_ids.map((id: string, index: number) => (
+                    <option key={id} value={id}>
+                      YouTube Video {index + 1}: {id}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className={`metadataEditorInput ${youtubeUrlError ? 'metadataEditorInputError' : ''}`}
+                  value={youtubeUrl}
+                  onChange={(e) => handleYouTubeUrlChange(e.target.value)}
+                  placeholder="https://youtube.com/watch?v=... or video ID"
+                />
+              )}
               {youtubeUrlError && (
                 <span className="metadataEditorError">{youtubeUrlError}</span>
               )}

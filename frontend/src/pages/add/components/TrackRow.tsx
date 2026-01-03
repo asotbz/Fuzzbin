@@ -6,13 +6,10 @@ import type {
   SpotifyTrackEnrichResponse,
   YouTubeMetadataResponse,
 } from '../../../lib/api/types'
-import type { DiscogsEnrichResponse } from '../../../lib/api/endpoints/spotify'
 
 export interface TrackRowState {
   enrichmentStatus: 'pending' | 'loading' | 'success' | 'error' | 'no_match'
   enrichmentData?: SpotifyTrackEnrichResponse
-  discogsEnrichmentStatus?: 'pending' | 'loading' | 'success' | 'error' | 'no_match'
-  discogsEnrichmentData?: DiscogsEnrichResponse
   selected: boolean
 }
 
@@ -37,7 +34,6 @@ interface TrackRowProps {
   onSearchYouTube: () => void
   onPreviewYouTube: (youtubeId: string) => void
   onRetryIMVDb: () => void
-  onEnrichDiscogs?: () => void
 }
 
 export default function TrackRow({
@@ -49,9 +45,8 @@ export default function TrackRow({
   onSearchYouTube,
   onPreviewYouTube,
   onRetryIMVDb,
-  onEnrichDiscogs,
 }: TrackRowProps) {
-  const { enrichmentStatus, enrichmentData, discogsEnrichmentStatus, discogsEnrichmentData, selected } = state
+  const { enrichmentStatus, enrichmentData, selected } = state
 
   // Get YouTube ID from metadata override (if user selected alternate) or enrichment data
   const youtubeId =
@@ -59,9 +54,6 @@ export default function TrackRow({
     (enrichmentData?.youtube_ids && enrichmentData.youtube_ids.length > 0
       ? enrichmentData.youtube_ids[0]
       : null)
-
-  // Get match type for badge
-  const matchType = enrichmentData?.match_type
 
   // YouTube metadata state
   const [youtubeMetadata, setYoutubeMetadata] = useState<YouTubeMetadataResponse | null>(null)
@@ -110,37 +102,32 @@ export default function TrackRow({
     return `${views} views`
   }
 
-  // Get display titles (clean versions)
+  // Get display titles - use canonical from MusicBrainz if available
+  const canonicalTitle = enrichmentData?.musicbrainz?.canonical_title
+  const canonicalArtist = enrichmentData?.musicbrainz?.canonical_artist
+  
   const displayTitle = getDisplayTrackTitle(
     track.title,
-    enrichmentData?.metadata?.title as string | undefined
+    canonicalTitle || enrichmentData?.title
   )
-  
-  // Discogs enrichment data overrides IMVDb enrichment for album, label, genre
-  const discogsAlbum = discogsEnrichmentData?.album
-  const discogsLabel = discogsEnrichmentData?.label
-  const discogsGenre = discogsEnrichmentData?.genre
-  const discogsYear = discogsEnrichmentData?.year
   
   const displayAlbum = getDisplayAlbumTitle(
     metadataOverride?.album ?? 
-    discogsAlbum ?? 
-    (enrichmentData?.metadata?.album as string | null | undefined) ?? 
+    enrichmentData?.album ?? 
     track.album ?? 
     null
   )
 
   // Get metadata from enrichment data or metadata override
-  // Precedence: User override > Discogs enrichment > IMVDb enrichment > Spotify original
-  const displayArtist: string = metadataOverride?.artist || (enrichmentData?.metadata?.artist as string | undefined) || track.artist
-  const displayYear: number | null | undefined = metadataOverride?.year ?? discogsYear ?? (enrichmentData?.metadata?.year as number | null | undefined) ?? track.year
-  const displayLabel: string | null | undefined = metadataOverride?.label ?? discogsLabel ?? (enrichmentData?.metadata?.label as string | null | undefined) ?? track.label
-  const displayDirectors: string | null | undefined = metadataOverride?.directors ?? (enrichmentData?.metadata?.directors as string | null | undefined)
+  // Precedence: User override > MusicBrainz canonical > Enriched values > Spotify original
+  const displayArtist: string = metadataOverride?.artist || canonicalArtist || enrichmentData?.artist || track.artist
+  const displayYear: number | null | undefined = metadataOverride?.year ?? enrichmentData?.year ?? track.year
+  const displayLabel: string | null | undefined = metadataOverride?.label ?? enrichmentData?.label ?? track.label
+  const displayDirectors: string | null | undefined = metadataOverride?.directors ?? enrichmentData?.directors
   const displayFeaturedArtists: string | null | undefined =
-    metadataOverride?.featuredArtists ?? (enrichmentData?.metadata?.featured_artists as string | null | undefined)
-  // Genre comes from Discogs (preferred), then Spotify artist genres via enrichment - classified to a broad bucket
+    metadataOverride?.featuredArtists ?? enrichmentData?.featured_artists
   const displayGenre: string | null | undefined =
-    metadataOverride?.genre ?? discogsGenre ?? enrichmentData?.genre ?? enrichmentData?.genre_normalized
+    metadataOverride?.genre ?? enrichmentData?.genre
 
   return (
     <div
@@ -210,10 +197,16 @@ export default function TrackRow({
           <span className="trackRowStatusText">Waiting...</span>
         )}
         {enrichmentStatus === 'loading' && (
-          <>
-            <div className="trackRowSpinner" />
-            <span className="trackRowStatusText">Searching IMVDb...</span>
-          </>
+          <div className="trackRowEnrichmentStack">
+            <div className="trackRowEnrichmentItem">
+              <div className="trackRowSpinner" />
+              <span className="trackRowStatusText">MusicBrainz...</span>
+            </div>
+            <div className="trackRowEnrichmentItem">
+              <div className="trackRowSpinner" />
+              <span className="trackRowStatusText">IMVDb...</span>
+            </div>
+          </div>
         )}
         {enrichmentStatus === 'success' && (
           <>
@@ -221,32 +214,64 @@ export default function TrackRow({
               // Track already exists in library (enrichment was skipped)
               <span className="trackRowBadge trackRowBadgeExists">EXISTS</span>
             ) : (
-              // Track was enriched successfully
-              <>
-                <svg className="trackRowIcon trackRowIconSuccess" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                {matchType && (
-                  <span className={`trackRowBadge ${matchType === 'exact' ? 'trackRowBadgeExact' : 'trackRowBadgeFuzzy'}`}>
-                    {matchType === 'exact' ? 'Exact Match' : 'Fuzzy Match'}
-                  </span>
-                )}
+              // Track was enriched successfully - show stacked indicators
+              <div className="trackRowEnrichmentStack">
+                {/* MusicBrainz indicator */}
+                <div className="trackRowEnrichmentItem">
+                  {enrichmentData?.musicbrainz?.confident_match ? (
+                    <>
+                      <svg className="trackRowIcon trackRowIconSuccess" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span 
+                        className="trackRowBadge trackRowBadgeMusicBrainz"
+                        title={`MusicBrainz Match\nRecording: ${enrichmentData.musicbrainz.recording_mbid || 'N/A'}\nAlbum: ${enrichmentData.musicbrainz.album || 'N/A'}\nLabel: ${enrichmentData.musicbrainz.label || 'N/A'}`}
+                      >
+                        MusicBrainz
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="trackRowIcon trackRowIconWarning" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span className="trackRowStatusText trackRowStatusTextMuted">MusicBrainz</span>
+                    </>
+                  )}
+                </div>
+
+                {/* IMVDb indicator */}
+                <div className="trackRowEnrichmentItem">
+                  {enrichmentData?.imvdb?.match_found ? (
+                    <>
+                      <svg className="trackRowIcon trackRowIconSuccess" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span 
+                        className="trackRowBadge trackRowBadgeIMVDb"
+                        title={`IMVDb Match\nID: ${enrichmentData.imvdb.imvdb_id || 'N/A'}\nDirectors: ${enrichmentData.imvdb.directors || 'N/A'}`}
+                      >
+                        IMVDb
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="trackRowIcon trackRowIconWarning" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span className="trackRowStatusText trackRowStatusTextMuted">IMVDb</span>
+                    </>
+                  )}
+                </div>
+
                 {enrichmentData?.already_exists && (
                   <span className="trackRowBadge trackRowBadgeExists">Exists</span>
                 )}
-                {/* Discogs enrichment status */}
-                {discogsEnrichmentStatus === 'loading' && (
-                  <span className="trackRowStatusText">Discogs...</span>
-                )}
-                {discogsEnrichmentStatus === 'success' && discogsEnrichmentData?.match_found && (
-                  <span className="trackRowBadge trackRowBadgeDiscogs" title={`Album: ${discogsEnrichmentData.album || 'N/A'}\nLabel: ${discogsEnrichmentData.label || 'N/A'}\nGenre: ${discogsEnrichmentData.genre || 'N/A'}`}>
-                    Discogs
-                  </span>
-                )}
-                {discogsEnrichmentStatus === 'no_match' && (
-                  <span className="trackRowStatusText">Discogs: No match</span>
-                )}
-              </>
+              </div>
             )}
           </>
         )}
@@ -257,7 +282,7 @@ export default function TrackRow({
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <span className="trackRowStatusText">No IMVDb match</span>
+            <span className="trackRowStatusText">No match found</span>
           </>
         )}
         {enrichmentStatus === 'error' && (
@@ -356,37 +381,18 @@ export default function TrackRow({
             <path d="M21 21l-4.35-4.35" />
           </svg>
         </button>
-        {(enrichmentStatus === 'no_match' || (enrichmentStatus === 'success' && matchType === 'fuzzy')) && !track.already_exists && (
+        {(enrichmentStatus === 'no_match' || enrichmentStatus === 'success') && !track.already_exists && (
           <button
             type="button"
             className="trackRowActionButton"
             onClick={onRetryIMVDb}
-            title="Retry IMVDb search"
+            title="Retry enrichment with custom search"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M1 4v6h6" />
               <path d="M23 20v-6h-6" />
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
             </svg>
-          </button>
-        )}
-        {/* Discogs enrichment button - show only after successful IMVDb match */}
-        {enrichmentStatus === 'success' && !track.already_exists && onEnrichDiscogs && (
-          <button
-            type="button"
-            className="trackRowActionButton"
-            onClick={onEnrichDiscogs}
-            disabled={discogsEnrichmentStatus === 'loading'}
-            title="Enrich with Discogs"
-          >
-            {discogsEnrichmentStatus === 'loading' ? (
-              <div className="trackRowSpinner" />
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 6v6l4 2" />
-              </svg>
-            )}
           </button>
         )}
       </div>

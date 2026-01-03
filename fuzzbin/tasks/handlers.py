@@ -852,7 +852,7 @@ async def _handle_direct_url_download(job: Job, url: str, output_path: str) -> N
             job.mark_completed(
                 {
                     "url": url,
-                    "file_path": str(result.file_path),
+                    "file_path": str(result.output_path),
                     "file_size": result.file_size,
                 }
             )
@@ -860,7 +860,7 @@ async def _handle_direct_url_download(job: Job, url: str, output_path: str) -> N
             logger.info(
                 "youtube_direct_download_completed",
                 job_id=job.id,
-                file_path=str(result.file_path),
+                file_path=str(result.output_path),
                 file_size=result.file_size,
             )
 

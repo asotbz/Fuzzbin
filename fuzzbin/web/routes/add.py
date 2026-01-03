@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Annotated, Any, Optional
+from contextlib import nullcontext
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,9 +27,9 @@ from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.clients.ytdlp_client import YTDLPClient
 from fuzzbin.common.config import YTDLPConfig
-from fuzzbin.common.genre_buckets import classify_genres
 from fuzzbin.common.string_utils import normalize_spotify_title
-from fuzzbin.services.discogs_enrichment import DiscogsEnrichmentService
+from fuzzbin.services.musicbrainz_enrichment import MusicBrainzEnrichmentService
+from fuzzbin.services.track_enrichment import TrackEnrichmentService
 from fuzzbin.tasks import Job, JobType, get_job_queue
 from fuzzbin.web.dependencies import get_current_user
 from fuzzbin.web.schemas.add import (
@@ -43,8 +44,8 @@ from fuzzbin.web.schemas.add import (
     BatchPreviewItem,
     BatchPreviewRequest,
     BatchPreviewResponse,
-    DiscogsEnrichRequest,
-    DiscogsEnrichResponse,
+    IMVDbEnrichmentData,
+    MusicBrainzEnrichmentData,
     NFOScanResponse,
     SpotifyBatchImportRequest,
     SpotifyBatchImportResponse,
@@ -57,7 +58,6 @@ from fuzzbin.web.schemas.add import (
     YouTubeSearchRequest,
     normalize_spotify_playlist_id,
 )
-from fuzzbin.parsers.imvdb_parser import IMVDbParser
 from fuzzbin.web.schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from fuzzbin.web.schemas.imvdb import IMVDbVideoDetail
 from fuzzbin.web.schemas.scan import ImportMode, ScanJobResponse, ScanRequest
@@ -313,6 +313,7 @@ async def preview_batch(
                     album=album,
                     year=year,
                     label=label,
+                    isrc=track.isrc,  # Include ISRC for MusicBrainz lookup
                     already_exists=already_exists,
                     spotify_track_id=track.id,
                     spotify_playlist_id=playlist_id,
@@ -968,23 +969,25 @@ async def submit_single_import(
     "/spotify/enrich-track",
     response_model=SpotifyTrackEnrichResponse,
     responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
-    summary="Enrich a Spotify track with IMVDb metadata",
-    description="Search IMVDb for a track and return matched metadata including YouTube IDs.",
+    summary="Enrich Spotify track with MusicBrainz and IMVDb metadata",
+    description="Unified enrichment using ISRC → MusicBrainz → IMVDb pipeline",
 )
 async def enrich_spotify_track(
     request: SpotifyTrackEnrichRequest,
     current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
 ) -> SpotifyTrackEnrichResponse:
     """
-    Enrich a single Spotify track with IMVDb metadata.
+    Enrich a single Spotify track with MusicBrainz and IMVDb metadata.
 
     This endpoint:
-    1. Searches IMVDb for the track
-    2. Applies fuzzy matching (threshold 0.8)
-    3. Extracts YouTube IDs from IMVDb sources
-    4. Checks if track already exists in library
+    1. Searches MusicBrainz using ISRC (preferred) or artist/title
+    2. Extracts canonical metadata, album, label, year, genres from MusicBrainz
+    3. Classifies genres from MusicBrainz tags (with Spotify fallback)
+    4. Searches IMVDb using canonical artist/title for better matching
+    5. Extracts directors, featured artists, YouTube IDs from IMVDb
+    6. Checks if track already exists in library
 
-    Returns enrichment data including match status, IMVDb ID, YouTube IDs, and metadata.
+    Returns unified enrichment data with MusicBrainz and IMVDb sections.
     """
     user_label = current_user.username if current_user else "anonymous"
     logger.info(
@@ -992,362 +995,167 @@ async def enrich_spotify_track(
         artist=request.artist,
         track_title=request.track_title,
         spotify_track_id=request.spotify_track_id,
+        has_isrc=bool(request.isrc),
         user=user_label,
     )
 
-    # Initialize response with defaults
-    response = SpotifyTrackEnrichResponse(
-        spotify_track_id=request.spotify_track_id,
-        match_found=False,
-    )
+    # Get API configs
+    musicbrainz_config = _get_api_config("musicbrainz")
+    imvdb_config = _get_api_config("imvdb")
 
-    # Search IMVDb
-    api_config = _get_api_config("imvdb")
-    if not api_config:
-        logger.warning(
-            "spotify_enrich_track_skipped",
-            reason="IMVDb API is not configured",
-            user=user_label,
-        )
-        return response
-
+    # Initialize services
     try:
-        # Normalize Spotify titles before IMVDb search to improve matching
-        # For artist: remove featured artists but keep version qualifiers (if any)
-        # For track: remove both version qualifiers and featured artists
-        normalized_artist = normalize_spotify_title(
-            request.artist,
-            remove_version_qualifiers_flag=False,
-            remove_featured=True,
-        )
-        normalized_title = normalize_spotify_title(
-            request.track_title,
-            remove_version_qualifiers_flag=True,
-            remove_featured=True,
-        )
+        repository = await fuzzbin_module.get_repository()
 
-        logger.debug(
-            "spotify_titles_normalized",
-            original_artist=request.artist,
-            normalized_artist=normalized_artist,
-            original_title=request.track_title,
-            normalized_title=normalized_title,
-        )
+        # Create MusicBrainz enrichment service
+        mb_service = MusicBrainzEnrichmentService(config=musicbrainz_config)
 
-        async with IMVDbClient.from_config(api_config) as imvdb_client:
-            search_result = await imvdb_client.search_videos(
-                artist=normalized_artist,
-                track_title=normalized_title,
-                page=1,
-                per_page=20,  # Get more results for better matching
+        # Create IMVDb client (will be used in context manager)
+        imvdb_client = IMVDbClient.from_config(imvdb_config) if imvdb_config else None
+
+        if not imvdb_client:
+            logger.warning(
+                "imvdb_not_configured",
+                spotify_track_id=request.spotify_track_id,
             )
 
-            # If no results, return no match
-            if not search_result.results:
-                logger.info(
-                    "spotify_enrich_track_no_results",
-                    artist=request.artist,
-                    track_title=request.track_title,
-                    user=user_label,
-                )
-                return response
+        # Use async context manager for IMVDb client
+        async with imvdb_client if imvdb_client else nullcontext():
+            # Create unified enrichment service
+            enrichment_service = TrackEnrichmentService(
+                repository=repository,
+                musicbrainz_service=mb_service,
+                imvdb_client=imvdb_client,
+            )
 
-            # Try to find best match using fuzzy matching
-            try:
-                matched_video = IMVDbParser.find_best_video_match(
-                    results=search_result.results,
-                    artist=request.artist,
-                    title=request.track_title,
-                    threshold=0.8,
-                )
-            except Exception as e:
-                logger.info(
-                    "spotify_enrich_track_no_match",
-                    artist=request.artist,
-                    track_title=request.track_title,
-                    error=str(e),
-                    user=user_label,
-                )
-                return response
+            # Perform enrichment
+            result = await enrichment_service.enrich(
+                artist=request.artist,
+                title=request.track_title,
+                isrc=request.isrc,
+                spotify_artist_genres=request.artist_genres,
+            )
 
-            # Match found! Get full video details
-            try:
-                video = await imvdb_client.get_video(matched_video.id)
-                logger.debug(
-                    "imvdb_video_details_retrieved",
-                    video_id=matched_video.id,
-                    has_sources=bool(video.sources),
-                    has_artists=bool(video.artists),
-                    has_directors=bool(video.directors),
-                )
-            except Exception as e:
-                logger.error(
-                    "failed_to_get_imvdb_video_details",
-                    video_id=matched_video.id,
-                    error=str(e),
-                    exc_info=True,
-                )
-                raise
+            # Check if track already exists (by ISRC, MusicBrainz ID, or IMVDb ID)
+            existing_video = None
+            existing_video_id = None
 
-            # Fetch IMVDb entity to get Discogs artist ID
-            imvdb_entity_id: Optional[int] = None
-            discogs_artist_id: Optional[int] = None
-
-            if video.artists and len(video.artists) > 0:
-                primary_artist_name = video.artists[0].name
-
+            # Try ISRC first
+            if request.isrc:
                 try:
-                    entity_search = await imvdb_client.search_entities(
-                        artist_name=primary_artist_name,
-                        page=1,
-                        per_page=1,
+                    existing_video = await repository.get_video_by_isrc(
+                        request.isrc, include_deleted=False
                     )
-
-                    if entity_search.results:
-                        entity = entity_search.results[0]
-                        imvdb_entity_id = entity.id
-                        discogs_artist_id = entity.discogs_id
-
+                    if existing_video:
+                        existing_video_id = existing_video.get("id")
                         logger.debug(
-                            "imvdb_entity_found",
-                            video_id=matched_video.id,
-                            entity_id=imvdb_entity_id,
-                            discogs_artist_id=discogs_artist_id,
+                            "found_existing_video_by_isrc",
+                            isrc=request.isrc,
+                            existing_video_id=existing_video_id,
                         )
-                except Exception as e:
-                    logger.debug(
-                        "imvdb_entity_search_failed",
-                        video_id=matched_video.id,
-                        artist_name=primary_artist_name,
-                        error=str(e),
+                except Exception:
+                    pass
+
+            # Try MusicBrainz recording ID
+            if not existing_video and result.mb_recording_mbid:
+                try:
+                    existing_video = await repository.get_video_by_musicbrainz_recording(
+                        result.mb_recording_mbid, include_deleted=False
                     )
+                    if existing_video:
+                        existing_video_id = existing_video.get("id")
+                        logger.debug(
+                            "found_existing_video_by_mb_recording",
+                            recording_mbid=result.mb_recording_mbid,
+                            existing_video_id=existing_video_id,
+                        )
+                except Exception:
+                    pass
 
-            # Extract YouTube IDs from sources
-            try:
-                youtube_ids: list[str] = []
-                for s in video.sources or []:
-                    if getattr(s, "source_slug", None) != "youtube":
-                        continue
-                    sd = getattr(s, "source_data", None)
-                    if isinstance(sd, str) and sd:
-                        youtube_ids.append(sd)
-                    elif isinstance(sd, dict):
-                        candidate = sd.get("id") or sd.get("video_id") or sd.get("youtube_id")
-                        if isinstance(candidate, str) and candidate:
-                            youtube_ids.append(candidate)
-
-                # Remove duplicates while preserving order
-                youtube_ids = list(dict.fromkeys(youtube_ids))
-                logger.debug(
-                    "youtube_ids_extracted",
-                    video_id=matched_video.id,
-                    youtube_id_count=len(youtube_ids),
-                    youtube_ids=youtube_ids,
-                )
-            except Exception as e:
-                logger.error(
-                    "failed_to_extract_youtube_ids",
-                    video_id=matched_video.id,
-                    error=str(e),
-                    exc_info=True,
-                )
-                raise
-
-            # Build metadata dict
-            try:
-                primary_artist = None
-                if video.artists and len(video.artists) > 0:
-                    primary_artist = video.artists[0].name
-
-                directors_list = []
-                for d in video.directors or []:
-                    if d.entity_name:
-                        directors_list.append(d.entity_name)
-                directors_str = ", ".join(directors_list) if directors_list else None
-
-                # Normalize album name from Spotify (remove version qualifiers)
-                normalized_album = None
-                if request.album:
-                    normalized_album = normalize_spotify_title(
-                        request.album,
-                        remove_version_qualifiers_flag=True,
-                        remove_featured=False,
-                    )
-                    # Capitalize first letter of each word for better display
-                    normalized_album = normalized_album.title()
-
-                # Extract featured artists
-                featured_artists_list = []
-                for fa in video.featured_artists or []:
-                    if fa.name:
-                        featured_artists_list.append(fa.name)
-                featured_artists_str = (
-                    ", ".join(featured_artists_list) if featured_artists_list else None
-                )
-
-                metadata = {
-                    "title": video.song_title,  # Use IMVDb's clean title
-                    "artist": primary_artist,
-                    "year": video.year,
-                    "album": normalized_album or request.album,  # Use normalized album if available
-                    "label": request.label,  # Keep original label from Spotify
-                    "directors": directors_str,
-                    "featured_artists": featured_artists_str,
-                    "sources": [
-                        {
-                            "source": s.source,
-                            "source_slug": s.source_slug,
-                            "source_data": s.source_data,
-                            "is_primary": s.is_primary,
-                        }
-                        for s in (video.sources or [])
-                    ],
-                }
-                logger.debug(
-                    "metadata_built",
-                    video_id=matched_video.id,
-                    has_title=bool(metadata.get("title")),
-                    has_artist=bool(metadata.get("artist")),
-                    sources_count=len(metadata.get("sources", [])),
-                )
-            except Exception as e:
-                logger.error(
-                    "failed_to_build_metadata",
-                    video_id=matched_video.id,
-                    error=str(e),
-                    exc_info=True,
-                )
-                raise
-
-            # Check if video already exists in library
-            try:
-                repository = await fuzzbin_module.get_repository()
-                existing_video = None
-                existing_video_id = None
-
+            # Try IMVDb ID
+            if not existing_video and result.imvdb_id:
                 try:
                     existing_video = await repository.get_video_by_imvdb_id(
-                        str(matched_video.id), include_deleted=False
+                        str(result.imvdb_id), include_deleted=False
                     )
                     if existing_video:
                         existing_video_id = existing_video.get("id")
                         logger.debug(
                             "found_existing_video_by_imvdb_id",
-                            video_id=matched_video.id,
+                            imvdb_id=result.imvdb_id,
                             existing_video_id=existing_video_id,
                         )
                 except Exception:
-                    pass  # Video not found
+                    pass
 
-                if not existing_video and youtube_ids:
-                    try:
-                        existing_video = await repository.get_video_by_youtube_id(
-                            youtube_ids[0], include_deleted=False
+            # Try first YouTube ID
+            if not existing_video and result.imvdb_youtube_ids:
+                try:
+                    existing_video = await repository.get_video_by_youtube_id(
+                        result.imvdb_youtube_ids[0], include_deleted=False
+                    )
+                    if existing_video:
+                        existing_video_id = existing_video.get("id")
+                        logger.debug(
+                            "found_existing_video_by_youtube_id",
+                            youtube_id=result.imvdb_youtube_ids[0],
+                            existing_video_id=existing_video_id,
                         )
-                        if existing_video:
-                            existing_video_id = existing_video.get("id")
-                            logger.debug(
-                                "found_existing_video_by_youtube_id",
-                                youtube_id=youtube_ids[0],
-                                existing_video_id=existing_video_id,
-                            )
-                    except Exception:
-                        pass  # Video not found
-
-                logger.debug(
-                    "existence_check_complete",
-                    video_id=matched_video.id,
-                    already_exists=existing_video is not None,
-                )
-            except Exception as e:
-                logger.error(
-                    "failed_existence_check",
-                    video_id=matched_video.id,
-                    error=str(e),
-                    exc_info=True,
-                )
-                raise
-
-            # Step 5: Classify genre from Spotify artist genres
-            genre: Optional[str] = None
-            genre_normalized: Optional[str] = None
-            genre_is_mapped: Optional[bool] = None
-            source_genres: Optional[list[str]] = None
-
-            if request.artist_genres:
-                source_genres = request.artist_genres
-                classified_genre, _ = classify_genres(request.artist_genres)
-                if classified_genre:
-                    genre = classified_genre
-                    genre_normalized = classified_genre  # Same value for backwards compatibility
-                    genre_is_mapped = True
-
-                    logger.info(
-                        "spotify_enrich_track_genre_classified",
-                        spotify_track_id=request.spotify_track_id,
-                        genre=genre,
-                        source_genres=source_genres,
-                    )
-
-                    # Add genre to metadata dict
-                    metadata["genre"] = genre
-                    metadata["genre_normalized"] = genre_normalized
-                else:
-                    genre_is_mapped = False
-                    logger.debug(
-                        "spotify_enrich_track_genre_not_classified",
-                        spotify_track_id=request.spotify_track_id,
-                        source_genres=source_genres,
-                    )
+                except Exception:
+                    pass
 
             # Build response
-            try:
-                match_type = "exact" if getattr(matched_video, "is_exact_match", False) else "fuzzy"
+            response = SpotifyTrackEnrichResponse(
+                spotify_track_id=request.spotify_track_id,
+                musicbrainz=MusicBrainzEnrichmentData(
+                    recording_mbid=result.mb_recording_mbid,
+                    release_mbid=result.mb_release_mbid,
+                    canonical_title=result.mb_canonical_title,
+                    canonical_artist=result.mb_canonical_artist,
+                    album=result.mb_album,
+                    year=result.mb_year,
+                    label=result.mb_label,
+                    genre=result.mb_genre,
+                    classified_genre=result.mb_classified_genre,
+                    all_genres=result.mb_all_genres,
+                    match_score=result.mb_match_score,
+                    match_method=result.mb_match_method,
+                    confident_match=result.mb_confident_match,
+                ),
+                imvdb=IMVDbEnrichmentData(
+                    imvdb_id=result.imvdb_id,
+                    imvdb_url=result.imvdb_url,
+                    year=result.imvdb_year,
+                    directors=result.imvdb_directors,
+                    featured_artists=result.imvdb_featured_artists,
+                    youtube_ids=result.imvdb_youtube_ids,
+                    thumbnail_url=result.imvdb_thumbnail_url,
+                    match_found=result.imvdb_found,
+                ),
+                title=result.final_title,
+                artist=result.final_artist,
+                album=result.final_album,
+                year=result.final_year,
+                label=result.final_label,
+                genre=result.final_genre,
+                directors=result.imvdb_directors,
+                featured_artists=result.imvdb_featured_artists,
+                youtube_ids=result.imvdb_youtube_ids,
+                thumbnail_url=result.imvdb_thumbnail_url,
+                already_exists=existing_video is not None,
+                existing_video_id=existing_video_id,
+            )
 
-                # Extract thumbnail URL from IMVDb image (prefer original, fall back to large)
-                thumbnail_url = None
-                if video.image:
-                    thumbnail_url = video.image.get("o") or video.image.get("l")
+            logger.info(
+                "spotify_enrich_track_success",
+                spotify_track_id=request.spotify_track_id,
+                mb_confident_match=result.mb_confident_match,
+                imvdb_found=result.imvdb_found,
+                already_exists=response.already_exists,
+                user=user_label,
+            )
 
-                response = SpotifyTrackEnrichResponse(
-                    spotify_track_id=request.spotify_track_id,
-                    match_found=True,
-                    match_type=match_type,
-                    imvdb_id=matched_video.id,
-                    imvdb_url=getattr(video, "url", None),
-                    imvdb_entity_id=imvdb_entity_id,
-                    discogs_artist_id=discogs_artist_id,
-                    youtube_ids=youtube_ids,
-                    metadata=metadata,
-                    already_exists=existing_video is not None,
-                    existing_video_id=existing_video_id,
-                    genre=genre,
-                    genre_normalized=genre_normalized,
-                    genre_is_mapped=genre_is_mapped,
-                    source_genres=source_genres,
-                    thumbnail_url=thumbnail_url,
-                )
-
-                logger.info(
-                    "spotify_enrich_track_success",
-                    spotify_track_id=request.spotify_track_id,
-                    imvdb_id=matched_video.id,
-                    match_type=match_type,
-                    youtube_id_count=len(youtube_ids),
-                    already_exists=response.already_exists,
-                    genre=genre,
-                    user=user_label,
-                )
-
-                return response
-            except Exception as e:
-                logger.error(
-                    "failed_to_build_response",
-                    video_id=matched_video.id,
-                    error=str(e),
-                    exc_info=True,
-                )
-                raise
+            return response
 
     except Exception as e:
         logger.error(
@@ -1358,139 +1166,14 @@ async def enrich_spotify_track(
             user=user_label,
             exc_info=True,
         )
-        # Return no match on error
+        # Return empty enrichment on error
         return SpotifyTrackEnrichResponse(
             spotify_track_id=request.spotify_track_id,
-            match_found=False,
-        )
-
-
-@router.post(
-    "/spotify/enrich-track-discogs",
-    response_model=DiscogsEnrichResponse,
-    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
-    summary="Enrich Spotify track with Discogs metadata",
-    description="Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.",
-)
-async def enrich_spotify_track_discogs(
-    request: DiscogsEnrichRequest,
-    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
-) -> DiscogsEnrichResponse:
-    """
-    Enrich a Spotify track with Discogs metadata (album, label, genre).
-
-    Searches Discogs for the earliest album appearance of the track.
-    If discogs_artist_id is provided, searches artist releases (more accurate).
-    Otherwise, uses text search with artist name + track title.
-    """
-    user_label = current_user.username if current_user else "anonymous"
-
-    # Get API configs
-    imvdb_config = _get_api_config("imvdb")
-    discogs_config = _get_api_config("discogs")
-
-    if not discogs_config:
-        logger.warning(
-            "discogs_enrich_skipped",
-            reason="Discogs API is not configured",
-            spotify_track_id=request.spotify_track_id,
-            user=user_label,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Discogs API is not configured",
-        )
-
-    # Initialize enrichment service
-    service = DiscogsEnrichmentService(
-        imvdb_config=imvdb_config,
-        discogs_config=discogs_config,
-    )
-
-    try:
-        # Choose enrichment method based on whether Discogs artist ID is available
-        if request.discogs_artist_id:
-            # Use artist ID search (more accurate - finds earliest release)
-            logger.info(
-                "discogs_enrich_via_artist_id",
-                spotify_track_id=request.spotify_track_id,
-                discogs_artist_id=request.discogs_artist_id,
-                track_title=request.track_title,
-                user=user_label,
-            )
-            result = await service.enrich_from_discogs_artist(
-                discogs_artist_id=request.discogs_artist_id,
-                track_title=request.track_title,
-            )
-        else:
-            # Fall back to text search
-            logger.info(
-                "discogs_enrich_via_text_search",
-                spotify_track_id=request.spotify_track_id,
-                artist_name=request.artist_name,
-                track_title=request.track_title,
-                user=user_label,
-            )
-            result = await service._enrich_via_text_search(
-                artist_name=request.artist_name,
-                track_title=request.track_title,
-            )
-
-        # Classify Discogs genre through the same genre classifier used for Spotify/IMVDb
-        classified_genre = None
-        if result.genre:
-            # Pass Discogs genre as a single-item list to the classifier
-            classified_genre, _ = classify_genres([result.genre])
-            if classified_genre:
-                logger.debug(
-                    "discogs_genre_classified",
-                    spotify_track_id=request.spotify_track_id,
-                    original_genre=result.genre,
-                    classified_genre=classified_genre,
-                )
-
-        # Build response
-        response = DiscogsEnrichResponse(
-            spotify_track_id=request.spotify_track_id,
-            match_found=result.confident_match,
-            discogs_artist_id=result.discogs_artist_id,
-            discogs_master_id=result.discogs_master_id,
-            album=result.album,
-            label=result.label,
-            genre=classified_genre or result.genre,  # Use classified genre if available
-            year=result.year,
-            match_score=result.match_score,
-            match_method=result.match_method,
-        )
-
-        logger.info(
-            "discogs_enrich_complete",
-            spotify_track_id=request.spotify_track_id,
-            match_found=result.confident_match,
-            match_score=result.match_score,
-            match_method=result.match_method,
-            album=result.album,
-            label=result.label,
-            genre=result.genre,
-            user=user_label,
-        )
-
-        return response
-
-    except Exception as e:
-        logger.error(
-            "discogs_enrich_failed",
-            spotify_track_id=request.spotify_track_id,
-            error=str(e),
-            user=user_label,
-            exc_info=True,
-        )
-        # Return no match on error
-        return DiscogsEnrichResponse(
-            spotify_track_id=request.spotify_track_id,
-            match_found=False,
-            match_score=0.0,
-            match_method="none",
+            musicbrainz=MusicBrainzEnrichmentData(),
+            imvdb=IMVDbEnrichmentData(),
+            title=request.track_title,
+            artist=request.artist,
+            already_exists=False,
         )
 
 

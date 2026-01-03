@@ -12,6 +12,7 @@ from ..parsers.musicbrainz_models import (
     MusicBrainzISRCResponse,
     MusicBrainzRecording,
     MusicBrainzRecordingSearchResponse,
+    MusicBrainzRelease,
     RecordingNotFoundError,
 )
 from ..parsers.musicbrainz_parser import MusicBrainzParser
@@ -83,7 +84,9 @@ class MusicBrainzClient(RateLimitedAPIClient):
     DEFAULT_REQUESTS_PER_MINUTE = 60  # 1 request per second
     DEFAULT_BURST_SIZE = 1  # No bursting allowed
     DEFAULT_MAX_CONCURRENT = 1  # One request at a time
-    DEFAULT_INCLUDES = "artist-credits+releases+tags"  # Sensible defaults for recording queries
+    DEFAULT_INCLUDES = "artist-credits+releases+tags+release-groups+labels"  # Sensible defaults for recording queries
+    # ISRC endpoint only supports a subset of includes (no release-groups or labels)
+    ISRC_INCLUDES = "tags"
     CACHE_DATABASE = "musicbrainz_cache.sqlite"
 
     def __init__(
@@ -328,7 +331,7 @@ class MusicBrainzClient(RateLimitedAPIClient):
         """
         params = {
             "fmt": "json",
-            "inc": self.DEFAULT_INCLUDES,
+            "inc": self.ISRC_INCLUDES,
         }
 
         self.logger.info(
@@ -385,3 +388,40 @@ class MusicBrainzClient(RateLimitedAPIClient):
 
         response.raise_for_status()
         return MusicBrainzParser.parse_recording(response.json())
+
+    async def get_release(
+        self,
+        mbid: str,
+        includes: str = "labels",
+    ) -> MusicBrainzRelease:
+        """
+        Get detailed information about a specific release by MBID.
+
+        Args:
+            mbid: MusicBrainz release ID (UUID format)
+            includes: Include parameters (default: labels)
+
+        Returns:
+            MusicBrainzRelease with full details including label info
+
+        Raises:
+            httpx.HTTPStatusError: If the API returns an error status
+
+        Example:
+            >>> release = await client.get_release("ff565cd7-acf8-4dc0-9603-72d1b7ae284b")
+            >>> if release.label_info:
+            ...     print(f"Label: {release.label_info[0].label.name}")
+        """
+        params = {
+            "fmt": "json",
+            "inc": includes,
+        }
+
+        self.logger.info(
+            "musicbrainz_get_release",
+            mbid=mbid,
+        )
+
+        response = await self.get(f"/release/{mbid}", params=params)
+        response.raise_for_status()
+        return MusicBrainzParser.parse_release(response.json())

@@ -31,6 +31,10 @@ from .discogs_enrichment import (
     DiscogsEnrichmentResult,
     DiscogsTrackMatch,
 )
+from .musicbrainz_enrichment import (
+    MusicBrainzEnrichmentService,
+    MusicBrainzEnrichmentResult,
+)
 
 __all__ = [
     # Base classes and utilities
@@ -49,4 +53,6 @@ __all__ = [
     "DiscogsEnrichmentService",
     "DiscogsEnrichmentResult",
     "DiscogsTrackMatch",
+    "MusicBrainzEnrichmentService",
+    "MusicBrainzEnrichmentResult",
 ]

@@ -55,11 +55,22 @@ class SpotifyTrack(BaseModel):
     duration_ms: Optional[int] = Field(default=None, description="Track duration in milliseconds")
     popularity: Optional[int] = Field(default=None, description="Popularity score 0-100")
     explicit: Optional[bool] = Field(default=None, description="Explicit content flag")
+    external_ids: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="External IDs including ISRC, EAN, UPC",
+    )
 
     model_config = {
         "extra": "ignore",
         "validate_assignment": True,
     }
+
+    @property
+    def isrc(self) -> Optional[str]:
+        """Extract ISRC from external_ids if available."""
+        if self.external_ids:
+            return self.external_ids.get("isrc")
+        return None
 
 
 class SpotifyPlaylistTrack(BaseModel):

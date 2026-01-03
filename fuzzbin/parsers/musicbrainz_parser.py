@@ -10,6 +10,7 @@ from .musicbrainz_models import (
     MusicBrainzISRCResponse,
     MusicBrainzRecording,
     MusicBrainzRecordingSearchResponse,
+    MusicBrainzRelease,
 )
 
 logger = structlog.get_logger(__name__)
@@ -140,3 +141,24 @@ class MusicBrainzParser:
             >>> recordings = MusicBrainzParser.parse_recordings_list(data["recordings"])
         """
         return [MusicBrainzRecording.model_validate(r) for r in data]
+
+    @staticmethod
+    def parse_release(data: Dict[str, Any]) -> MusicBrainzRelease:
+        """
+        Parse MusicBrainz release response into validated model.
+
+        Args:
+            data: Raw release response from MusicBrainz API
+
+        Returns:
+            Validated MusicBrainzRelease model
+
+        Raises:
+            ValidationError: If response data is invalid
+
+        Example:
+            >>> response = await client.get("/release/{mbid}?inc=labels")
+            >>> release = MusicBrainzParser.parse_release(response.json())
+            >>> print(release.label_info[0].label.name if release.label_info else "No label")
+        """
+        return MusicBrainzRelease.model_validate(data)

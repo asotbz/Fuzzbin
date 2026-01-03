@@ -52,13 +52,23 @@ def musicbrainz_config():
     return APIClientConfig(name="musicbrainz")
 
 
+@pytest.fixture
+def temp_cache_dir(tmp_path):
+    """Create a temporary directory for cache storage to avoid test interference."""
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    return cache_dir
+
+
 class TestMusicBrainzClient:
     """Test suite for MusicBrainzClient."""
 
     @pytest.mark.asyncio
-    async def test_from_config(self, musicbrainz_config):
+    async def test_from_config(self, musicbrainz_config, temp_cache_dir):
         """Test creating client from configuration."""
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             assert client.base_url == "https://musicbrainz.org/ws/2"
             assert client.rate_limiter is not None
             assert client.concurrency_limiter is not None
@@ -69,16 +79,18 @@ class TestMusicBrainzClient:
             assert client.auth_headers["Accept"] == "application/json"
 
     @pytest.mark.asyncio
-    async def test_from_config_none(self):
+    async def test_from_config_none(self, temp_cache_dir):
         """Test creating client with no config (MusicBrainz requires no auth)."""
-        async with MusicBrainzClient.from_config() as client:
+        async with MusicBrainzClient.from_config(config_dir=temp_cache_dir) as client:
             assert client.base_url == "https://musicbrainz.org/ws/2"
             assert "User-Agent" in client.auth_headers
 
     @pytest.mark.asyncio
-    async def test_user_agent_format(self, musicbrainz_config):
+    async def test_user_agent_format(self, musicbrainz_config, temp_cache_dir):
         """Test that User-Agent header follows required format."""
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             user_agent = client.auth_headers["User-Agent"]
             assert user_agent.startswith("fuzzbin/")
             assert "(https://github.com/asotbz/Fuzzbin)" in user_agent
@@ -162,14 +174,16 @@ class TestSearchRecordings:
     @pytest.mark.asyncio
     @respx.mock
     async def test_search_recordings_by_artist_and_title(
-        self, musicbrainz_config, search_response
+        self, musicbrainz_config, search_response, temp_cache_dir
     ):
         """Test searching for recordings by artist and title."""
         route = respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=search_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.search_recordings(
                 artist="Nirvana", recording="Smells Like Teen Spirit"
             )
@@ -202,19 +216,21 @@ class TestSearchRecordings:
     @pytest.mark.asyncio
     @respx.mock
     async def test_search_recordings_by_isrc(
-        self, musicbrainz_config, isrc_search_response
+        self, musicbrainz_config, isrc_search_response, temp_cache_dir
     ):
         """Test searching for recordings by ISRC."""
         route = respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=isrc_search_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.search_recordings(isrc="USGF19942501")
 
-            # Verify response
-            assert result.count == 2
-            assert len(result.recordings) > 0
+            # Verify response - count from example file
+            assert result.count == 1
+            assert len(result.recordings) == 1
 
             # Verify request contains ISRC query
             request_url = str(route.calls.last.request.url)
@@ -223,14 +239,16 @@ class TestSearchRecordings:
     @pytest.mark.asyncio
     @respx.mock
     async def test_search_recordings_with_pagination(
-        self, musicbrainz_config, search_response
+        self, musicbrainz_config, search_response, temp_cache_dir
     ):
         """Test search with custom pagination parameters."""
         route = respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=search_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.search_recordings(
                 artist="Nirvana",
                 recording="Smells Like Teen Spirit",
@@ -246,14 +264,16 @@ class TestSearchRecordings:
     @pytest.mark.asyncio
     @respx.mock
     async def test_search_recordings_limit_capped_at_100(
-        self, musicbrainz_config, search_response
+        self, musicbrainz_config, search_response, temp_cache_dir
     ):
         """Test that limit is capped at 100 (API maximum)."""
         route = respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=search_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             await client.search_recordings(artist="Nirvana", limit=500)
 
             # Verify limit is capped
@@ -261,9 +281,13 @@ class TestSearchRecordings:
             assert "limit=100" in request_url
 
     @pytest.mark.asyncio
-    async def test_search_recordings_no_criteria_raises_error(self, musicbrainz_config):
+    async def test_search_recordings_no_criteria_raises_error(
+        self, musicbrainz_config, temp_cache_dir
+    ):
         """Test that search with no criteria raises ValueError."""
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             with pytest.raises(ValueError, match="At least one search criterion"):
                 await client.search_recordings()
 
@@ -273,13 +297,15 @@ class TestLookupByISRC:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_lookup_by_isrc(self, musicbrainz_config, isrc_response):
+    async def test_lookup_by_isrc(self, musicbrainz_config, isrc_response, temp_cache_dir):
         """Test ISRC lookup."""
         route = respx.get("https://musicbrainz.org/ws/2/isrc/USGF19942501").mock(
             return_value=httpx.Response(200, json=isrc_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.lookup_by_isrc("USGF19942501")
 
             # Verify response
@@ -296,16 +322,18 @@ class TestLookupByISRC:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_lookup_by_isrc_not_found(self, musicbrainz_config):
+    async def test_lookup_by_isrc_not_found(self, musicbrainz_config, temp_cache_dir):
         """Test ISRC lookup returns 404."""
         respx.get("https://musicbrainz.org/ws/2/isrc/INVALID123456").mock(
             return_value=httpx.Response(404, json={"error": "Not Found"})
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             with pytest.raises(RecordingNotFoundError) as exc_info:
                 await client.lookup_by_isrc("INVALID123456")
-            
+
             assert exc_info.value.isrc == "INVALID123456"
 
 
@@ -314,14 +342,18 @@ class TestGetRecording:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_get_recording(self, musicbrainz_config, recording_response):
+    async def test_get_recording(
+        self, musicbrainz_config, recording_response, temp_cache_dir
+    ):
         """Test getting recording by MBID."""
         mbid = "5fb524f1-8cc8-4c04-a921-e34c0a911ea7"
         route = respx.get(f"https://musicbrainz.org/ws/2/recording/{mbid}").mock(
             return_value=httpx.Response(200, json=recording_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.get_recording(mbid)
 
             # Verify response
@@ -340,29 +372,36 @@ class TestGetRecording:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_get_recording_not_found(self, musicbrainz_config):
+    async def test_get_recording_not_found(self, musicbrainz_config, temp_cache_dir):
         """Test getting recording that doesn't exist."""
         mbid = "00000000-0000-0000-0000-000000000000"
         respx.get(f"https://musicbrainz.org/ws/2/recording/{mbid}").mock(
             return_value=httpx.Response(404, json={"error": "Not Found"})
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             with pytest.raises(RecordingNotFoundError) as exc_info:
                 await client.get_recording(mbid)
-            
+
             assert exc_info.value.mbid == mbid
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_get_recording_custom_includes(self, musicbrainz_config, recording_response):
+    async def test_get_recording_custom_includes(
+        self, musicbrainz_config, recording_response, temp_cache_dir
+    ):
         """Test getting recording with custom includes parameter."""
-        mbid = "5fb524f1-8cc8-4c04-a921-e34c0a911ea7"
+        # Use a different MBID to ensure this test doesn't share cache with others
+        mbid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         route = respx.get(f"https://musicbrainz.org/ws/2/recording/{mbid}").mock(
             return_value=httpx.Response(200, json=recording_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             await client.get_recording(mbid, includes="tags+isrcs")
 
             # Verify custom includes in request
@@ -375,13 +414,17 @@ class TestRecordingModel:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_recording_duration_seconds(self, musicbrainz_config, search_response):
+    async def test_recording_duration_seconds(
+        self, musicbrainz_config, search_response, temp_cache_dir
+    ):
         """Test duration_seconds property."""
         respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=search_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.search_recordings(
                 artist="Nirvana", recording="Smells Like Teen Spirit"
             )
@@ -393,13 +436,17 @@ class TestRecordingModel:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_recording_artist_name(self, musicbrainz_config, search_response):
+    async def test_recording_artist_name(
+        self, musicbrainz_config, search_response, temp_cache_dir
+    ):
         """Test artist_name property."""
         respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=search_response)
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             result = await client.search_recordings(
                 artist="Nirvana", recording="Smells Like Teen Spirit"
             )
@@ -413,19 +460,21 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_http_error_propagated(self, musicbrainz_config):
+    async def test_http_error_propagated(self, musicbrainz_config, temp_cache_dir):
         """Test that HTTP errors are propagated."""
         respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(500, json={"error": "Internal Server Error"})
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             with pytest.raises(httpx.HTTPStatusError):
                 await client.search_recordings(artist="Nirvana")
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_rate_limit_response(self, musicbrainz_config):
+    async def test_rate_limit_response(self, musicbrainz_config, temp_cache_dir):
         """Test handling of rate limit response."""
         respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(
@@ -435,6 +484,8 @@ class TestErrorHandling:
             )
         )
 
-        async with MusicBrainzClient.from_config(config=musicbrainz_config) as client:
+        async with MusicBrainzClient.from_config(
+            config=musicbrainz_config, config_dir=temp_cache_dir
+        ) as client:
             with pytest.raises(httpx.HTTPStatusError):
                 await client.search_recordings(artist="Nirvana")

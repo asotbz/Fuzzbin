@@ -368,6 +368,68 @@ class VideoRepository:
 
         return dict(row)
 
+    async def get_video_by_isrc(
+        self, isrc: str, include_deleted: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get video by ISRC code.
+
+        Args:
+            isrc: ISRC code
+            include_deleted: Include soft-deleted records
+
+        Returns:
+            Video record as dictionary, or None if not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        where_clause = "WHERE isrc = ?"
+        if not include_deleted:
+            where_clause += " AND is_deleted = 0"
+
+        cursor = await self._connection.execute(
+            f"SELECT * FROM videos {where_clause}",
+            (isrc,),
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            return None
+
+        return dict(row)
+
+    async def get_video_by_musicbrainz_recording(
+        self, mbid: str, include_deleted: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get video by MusicBrainz recording MBID.
+
+        Args:
+            mbid: MusicBrainz recording MBID
+            include_deleted: Include soft-deleted records
+
+        Returns:
+            Video record as dictionary, or None if not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        where_clause = "WHERE recording_mbid = ?"
+        if not include_deleted:
+            where_clause += " AND is_deleted = 0"
+
+        cursor = await self._connection.execute(
+            f"SELECT * FROM videos {where_clause}",
+            (mbid,),
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            return None
+
+        return dict(row)
+
     async def get_video_by_youtube_id(
         self, youtube_id: str, include_deleted: bool = False
     ) -> Dict[str, Any]:

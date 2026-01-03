@@ -70,6 +70,10 @@ class BatchPreviewItem(BaseModel):
     album: Optional[str] = Field(default=None, description="Album name")
     year: Optional[int] = Field(default=None, description="Release year if known")
     label: Optional[str] = Field(default=None, description="Record label")
+    isrc: Optional[str] = Field(
+        default=None,
+        description="ISRC code from Spotify for MusicBrainz lookup and duplicate detection",
+    )
 
     already_exists: bool = Field(default=False, description="Whether item already exists")
 
@@ -326,47 +330,112 @@ class AddSingleImportResponse(BaseModel):
 
 
 class SpotifyTrackEnrichRequest(BaseModel):
-    """Request to enrich a single Spotify track with IMVDb metadata."""
+    """Request for unified track enrichment (MusicBrainz + IMVDb)."""
 
+    spotify_track_id: str = Field(description="Spotify track ID")
     artist: str = Field(min_length=1, max_length=200, description="Track artist name")
     track_title: str = Field(min_length=1, max_length=200, description="Track title")
-    spotify_track_id: str = Field(description="Spotify track ID")
-    album: Optional[str] = Field(default=None, description="Album name")
-    year: Optional[int] = Field(default=None, description="Release year")
-    label: Optional[str] = Field(default=None, description="Record label")
+    isrc: Optional[str] = Field(
+        default=None,
+        description="ISRC from Spotify for MusicBrainz lookup",
+    )
+    album: Optional[str] = Field(default=None, description="Spotify album name for fallback")
     artist_genres: Optional[list[str]] = Field(
         default=None,
-        description="Genres from Spotify for the primary artist (used for genre classification)",
+        description="Spotify artist genres (used as fallback when MusicBrainz returns no genre)",
     )
 
 
-class SpotifyTrackEnrichResponse(BaseModel):
-    """Response after enriching a Spotify track with IMVDb metadata."""
+class MusicBrainzEnrichmentData(BaseModel):
+    """MusicBrainz enrichment results."""
 
-    spotify_track_id: str = Field(description="Spotify track ID")
-    match_found: bool = Field(description="Whether an IMVDb match was found")
-    match_type: Optional[str] = Field(
+    recording_mbid: Optional[str] = Field(default=None, description="MusicBrainz recording MBID")
+    release_mbid: Optional[str] = Field(default=None, description="MusicBrainz release MBID")
+    canonical_title: Optional[str] = Field(
         default=None,
-        description="Match type: 'exact' or 'fuzzy'",
+        description="Canonical track title from MusicBrainz",
     )
-    imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID if match found")
+    canonical_artist: Optional[str] = Field(
+        default=None,
+        description="Canonical artist name from MusicBrainz",
+    )
+    album: Optional[str] = Field(default=None, description="Album name from MusicBrainz")
+    year: Optional[int] = Field(default=None, description="Release year from MusicBrainz")
+    label: Optional[str] = Field(default=None, description="Record label from MusicBrainz")
+    genre: Optional[str] = Field(
+        default=None,
+        description="Top raw genre tag from MusicBrainz",
+    )
+    classified_genre: Optional[str] = Field(
+        default=None,
+        description="Classified genre bucket (Rock, Pop, Metal, etc.)",
+    )
+    all_genres: list[str] = Field(
+        default_factory=list,
+        description="All genre tags with count > 1",
+    )
+    match_score: float = Field(default=0.0, description="Match confidence score")
+    match_method: str = Field(
+        default="none",
+        description="Match method: 'isrc_search', 'search', 'none'",
+    )
+    confident_match: bool = Field(
+        default=False,
+        description="Whether this is a confident match",
+    )
+
+
+class IMVDbEnrichmentData(BaseModel):
+    """IMVDb enrichment results."""
+
+    imvdb_id: Optional[int] = Field(default=None, description="IMVDb video ID")
     imvdb_url: Optional[str] = Field(default=None, description="Full IMVDb video URL")
-    imvdb_entity_id: Optional[int] = Field(
+    year: Optional[int] = Field(default=None, description="Year from IMVDb")
+    directors: Optional[str] = Field(default=None, description="Directors from IMVDb")
+    featured_artists: Optional[str] = Field(
         default=None,
-        description="IMVDb entity ID for the primary artist",
-    )
-    discogs_artist_id: Optional[int] = Field(
-        default=None,
-        description="Discogs artist ID from IMVDb entity (for Discogs enrichment)",
+        description="Featured artists from IMVDb",
     )
     youtube_ids: list[str] = Field(
         default_factory=list,
-        description="YouTube video IDs extracted from IMVDb sources",
+        description="All YouTube video IDs from IMVDb sources",
     )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Enriched metadata (title, artist, year, album, directors, sources)",
+    thumbnail_url: Optional[str] = Field(
+        default=None,
+        description="IMVDb thumbnail URL",
     )
+    match_found: bool = Field(default=False, description="Whether IMVDb match was found")
+
+
+class SpotifyTrackEnrichResponse(BaseModel):
+    """Unified enrichment response."""
+
+    spotify_track_id: str = Field(description="Spotify track ID")
+    musicbrainz: MusicBrainzEnrichmentData = Field(description="MusicBrainz enrichment data")
+    imvdb: IMVDbEnrichmentData = Field(description="IMVDb enrichment data")
+
+    # Resolved final values (priority: MB canonical > IMVDb > Spotify)
+    title: str = Field(description="Resolved track title")
+    artist: str = Field(description="Resolved artist name")
+    album: Optional[str] = Field(default=None, description="Resolved album name")
+    year: Optional[int] = Field(default=None, description="Resolved release year")
+    label: Optional[str] = Field(default=None, description="Resolved record label")
+    genre: Optional[str] = Field(default=None, description="Resolved classified genre")
+    directors: Optional[str] = Field(default=None, description="Directors from IMVDb")
+    featured_artists: Optional[str] = Field(
+        default=None,
+        description="Featured artists from IMVDb",
+    )
+    youtube_ids: list[str] = Field(
+        default_factory=list,
+        description="All YouTube video IDs from IMVDb sources",
+    )
+    thumbnail_url: Optional[str] = Field(
+        default=None,
+        description="Thumbnail URL from IMVDb",
+    )
+
+    # Status
     already_exists: bool = Field(
         default=False,
         description="Whether this track already exists in the library",
@@ -374,26 +443,6 @@ class SpotifyTrackEnrichResponse(BaseModel):
     existing_video_id: Optional[int] = Field(
         default=None,
         description="Video ID if track already exists",
-    )
-    genre: Optional[str] = Field(
-        default=None,
-        description="Classified genre bucket (Rock, Pop, Hip Hop/R&B, Metal, Electronic, Country)",
-    )
-    genre_normalized: Optional[str] = Field(
-        default=None,
-        description="Alias for genre (deprecated, use genre field)",
-    )
-    genre_is_mapped: Optional[bool] = Field(
-        default=None,
-        description="Whether genre was classified to a bucket (True) or left empty (False)",
-    )
-    source_genres: Optional[list[str]] = Field(
-        default=None,
-        description="Original genres from Spotify artist profile",
-    )
-    thumbnail_url: Optional[str] = Field(
-        default=None,
-        description="IMVDb image URL to use as thumbnail (original size)",
     )
 
 
@@ -475,38 +524,3 @@ class YouTubeMetadataResponse(BaseModel):
     channel: Optional[str] = Field(default=None, description="Channel name")
     title: Optional[str] = Field(default=None, description="Video title")
     error: Optional[str] = Field(default=None, description="Error message if unavailable")
-
-
-class DiscogsEnrichRequest(BaseModel):
-    """Request to enrich a Spotify track with Discogs metadata."""
-
-    spotify_track_id: str = Field(description="Spotify track ID")
-    track_title: str = Field(min_length=1, max_length=200, description="Track title")
-    artist_name: str = Field(min_length=1, max_length=200, description="Artist name")
-    discogs_artist_id: Optional[int] = Field(
-        default=None,
-        description="Discogs artist ID (if available from IMVDb entity). If provided, uses artist releases search; otherwise uses text search.",
-    )
-
-
-class DiscogsEnrichResponse(BaseModel):
-    """Response after enriching a Spotify track with Discogs metadata."""
-
-    spotify_track_id: str = Field(description="Spotify track ID")
-    match_found: bool = Field(description="Whether a Discogs match was found")
-    discogs_artist_id: Optional[int] = Field(
-        default=None,
-        description="Discogs artist ID",
-    )
-    discogs_master_id: Optional[int] = Field(
-        default=None,
-        description="Discogs master release ID if match found",
-    )
-    album: Optional[str] = Field(default=None, description="Album title from Discogs")
-    label: Optional[str] = Field(default=None, description="Record label from Discogs")
-    genre: Optional[str] = Field(default=None, description="Genre from Discogs")
-    year: Optional[int] = Field(default=None, description="Release year from Discogs")
-    match_score: float = Field(description="Fuzzy match score (0-100)")
-    match_method: str = Field(
-        description="Method used to find match: 'artist_releases', 'text_search', or 'none'",
-    )
