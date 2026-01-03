@@ -1,0 +1,246 @@
+{
+    "recordings": [
+        {
+            "video": false,
+            "length": 301133,
+            "first-release-date": "1991-09-10",
+            "artist-credit": [
+                {
+                    "artist": {
+                        "country": "US",
+                        "sort-name": "Nirvana",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "tags": [
+                            {
+                                "count": 3,
+                                "name": "90s"
+                            },
+                            {
+                                "count": 7,
+                                "name": "acoustic rock"
+                            },
+                            {
+                                "count": 1,
+                                "name": "alternative metal"
+                            },
+                            {
+                                "count": 30,
+                                "name": "alternative rock"
+                            },
+                            {
+                                "count": 8,
+                                "name": "american"
+                            },
+                            {
+                                "name": "estados unidos",
+                                "count": 1
+                            },
+                            {
+                                "count": 61,
+                                "name": "grunge"
+                            },
+                            {
+                                "count": 11,
+                                "name": "noise rock"
+                            },
+                            {
+                                "name": "pigfuck",
+                                "count": 1
+                            },
+                            {
+                                "name": "post-hardcore",
+                                "count": 1
+                            },
+                            {
+                                "name": "punk",
+                                "count": 1
+                            },
+                            {
+                                "count": 1,
+                                "name": "punk rock"
+                            },
+                            {
+                                "name": "rock",
+                                "count": 20
+                            },
+                            {
+                                "count": 6,
+                                "name": "seattle"
+                            },
+                            {
+                                "name": "sludge metal",
+                                "count": 3
+                            },
+                            {
+                                "name": "united states",
+                                "count": 1
+                            },
+                            {
+                                "name": "usa",
+                                "count": 2
+                            }
+                        ],
+                        "name": "Nirvana",
+                        "id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+                        "disambiguation": "1980s–1990s US grunge band",
+                        "type": "Group"
+                    },
+                    "name": "Nirvana",
+                    "joinphrase": ""
+                }
+            ],
+            "tags": [
+                {
+                    "name": "alternative",
+                    "count": 1
+                },
+                {
+                    "name": "alternative pop/rock",
+                    "count": 1
+                },
+                {
+                    "name": "alternative rock",
+                    "count": 6
+                },
+                {
+                    "count": 1,
+                    "name": "anthemic"
+                },
+                {
+                    "count": 1,
+                    "name": "apathetic"
+                },
+                {
+                    "count": 1,
+                    "name": "cryptic"
+                },
+                {
+                    "name": "energetic",
+                    "count": 1
+                },
+                {
+                    "name": "grunge",
+                    "count": 24
+                },
+                {
+                    "count": 1,
+                    "name": "pop"
+                },
+                {
+                    "name": "punk rock",
+                    "count": 1
+                },
+                {
+                    "count": 1,
+                    "name": "rebellious"
+                },
+                {
+                    "name": "rock",
+                    "count": 4
+                },
+                {
+                    "count": 1,
+                    "name": "sarcastic"
+                }
+            ],
+            "id": "5fb524f1-8cc8-4c04-a921-e34c0a911ea7",
+            "disambiguation": "",
+            "title": "Smells Like Teen Spirit"
+        },
+        {
+            "disambiguation": "",
+            "title": "Smells Like Teen Spirit (remastered 2021)",
+            "tags": [],
+            "id": "780825bf-3a65-4fc9-8668-c712b6670ce6",
+            "first-release-date": "2021-11-10",
+            "artist-credit": [
+                {
+                    "name": "Nirvana",
+                    "joinphrase": "",
+                    "artist": {
+                        "id": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+                        "name": "Nirvana",
+                        "tags": [
+                            {
+                                "name": "90s",
+                                "count": 3
+                            },
+                            {
+                                "name": "acoustic rock",
+                                "count": 7
+                            },
+                            {
+                                "name": "alternative metal",
+                                "count": 1
+                            },
+                            {
+                                "count": 30,
+                                "name": "alternative rock"
+                            },
+                            {
+                                "count": 8,
+                                "name": "american"
+                            },
+                            {
+                                "count": 1,
+                                "name": "estados unidos"
+                            },
+                            {
+                                "count": 61,
+                                "name": "grunge"
+                            },
+                            {
+                                "name": "noise rock",
+                                "count": 11
+                            },
+                            {
+                                "count": 1,
+                                "name": "pigfuck"
+                            },
+                            {
+                                "count": 1,
+                                "name": "post-hardcore"
+                            },
+                            {
+                                "count": 1,
+                                "name": "punk"
+                            },
+                            {
+                                "name": "punk rock",
+                                "count": 1
+                            },
+                            {
+                                "count": 20,
+                                "name": "rock"
+                            },
+                            {
+                                "name": "seattle",
+                                "count": 6
+                            },
+                            {
+                                "name": "sludge metal",
+                                "count": 3
+                            },
+                            {
+                                "name": "united states",
+                                "count": 1
+                            },
+                            {
+                                "count": 2,
+                                "name": "usa"
+                            }
+                        ],
+                        "disambiguation": "1980s–1990s US grunge band",
+                        "type": "Group",
+                        "country": "US",
+                        "sort-name": "Nirvana",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    }
+                }
+            ],
+            "video": false,
+            "length": 300893
+        }
+    ],
+    "isrc": "USGF19942501"
+}

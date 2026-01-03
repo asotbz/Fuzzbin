@@ -1,4 +1,4 @@
-curl -sS -G 'https://musicbrainz.org/ws/2/recording' \                                                                                              ─╯
+curl -sS -G 'https://musicbrainz.org/ws/2/recording' \
           -H "User-Agent: $UA" \
           --data-urlencode 'fmt=json' \
           --data-urlencode 'limit=25' \
