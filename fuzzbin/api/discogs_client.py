@@ -287,9 +287,9 @@ class DiscogsClient(RateLimitedAPIClient):
 
         response = await self.get("/database/search", params=params)
         response.raise_for_status()
-        
+
         result = response.json()
-        
+
         # Log the actual request and response for debugging
         self.logger.info(
             "discogs_search_response",
@@ -299,7 +299,7 @@ class DiscogsClient(RateLimitedAPIClient):
             pagination=result.get("pagination", {}),
             search_type="master+album",
         )
-        
+
         # If no results with format=album, try without format constraint
         if len(result.get("results", [])) == 0:
             self.logger.info(
@@ -309,7 +309,7 @@ class DiscogsClient(RateLimitedAPIClient):
                 reason="no_results_with_album_format",
                 search_type="master_only",
             )
-            
+
             params_retry = {
                 "type": "master",
                 "artist": artist,
@@ -317,12 +317,12 @@ class DiscogsClient(RateLimitedAPIClient):
                 "page": page,
                 "per_page": per_page,
             }
-            
+
             response = await self.get("/database/search", params=params_retry)
             response.raise_for_status()
-            
+
             result = response.json()
-            
+
             self.logger.info(
                 "discogs_search_response",
                 request_url=str(response.url),
@@ -331,7 +331,7 @@ class DiscogsClient(RateLimitedAPIClient):
                 pagination=result.get("pagination", {}),
                 search_type="master_only",
             )
-        
+
         return result
 
     async def get_artist_releases(

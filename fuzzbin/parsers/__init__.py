@@ -44,6 +44,25 @@ from .ffprobe_models import (
     FFProbeMediaInfo,
 )
 from .ffprobe_parser import FFProbeParser
+from .musicbrainz_models import (
+    MusicBrainzTag,
+    MusicBrainzAlias,
+    MusicBrainzArea,
+    MusicBrainzLifeSpan,
+    MusicBrainzArtist,
+    MusicBrainzArtistCredit,
+    MusicBrainzReleaseGroup,
+    MusicBrainzReleaseEvent,
+    MusicBrainzTrack,
+    MusicBrainzMedia,
+    MusicBrainzRelease,
+    MusicBrainzRecording,
+    MusicBrainzRecordingSearchResponse,
+    MusicBrainzArtistSearchResponse,
+    MusicBrainzISRCResponse,
+    RecordingNotFoundError,
+)
+from .musicbrainz_parser import MusicBrainzParser
 
 __all__ = [
     "ArtistNFO",
@@ -86,4 +105,21 @@ __all__ = [
     "FFProbeAudioStream",
     "FFProbeMediaInfo",
     "FFProbeParser",
+    "MusicBrainzTag",
+    "MusicBrainzAlias",
+    "MusicBrainzArea",
+    "MusicBrainzLifeSpan",
+    "MusicBrainzArtist",
+    "MusicBrainzArtistCredit",
+    "MusicBrainzReleaseGroup",
+    "MusicBrainzReleaseEvent",
+    "MusicBrainzTrack",
+    "MusicBrainzMedia",
+    "MusicBrainzRelease",
+    "MusicBrainzRecording",
+    "MusicBrainzRecordingSearchResponse",
+    "MusicBrainzArtistSearchResponse",
+    "MusicBrainzISRCResponse",
+    "MusicBrainzParser",
+    "RecordingNotFoundError",
 ]

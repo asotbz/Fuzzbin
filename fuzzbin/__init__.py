@@ -43,6 +43,7 @@ from .common.string_utils import (
 from .api.base_client import RateLimitedAPIClient
 from .api.imvdb_client import IMVDbClient
 from .api.discogs_client import DiscogsClient
+from .api.musicbrainz_client import MusicBrainzClient
 from .api.spotify_client import SpotifyClient
 from .api.spotify_auth import SpotifyTokenManager
 from .clients.ytdlp_client import YTDLPClient
@@ -74,6 +75,11 @@ from .parsers import (
     FFProbeAudioStream,
     FFProbeMediaInfo,
     FFProbeParser,
+    MusicBrainzRecording,
+    MusicBrainzRecordingSearchResponse,
+    MusicBrainzISRCResponse,
+    MusicBrainzParser,
+    RecordingNotFoundError,
 )
 from .parsers.ytdlp_models import (
     YTDLPSearchResult,
@@ -144,6 +150,7 @@ __all__ = [
     "RateLimitedAPIClient",
     "IMVDbClient",
     "DiscogsClient",
+    "MusicBrainzClient",
     "SpotifyClient",
     "SpotifyTokenManager",
     "YTDLPClient",
@@ -211,6 +218,11 @@ __all__ = [
     "DiscogsParser",
     "MasterNotFoundError",
     "ReleaseNotFoundError",
+    "MusicBrainzRecording",
+    "MusicBrainzRecordingSearchResponse",
+    "MusicBrainzISRCResponse",
+    "MusicBrainzParser",
+    "RecordingNotFoundError",
     "YTDLPSearchResult",
     "YTDLPDownloadResult",
     "DownloadProgress",
