@@ -6354,8 +6354,8 @@
         "tags": [
           "Add"
         ],
-        "summary": "Enrich a Spotify track with IMVDb metadata",
-        "description": "Search IMVDb for a track and return matched metadata including YouTube IDs.",
+        "summary": "Enrich Spotify track with MusicBrainz and IMVDb metadata",
+        "description": "Unified enrichment using ISRC \u2192 MusicBrainz \u2192 IMVDb pipeline",
         "operationId": "enrich_spotify_track_add_spotify_enrich_track_post",
         "requestBody": {
           "content": {
@@ -6374,83 +6374,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SpotifyTrackEnrichResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication required or token invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions or account disabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request - Invalid input or business rule violation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/add/spotify/enrich-track-discogs": {
-      "post": {
-        "tags": [
-          "Add"
-        ],
-        "summary": "Enrich Spotify track with Discogs metadata",
-        "description": "Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.",
-        "operationId": "enrich_spotify_track_discogs_add_spotify_enrich_track_discogs_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DiscogsEnrichRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscogsEnrichResponse"
                 }
               }
             }
@@ -10268,6 +10191,18 @@
             "title": "Label",
             "description": "Record label"
           },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc",
+            "description": "ISRC code from Spotify for MusicBrainz lookup and duplicate detection"
+          },
           "already_exists": {
             "type": "boolean",
             "title": "Already Exists",
@@ -11668,154 +11603,6 @@
         "type": "object",
         "title": "DiscogsCommunity",
         "description": "Community stats for a release."
-      },
-      "DiscogsEnrichRequest": {
-        "properties": {
-          "spotify_track_id": {
-            "type": "string",
-            "title": "Spotify Track Id",
-            "description": "Spotify track ID"
-          },
-          "track_title": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Track Title",
-            "description": "Track title"
-          },
-          "artist_name": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Artist Name",
-            "description": "Artist name"
-          },
-          "discogs_artist_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Discogs Artist Id",
-            "description": "Discogs artist ID (if available from IMVDb entity). If provided, uses artist releases search; otherwise uses text search."
-          }
-        },
-        "type": "object",
-        "required": [
-          "spotify_track_id",
-          "track_title",
-          "artist_name"
-        ],
-        "title": "DiscogsEnrichRequest",
-        "description": "Request to enrich a Spotify track with Discogs metadata."
-      },
-      "DiscogsEnrichResponse": {
-        "properties": {
-          "spotify_track_id": {
-            "type": "string",
-            "title": "Spotify Track Id",
-            "description": "Spotify track ID"
-          },
-          "match_found": {
-            "type": "boolean",
-            "title": "Match Found",
-            "description": "Whether a Discogs match was found"
-          },
-          "discogs_artist_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Discogs Artist Id",
-            "description": "Discogs artist ID"
-          },
-          "discogs_master_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Discogs Master Id",
-            "description": "Discogs master release ID if match found"
-          },
-          "album": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Album",
-            "description": "Album title from Discogs"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label",
-            "description": "Record label from Discogs"
-          },
-          "genre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Genre",
-            "description": "Genre from Discogs"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year",
-            "description": "Release year from Discogs"
-          },
-          "match_score": {
-            "type": "number",
-            "title": "Match Score",
-            "description": "Fuzzy match score (0-100)"
-          },
-          "match_method": {
-            "type": "string",
-            "title": "Match Method",
-            "description": "Method used to find match: 'artist_releases', 'text_search', or 'none'"
-          }
-        },
-        "type": "object",
-        "required": [
-          "spotify_track_id",
-          "match_found",
-          "match_score",
-          "match_method"
-        ],
-        "title": "DiscogsEnrichResponse",
-        "description": "Response after enriching a Spotify track with Discogs metadata."
       },
       "DiscogsFormat": {
         "properties": {
@@ -13266,6 +13053,99 @@
         "title": "IMVDbCredits",
         "description": "Credits container with crew and cast lists."
       },
+      "IMVDbEnrichmentData": {
+        "properties": {
+          "imvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Id",
+            "description": "IMVDb video ID"
+          },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Year from IMVDb"
+          },
+          "directors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directors",
+            "description": "Directors from IMVDb"
+          },
+          "featured_artists": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Featured Artists",
+            "description": "Featured artists from IMVDb"
+          },
+          "youtube_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Youtube Ids",
+            "description": "All YouTube video IDs from IMVDb sources"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "IMVDb thumbnail URL"
+          },
+          "match_found": {
+            "type": "boolean",
+            "title": "Match Found",
+            "description": "Whether IMVDb match was found",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "IMVDbEnrichmentData",
+        "description": "IMVDb enrichment results."
+      },
       "IMVDbEntityDetail": {
         "properties": {
           "id": {
@@ -14510,6 +14390,147 @@
         ],
         "title": "LoginRequest",
         "description": "Request schema for user login."
+      },
+      "MusicBrainzEnrichmentData": {
+        "properties": {
+          "recording_mbid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recording Mbid",
+            "description": "MusicBrainz recording MBID"
+          },
+          "release_mbid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Mbid",
+            "description": "MusicBrainz release MBID"
+          },
+          "canonical_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Title",
+            "description": "Canonical track title from MusicBrainz"
+          },
+          "canonical_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Artist",
+            "description": "Canonical artist name from MusicBrainz"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album",
+            "description": "Album name from MusicBrainz"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year from MusicBrainz"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Record label from MusicBrainz"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre",
+            "description": "Top raw genre tag from MusicBrainz"
+          },
+          "classified_genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classified Genre",
+            "description": "Classified genre bucket (Rock, Pop, Metal, etc.)"
+          },
+          "all_genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "All Genres",
+            "description": "All genre tags with count > 1"
+          },
+          "match_score": {
+            "type": "number",
+            "title": "Match Score",
+            "description": "Match confidence score",
+            "default": 0.0
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method",
+            "description": "Match method: 'isrc_search', 'search', 'none'",
+            "default": "none"
+          },
+          "confident_match": {
+            "type": "boolean",
+            "title": "Confident Match",
+            "description": "Whether this is a confident match",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "MusicBrainzEnrichmentData",
+        "description": "MusicBrainz enrichment results."
       },
       "NFOExportRequest": {
         "properties": {
@@ -16379,6 +16400,11 @@
       },
       "SpotifyTrackEnrichRequest": {
         "properties": {
+          "spotify_track_id": {
+            "type": "string",
+            "title": "Spotify Track Id",
+            "description": "Spotify track ID"
+          },
           "artist": {
             "type": "string",
             "maxLength": 200,
@@ -16393,10 +16419,17 @@
             "title": "Track Title",
             "description": "Track title"
           },
-          "spotify_track_id": {
-            "type": "string",
-            "title": "Spotify Track Id",
-            "description": "Spotify track ID"
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc",
+            "description": "ISRC from Spotify for MusicBrainz lookup"
           },
           "album": {
             "anyOf": [
@@ -16408,31 +16441,7 @@
               }
             ],
             "title": "Album",
-            "description": "Album name"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year",
-            "description": "Release year"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label",
-            "description": "Record label"
+            "description": "Spotify album name for fallback"
           },
           "artist_genres": {
             "anyOf": [
@@ -16447,17 +16456,17 @@
               }
             ],
             "title": "Artist Genres",
-            "description": "Genres from Spotify for the primary artist (used for genre classification)"
+            "description": "Spotify artist genres (used as fallback when MusicBrainz returns no genre)"
           }
         },
         "type": "object",
         "required": [
+          "spotify_track_id",
           "artist",
-          "track_title",
-          "spotify_track_id"
+          "track_title"
         ],
         "title": "SpotifyTrackEnrichRequest",
-        "description": "Request to enrich a single Spotify track with IMVDb metadata."
+        "description": "Request for unified track enrichment (MusicBrainz + IMVDb)."
       },
       "SpotifyTrackEnrichResponse": {
         "properties": {
@@ -16466,12 +16475,25 @@
             "title": "Spotify Track Id",
             "description": "Spotify track ID"
           },
-          "match_found": {
-            "type": "boolean",
-            "title": "Match Found",
-            "description": "Whether an IMVDb match was found"
+          "musicbrainz": {
+            "$ref": "#/components/schemas/MusicBrainzEnrichmentData",
+            "description": "MusicBrainz enrichment data"
           },
-          "match_type": {
+          "imvdb": {
+            "$ref": "#/components/schemas/IMVDbEnrichmentData",
+            "description": "IMVDb enrichment data"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Resolved track title"
+          },
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "description": "Resolved artist name"
+          },
+          "album": {
             "anyOf": [
               {
                 "type": "string"
@@ -16480,10 +16502,10 @@
                 "type": "null"
               }
             ],
-            "title": "Match Type",
-            "description": "Match type: 'exact' or 'fuzzy'"
+            "title": "Album",
+            "description": "Resolved album name"
           },
-          "imvdb_id": {
+          "year": {
             "anyOf": [
               {
                 "type": "integer"
@@ -16492,10 +16514,10 @@
                 "type": "null"
               }
             ],
-            "title": "Imvdb Id",
-            "description": "IMVDb video ID if match found"
+            "title": "Year",
+            "description": "Resolved release year"
           },
-          "imvdb_url": {
+          "label": {
             "anyOf": [
               {
                 "type": "string"
@@ -16504,32 +16526,44 @@
                 "type": "null"
               }
             ],
-            "title": "Imvdb Url",
-            "description": "Full IMVDb video URL"
+            "title": "Label",
+            "description": "Resolved record label"
           },
-          "imvdb_entity_id": {
+          "genre": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Imvdb Entity Id",
-            "description": "IMVDb entity ID for the primary artist"
+            "title": "Genre",
+            "description": "Resolved classified genre"
           },
-          "discogs_artist_id": {
+          "directors": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Discogs Artist Id",
-            "description": "Discogs artist ID from IMVDb entity (for Discogs enrichment)"
+            "title": "Directors",
+            "description": "Directors from IMVDb"
+          },
+          "featured_artists": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Featured Artists",
+            "description": "Featured artists from IMVDb"
           },
           "youtube_ids": {
             "items": {
@@ -16537,13 +16571,19 @@
             },
             "type": "array",
             "title": "Youtube Ids",
-            "description": "YouTube video IDs extracted from IMVDb sources"
+            "description": "All YouTube video IDs from IMVDb sources"
           },
-          "metadata": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Metadata",
-            "description": "Enriched metadata (title, artist, year, album, directors, sources)"
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "Thumbnail URL from IMVDb"
           },
           "already_exists": {
             "type": "boolean",
@@ -16562,78 +16602,18 @@
             ],
             "title": "Existing Video Id",
             "description": "Video ID if track already exists"
-          },
-          "genre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Genre",
-            "description": "Classified genre bucket (Rock, Pop, Hip Hop/R&B, Metal, Electronic, Country)"
-          },
-          "genre_normalized": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Genre Normalized",
-            "description": "Alias for genre (deprecated, use genre field)"
-          },
-          "genre_is_mapped": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Genre Is Mapped",
-            "description": "Whether genre was classified to a bucket (True) or left empty (False)"
-          },
-          "source_genres": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Genres",
-            "description": "Original genres from Spotify artist profile"
-          },
-          "thumbnail_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thumbnail Url",
-            "description": "IMVDb image URL to use as thumbnail (original size)"
           }
         },
         "type": "object",
         "required": [
           "spotify_track_id",
-          "match_found"
+          "musicbrainz",
+          "imvdb",
+          "title",
+          "artist"
         ],
         "title": "SpotifyTrackEnrichResponse",
-        "description": "Response after enriching a Spotify track with IMVDb metadata."
+        "description": "Unified enrichment response."
       },
       "SpotifyTrackSchema": {
         "properties": {

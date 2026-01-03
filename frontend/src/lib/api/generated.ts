@@ -1473,30 +1473,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enrich a Spotify track with IMVDb metadata
-         * @description Search IMVDb for a track and return matched metadata including YouTube IDs.
+         * Enrich Spotify track with MusicBrainz and IMVDb metadata
+         * @description Unified enrichment using ISRC → MusicBrainz → IMVDb pipeline
          */
         post: operations["enrich_spotify_track_add_spotify_enrich_track_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/add/spotify/enrich-track-discogs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enrich Spotify track with Discogs metadata
-         * @description Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.
-         */
-        post: operations["enrich_spotify_track_discogs_add_spotify_enrich_track_discogs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3008,6 +2988,11 @@ export interface components {
              */
             label?: string | null;
             /**
+             * Isrc
+             * @description ISRC code from Spotify for MusicBrainz lookup and duplicate detection
+             */
+            isrc?: string | null;
+            /**
              * Already Exists
              * @description Whether item already exists
              * @default false
@@ -3876,88 +3861,6 @@ export interface components {
             have: number;
         };
         /**
-         * DiscogsEnrichRequest
-         * @description Request to enrich a Spotify track with Discogs metadata.
-         */
-        DiscogsEnrichRequest: {
-            /**
-             * Spotify Track Id
-             * @description Spotify track ID
-             */
-            spotify_track_id: string;
-            /**
-             * Track Title
-             * @description Track title
-             */
-            track_title: string;
-            /**
-             * Artist Name
-             * @description Artist name
-             */
-            artist_name: string;
-            /**
-             * Discogs Artist Id
-             * @description Discogs artist ID (if available from IMVDb entity). If provided, uses artist releases search; otherwise uses text search.
-             */
-            discogs_artist_id?: number | null;
-        };
-        /**
-         * DiscogsEnrichResponse
-         * @description Response after enriching a Spotify track with Discogs metadata.
-         */
-        DiscogsEnrichResponse: {
-            /**
-             * Spotify Track Id
-             * @description Spotify track ID
-             */
-            spotify_track_id: string;
-            /**
-             * Match Found
-             * @description Whether a Discogs match was found
-             */
-            match_found: boolean;
-            /**
-             * Discogs Artist Id
-             * @description Discogs artist ID
-             */
-            discogs_artist_id?: number | null;
-            /**
-             * Discogs Master Id
-             * @description Discogs master release ID if match found
-             */
-            discogs_master_id?: number | null;
-            /**
-             * Album
-             * @description Album title from Discogs
-             */
-            album?: string | null;
-            /**
-             * Label
-             * @description Record label from Discogs
-             */
-            label?: string | null;
-            /**
-             * Genre
-             * @description Genre from Discogs
-             */
-            genre?: string | null;
-            /**
-             * Year
-             * @description Release year from Discogs
-             */
-            year?: number | null;
-            /**
-             * Match Score
-             * @description Fuzzy match score (0-100)
-             */
-            match_score: number;
-            /**
-             * Match Method
-             * @description Method used to find match: 'artist_releases', 'text_search', or 'none'
-             */
-            match_method: string;
-        };
-        /**
          * DiscogsFormat
          * @description Release format details.
          */
@@ -4824,6 +4727,53 @@ export interface components {
             }[];
         };
         /**
+         * IMVDbEnrichmentData
+         * @description IMVDb enrichment results.
+         */
+        IMVDbEnrichmentData: {
+            /**
+             * Imvdb Id
+             * @description IMVDb video ID
+             */
+            imvdb_id?: number | null;
+            /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
+            /**
+             * Year
+             * @description Year from IMVDb
+             */
+            year?: number | null;
+            /**
+             * Directors
+             * @description Directors from IMVDb
+             */
+            directors?: string | null;
+            /**
+             * Featured Artists
+             * @description Featured artists from IMVDb
+             */
+            featured_artists?: string | null;
+            /**
+             * Youtube Ids
+             * @description All YouTube video IDs from IMVDb sources
+             */
+            youtube_ids?: string[];
+            /**
+             * Thumbnail Url
+             * @description IMVDb thumbnail URL
+             */
+            thumbnail_url?: string | null;
+            /**
+             * Match Found
+             * @description Whether IMVDb match was found
+             * @default false
+             */
+            match_found: boolean;
+        };
+        /**
          * IMVDbEntityDetail
          * @description Full entity details including video listings.
          */
@@ -5461,6 +5411,80 @@ export interface components {
              * @example changeme
              */
             password: string;
+        };
+        /**
+         * MusicBrainzEnrichmentData
+         * @description MusicBrainz enrichment results.
+         */
+        MusicBrainzEnrichmentData: {
+            /**
+             * Recording Mbid
+             * @description MusicBrainz recording MBID
+             */
+            recording_mbid?: string | null;
+            /**
+             * Release Mbid
+             * @description MusicBrainz release MBID
+             */
+            release_mbid?: string | null;
+            /**
+             * Canonical Title
+             * @description Canonical track title from MusicBrainz
+             */
+            canonical_title?: string | null;
+            /**
+             * Canonical Artist
+             * @description Canonical artist name from MusicBrainz
+             */
+            canonical_artist?: string | null;
+            /**
+             * Album
+             * @description Album name from MusicBrainz
+             */
+            album?: string | null;
+            /**
+             * Year
+             * @description Release year from MusicBrainz
+             */
+            year?: number | null;
+            /**
+             * Label
+             * @description Record label from MusicBrainz
+             */
+            label?: string | null;
+            /**
+             * Genre
+             * @description Top raw genre tag from MusicBrainz
+             */
+            genre?: string | null;
+            /**
+             * Classified Genre
+             * @description Classified genre bucket (Rock, Pop, Metal, etc.)
+             */
+            classified_genre?: string | null;
+            /**
+             * All Genres
+             * @description All genre tags with count > 1
+             */
+            all_genres?: string[];
+            /**
+             * Match Score
+             * @description Match confidence score
+             * @default 0
+             */
+            match_score: number;
+            /**
+             * Match Method
+             * @description Match method: 'isrc_search', 'search', 'none'
+             * @default none
+             */
+            match_method: string;
+            /**
+             * Confident Match
+             * @description Whether this is a confident match
+             * @default false
+             */
+            confident_match: boolean;
         };
         /**
          * NFOExportRequest
@@ -6674,9 +6698,14 @@ export interface components {
         };
         /**
          * SpotifyTrackEnrichRequest
-         * @description Request to enrich a single Spotify track with IMVDb metadata.
+         * @description Request for unified track enrichment (MusicBrainz + IMVDb).
          */
         SpotifyTrackEnrichRequest: {
+            /**
+             * Spotify Track Id
+             * @description Spotify track ID
+             */
+            spotify_track_id: string;
             /**
              * Artist
              * @description Track artist name
@@ -6688,34 +6717,24 @@ export interface components {
              */
             track_title: string;
             /**
-             * Spotify Track Id
-             * @description Spotify track ID
+             * Isrc
+             * @description ISRC from Spotify for MusicBrainz lookup
              */
-            spotify_track_id: string;
+            isrc?: string | null;
             /**
              * Album
-             * @description Album name
+             * @description Spotify album name for fallback
              */
             album?: string | null;
             /**
-             * Year
-             * @description Release year
-             */
-            year?: number | null;
-            /**
-             * Label
-             * @description Record label
-             */
-            label?: string | null;
-            /**
              * Artist Genres
-             * @description Genres from Spotify for the primary artist (used for genre classification)
+             * @description Spotify artist genres (used as fallback when MusicBrainz returns no genre)
              */
             artist_genres?: string[] | null;
         };
         /**
          * SpotifyTrackEnrichResponse
-         * @description Response after enriching a Spotify track with IMVDb metadata.
+         * @description Unified enrichment response.
          */
         SpotifyTrackEnrichResponse: {
             /**
@@ -6723,48 +6742,60 @@ export interface components {
              * @description Spotify track ID
              */
             spotify_track_id: string;
+            /** @description MusicBrainz enrichment data */
+            musicbrainz: components["schemas"]["MusicBrainzEnrichmentData"];
+            /** @description IMVDb enrichment data */
+            imvdb: components["schemas"]["IMVDbEnrichmentData"];
             /**
-             * Match Found
-             * @description Whether an IMVDb match was found
+             * Title
+             * @description Resolved track title
              */
-            match_found: boolean;
+            title: string;
             /**
-             * Match Type
-             * @description Match type: 'exact' or 'fuzzy'
+             * Artist
+             * @description Resolved artist name
              */
-            match_type?: string | null;
+            artist: string;
             /**
-             * Imvdb Id
-             * @description IMVDb video ID if match found
+             * Album
+             * @description Resolved album name
              */
-            imvdb_id?: number | null;
+            album?: string | null;
             /**
-             * Imvdb Url
-             * @description Full IMVDb video URL
+             * Year
+             * @description Resolved release year
              */
-            imvdb_url?: string | null;
+            year?: number | null;
             /**
-             * Imvdb Entity Id
-             * @description IMVDb entity ID for the primary artist
+             * Label
+             * @description Resolved record label
              */
-            imvdb_entity_id?: number | null;
+            label?: string | null;
             /**
-             * Discogs Artist Id
-             * @description Discogs artist ID from IMVDb entity (for Discogs enrichment)
+             * Genre
+             * @description Resolved classified genre
              */
-            discogs_artist_id?: number | null;
+            genre?: string | null;
+            /**
+             * Directors
+             * @description Directors from IMVDb
+             */
+            directors?: string | null;
+            /**
+             * Featured Artists
+             * @description Featured artists from IMVDb
+             */
+            featured_artists?: string | null;
             /**
              * Youtube Ids
-             * @description YouTube video IDs extracted from IMVDb sources
+             * @description All YouTube video IDs from IMVDb sources
              */
             youtube_ids?: string[];
             /**
-             * Metadata
-             * @description Enriched metadata (title, artist, year, album, directors, sources)
+             * Thumbnail Url
+             * @description Thumbnail URL from IMVDb
              */
-            metadata?: {
-                [key: string]: unknown;
-            };
+            thumbnail_url?: string | null;
             /**
              * Already Exists
              * @description Whether this track already exists in the library
@@ -6776,31 +6807,6 @@ export interface components {
              * @description Video ID if track already exists
              */
             existing_video_id?: number | null;
-            /**
-             * Genre
-             * @description Classified genre bucket (Rock, Pop, Hip Hop/R&B, Metal, Electronic, Country)
-             */
-            genre?: string | null;
-            /**
-             * Genre Normalized
-             * @description Alias for genre (deprecated, use genre field)
-             */
-            genre_normalized?: string | null;
-            /**
-             * Genre Is Mapped
-             * @description Whether genre was classified to a bucket (True) or left empty (False)
-             */
-            genre_is_mapped?: boolean | null;
-            /**
-             * Source Genres
-             * @description Original genres from Spotify artist profile
-             */
-            source_genres?: string[] | null;
-            /**
-             * Thumbnail Url
-             * @description IMVDb image URL to use as thumbnail (original size)
-             */
-            thumbnail_url?: string | null;
         };
         /**
          * SpotifyTrackSchema
@@ -11762,66 +11768,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpotifyTrackEnrichResponse"];
-                };
-            };
-            /** @description Bad Request - Invalid input or business rule violation */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Unauthorized - Authentication required or token invalid */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions or account disabled */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enrich_spotify_track_discogs_add_spotify_enrich_track_discogs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DiscogsEnrichRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscogsEnrichResponse"];
                 };
             };
             /** @description Bad Request - Invalid input or business rule violation */

@@ -564,10 +564,8 @@ Import hub endpoints: batch preview and import job submission
   - Check if a video with the given IMVDb ID or YouTube ID already exists in the library.
 - `POST` `/add/import` — Submit a single-video import job
   - Creates/updates a video record based on a selected search result (IMVDb/Discogs/YouTube).
-- `POST` `/add/spotify/enrich-track` — Enrich a Spotify track with IMVDb metadata
-  - Search IMVDb for a track and return matched metadata including YouTube IDs.
-- `POST` `/add/spotify/enrich-track-discogs` — Enrich Spotify track with Discogs metadata
-  - Enriches a Spotify track with album, label, and genre from Discogs. Prefers artist ID search if available, falls back to text search.
+- `POST` `/add/spotify/enrich-track` — Enrich Spotify track with MusicBrainz and IMVDb metadata
+  - Unified enrichment using ISRC → MusicBrainz → IMVDb pipeline
 - `POST` `/add/youtube/search` — Search YouTube for videos
   - Search YouTube using yt-dlp for video results. Returns results in the same format as /add/search.
 - `POST` `/add/spotify/import-selected` — Import selected tracks from Spotify playlist
