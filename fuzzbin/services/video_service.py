@@ -403,6 +403,23 @@ class VideoService(BaseService):
             await self.repository.update_video(video_id, **kwargs)
             self.logger.info("video_updated", video_id=video_id, fields=list(kwargs.keys()))
 
+            # Emit WebSocket event for real-time UI updates
+            from fuzzbin.core.event_bus import get_event_bus
+            import time
+
+            try:
+                event_bus = get_event_bus()
+                # Include timestamp if thumbnail-related fields changed
+                thumbnail_related = {"thumbnail", "width", "height", "duration", "file_path"}
+                thumbnail_ts = int(time.time()) if thumbnail_related & set(kwargs.keys()) else None
+                await event_bus.emit_video_updated(
+                    video_id=video_id,
+                    fields_changed=list(kwargs.keys()),
+                    thumbnail_timestamp=thumbnail_ts,
+                )
+            except RuntimeError:
+                pass  # Event bus not initialized (tests)
+
             # Auto-add decade tag if year was updated and auto_decade enabled
             if "year" in kwargs and kwargs["year"]:
                 config = self._get_config()

@@ -2814,6 +2814,20 @@ async def handle_video_post_process(job: Job) -> None:
                 video_id=video_id,
                 thumbnail_path=str(thumbnail_path),
             )
+
+            # Emit WebSocket event for real-time UI updates
+            from fuzzbin.core.event_bus import get_event_bus
+            import time
+
+            try:
+                event_bus = get_event_bus()
+                await event_bus.emit_video_updated(
+                    video_id=video_id,
+                    fields_changed=["thumbnail", "file_properties"],
+                    thumbnail_timestamp=int(time.time()),
+                )
+            except RuntimeError:
+                pass  # Event bus not initialized (tests)
         except Exception as e:
             # Log but don't fail - thumbnail generation is optional
             logger.warning(
