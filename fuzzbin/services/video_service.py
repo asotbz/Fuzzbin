@@ -404,19 +404,30 @@ class VideoService(BaseService):
             self.logger.info("video_updated", video_id=video_id, fields=list(kwargs.keys()))
 
             # Emit WebSocket event for real-time UI updates
+            # Only emit for fields that affect the visual display
             from fuzzbin.core.event_bus import get_event_bus
             import time
 
             try:
                 event_bus = get_event_bus()
-                # Include timestamp if thumbnail-related fields changed
-                thumbnail_related = {"thumbnail", "width", "height", "duration", "file_path"}
-                thumbnail_ts = int(time.time()) if thumbnail_related & set(kwargs.keys()) else None
-                await event_bus.emit_video_updated(
-                    video_id=video_id,
-                    fields_changed=list(kwargs.keys()),
-                    thumbnail_timestamp=thumbnail_ts,
-                )
+                # Fields that should trigger UI updates
+                ui_relevant_fields = {
+                    "thumbnail", "width", "height", "duration", "file_path",
+                    "title", "artist", "album", "year", "status",
+                    "studio", "director", "youtube_id"
+                }
+                changed_fields = set(kwargs.keys())
+                
+                # Only emit if UI-relevant fields changed
+                if ui_relevant_fields & changed_fields:
+                    # Include timestamp only if thumbnail-related fields changed
+                    thumbnail_related = {"thumbnail", "width", "height", "duration", "file_path"}
+                    thumbnail_ts = int(time.time()) if thumbnail_related & changed_fields else None
+                    await event_bus.emit_video_updated(
+                        video_id=video_id,
+                        fields_changed=list(kwargs.keys()),
+                        thumbnail_timestamp=thumbnail_ts,
+                    )
             except RuntimeError:
                 pass  # Event bus not initialized (tests)
 
