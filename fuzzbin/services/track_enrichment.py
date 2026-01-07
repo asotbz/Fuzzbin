@@ -176,7 +176,9 @@ class TrackEnrichmentService(BaseService):
                 else None
             )
             result.imvdb_featured_artists = (
-                ", ".join(imvdb_result.featured_artists) if imvdb_result.featured_artists else None
+                ", ".join(a.name for a in imvdb_result.featured_artists)
+                if imvdb_result.featured_artists
+                else None
             )
             result.imvdb_youtube_ids = self._extract_youtube_ids(imvdb_result)
             result.imvdb_thumbnail_url = (
