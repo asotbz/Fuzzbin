@@ -1028,13 +1028,13 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                     )
 
                     # Update database with file path
-                    await repository.update_video(video_id, video_file_path=str(result.file_path))
+                    await repository.update_video(video_id, video_file_path=str(result.output_path))
 
                     downloaded += 1
                     logger.info(
                         "video_downloaded",
                         video_id=video_id,
-                        file_path=str(result.file_path),
+                        file_path=str(result.output_path),
                         file_size=result.file_size,
                     )
 
