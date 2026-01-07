@@ -1,5 +1,5 @@
 /* ============================================================================
-   SETTINGS PAGE - MTV-INSPIRED BOLD AESTHETIC
+   SETTINGS PAGE - STUDIO CONSOLE AESTHETIC
    ============================================================================ */
 
 .settingsPage {
@@ -7,182 +7,6 @@
   background: var(--bg-base);
   display: flex;
   flex-direction: column;
-}
-
-/* ============================================================================
-   HEADER
-   ============================================================================ */
-
-.settingsHeader {
-  background: var(--mtv-purple);
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 10px,
-    rgba(0, 0, 0, 0.1) 10px,
-    rgba(0, 0, 0, 0.1) 20px
-  );
-  border-bottom: 8px solid var(--bg-accent);
-  position: relative;
-  overflow: hidden;
-}
-
-.settingsHeader::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 400px;
-  height: 100%;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 50%
-  );
-  pointer-events: none;
-}
-
-.settingsHeaderTop {
-  padding: var(--space-6) var(--space-6) var(--space-4);
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  position: relative;
-  z-index: 1;
-}
-
-.settingsTitleContainer {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.settingsIcon {
-  width: 64px;
-  height: 64px;
-  filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.4));
-}
-
-.settingsTitle {
-  font-family: var(--font-display);
-  font-size: 5rem;
-  font-weight: 900;
-  color: var(--text-on-dark);
-  text-transform: uppercase;
-  line-height: 0.85;
-  letter-spacing: -0.03em;
-  text-shadow:
-    5px 5px 0 rgba(0, 0, 0, 0.3),
-    0 0 40px rgba(255, 255, 255, 0.2);
-  margin: 0;
-  animation: titlePulse 4s ease-in-out infinite;
-}
-
-@keyframes titlePulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-}
-
-.settingsActions {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.settingsActionButton {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  background: rgba(255, 255, 255, 0.15);
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  color: var(--text-on-dark);
-  font-family: var(--font-ui);
-  font-size: var(--text-xs);
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-}
-
-.settingsActionButton:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
-}
-
-.settingsActionButton:active {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
-}
-
-.actionIcon {
-  font-size: 1.5rem;
-  line-height: 1;
-}
-
-.actionLabel {
-  letter-spacing: 0.15em;
-}
-
-/* Top Navigation */
-.settingsTopNav {
-  padding: 0 var(--space-6) var(--space-4);
-  display: flex;
-  gap: var(--space-3);
-  position: relative;
-  z-index: 1;
-}
-
-.navButton {
-  position: relative;
-  padding: var(--space-3) var(--space-6);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--text-on-dark);
-  background: transparent;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-}
-
-.navButton::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.navButton:hover::before {
-  left: 0;
-}
-
-.navButton:hover {
-  border-color: rgba(255, 255, 255, 0.6);
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
-}
-
-.navButton:active {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
-}
-
-.navButtonInner {
-  position: relative;
-  z-index: 1;
 }
 
 /* ============================================================================
@@ -202,15 +26,15 @@
 .settingsNav {
   width: 280px;
   background: var(--bg-surface);
-  border-right: 4px solid var(--bg-accent);
+  border-right: 1px solid var(--bg-surface-light);
   overflow-y: auto;
   flex-shrink: 0;
 }
 
 .navHeader {
   padding: var(--space-6) var(--space-4);
-  background: linear-gradient(135deg, var(--mtv-purple) 0%, #6b21a8 100%);
-  border-bottom: 4px solid var(--bg-accent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--channel-system) 60%, var(--bg-surface)) 0%, var(--bg-surface) 100%);
+  border-bottom: 1px solid var(--bg-surface-light);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -218,30 +42,29 @@
 
 .navHeaderIcon {
   font-size: 2rem;
-  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.3));
+  color: var(--text-primary);
 }
 
 .navHeaderTitle {
   font-family: var(--font-display);
   font-size: 1.5rem;
-  font-weight: 900;
-  color: var(--text-on-dark);
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
-  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .navGroup {
-  border-bottom: 2px solid var(--bg-accent);
+  border-bottom: 1px solid var(--bg-surface-light);
 }
 
 .navGroupTitle {
   padding: var(--space-4) var(--space-4) var(--space-2);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
-  font-weight: 900;
-  color: var(--mtv-purple);
+  font-weight: 600;
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
 }
 
 .navGroupItems {
@@ -256,7 +79,8 @@
   padding: var(--space-3) var(--space-4);
   background: transparent;
   border: none;
-  border-left: 4px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -270,17 +94,15 @@
 .navItem:hover {
   background: var(--bg-surface-light);
   color: var(--text-primary);
-  border-left-color: var(--mtv-purple);
+  border-left-color: var(--channel-system);
 }
 
 .navItemActive {
   background: var(--bg-base);
   color: var(--text-primary);
-  border-left-color: var(--mtv-purple);
-  font-weight: 700;
-  box-shadow:
-    inset 4px 0 0 var(--mtv-purple),
-    3px 0 0 rgba(139, 92, 246, 0.2);
+  border-left-color: var(--channel-system);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--channel-system) 70%, transparent);
 }
 
 .navItemDot {
@@ -291,7 +113,7 @@
 
 .navItemActive .navItemDot {
   opacity: 1;
-  color: var(--mtv-purple);
+  color: var(--channel-system);
 }
 
 .navItemLabel {
@@ -300,7 +122,7 @@
 
 .navItemIndicator {
   font-size: 0.75rem;
-  color: var(--mtv-purple);
+  color: var(--channel-system);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -322,21 +144,20 @@
 .settingsContentHeader {
   padding: var(--space-6);
   background: var(--bg-surface);
-  border-bottom: 4px solid var(--bg-accent);
+  border-bottom: 1px solid var(--bg-surface-light);
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
-.sectionTitle {
+.settingsPage .sectionTitle {
   font-family: var(--font-display);
-  font-size: 2.5rem;
-  font-weight: 900;
+  font-size: 2rem;
+  font-weight: 600;
   color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: -0.02em;
+  text-transform: none;
+  letter-spacing: -0.01em;
   margin: 0 0 var(--space-2) 0;
-  text-shadow: 3px 3px 0 rgba(139, 92, 246, 0.2);
 }
 
 .sectionPath {
@@ -367,8 +188,8 @@
 .loadingSpinner {
   width: 64px;
   height: 64px;
-  border: 6px solid var(--bg-accent);
-  border-top-color: var(--mtv-purple);
+  border: 3px solid var(--bg-surface-light);
+  border-top-color: var(--channel-system);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -380,9 +201,9 @@
 .loadingText {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
-  font-weight: 900;
+  font-weight: 600;
   color: var(--text-secondary);
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
 }
 
 .settingsError {
@@ -391,24 +212,24 @@
   align-items: center;
   padding: var(--space-12);
   gap: var(--space-4);
-  background: var(--bg-surface);
-  border: 4px solid var(--mtv-red);
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+  background: color-mix(in srgb, var(--error) 10%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--error) 50%, var(--bg-surface-light));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .errorIcon {
   font-size: 4rem;
-  color: var(--mtv-red);
-  filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, 0.2));
+  color: var(--error);
 }
 
 .errorTitle {
   font-family: var(--font-display);
   font-size: 1.5rem;
-  font-weight: 900;
-  color: var(--mtv-red);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--error);
+  text-transform: none;
+  letter-spacing: -0.01em;
 }
 
 .errorMessage {
@@ -430,20 +251,21 @@
   padding: var(--space-8);
   gap: var(--space-4);
   background: var(--bg-surface);
-  border: 4px dashed var(--bg-accent);
+  border: 1px dashed var(--bg-surface-light);
+  border-radius: var(--radius-lg);
 }
 
 .placeholderIcon {
   font-size: 4rem;
-  filter: drop-shadow(3px 3px 0 rgba(139, 92, 246, 0.3));
+  color: var(--text-tertiary);
 }
 
 .placeholderTitle {
   font-family: var(--font-display);
   font-size: 2rem;
-  font-weight: 900;
+  font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 0.05em;
+  letter-spacing: -0.01em;
 }
 
 .placeholderText {
@@ -462,13 +284,14 @@
 
 .configPreview pre {
   padding: var(--space-4);
-  background: var(--bg-base);
-  border: 2px solid var(--bg-accent);
+  background: color-mix(in srgb, var(--bg-base) 85%, var(--bg-surface));
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-sm);
   font-family: 'Courier New', monospace;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   overflow-x: auto;
-  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================================================
@@ -483,47 +306,6 @@
   .settingsNav {
     width: 100%;
     border-right: none;
-    border-bottom: 4px solid var(--bg-accent);
-  }
-
-  .settingsTitle {
-    font-size: 3rem;
-  }
-
-  .settingsHeaderTop {
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .settingsActions {
-    align-self: flex-start;
-  }
-
-  .settingsTopNav {
-    flex-wrap: wrap;
-  }
-
-  .navButton {
-    flex: 1;
-    min-width: 120px;
-  }
-}
-
-@media (max-width: 480px) {
-  .settingsTitle {
-    font-size: 2.5rem;
-  }
-
-  .settingsIcon {
-    width: 48px;
-    height: 48px;
-  }
-
-  .settingsTopNav {
-    flex-direction: column;
-  }
-
-  .navButton {
-    width: 100%;
+    border-bottom: 1px solid var(--bg-surface-light);
   }
 }

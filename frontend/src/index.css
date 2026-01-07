@@ -1,59 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
-  /* MTV Primary Colors - Bold and Saturated */
-  --mtv-orange: #FF6600;
-  --mtv-pink: #FF0099;
-  --mtv-blue: #0099FF;
-  --mtv-yellow: #FFCC00;
-  --mtv-purple: #9933FF;
-  --mtv-red: #FF0033;
-  --mtv-green: #00CC66;
+  /* Studio Console palette */
+  --accent-amber: #d8a24a;
+  --accent-copper: #c97a5b;
+  --accent-teal: #4fb3a3;
+  --accent-gold: #f1c66a;
+  --accent-mauve: #7a6d8a;
+  --accent-ruby: #c45a5a;
+  --accent-sage: #6fb38a;
 
-  /* Channel Colors - Map to MTV palette */
-  --channel-library: var(--mtv-blue);
-  --channel-import: var(--mtv-pink);
-  --channel-player: var(--mtv-yellow);
-  --channel-manage: var(--mtv-green);
-  --channel-system: var(--mtv-purple);
+  --mtv-orange: var(--accent-amber);
+  --mtv-pink: var(--accent-copper);
+  --mtv-blue: var(--accent-teal);
+  --mtv-yellow: var(--accent-gold);
+  --mtv-purple: var(--accent-mauve);
+  --mtv-red: var(--accent-ruby);
+  --mtv-green: var(--accent-sage);
 
-  /* Backgrounds - Dark mode MTV */
-  --bg-base: #0A0A0A;
-  --bg-surface: #1A1A1A;
-  --bg-surface-light: #2A2A2A;
-  --bg-surface-hover: #3A3A3A;
-  --bg-accent: #0A0A0A;
+  /* Channel Colors */
+  --channel-library: var(--accent-teal);
+  --channel-import: var(--accent-amber);
+  --channel-player: var(--accent-gold);
+  --channel-manage: var(--accent-sage);
+  --channel-system: var(--accent-mauve);
 
-  /* Text - Light on dark */
-  --text-primary: #FFFFFF;
-  --text-secondary: #AAAAAA;
-  --text-tertiary: #777777;
-  --text-on-dark: #FFFFFF;
+  /* Backgrounds */
+  --bg-base: #141210;
+  --bg-surface: #1d1a17;
+  --bg-surface-light: #26221e;
+  --bg-surface-hover: #2f2a25;
+  --bg-accent: #332e28;
+
+  /* Text */
+  --text-primary: #f4efe7;
+  --text-secondary: #c8c1b6;
+  --text-tertiary: #8e867b;
+  --text-on-dark: #fdf7ee;
 
   /* Semantic */
-  --success: #00CC66;
-  --warning: #FFCC00;
-  --error: #FF0033;
-  --info: #0099FF;
+  --success: #6fb38a;
+  --warning: #f1c66a;
+  --error: #c45a5a;
+  --info: #4fb3a3;
+  --danger: var(--error);
 
-  /* Gradients - Removed for MTV aesthetic */
-  --gradient-mesh: none;
+  /* Background texture */
+  --gradient-mesh:
+    radial-gradient(800px circle at 20% -10%, rgba(216, 162, 74, 0.22), transparent 60%),
+    radial-gradient(700px circle at 85% 0%, rgba(79, 179, 163, 0.18), transparent 55%),
+    linear-gradient(180deg, #12100e 0%, #151311 55%, #0f0e0d 100%);
 
-  /* MTV Typography - Bold, condensed, impactful */
-  --font-display: 'Bebas Neue', 'Oswald', 'Impact', 'Arial Black', sans-serif;
-  --font-body: 'Arial', 'Helvetica Neue', sans-serif;
-  --font-ui: 'Arial Narrow', 'Arial', sans-serif;
+  /* Typography */
+  --font-display: 'Space Grotesk', 'Helvetica Neue', 'Arial', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Helvetica Neue', 'Arial', sans-serif;
+  --font-ui: 'IBM Plex Sans', 'Helvetica Neue', 'Arial', sans-serif;
 
-  /* Size scale - bigger headlines for MTV */
+  /* Size scale */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.75rem;
-  --text-2xl: 2.5rem;
-  --text-3xl: 4rem;
-  --text-4xl: 6rem;
-  --text-5xl: 8rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+  --text-5xl: 4rem;
 
   /* Spacing */
   --space-1: 0.25rem;
@@ -66,28 +78,28 @@
   --space-10: 4rem;
   --space-12: 6rem;
 
-  /* MTV Sharp Corners - All square edges */
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-full: 0;
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 999px;
 
-  /* MTV Hard Drop Shadows - No glow, solid black */
-  --shadow-sm: 3px 3px 0 rgba(0, 0, 0, 0.9);
-  --shadow-md: 5px 5px 0 rgba(0, 0, 0, 0.9);
-  --shadow-lg: 8px 8px 0 rgba(0, 0, 0, 0.9);
-  --shadow-xl: 12px 12px 0 rgba(0, 0, 0, 0.9);
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 26px 60px rgba(0, 0, 0, 0.55);
 
   /* Colored shadow variants for emphasis */
-  --shadow-orange: 5px 5px 0 var(--mtv-orange);
-  --shadow-pink: 5px 5px 0 var(--mtv-pink);
-  --shadow-blue: 5px 5px 0 var(--mtv-blue);
+  --shadow-orange: 0 14px 30px rgba(216, 162, 74, 0.35);
+  --shadow-pink: 0 14px 30px rgba(201, 122, 91, 0.35);
+  --shadow-blue: 0 14px 30px rgba(79, 179, 163, 0.35);
 
-  /* Remove glow shadows */
-  --shadow-glow-cyan: none;
-  --shadow-glow-magenta: none;
-  --shadow-glow-yellow: none;
+  /* Glow shadows */
+  --shadow-glow-cyan: 0 0 24px rgba(79, 179, 163, 0.35);
+  --shadow-glow-magenta: 0 0 24px rgba(201, 122, 91, 0.35);
+  --shadow-glow-yellow: 0 0 24px rgba(241, 198, 106, 0.35);
 
   color-scheme: dark;
   text-rendering: optimizeLegibility;
@@ -107,13 +119,76 @@ body {
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--bg-base);
+  background-color: var(--bg-base);
+  background-image: var(--gradient-mesh);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-body);
 }
 
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--mtv-orange) 35%, transparent);
+  color: var(--text-primary);
+}
+
 #root {
   min-height: 100vh;
+}
+
+.addNav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.addNavLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--bg-surface-light);
+  background: color-mix(in srgb, var(--bg-surface) 70%, transparent);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.addNavLink:hover {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--nav-accent, var(--channel-import)) 45%, var(--bg-surface-light));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nav-accent, var(--channel-import)) 18%, transparent);
+}
+
+.addNavLink:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nav-accent, var(--channel-import)) 35%, transparent);
+}
+
+.addNavLinkActive {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--nav-accent, var(--channel-import)) 60%, var(--bg-surface-light));
+  background: color-mix(in srgb, var(--nav-accent, var(--channel-import)) 18%, var(--bg-surface));
+  box-shadow: var(--shadow-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {

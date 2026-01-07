@@ -93,8 +93,10 @@ export function useVideoThumbnail(
       return fetchThumbnailBlob(videoId, cacheBustTimestamp)
     },
     enabled: enabled && videoId != null,
-    staleTime: 1000 * 60 * 60, // 1 hour - thumbnails rarely change
-    gcTime: 1000 * 60 * 60 * 24, // Keep in cache for 24 hours
+    // Don't cache blob URLs - they become invalid when revoked
+    // Fetch is cheap (cached at HTTP level) and prevents stale blob URL errors
+    staleTime: 0,
+    gcTime: 0,
     retry: (failureCount, error) => {
       // Don't retry on 404 (video not found) or 401 (auth failure after refresh)
       if (error instanceof APIError && (error.status === 404 || error.status === 401)) {
@@ -104,7 +106,7 @@ export function useVideoThumbnail(
     },
   })
 
-  // Cleanup previous blob URL when a new one is created or on unmount
+  // Cleanup blob URL when component unmounts or new URL arrives
   useEffect(() => {
     const currentUrl = query.data
     const previousUrl = blobUrlRef.current
@@ -118,7 +120,7 @@ export function useVideoThumbnail(
       blobUrlRef.current = currentUrl
     }
 
-    // Cleanup on unmount
+    // Cleanup on unmount - safe now because we don't cache
     return () => {
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current)

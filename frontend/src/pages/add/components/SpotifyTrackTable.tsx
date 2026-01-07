@@ -27,7 +27,7 @@ interface SpotifyTrackTableProps {
     enrichment: SpotifyTrackEnrichResponse
   ) => void
   onEditTrack: (track: BatchPreviewItem, state: TrackRowState) => void
-  onSearchYouTube: (track: BatchPreviewItem) => void
+  onSearchYouTube: (track: BatchPreviewItem, artist: string, trackTitle: string) => void
   onSelectionChange?: (selectedIds: Set<string>) => void
 }
 
@@ -330,7 +330,7 @@ export default function SpotifyTrackTable({
                 })
               }}
               onEdit={() => onEditTrack(track, state)}
-              onSearchYouTube={() => onSearchYouTube(track)}
+              onSearchYouTube={(artist, trackTitle) => onSearchYouTube(track, artist, trackTitle)}
               onPreviewYouTube={handlePreviewYouTube}
               onRetryIMVDb={() => setRetryingTrack(track)}
             />

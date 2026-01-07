@@ -1,0 +1,114 @@
+.pageHeader {
+  --header-accent: var(--channel-system);
+  --nav-accent: var(--header-accent);
+  background:
+    linear-gradient(
+      140deg,
+      color-mix(in srgb, var(--header-accent) 30%, transparent) 0%,
+      rgba(20, 18, 16, 0.95) 100%
+    ),
+    var(--bg-surface);
+  border-bottom: 1px solid var(--bg-surface-light);
+  position: relative;
+  overflow: hidden;
+}
+
+.pageHeaderTop {
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-6);
+  position: relative;
+  z-index: 1;
+}
+
+.pageHeaderTitleContainer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.pageHeaderIcon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.pageHeaderTitle {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: none;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.pageHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.pageHeaderNav {
+  padding: 0 var(--space-6) var(--space-4);
+  border-top: 1px solid var(--bg-surface-light);
+  padding-top: var(--space-4);
+  position: relative;
+  z-index: 1;
+}
+
+.pageHeaderSubNav {
+  padding: 0 var(--space-6) var(--space-5);
+  border-top: 1px solid var(--bg-surface-light);
+  padding-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--header-accent) 10%, var(--bg-surface));
+  position: relative;
+  z-index: 1;
+}
+
+.pageHeaderSubNavLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: color-mix(in srgb, var(--header-accent) 45%, var(--text-tertiary));
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 900px) {
+  .pageHeaderTop {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--space-5) var(--space-4) var(--space-4);
+  }
+
+  .pageHeaderIcon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .pageHeaderActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pageHeaderNav {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+
+  .pageHeaderSubNav {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+}

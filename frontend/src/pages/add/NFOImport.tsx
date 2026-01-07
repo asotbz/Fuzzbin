@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { addPreviewBatch, addNFOScan } from '../../lib/api/endpoints/add'
 import { getJob } from '../../lib/api/endpoints/jobs'
 import { jobsKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
 import { useJobEvents } from '../../lib/ws/useJobEvents'
+import PageHeader from '../../components/layout/PageHeader'
 import type { BatchPreviewResponse, NFOScanResponse, GetJobResponse } from '../../lib/api/types'
 import './NFOImport.css'
 
@@ -162,15 +163,24 @@ export default function NFOImport() {
 
   return (
     <div className="nfoImport">
-      <div className="nfoImportHeader">
-        <h1 className="nfoImportTitle">NFO Directory Scan</h1>
-        <Link to="/add" className="nfoImportBackLink">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Back to Hub
-        </Link>
-      </div>
+      <PageHeader
+        title="NFO Directory Scan"
+        iconSrc="/fuzzbin-icon.png"
+        iconAlt="Fuzzbin"
+        accent="var(--channel-import)"
+        navItems={[
+          { label: 'Library', to: '/library' },
+          { label: 'Import', to: '/add' },
+          { label: 'Activity', to: '/activity' },
+          { label: 'Settings', to: '/settings' },
+        ]}
+        subNavLabel="Import workflows"
+        subNavItems={[
+          { label: 'Search', to: '/add', end: true },
+          { label: 'Spotify Playlist', to: '/add/spotify' },
+          { label: 'NFO Scan', to: '/add/nfo' },
+        ]}
+      />
 
       <div className="nfoImportContent">
         <div className="nfoImportCard">

@@ -23,15 +23,19 @@
 }
 
 .videoPlayerModal {
-  background: var(--bg-base);
-  border: 6px solid var(--mtv-pink);
-  border-radius: 0;
+  --player-accent: var(--channel-player);
+  background: var(--bg-surface);
+  border: 3px solid var(--player-accent);
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 1200px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 12px 12px 0 rgba(0, 0, 0, 0.9);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 0 1px var(--player-accent),
+    var(--shadow-glow-yellow);
   animation: slideIn 0.3s ease-out;
 }
 
@@ -51,15 +55,8 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--space-4) var(--space-6);
-  background: var(--mtv-pink);
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 8px,
-    rgba(0, 0, 0, 0.1) 8px,
-    rgba(0, 0, 0, 0.1) 16px
-  );
-  border-bottom: 4px solid var(--bg-accent);
+  background: color-mix(in srgb, var(--player-accent) 12%, var(--bg-surface));
+  border-bottom: 1px solid var(--bg-surface-light);
 }
 
 .videoPlayerModalTitle {
@@ -72,19 +69,18 @@
 .videoPlayerModalArtist {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-secondary);
 }
 
 .videoPlayerModalTrack {
   font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: var(--text-on-dark);
-  letter-spacing: 0.02em;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,10 +89,10 @@
 .videoPlayerModalClose {
   width: 40px;
   height: 40px;
-  background: transparent;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-surface-light);
   border-radius: var(--radius-md);
-  color: var(--text-on-dark);
+  color: var(--text-secondary);
   font-size: var(--text-xl);
   cursor: pointer;
   transition: all 0.2s;
@@ -108,9 +104,9 @@
 }
 
 .videoPlayerModalClose:hover {
-  border-color: var(--text-on-dark);
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(1.1);
+  border-color: var(--player-accent);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--player-accent) 25%, transparent);
 }
 
 .videoPlayerModalBody {
@@ -120,11 +116,14 @@
   justify-content: center;
   background: #000;
   min-height: 0;
+  padding: var(--space-4);
 }
 
 .videoPlayerVideo {
   width: 100%;
-  max-height: calc(90vh - 140px);
+  max-height: calc(90vh - 170px);
+  border-radius: var(--radius-lg);
+  background: #000;
   outline: none;
 }
 
@@ -134,13 +133,14 @@
 
 .videoPlayerModalHint {
   padding: var(--space-2) var(--space-4);
-  background: var(--bg-surface);
-  border-top: 2px solid var(--bg-surface-light);
+  background: var(--bg-base);
+  border-top: 1px solid var(--bg-surface-light);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   text-align: center;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* Responsive */
@@ -163,6 +163,7 @@
   }
 
   .videoPlayerVideo {
-    max-height: calc(100vh - 120px);
+    max-height: calc(100vh - 140px);
+    border-radius: var(--radius-md);
   }
 }

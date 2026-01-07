@@ -54,8 +54,8 @@ describe('LibraryPage', () => {
       </MemoryRouter>
     )
 
-    const importHubLink = screen.getByRole('link', { name: /import hub/i })
-    expect(importHubLink).toHaveAttribute('href', '/add')
+    const importLink = screen.getByRole('link', { name: /import/i })
+    expect(importLink).toHaveAttribute('href', '/add')
 
     expect(await screen.findByText('rock')).toBeInTheDocument()
   })

@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useConfig } from '../hooks/useConfig'
 import LoggingSettings from '../components/sections/LoggingSettings'
 import APISettings from '../components/sections/APISettings'
 import MediaSettings from '../components/sections/MediaSettings'
 import LibrarySettings from '../components/sections/LibrarySettings'
 import AdvancedSettings from '../components/sections/AdvancedSettings'
+import PageHeader from '../../../components/layout/PageHeader'
 import './SettingsPage.css'
 
 interface ConfigSection {
@@ -61,48 +61,18 @@ export default function SettingsPage() {
 
   return (
     <div className="settingsPage">
-      {/* MTV-style Header */}
-      <header className="settingsHeader">
-        <div className="settingsHeaderTop">
-          <div className="settingsTitleContainer">
-            <img
-              src="/fuzzbin-icon.png"
-              alt="Fuzzbin"
-              className="settingsIcon"
-            />
-            <h1 className="settingsTitle">SETTINGS</h1>
-          </div>
-
-          <div className="settingsActions">
-            <button
-              className="settingsActionButton"
-              title="Undo last change"
-            >
-              <span className="actionIcon">↶</span>
-              <span className="actionLabel">UNDO</span>
-            </button>
-            <button
-              className="settingsActionButton"
-              title="Redo change"
-            >
-              <span className="actionIcon">↷</span>
-              <span className="actionLabel">REDO</span>
-            </button>
-          </div>
-        </div>
-
-        <nav className="settingsTopNav">
-          <Link className="navButton" to="/library">
-            <span className="navButtonInner">LIBRARY</span>
-          </Link>
-          <Link className="navButton" to="/activity">
-            <span className="navButtonInner">ACTIVITY</span>
-          </Link>
-          <Link className="navButton" to="/add">
-            <span className="navButtonInner">IMPORT HUB</span>
-          </Link>
-        </nav>
-      </header>
+      <PageHeader
+        title="Settings"
+        iconSrc="/fuzzbin-icon.png"
+        iconAlt="Fuzzbin"
+        accent="var(--channel-system)"
+        navItems={[
+          { label: 'Library', to: '/library' },
+          { label: 'Import', to: '/add' },
+          { label: 'Activity', to: '/activity' },
+          { label: 'Settings', to: '/settings' },
+        ]}
+      />
 
       <main className="settingsMain">
         {/* Left Sidebar Navigation */}

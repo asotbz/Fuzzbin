@@ -40,8 +40,9 @@ export default function YouTubeSearchModal({
   }
 
   return (
-    <div className="youtubeSearchModalOverlay" onClick={onCancel}>
-      <div className="youtubeSearchModal" onClick={(e) => e.stopPropagation()}>
+    <div className="youtubeSearchModal">
+      <div className="youtubeSearchModalOverlay" onClick={onCancel} />
+      <div className="youtubeSearchModalContent" onClick={(e) => e.stopPropagation()}>
         <div className="youtubeSearchModalHeader">
           <h2 className="youtubeSearchModalTitle">Search YouTube</h2>
           <button type="button" className="youtubeSearchModalClose" onClick={onCancel}>

@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { getYouTubeMetadata } from '../../../lib/api/endpoints/spotify'
-import { getDisplayTrackTitle, getDisplayAlbumTitle } from '../../../lib/utils/titleUtils'
+import {
+  getDisplayTrackTitle,
+  getDisplayAlbumTitle,
+  removeFeaturedArtists,
+  removeVersionQualifiers,
+} from '../../../lib/utils/titleUtils'
 import type {
   BatchPreviewItem,
   SpotifyTrackEnrichResponse,
@@ -31,7 +36,7 @@ interface TrackRowProps {
   metadataOverride?: TrackMetadata
   onSelect: (selected: boolean) => void
   onEdit: () => void
-  onSearchYouTube: () => void
+  onSearchYouTube: (artist: string, trackTitle: string) => void
   onPreviewYouTube: (youtubeId: string) => void
   onRetryIMVDb: () => void
 }
@@ -106,10 +111,9 @@ export default function TrackRow({
   const canonicalTitle = enrichmentData?.musicbrainz?.canonical_title
   const canonicalArtist = enrichmentData?.musicbrainz?.canonical_artist
   
-  const displayTitle = getDisplayTrackTitle(
-    track.title,
-    canonicalTitle || enrichmentData?.title
-  )
+  const displayTitle =
+    metadataOverride?.title ||
+    getDisplayTrackTitle(track.title, canonicalTitle || enrichmentData?.title)
   
   const displayAlbum = getDisplayAlbumTitle(
     metadataOverride?.album ?? 
@@ -128,6 +132,16 @@ export default function TrackRow({
     metadataOverride?.featuredArtists ?? enrichmentData?.featured_artists
   const displayGenre: string | null | undefined =
     metadataOverride?.genre ?? enrichmentData?.genre
+
+  const baseSearchTitle =
+    metadataOverride?.title || canonicalTitle || enrichmentData?.title || track.title
+  const baseSearchArtist =
+    metadataOverride?.artist || canonicalArtist || enrichmentData?.artist || track.artist
+
+  const cleanSearchTitle = removeFeaturedArtists(removeVersionQualifiers(baseSearchTitle)).trim()
+  const cleanSearchArtist = removeFeaturedArtists(baseSearchArtist).trim()
+  const searchTitle = cleanSearchTitle || baseSearchTitle
+  const searchArtist = cleanSearchArtist || baseSearchArtist
 
   return (
     <div
@@ -372,7 +386,7 @@ export default function TrackRow({
         <button
           type="button"
           className="trackRowActionButton"
-          onClick={onSearchYouTube}
+          onClick={() => onSearchYouTube(searchArtist, searchTitle)}
           disabled={enrichmentStatus === 'pending' || enrichmentStatus === 'loading'}
           title="Search YouTube"
         >

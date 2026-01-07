@@ -1,10 +1,11 @@
 /* Job Card Styles */
 .jobCard {
   background: var(--bg-surface);
-  border: 5px solid var(--bg-accent);
-  padding: 1.5rem;
-  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.9);
-  transition: all 0.15s;
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   position: relative;
   overflow: hidden;
 }
@@ -16,38 +17,42 @@
   left: 0;
   width: 8px;
   height: 100%;
-  background: var(--job-color, var(--bg-accent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--job-color, var(--bg-accent)) 70%, transparent),
+    transparent
+  );
 }
 
 .jobCardRunning {
-  --job-color: var(--mtv-green);
-  border-color: var(--mtv-green);
-  animation: pulseCard 2s ease-in-out infinite;
+  --job-color: var(--channel-manage);
+  border-color: color-mix(in srgb, var(--channel-manage) 45%, var(--bg-surface-light));
+  animation: pulseCard 3s ease-in-out infinite;
 }
 
 @keyframes pulseCard {
   0%, 100% {
-    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.9), 0 0 0 0 var(--mtv-green);
+    box-shadow: var(--shadow-sm);
   }
   50% {
-    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.9), 0 0 20px 2px var(--mtv-green);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--channel-manage) 25%, transparent);
   }
 }
 
 .jobCardCompleted {
-  --job-color: var(--mtv-blue);
-  border-color: var(--bg-accent);
+  --job-color: var(--channel-library);
+  border-color: var(--bg-surface-light);
   opacity: 0.7;
 }
 
 .jobCardFailed {
-  --job-color: var(--mtv-red);
-  border-color: var(--mtv-red);
+  --job-color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 55%, var(--bg-surface-light));
 }
 
 .jobCard:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.9);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .jobCardHeader {
@@ -66,10 +71,10 @@
 
 .jobType {
   font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: -0.01em;
+  font-size: 1.35rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -0.02em;
   margin-bottom: 0.25rem;
   color: var(--text-primary);
 }
@@ -78,48 +83,49 @@
   font-family: var(--font-ui);
   font-size: 0.7rem;
   color: var(--text-secondary);
-  letter-spacing: 0.05em;
-  font-weight: 500;
+  letter-spacing: 0.06em;
+  font-weight: 600;
   word-break: break-all;
 }
 
 .jobStatusBadge {
   font-family: var(--font-ui);
   font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.35rem 0.75rem;
-  border: 3px solid currentColor;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   white-space: nowrap;
 }
 
 .jobStatusBadgeRunning {
-  background: var(--mtv-green);
-  color: var(--bg-base);
-  border-color: var(--mtv-green);
-  box-shadow: 0 0 15px var(--mtv-green);
+  background: color-mix(in srgb, var(--channel-manage) 20%, var(--bg-surface));
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--channel-manage) 55%, var(--bg-surface-light));
+  box-shadow: var(--shadow-sm);
 }
 
 .jobStatusBadgePending,
 .jobStatusBadgeWaiting {
   background: transparent;
-  color: var(--mtv-yellow);
-  border-color: var(--mtv-yellow);
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 60%, var(--bg-surface-light));
 }
 
 .jobStatusBadgeCompleted {
   background: transparent;
-  color: var(--mtv-blue);
-  border-color: var(--mtv-blue);
+  color: var(--channel-library);
+  border-color: color-mix(in srgb, var(--channel-library) 60%, var(--bg-surface-light));
 }
 
 .jobStatusBadgeFailed,
 .jobStatusBadgeCancelled,
 .jobStatusBadgeTimeout {
-  background: var(--mtv-red);
-  color: var(--text-on-dark);
-  border-color: var(--mtv-red);
+  background: color-mix(in srgb, var(--error) 22%, var(--bg-surface));
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--error) 60%, var(--bg-surface-light));
 }
 
 .jobCurrentStep {
@@ -138,9 +144,10 @@
 }
 
 .progressBarContainer {
-  height: 16px;
+  height: 10px;
   background: var(--bg-base);
-  border: 4px solid var(--bg-accent);
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-full);
   position: relative;
   overflow: hidden;
   margin-bottom: 0.5rem;
@@ -148,13 +155,13 @@
 
 .progressBarFill {
   height: 100%;
-  background: linear-gradient(90deg, var(--mtv-green) 0%, #00FF88 100%);
+  background: linear-gradient(90deg, var(--channel-manage) 0%, color-mix(in srgb, var(--channel-manage) 80%, var(--bg-base)) 100%);
   transition: width 0.3s ease;
   position: relative;
 }
 
 .progressBarFillRunning {
-  box-shadow: 0 0 20px var(--mtv-green);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--channel-manage) 35%, transparent);
 }
 
 .progressBarFillRunning::after {
@@ -180,13 +187,13 @@
 }
 
 .progressBarFillCompleted {
-  background: linear-gradient(90deg, var(--mtv-blue) 0%, #00BBFF 100%);
-  box-shadow: 0 0 20px var(--mtv-blue);
+  background: linear-gradient(90deg, var(--channel-library) 0%, color-mix(in srgb, var(--channel-library) 80%, var(--bg-base)) 100%);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--channel-library) 35%, transparent);
 }
 
 .progressBarFillFailed {
-  background: linear-gradient(90deg, var(--mtv-red) 0%, #FF3355 100%);
-  box-shadow: 0 0 20px var(--mtv-red);
+  background: linear-gradient(90deg, var(--error) 0%, color-mix(in srgb, var(--error) 80%, var(--bg-base)) 100%);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--error) 35%, transparent);
 }
 
 .progressStats {
@@ -205,19 +212,19 @@
 }
 
 .progressRunning {
-  color: #00FF88;
+  color: var(--channel-manage);
 }
 
 .progressCompleted {
-  color: var(--mtv-blue);
+  color: var(--channel-library);
 }
 
 .progressFailed {
-  color: var(--mtv-red);
+  color: var(--error);
 }
 
 .progressSpeed {
-  color: var(--mtv-green);
+  color: var(--channel-manage);
 }
 
 .progressEta,
@@ -236,7 +243,7 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
   padding-top: 0.75rem;
-  border-top: 2px solid var(--bg-accent);
+  border-top: 1px solid var(--bg-surface-light);
 }
 
 .jobTimestamp {
@@ -253,34 +260,35 @@
 .actionBtn {
   font-family: var(--font-ui);
   font-size: 0.7rem;
-  font-weight: 700;
-  background: transparent;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
   color: var(--text-secondary);
-  border: 2px solid var(--bg-accent);
-  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-full);
+  padding: 0.3rem 0.7rem;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .actionBtn:hover {
-  border-color: var(--mtv-green);
-  color: var(--mtv-green);
+  border-color: color-mix(in srgb, var(--channel-manage) 50%, var(--bg-surface-light));
+  color: var(--text-primary);
 }
 
 .actionBtnDanger:hover {
-  border-color: var(--mtv-red);
-  color: var(--mtv-red);
+  border-color: color-mix(in srgb, var(--error) 50%, var(--bg-surface-light));
+  color: var(--error);
 }
 
 /* Job Details */
 .jobDetails {
   margin-top: 1rem;
   padding: 1rem;
-  padding-left: 2rem;
-  background: var(--bg-base);
-  border-top: 2px solid var(--bg-accent);
+  padding-left: 1.5rem;
+  background: color-mix(in srgb, var(--bg-base) 80%, var(--bg-surface));
+  border-top: 1px solid var(--bg-surface-light);
 }
 
 .jobDetailsSection {
@@ -294,10 +302,10 @@
 .jobDetailsLabel {
   font-family: var(--font-ui);
   font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--mtv-green);
+  font-weight: 600;
+  color: var(--channel-manage);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   margin-bottom: 0.5rem;
 }
 
@@ -309,14 +317,15 @@
 }
 
 .jobDetailsError {
-  color: var(--mtv-red);
+  color: var(--error);
 }
 
 .jobDetailsCode {
   background: var(--bg-surface-light);
   padding: 0.75rem;
   overflow-x: auto;
-  border: 2px solid var(--bg-accent);
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
 }
 

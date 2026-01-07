@@ -128,8 +128,8 @@ export default function MediaSettings({ config, section }: MediaSettingsProps) {
 
       <div style={{
         padding: 'var(--space-3)',
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border-subtle)',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--bg-surface-light)',
         marginTop: 'var(--space-4)',
         fontFamily: 'var(--font-body)',
         fontSize: 'var(--text-sm)',

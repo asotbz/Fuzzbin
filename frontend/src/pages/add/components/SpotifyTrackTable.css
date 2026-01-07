@@ -4,24 +4,23 @@
   flex-direction: column;
   gap: var(--space-4);
   background: var(--bg-base);
-  border: 5px solid var(--bg-accent);
-  border-radius: 0;
-  padding: var(--space-6);
-  box-shadow: var(--shadow-lg);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
 }
 
 /* Progress indicator */
 .spotifyTrackTableProgress {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--text-on-dark);
+  font-weight: 600;
+  color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: var(--space-2) var(--space-4);
-  background: var(--mtv-pink);
-  border: 3px solid var(--mtv-pink);
-  border-radius: 0;
+  background: color-mix(in srgb, var(--channel-import) 15%, var(--bg-surface));
+  border: 2px solid color-mix(in srgb, var(--channel-import) 40%, var(--bg-surface-light));
+  border-radius: var(--radius-full);
   text-align: center;
 }
 
@@ -31,22 +30,15 @@
   grid-template-columns: 40px 2fr 1.5fr 1fr 180px;
   gap: var(--space-4);
   padding: var(--space-4);
-  background: var(--bg-accent);
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 6px,
-    rgba(255, 255, 255, 0.05) 6px,
-    rgba(255, 255, 255, 0.05) 12px
-  );
-  color: var(--text-on-dark);
-  border-radius: 0;
+  background: color-mix(in srgb, var(--channel-import) 8%, var(--bg-surface));
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
   font-family: var(--font-ui);
   font-weight: 700;
   text-transform: uppercase;
   font-size: var(--text-xs);
   letter-spacing: 0.05em;
-  border: 4px solid var(--mtv-pink);
+  border: 2px solid var(--bg-surface-light);
 }
 
 .spotifyTrackTableHeaderCheckbox {
@@ -71,16 +63,16 @@
 .spotifyTrackTableFooter {
   padding: var(--space-4);
   background: var(--bg-surface);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   text-align: center;
   font-family: var(--font-ui);
   font-weight: 700;
   color: var(--text-secondary);
-  border: 3px solid var(--bg-accent);
+  border: 2px solid var(--bg-surface-light);
 }
 
 .spotifyTrackTableSelection {
-  color: var(--mtv-pink);
+  color: var(--channel-import);
 }
 
 /* Track Row */
@@ -90,16 +82,16 @@
   gap: var(--space-4);
   padding: var(--space-4);
   background: var(--bg-base);
-  border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
-  transition: all 0.15s;
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   align-items: center;
 }
 
 .trackRow:hover {
-  border-color: var(--mtv-pink);
-  box-shadow: 4px 4px 0 var(--mtv-pink);
-  transform: translateX(4px);
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .trackRowPending {
@@ -107,25 +99,25 @@
 }
 
 .trackRowLoading {
-  border-color: var(--mtv-pink);
+  border-color: var(--channel-import);
   animation: pulse 2s ease-in-out infinite;
 }
 
 .trackRowSuccess {
-  border-color: var(--mtv-green);
+  border-color: var(--success);
 }
 
 .trackRowNoMatch {
-  border-color: var(--mtv-yellow);
+  border-color: var(--warning);
 }
 
 .trackRowError {
-  border-color: var(--mtv-red);
+  border-color: var(--error);
 }
 
 .trackRowSelected {
-  border-color: var(--mtv-pink);
-  background: var(--bg-surface);
+  border-color: var(--channel-import);
+  background: color-mix(in srgb, var(--channel-import) 8%, var(--bg-surface));
   box-shadow: var(--shadow-sm);
 }
 
@@ -280,7 +272,7 @@
   display: inline-flex;
   align-items: center;
   padding: var(--space-1) var(--space-2);
-  border-radius: 0;
+  border-radius: var(--radius-full);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: 700;
@@ -308,9 +300,9 @@
 }
 
 .trackRowBadgeDiscogs {
-  background: rgba(138, 43, 226, 0.1);
-  border: 1px solid rgba(138, 43, 226, 0.3);
-  color: #8a2be2;
+  background: rgba(255, 0, 110, 0.1);
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  color: var(--channel-import);
   cursor: help;
 }
 
@@ -394,19 +386,18 @@
   width: 36px;
   height: 36px;
   padding: 0;
-  background: var(--bg-base);
-  border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  background: var(--bg-surface);
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
   color: var(--text-secondary);
 }
 
 .trackRowActionButton:hover:not(:disabled) {
-  border-color: var(--mtv-pink);
-  color: var(--mtv-pink);
-  transform: translate(-2px, -2px);
-  box-shadow: 3px 3px 0 var(--mtv-pink);
+  border-color: var(--channel-import);
+  color: var(--channel-import);
+  box-shadow: var(--shadow-sm);
 }
 
 .trackRowActionButton:disabled {
@@ -426,7 +417,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -436,14 +428,17 @@
 
 .metadataEditorModal {
   background: var(--bg-surface);
-  border: 5px solid var(--mtv-pink);
-  border-radius: 0;
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.9);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 0 1px var(--channel-import),
+    var(--shadow-glow-magenta);
 }
 
 .metadataEditorHeader {
@@ -457,9 +452,9 @@
 .metadataEditorTitle {
   font-family: var(--font-display);
   font-size: var(--text-2xl);
-  font-weight: 900;
+  font-weight: 800;
   text-transform: uppercase;
-  color: var(--mtv-pink);
+  color: var(--channel-import);
   margin: 0;
 }
 
@@ -479,7 +474,6 @@
 
 .metadataEditorClose:hover {
   color: var(--channel-import);
-  transform: scale(1.1);
 }
 
 .metadataEditorClose svg {
@@ -497,8 +491,8 @@
   margin-bottom: var(--space-6);
   padding: var(--space-4);
   background: var(--bg-base);
-  border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  border: 2px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
 }
 
 .metadataEditorComparisonHeader {
@@ -544,7 +538,7 @@
 .metadataEditorLabel {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -556,19 +550,19 @@
 
 .metadataEditorInput {
   padding: var(--space-3) var(--space-4);
-  background: var(--bg-base);
+  background: var(--bg-surface);
   border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--text-primary);
-  transition: all 0.15s;
+  transition: all 0.3s;
 }
 
 .metadataEditorInput:focus {
   outline: none;
-  border-color: var(--mtv-pink);
-  box-shadow: 3px 3px 0 var(--mtv-pink);
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-glow-magenta);
 }
 
 .metadataEditorInputError {
@@ -592,9 +586,9 @@
 
 .metadataEditorButton {
   padding: var(--space-3) var(--space-6);
-  background: transparent;
+  background: var(--bg-surface);
   border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 700;
@@ -602,34 +596,36 @@
   letter-spacing: 0.05em;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.3s;
 }
 
 .metadataEditorButton:hover {
   border-color: var(--text-secondary);
   color: var(--text-primary);
-  transform: translate(-2px, -2px);
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.9);
 }
 
 .metadataEditorButtonPrimary {
   padding: var(--space-3) var(--space-6);
-  background: var(--mtv-pink);
-  border: 3px solid var(--mtv-pink);
-  border-radius: 0;
+  background: var(--bg-surface);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-lg);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-on-dark);
+  color: var(--channel-import);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .metadataEditorButtonPrimary:hover:not(:disabled) {
-  transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.9);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-xl), var(--shadow-glow-magenta);
+}
+
+.metadataEditorButtonPrimary:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .metadataEditorButtonPrimary:disabled {
@@ -638,30 +634,45 @@
 }
 
 /* YouTube Search Modal */
+.youtubeSearchModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
 .youtubeSearchModalOverlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--space-6);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: -1;
 }
 
-.youtubeSearchModal {
+.youtubeSearchModalContent {
+  position: relative;
+  z-index: 1;
   background: var(--bg-surface);
-  border: 5px solid var(--mtv-pink);
-  border-radius: 0;
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-xl);
   width: 100%;
-  max-width: 800px;
+  max-width: 900px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.9);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 0 1px var(--channel-import),
+    var(--shadow-glow-magenta);
 }
 
 .youtubeSearchModalHeader {
@@ -675,9 +686,9 @@
 .youtubeSearchModalTitle {
   font-family: var(--font-display);
   font-size: var(--text-2xl);
-  font-weight: 900;
+  font-weight: 800;
   text-transform: uppercase;
-  color: var(--mtv-pink);
+  color: var(--channel-import);
   margin: 0;
 }
 
@@ -697,7 +708,6 @@
 
 .youtubeSearchModalClose:hover {
   color: var(--channel-import);
-  transform: scale(1.1);
 }
 
 .youtubeSearchModalClose svg {
@@ -722,17 +732,17 @@
   padding: var(--space-3) var(--space-4);
   background: var(--bg-base);
   border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--text-primary);
-  transition: all 0.15s;
+  transition: all 0.3s;
 }
 
 .youtubeSearchModalInput:focus {
   outline: none;
-  border-color: var(--mtv-pink);
-  box-shadow: 3px 3px 0 var(--mtv-pink);
+  border-color: var(--channel-import);
+  box-shadow: var(--shadow-glow-magenta);
 }
 
 .youtubeSearchModalSearchButton {
@@ -742,17 +752,17 @@
   width: 48px;
   height: 48px;
   padding: 0;
-  background: var(--mtv-pink);
-  border: 3px solid var(--mtv-pink);
-  border-radius: 0;
+  background: var(--bg-surface);
+  border: 3px solid var(--channel-import);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  color: var(--text-on-dark);
-  transition: all 0.15s;
+  color: var(--channel-import);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .youtubeSearchModalSearchButton:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.9);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-xl), var(--shadow-glow-magenta);
 }
 
 .youtubeSearchModalSearchButton svg {
@@ -782,15 +792,15 @@
   padding: var(--space-4);
   background: var(--bg-base);
   border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .youtubeSearchModalResult:hover {
-  border-color: var(--mtv-pink);
-  transform: translateX(4px);
-  box-shadow: 4px 4px 0 var(--mtv-pink);
+  border-color: var(--channel-import);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .youtubeSearchModalThumbnail {
@@ -798,7 +808,7 @@
   width: 160px;
   height: 90px;
   flex-shrink: 0;
-  border-radius: 0;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -818,7 +828,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 0, 110, 0.9);
+  background: color-mix(in srgb, var(--channel-import) 80%, transparent);
   border-radius: 50%;
   color: white;
   opacity: 0;
@@ -877,9 +887,9 @@
 
 .youtubeSearchModalButton {
   padding: var(--space-3) var(--space-6);
-  background: transparent;
+  background: var(--bg-surface);
   border: 3px solid var(--bg-surface-light);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 700;
@@ -887,12 +897,10 @@
   letter-spacing: 0.05em;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.3s;
 }
 
 .youtubeSearchModalButton:hover {
   border-color: var(--text-secondary);
   color: var(--text-primary);
-  transform: translate(-2px, -2px);
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.9);
 }

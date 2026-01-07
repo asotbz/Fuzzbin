@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
 import { useActivityWebSocket, type JobData } from '../hooks/useActivityWebSocket'
 import { cancelJob } from '../../../lib/api/endpoints/jobs'
 import { getApiBaseUrl } from '../../../api/client'
+import PageHeader from '../../../components/layout/PageHeader'
 import JobCard from '../components/JobCard'
 import JobFilterBar from '../components/JobFilterBar'
 import './ActivityMonitorPage.css'
@@ -132,30 +132,24 @@ export default function ActivityMonitorPage() {
 
   return (
     <div className="activityMonitor">
-      <header className="activityHeader">
-        <div className="activityHeaderTop">
-          <div className="activityTitleContainer">
-            <img src="/fuzzbin-icon.png" alt="Fuzzbin" className="activityIcon" />
-            <h1 className="activityTitle">Activity<br />Monitor</h1>
-          </div>
+      <PageHeader
+        title="Activity Monitor"
+        iconSrc="/fuzzbin-icon.png"
+        iconAlt="Fuzzbin"
+        accent="var(--channel-manage)"
+        actions={
           <div className="activityLiveIndicator">
             <div className={`liveDot ${wsState === 'connected' ? 'liveDotConnected' : ''}`} />
             <span>{wsState === 'connected' ? 'LIVE' : wsState === 'connecting' ? 'CONNECTING...' : 'DISCONNECTED'}</span>
           </div>
-        </div>
-
-        <nav className="activityNav">
-          <Link className="navButton" to="/library" aria-label="Go to Library">
-            Library
-          </Link>
-          <Link className="navButton" to="/add" aria-label="Go to Import Hub">
-            Import Hub
-          </Link>
-          <Link className="navButton" to="/settings" aria-label="Go to Settings">
-            Settings
-          </Link>
-        </nav>
-      </header>
+        }
+        navItems={[
+          { label: 'Library', to: '/library' },
+          { label: 'Import', to: '/add' },
+          { label: 'Activity', to: '/activity' },
+          { label: 'Settings', to: '/settings' },
+        ]}
+      />
 
       <JobFilterBar
         statusFilter={statusFilter}

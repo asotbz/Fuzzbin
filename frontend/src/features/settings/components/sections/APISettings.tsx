@@ -68,10 +68,10 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
         >
           <div style={{
             padding: 'var(--space-3)',
-            background: 'var(--mtv-yellow)',
-            borderLeft: '4px solid #ca8a04',
+            background: 'color-mix(in srgb, var(--warning) 18%, var(--bg-surface))',
+            borderLeft: '3px solid color-mix(in srgb, var(--warning) 60%, var(--bg-surface-light))',
             marginBottom: 'var(--space-4)',
-            color: 'var(--bg-base)',
+            color: 'var(--text-primary)',
             fontFamily: 'var(--font-body)',
             fontSize: 'var(--text-sm)',
             lineHeight: '1.6'
@@ -105,10 +105,10 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
         >
           <div style={{
             padding: 'var(--space-3)',
-            background: 'var(--mtv-yellow)',
-            borderLeft: '4px solid #ca8a04',
+            background: 'color-mix(in srgb, var(--warning) 18%, var(--bg-surface))',
+            borderLeft: '3px solid color-mix(in srgb, var(--warning) 60%, var(--bg-surface-light))',
             marginBottom: 'var(--space-4)',
-            color: 'var(--bg-base)',
+            color: 'var(--text-primary)',
             fontFamily: 'var(--font-body)',
             fontSize: 'var(--text-sm)',
             lineHeight: '1.6'
@@ -156,10 +156,10 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
         >
           <div style={{
             padding: 'var(--space-3)',
-            background: 'var(--mtv-yellow)',
-            borderLeft: '4px solid #ca8a04',
+            background: 'color-mix(in srgb, var(--warning) 18%, var(--bg-surface))',
+            borderLeft: '3px solid color-mix(in srgb, var(--warning) 60%, var(--bg-surface-light))',
             marginBottom: 'var(--space-4)',
-            color: 'var(--bg-base)',
+            color: 'var(--text-primary)',
             fontFamily: 'var(--font-body)',
             fontSize: 'var(--text-sm)',
             lineHeight: '1.6'
@@ -210,8 +210,8 @@ export default function APISettings({ config, apiName }: APISettingsProps) {
       >
         <div style={{
           padding: 'var(--space-3)',
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-subtle)',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--bg-surface-light)',
           marginBottom: 'var(--space-4)',
           fontFamily: 'var(--font-body)',
           fontSize: 'var(--text-sm)',

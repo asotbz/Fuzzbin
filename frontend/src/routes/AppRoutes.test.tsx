@@ -85,9 +85,9 @@ describe('routing', () => {
       </MemoryRouter>
     )
 
-    expect(await screen.findByText('Import Hub')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /video library/i })).toHaveAttribute('href', '/library')
-    expect(await screen.findByText('Spotify Playlist')).toBeInTheDocument()
-    expect(await screen.findByText('NFO Directory Scan')).toBeInTheDocument()
+    expect(await screen.findByText('Artist/Title Search')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^search$/i })).toHaveAttribute('href', '/add')
+    expect(screen.getByRole('link', { name: /spotify playlist/i })).toHaveAttribute('href', '/add/spotify')
+    expect(screen.getByRole('link', { name: /nfo scan/i })).toHaveAttribute('href', '/add/nfo')
   })
 })

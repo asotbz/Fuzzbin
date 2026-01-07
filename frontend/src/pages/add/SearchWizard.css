@@ -9,51 +9,6 @@
   padding: var(--space-6);
 }
 
-.searchWizardHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-8);
-  padding-bottom: var(--space-4);
-  border-bottom: 2px solid var(--bg-surface-light);
-}
-
-.searchWizardTitle {
-  font-family: var(--font-display);
-  font-size: var(--text-3xl);
-  font-weight: 800;
-  text-transform: uppercase;
-  color: var(--channel-import);
-  margin: 0;
-}
-
-.searchWizardBackLink {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-tertiary);
-  text-decoration: none;
-  padding: var(--space-3) var(--space-4);
-  border: 2px solid var(--bg-surface-light);
-  border-radius: var(--radius-lg);
-  transition: all 0.3s;
-}
-
-.searchWizardBackLink svg {
-  width: 16px;
-  height: 16px;
-}
-
-.searchWizardBackLink:hover {
-  color: var(--channel-import);
-  border-color: var(--channel-import);
-  transform: translateX(-4px);
-}
-
 .searchWizardStep {
   background: var(--bg-surface);
   border: 3px solid var(--bg-surface-light);
@@ -61,27 +16,26 @@
   padding: var(--space-8);
 }
 
-.searchWizardStepTitle {
+.searchWizardCardTitle {
   font-family: var(--font-display);
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: 800;
   text-transform: uppercase;
   color: var(--text-primary);
-  margin: 0 0 var(--space-3) 0;
-}
-
-.searchWizardStepDescription {
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-  margin: 0 0 var(--space-6) 0;
+  margin: 0 0 var(--space-5) 0;
 }
 
 .searchWizardForm {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  max-width: 600px;
+  max-width: 100%;
+}
+
+.searchWizardFormRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
 }
 
 .searchWizardFormGroup {
@@ -101,6 +55,7 @@
 
 .searchWizardInput {
   width: 100%;
+  min-height: 56px;
   border-radius: var(--radius-lg);
   border: 3px solid var(--bg-surface-light);
   background: var(--bg-base);

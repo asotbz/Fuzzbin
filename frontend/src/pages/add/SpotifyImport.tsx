@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Import wizard handles dynamic API responses */
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { addPreviewBatch } from '../../lib/api/endpoints/add'
 import { importSelectedTracks } from '../../lib/api/endpoints/spotify'
@@ -9,6 +9,7 @@ import { getJob } from '../../lib/api/endpoints/jobs'
 import { jobsKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
 import { useJobEvents } from '../../lib/ws/useJobEvents'
+import PageHeader from '../../components/layout/PageHeader'
 import SpotifyTrackTable, { type TrackRowState } from './components/SpotifyTrackTable'
 import MetadataEditor, { type EditedMetadata, extractYouTubeId } from './components/MetadataEditor'
 import YouTubeSearchModal from './components/YouTubeSearchModal'
@@ -68,7 +69,11 @@ export default function SpotifyImport() {
 
   // Modal state
   const [editingTrack, setEditingTrack] = useState<{ track: BatchPreviewItem; state: TrackRowState } | null>(null)
-  const [searchingTrack, setSearchingTrack] = useState<BatchPreviewItem | null>(null)
+  const [searchingTrack, setSearchingTrack] = useState<{
+    track: BatchPreviewItem
+    artist: string
+    trackTitle: string
+  } | null>(null)
 
   // Job state
   const [jobId, setJobId] = useState<string | null>(null)
@@ -114,6 +119,7 @@ export default function SpotifyImport() {
       toast.success('Import started!', {
         description: `Importing ${resp.track_count} tracks. ${resp.auto_download ? 'Downloads will be queued automatically.' : ''}`,
       })
+      navigate('/library')
     },
     onError: (error: Error) => {
       toast.error('Import failed', { description: error.message })
@@ -224,19 +230,20 @@ export default function SpotifyImport() {
 
   const handleYouTubeSelect = (track: BatchPreviewItem, youtubeId: string) => {
     const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
+    const enrichment = enrichmentData.get(trackId)
 
     setMetadataOverrides((prev) => {
       const newMap = new Map(prev)
       const existing = newMap.get(trackId) || {
-        title: track.title,
-        artist: track.artist,
-        year: track.year ?? null,
-        album: track.album ?? null,
-        label: track.label ?? null,
-        directors: null,
-        featuredArtists: null,
+        title: enrichment?.title ?? track.title,
+        artist: enrichment?.artist ?? track.artist,
+        year: enrichment?.year ?? track.year ?? null,
+        album: enrichment?.album ?? track.album ?? null,
+        label: enrichment?.label ?? track.label ?? null,
+        directors: enrichment?.directors ?? null,
+        featuredArtists: enrichment?.featuredArtists ?? null,
         youtubeId: null,
-        genre: null,
+        genre: enrichment?.genre ?? null,
       }
       newMap.set(trackId, { ...existing, youtubeId })
       return newMap
@@ -348,26 +355,24 @@ export default function SpotifyImport() {
 
   return (
     <div className="spotifyImport">
-      <header className="spotifyImportHeader">
-        <div className="spotifyImportHeaderTop">
-          <div className="spotifyImportTitleContainer">
-            <img src="/fuzzbin-icon.png" alt="Fuzzbin" className="spotifyImportIcon" />
-            <h1 className="spotifyImportTitle">Spotify Playlist Import</h1>
-          </div>
-        </div>
-
-        <nav className="spotifyImportNav">
-          <Link to="/add" className="primaryButton">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '16px', height: '16px' }}>
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            Back to Hub
-          </Link>
-          <Link to="/library" className="primaryButton">
-            Video Library
-          </Link>
-        </nav>
-      </header>
+      <PageHeader
+        title="Spotify Playlist Import"
+        iconSrc="/fuzzbin-icon.png"
+        iconAlt="Fuzzbin"
+        accent="var(--channel-import)"
+        navItems={[
+          { label: 'Library', to: '/library' },
+          { label: 'Import', to: '/add' },
+          { label: 'Activity', to: '/activity' },
+          { label: 'Settings', to: '/settings' },
+        ]}
+        subNavLabel="Import workflows"
+        subNavItems={[
+          { label: 'Search', to: '/add', end: true },
+          { label: 'Spotify Playlist', to: '/add/spotify' },
+          { label: 'NFO Scan', to: '/add/nfo' },
+        ]}
+      />
 
       <div className="spotifyImportContent">
         {/* Configuration Card */}
@@ -434,7 +439,7 @@ export default function SpotifyImport() {
                 tracks={preview.items ?? []}
                 metadataOverrides={metadataOverrides}
                 onEditTrack={(track, state) => setEditingTrack({ track, state })}
-                onSearchYouTube={(track) => setSearchingTrack(track)}
+                onSearchYouTube={(track, artist, trackTitle) => setSearchingTrack({ track, artist, trackTitle })}
                 onSelectionChange={(selectedIds) => setSelectedTrackIds(selectedIds)}
                 onEnrichmentComplete={handleEnrichmentComplete}
               />
@@ -507,8 +512,8 @@ export default function SpotifyImport() {
       {searchingTrack && (
         <YouTubeSearchModal
           artist={searchingTrack.artist}
-          trackTitle={searchingTrack.title}
-          onSelect={(youtubeId) => handleYouTubeSelect(searchingTrack, youtubeId)}
+          trackTitle={searchingTrack.trackTitle}
+          onSelect={(youtubeId) => handleYouTubeSelect(searchingTrack.track, youtubeId)}
           onCancel={() => setSearchingTrack(null)}
         />
       )}

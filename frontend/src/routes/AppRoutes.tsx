@@ -4,7 +4,6 @@ import { useAuthTokens } from '../auth/useAuthTokens'
 import LibraryPage from '../features/library/pages/LibraryPage'
 import ActivityMonitorPage from '../features/activity/pages/ActivityMonitorPage'
 import SettingsPage from '../features/settings/pages/SettingsPage'
-import ImportHub from '../pages/add/ImportHub'
 import SearchWizard from '../pages/add/SearchWizard'
 import SpotifyImport from '../pages/add/SpotifyImport'
 import NFOImport from '../pages/add/NFOImport'
@@ -36,7 +35,7 @@ export default function AppRoutes() {
         path="/add"
         element={
           <RequireAuth>
-            <ImportHub />
+            <SearchWizard />
           </RequireAuth>
         }
       />
@@ -45,7 +44,7 @@ export default function AppRoutes() {
         path="/add/search"
         element={
           <RequireAuth>
-            <SearchWizard />
+            <Navigate to="/add" replace />
           </RequireAuth>
         }
       />

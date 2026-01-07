@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import PageHeader from '../../../components/layout/PageHeader'
 import VideoCard, { type VideoCardJobStatus } from '../../../components/video/VideoCard'
 import VideoGrid from '../../../components/video/VideoGrid'
 import LibraryTable from '../components/LibraryTable'
@@ -213,9 +214,16 @@ export default function LibraryPage() {
     includeActiveState: true,
     autoConnect: pageVideoIds.length > 0,
     onVideoUpdate: useCallback((event: VideoUpdateEvent) => {
-      // Invalidate videos query to refresh metadata (duration, codec, etc.)
+      // Only invalidate if video is on current page and non-thumbnail fields changed
+      // Thumbnail changes are handled via thumbnailTimestamp cache-busting
       if (pageVideoIds.includes(event.video_id)) {
-        queryClient.invalidateQueries({ queryKey: videosKeys.all })
+        const nonThumbnailFields = event.fields_changed.filter(f => 
+          f !== 'thumbnail' && f !== 'width' && f !== 'height'
+        )
+        // Only refetch if metadata fields changed (title, artist, status, etc.)
+        if (nonThumbnailFields.length > 0) {
+          queryClient.invalidateQueries({ queryKey: videosKeys.all })
+        }
       }
     }, [pageVideoIds, queryClient]),
   })
@@ -390,13 +398,12 @@ export default function LibraryPage() {
 
   return (
     <div className="libraryPage">
-      <header className="libraryHeader">
-        <div className="libraryHeaderTop">
-          <div className="libraryTitleContainer">
-            <img src="/fuzzbin-icon.png" alt="Fuzzbin" className="libraryIcon" />
-            <h1 className="libraryTitle">Video Library</h1>
-          </div>
-
+      <PageHeader
+        title="Video Library"
+        iconSrc="/fuzzbin-icon.png"
+        iconAlt="Fuzzbin"
+        accent="var(--channel-library)"
+        actions={
           <div className="libraryControls">
             <input
               className="searchInput"
@@ -443,17 +450,14 @@ export default function LibraryPage() {
               </button>
             </div>
           </div>
-        </div>
-
-        <nav className="libraryNav">
-          <Link className="primaryButton" to="/add" aria-label="Open Import Hub">
-            Import Hub
-          </Link>
-          <Link className="primaryButton" to="/settings" aria-label="Open Settings">
-            Settings
-          </Link>
-        </nav>
-      </header>
+        }
+        navItems={[
+          { label: 'Library', to: '/library' },
+          { label: 'Import', to: '/add' },
+          { label: 'Activity', to: '/activity' },
+          { label: 'Settings', to: '/settings' },
+        ]}
+      />
 
       <main className="libraryMain">
         <aside className={`panelCard libraryFacets ${facetsExpanded ? 'libraryFacetsExpanded' : 'libraryFacetsCollapsed'}`} aria-label="Filters">

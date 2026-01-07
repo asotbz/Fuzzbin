@@ -1,17 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Wizard handles dynamic API responses */
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { addSearch, addPreview, addImport, checkVideoExists, getYouTubeMetadata } from '../../lib/api/endpoints/add'
 import { addKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useSearchWizard } from '../../hooks/add/useSearchWizard'
-import WizardStepper from '../../components/add/wizard/WizardStepper'
+import PageHeader from '../../components/layout/PageHeader'
 import SourceComparison, { type ComparisonField } from '../../components/add/metadata/SourceComparison'
 import type { AddSingleImportRequest } from '../../lib/api/types'
 import './SearchWizard.css'
-
-const STEPS = ['Search', 'Select', 'Edit', 'Submit']
 
 export default function SearchWizard() {
   const navigate = useNavigate()
@@ -675,48 +673,53 @@ export default function SearchWizard() {
 
   return (
     <div className="searchWizard">
-      <WizardStepper steps={STEPS} currentStep={wizard.currentStep} onStepClick={wizard.goToStep} />
+      <PageHeader
+        title="Artist/Title Search"
+        iconSrc="/fuzzbin-icon.png"
+        iconAlt="Fuzzbin"
+        accent="var(--channel-import)"
+        navItems={[
+          { label: 'Library', to: '/library' },
+          { label: 'Import', to: '/add' },
+          { label: 'Activity', to: '/activity' },
+          { label: 'Settings', to: '/settings' },
+        ]}
+        subNavLabel="Import workflows"
+        subNavItems={[
+          { label: 'Search', to: '/add', end: true },
+          { label: 'Spotify Playlist', to: '/add/spotify' },
+          { label: 'NFO Scan', to: '/add/nfo' },
+        ]}
+      />
 
       <div className="searchWizardContent">
-        <div className="searchWizardHeader">
-          <h1 className="searchWizardTitle">Artist/Title Search</h1>
-          <Link to="/add" className="searchWizardBackLink">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            Back to Hub
-          </Link>
-        </div>
-
         {/* Step 0: Search */}
         {wizard.currentStep === 0 && (
           <div className="searchWizardStep">
-            <h2 className="searchWizardStepTitle">Search for a Video</h2>
-            <p className="searchWizardStepDescription">
-              Search across IMVDb, Discogs, and YouTube to find the music video you want to import.
-            </p>
-
+            <h2 className="searchWizardCardTitle">Search Configuration</h2>
             <form onSubmit={handleSearch} className="searchWizardForm">
-              <div className="searchWizardFormGroup">
-                <label className="searchWizardLabel">Artist</label>
-                <input
-                  type="text"
-                  className="searchWizardInput"
-                  value={artist}
-                  onChange={(e) => setArtist(e.target.value)}
-                  placeholder="Enter artist name"
-                />
-              </div>
+              <div className="searchWizardFormRow">
+                <div className="searchWizardFormGroup">
+                  <label className="searchWizardLabel">Artist</label>
+                  <input
+                    type="text"
+                    className="searchWizardInput"
+                    value={artist}
+                    onChange={(e) => setArtist(e.target.value)}
+                    placeholder="Enter artist name"
+                  />
+                </div>
 
-              <div className="searchWizardFormGroup">
-                <label className="searchWizardLabel">Track Title</label>
-                <input
-                  type="text"
-                  className="searchWizardInput"
-                  value={trackTitle}
-                  onChange={(e) => setTrackTitle(e.target.value)}
-                  placeholder="Enter track title"
-                />
+                <div className="searchWizardFormGroup">
+                  <label className="searchWizardLabel">Track Title</label>
+                  <input
+                    type="text"
+                    className="searchWizardInput"
+                    value={trackTitle}
+                    onChange={(e) => setTrackTitle(e.target.value)}
+                    placeholder="Enter track title"
+                  />
+                </div>
               </div>
 
               <button
@@ -733,11 +736,6 @@ export default function SearchWizard() {
         {/* Step 1: Select Source */}
         {wizard.currentStep === 1 && wizard.searchResults && (
           <div className="searchWizardStep">
-            <h2 className="searchWizardStepTitle">Select a Source</h2>
-            <p className="searchWizardStepDescription">
-              Choose the result that best matches your video. Click to view details and proceed.
-            </p>
-
             <div className="searchResultsList">
               {wizard.searchResults.results?.map((result, index) => (
                 <button
@@ -776,11 +774,6 @@ export default function SearchWizard() {
         {/* Step 2: Edit Metadata */}
         {wizard.currentStep === 2 && (
           <div className="searchWizardStep">
-            <h2 className="searchWizardStepTitle">Review & Edit Metadata</h2>
-            <p className="searchWizardStepDescription">
-              Review the metadata and make any necessary edits before importing.
-            </p>
-
             {previewQuery.isLoading && <div className="searchWizardLoading">Loading preview...</div>}
 
             {previewQuery.data && (
@@ -995,11 +988,6 @@ export default function SearchWizard() {
         {/* Step 3: Review & Submit */}
         {wizard.currentStep === 3 && (
           <div className="searchWizardStep">
-            <h2 className="searchWizardStepTitle">Review & Submit</h2>
-            <p className="searchWizardStepDescription">
-              Review your metadata and configure import settings before submitting.
-            </p>
-
             <div className="reviewSummary">
               <div className="reviewSummarySection">
                 <h3 className="reviewSummaryTitle">Metadata</h3>
