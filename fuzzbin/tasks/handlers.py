@@ -2784,6 +2784,9 @@ async def handle_video_post_process(job: Job) -> None:
                 resolution=f"{media_info.get('width')}x{media_info.get('height')}",
             )
 
+            # Get file size
+            file_size = temp_path.stat().st_size if temp_path.exists() else None
+
             # Update database with media info
             await repository.update_video(
                 video_id,
@@ -2797,6 +2800,7 @@ async def handle_video_post_process(job: Job) -> None:
                 frame_rate=media_info.get("frame_rate"),
                 audio_channels=media_info.get("audio_channels"),
                 audio_sample_rate=media_info.get("audio_sample_rate"),
+                file_size=file_size,
             )
         except Exception as e:
             # Log but don't fail - FFProbe is optional
