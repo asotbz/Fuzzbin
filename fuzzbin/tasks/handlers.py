@@ -1027,8 +1027,24 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                         hooks=hooks,
                     )
 
-                    # Update database with file path
-                    await repository.update_video(video_id, video_file_path=str(result.output_path))
+                    # Update database with file path and status
+                    await repository.update_video(
+                        video_id, video_file_path=str(result.output_path), status="downloaded"
+                    )
+
+                    # Queue post-process job for FFProbe, thumbnail, and organization
+                    from fuzzbin.tasks.queue import get_job_queue
+
+                    queue = get_job_queue()
+                    post_process_job = Job(
+                        type=JobType.VIDEO_POST_PROCESS,
+                        metadata={
+                            "video_id": video_id,
+                            "temp_path": str(result.output_path),
+                        },
+                        parent_job_id=job.id,
+                    )
+                    await queue.submit(post_process_job)
 
                     downloaded += 1
                     logger.info(
@@ -1036,6 +1052,7 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                         video_id=video_id,
                         file_path=str(result.output_path),
                         file_size=result.file_size,
+                        post_process_job_id=post_process_job.id,
                     )
 
                 except asyncio.CancelledError:
@@ -3072,9 +3089,14 @@ async def handle_import_organize(job: Job) -> None:
         # Move file from temp to final location
         shutil.move(str(temp_path), str(media_paths.video_path))
 
-        # Clean up temp directory
+        # Clean up temp directory only if it's empty (e.g., per-job temp dirs)
+        # Don't try to remove shared directories like downloads/
         if temp_path.parent.exists():
-            temp_path.parent.rmdir()
+            try:
+                temp_path.parent.rmdir()
+            except OSError:
+                # Directory not empty or is a permanent directory - this is fine
+                pass
 
         # Update video record with file paths
         await repository.update_video(
@@ -3122,7 +3144,11 @@ async def handle_import_organize(job: Job) -> None:
         if temp_path.exists():
             temp_path.unlink()
             if temp_path.parent.exists():
-                temp_path.parent.rmdir()
+                try:
+                    temp_path.parent.rmdir()
+                except OSError:
+                    # Directory not empty or is permanent - this is fine
+                    pass
 
         # Update video status to download_failed (allow retry)
         await repository.update_video(video_id, status="download_failed")
