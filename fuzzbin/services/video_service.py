@@ -412,12 +412,22 @@ class VideoService(BaseService):
                 event_bus = get_event_bus()
                 # Fields that should trigger UI updates
                 ui_relevant_fields = {
-                    "thumbnail", "width", "height", "duration", "file_path",
-                    "title", "artist", "album", "year", "status",
-                    "studio", "director", "youtube_id"
+                    "thumbnail",
+                    "width",
+                    "height",
+                    "duration",
+                    "file_path",
+                    "title",
+                    "artist",
+                    "album",
+                    "year",
+                    "status",
+                    "studio",
+                    "director",
+                    "youtube_id",
                 }
                 changed_fields = set(kwargs.keys())
-                
+
                 # Only emit if UI-relevant fields changed
                 if ui_relevant_fields & changed_fields:
                     # Include timestamp only if thumbnail-related fields changed
