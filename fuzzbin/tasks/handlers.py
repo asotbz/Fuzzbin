@@ -439,6 +439,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
                 "genre": genre_value,
                 "status": initial_status,
                 "download_source": "spotify",
+                "isrc": metadata.get("isrc"),
             }
 
             # Add external IDs if available

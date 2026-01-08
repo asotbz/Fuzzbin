@@ -369,6 +369,7 @@ class SpotifyPlaylistImporter:
             "source_genres": source_genres_json,
             "status": self.initial_status,
             "download_source": "spotify",
+            "isrc": track.isrc,
         }
 
     async def _check_track_exists(self, track: SpotifyTrack) -> bool:
