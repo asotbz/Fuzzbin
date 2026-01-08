@@ -1051,3 +1051,49 @@ async def stream_video(
         media_type=content_type,
         headers=headers,
     )
+
+
+@router.post(
+    "/backfill-imvdb-urls",
+    status_code=status.HTTP_200_OK,
+    responses={**COMMON_ERROR_RESPONSES, **AUTH_ERROR_RESPONSES},
+)
+async def backfill_imvdb_urls(
+    limit: Optional[int] = Query(None, description="Limit number of videos to process"),
+    video_service: VideoService = Depends(get_video_service),
+) -> dict:
+    """
+    Backfill missing IMVDb URLs for videos that have imvdb_video_id.
+
+    This endpoint is useful for fixing videos that were imported with
+    imvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).
+
+    Args:
+        limit: Optional limit on number of videos to process
+        video_service: Injected video service
+
+    Returns:
+        Dict with counts: total_found, updated, failed
+    """
+    try:
+        # Get IMVDb client from dependencies
+        from ..dependencies import get_imvdb_client
+
+        imvdb_client = await get_imvdb_client()
+
+        result = await video_service.backfill_imvdb_urls(
+            imvdb_client=imvdb_client,
+            limit=limit,
+        )
+
+        return result
+
+    except ServiceError as e:
+        logger.error("backfill_imvdb_urls_service_error", error=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception as e:
+        logger.error("backfill_imvdb_urls_unexpected_error", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to backfill IMVDb URLs",
+        )

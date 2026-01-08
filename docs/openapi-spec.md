@@ -92,6 +92,18 @@ Video CRUD operations and metadata management
   - Get or generate a thumbnail for a video.
 - `POST` `/videos/{video_id}/refresh` — Refresh video properties and thumbnail
   - Re-analyze video file with ffprobe and regenerate thumbnail.
+- `POST` `/videos/backfill-imvdb-urls` — Backfill Imvdb Urls
+  - Backfill missing IMVDb URLs for videos that have imvdb_video_id.
+
+This endpoint is useful for fixing videos that were imported with
+imvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).
+
+Args:
+    limit: Optional limit on number of videos to process
+    video_service: Injected video service
+
+Returns:
+    Dict with counts: total_found, updated, failed
 
 ## Artists
 Artist management and video associations

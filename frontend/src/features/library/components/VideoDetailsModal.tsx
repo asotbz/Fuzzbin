@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Video } from '../../../lib/api/types'
@@ -87,6 +87,9 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
 
   const anyVideo = video as Record<string, unknown>
   const videoId = typeof anyVideo.id === 'number' ? anyVideo.id : null
+
+  // Track if we've already attempted backfill for this video to avoid repeated attempts
+  const backfillAttemptedRef = useRef<number | null>(null)
 
   // Use the latest timestamp from WebSocket or local refresh
   const effectiveThumbnailTimestamp = thumbnailTimestamp ?? localThumbnailTimestamp
@@ -273,6 +276,39 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
       })
     },
   })
+
+  // Backfill IMVDb URL mutation
+  const backfillImvdbUrlMutation = useMutation({
+    mutationFn: async () => {
+      return await apiJson<{ total_found: number; updated: number; failed: number }>({
+        method: 'POST',
+        path: '/videos/backfill-imvdb-urls?limit=1',
+      })
+    },
+    onSuccess: (data) => {
+      if (data.updated > 0) {
+        // Refresh the video data to get the new URL
+        queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      }
+    },
+    onError: (error) => {
+      console.warn('Failed to backfill IMVDb URL:', error)
+    },
+  })
+
+  // Automatically backfill missing IMVDb URL if we have the video ID
+  const imvdbVideoId = typeof anyVideo.imvdb_video_id === 'string' ? anyVideo.imvdb_video_id : null
+  useEffect(() => {
+    // Only attempt backfill if:
+    // 1. We have an IMVDb video ID
+    // 2. We don't have an IMVDb URL
+    // 3. We have a valid video ID
+    // 4. We haven't already attempted backfill for this video
+    if (imvdbVideoId && !imvdbUrl && videoId && backfillAttemptedRef.current !== videoId) {
+      backfillAttemptedRef.current = videoId
+      backfillImvdbUrlMutation.mutate()
+    }
+  }, [imvdbVideoId, imvdbUrl, videoId, backfillImvdbUrlMutation])
 
   const handleSave = () => {
     // Validate ISRC before saving

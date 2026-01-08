@@ -2579,6 +2579,125 @@
         }
       }
     },
+    "/videos/backfill-imvdb-urls": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Backfill Imvdb Urls",
+        "description": "Backfill missing IMVDb URLs for videos that have imvdb_video_id.\n\nThis endpoint is useful for fixing videos that were imported with\nimvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).\n\nArgs:\n    limit: Optional limit on number of videos to process\n    video_service: Injected video service\n\nReturns:\n    Dict with counts: total_found, updated, failed",
+        "operationId": "backfill_imvdb_urls_videos_backfill_imvdb_urls_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Limit number of videos to process",
+              "title": "Limit"
+            },
+            "description": "Limit number of videos to process"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Backfill Imvdb Urls Videos Backfill Imvdb Urls Post"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource already exists or state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/artists": {
       "get": {
         "tags": [

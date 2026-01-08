@@ -1547,6 +1547,104 @@ class VideoService(BaseService):
         self.logger.info("library_repaired", **result)
         return result
 
+    # ==================== IMVDb URL Backfill ====================
+
+    async def backfill_imvdb_urls(
+        self,
+        imvdb_client: Any,
+        limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Backfill missing IMVDb URLs for videos that have imvdb_video_id.
+
+        Queries for videos with imvdb_video_id but NULL imvdb_url,
+        fetches the full video details from IMVDb API, and updates
+        the imvdb_url field.
+
+        Args:
+            imvdb_client: IMVDbClient instance for API calls
+            limit: Optional limit on number of videos to process
+
+        Returns:
+            Dict with counts: total_found, updated, failed
+        """
+        # Query for videos missing IMVDb URLs
+        query = """
+            SELECT id, imvdb_video_id
+            FROM videos
+            WHERE imvdb_video_id IS NOT NULL
+            AND (imvdb_url IS NULL OR imvdb_url = '')
+            AND deleted_at IS NULL
+        """
+
+        if limit:
+            query += f" LIMIT {limit}"
+
+        cursor = await self.repository._connection.execute(query)
+        rows = await cursor.fetchall()
+        videos = [{"id": row[0], "imvdb_video_id": row[1]} for row in rows]
+
+        total_found = len(videos)
+        updated = 0
+        failed = 0
+
+        logger.info(
+            "backfill_imvdb_urls_started",
+            total_videos=total_found,
+        )
+
+        async with imvdb_client:
+            for video in videos:
+                video_id = video["id"]
+                imvdb_id = video["imvdb_video_id"]
+
+                try:
+                    # Fetch video details from IMVDb
+                    imvdb_video = await imvdb_client.get_video(imvdb_id)
+
+                    if imvdb_video and imvdb_video.url:
+                        # Update the imvdb_url field
+                        await self.repository.update_video(
+                            video_id,
+                            imvdb_url=imvdb_video.url,
+                        )
+                        updated += 1
+                        logger.debug(
+                            "backfill_imvdb_url_success",
+                            video_id=video_id,
+                            imvdb_id=imvdb_id,
+                            url=imvdb_video.url,
+                        )
+                    else:
+                        failed += 1
+                        logger.warning(
+                            "backfill_imvdb_url_no_url",
+                            video_id=video_id,
+                            imvdb_id=imvdb_id,
+                        )
+
+                except Exception as e:
+                    failed += 1
+                    logger.error(
+                        "backfill_imvdb_url_failed",
+                        video_id=video_id,
+                        imvdb_id=imvdb_id,
+                        error=str(e),
+                    )
+
+        logger.info(
+            "backfill_imvdb_urls_completed",
+            total_found=total_found,
+            updated=updated,
+            failed=failed,
+        )
+
+        return {
+            "total_found": total_found,
+            "updated": updated,
+            "failed": failed,
+        }
+
     # ==================== Cached Aggregations ====================
 
     @cached_async(ttl_seconds=60.0, maxsize=32)
