@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import fuzzbin
 from fuzzbin.api.discogs_client import DiscogsClient
 from fuzzbin.api.imvdb_client import IMVDbClient
+from fuzzbin.api.musicbrainz_client import MusicBrainzClient
 from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth import check_token_revoked_in_db, decode_token, UserInfo
 from fuzzbin.core.db import VideoRepository
@@ -25,6 +26,7 @@ logger = structlog.get_logger(__name__)
 _imvdb_client: Optional[IMVDbClient] = None
 _discogs_client: Optional[DiscogsClient] = None
 _spotify_client: Optional[SpotifyClient] = None
+_musicbrainz_client: Optional[MusicBrainzClient] = None
 
 # Optional bearer scheme - doesn't require auth header, allows checking if present
 optional_bearer = HTTPBearer(auto_error=False)
@@ -433,6 +435,54 @@ async def get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
     yield _spotify_client
 
 
+async def get_musicbrainz_client() -> AsyncGenerator[MusicBrainzClient, None]:
+    """
+    Dependency that provides a shared MusicBrainz client instance.
+
+    The client is initialized once on first request and reused across all
+    subsequent requests. This ensures proper rate limiting, connection pooling,
+    and cache sharing across the application.
+
+    The client is cleaned up during application shutdown via the lifespan handler.
+
+    Yields:
+        MusicBrainzClient instance
+
+    Raises:
+        HTTPException(503): If MusicBrainz API is not configured
+
+    Example:
+        @router.get("/musicbrainz/recordings/{mbid}")
+        async def get_recording(
+            mbid: str,
+            client: MusicBrainzClient = Depends(get_musicbrainz_client)
+        ):
+            return await client.get_recording(mbid)
+    """
+    global _musicbrainz_client
+
+    if _musicbrainz_client is None:
+        config = fuzzbin.get_config()
+        if config.apis is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API configuration not available",
+            )
+        api_config = config.apis.get("musicbrainz")
+
+        if not api_config:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="MusicBrainz API is not configured",
+            )
+
+        _musicbrainz_client = MusicBrainzClient.from_config(api_config)
+        await _musicbrainz_client.__aenter__()
+        logger.info("musicbrainz_client_initialized_singleton")
+
+    yield _musicbrainz_client
+
+
 async def cleanup_api_clients() -> None:
     """
     Clean up shared API client instances.
@@ -440,7 +490,7 @@ async def cleanup_api_clients() -> None:
     Called during application shutdown to properly close HTTP connections
     and release resources.
     """
-    global _imvdb_client, _discogs_client, _spotify_client
+    global _imvdb_client, _discogs_client, _spotify_client, _musicbrainz_client
 
     if _imvdb_client is not None:
         await _imvdb_client.__aexit__(None, None, None)
@@ -456,3 +506,8 @@ async def cleanup_api_clients() -> None:
         await _spotify_client.__aexit__(None, None, None)
         _spotify_client = None
         logger.info("spotify_client_cleanup_complete")
+
+    if _musicbrainz_client is not None:
+        await _musicbrainz_client.__aexit__(None, None, None)
+        _musicbrainz_client = None
+        logger.info("musicbrainz_client_cleanup_complete")

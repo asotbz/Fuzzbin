@@ -27,6 +27,8 @@ from ..schemas.common import (
 )
 from ..schemas.jobs import JobResponse
 from ..schemas.video import (
+    MusicBrainzEnrichRequest,
+    MusicBrainzEnrichResponse,
     VideoCreate,
     VideoFilters,
     VideoResponse,
@@ -480,6 +482,91 @@ async def download_video(
     await queue.submit(job)
 
     return JobResponse.model_validate(job)
+
+
+@router.post(
+    "/{video_id}/enrich/musicbrainz",
+    response_model=MusicBrainzEnrichResponse,
+    responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
+    summary="Enrich video with MusicBrainz",
+    description="Enrich video metadata from MusicBrainz using ISRC (preferred) or title/artist search. Returns enrichment result for user preview/approval.",
+)
+async def enrich_video_musicbrainz(
+    video_id: int,
+    request: MusicBrainzEnrichRequest,
+    repo: VideoRepository = Depends(get_repository),
+) -> MusicBrainzEnrichResponse:
+    """Enrich video metadata from MusicBrainz.
+
+    Uses ISRC if provided (most reliable), otherwise falls back to title/artist search.
+    Returns enrichment result with match confidence for user approval.
+    Does not automatically update the video record - user must apply changes via PATCH endpoint.
+    """
+    from fuzzbin.services.musicbrainz_enrichment import MusicBrainzEnrichmentService
+
+    # Verify video exists and get current data
+    video = await repo.get_video_by_id(video_id)
+
+    # Use provided values or fall back to video's existing values
+    isrc = request.isrc or video.get("isrc")
+    title = request.title or video.get("title")
+    artist = request.artist or video.get("artist")
+
+    # Require at least ISRC or title+artist
+    if not isrc and not (title and artist):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must provide either ISRC or both title and artist",
+        )
+
+    # Create enrichment service
+    config = fuzzbin.get_config()
+    api_config = config.apis.get("musicbrainz") if config.apis else None
+    enrichment_service = MusicBrainzEnrichmentService(
+        config=api_config,
+        config_dir=config.config_dir,
+    )
+
+    # Perform enrichment
+    logger.info(
+        "musicbrainz_enrichment_requested",
+        video_id=video_id,
+        has_isrc=bool(isrc),
+        title=title,
+        artist=artist,
+    )
+
+    result = await enrichment_service.enrich(
+        isrc=isrc,
+        artist=artist,
+        title=title,
+    )
+
+    logger.info(
+        "musicbrainz_enrichment_complete",
+        video_id=video_id,
+        match_method=result.match_method,
+        match_score=result.match_score,
+        confident_match=result.confident_match,
+    )
+
+    # Convert result to response schema
+    return MusicBrainzEnrichResponse(
+        recording_mbid=result.recording_mbid,
+        release_mbid=result.release_mbid,
+        album=result.album,
+        year=result.year,
+        genre=result.genre,
+        label=result.label,
+        canonical_title=result.canonical_title,
+        canonical_artist=result.canonical_artist,
+        classified_genre=result.classified_genre,
+        match_score=result.match_score,
+        match_method=result.match_method,
+        confident_match=result.confident_match,
+        all_genres=result.all_genres,
+        release_type=result.release_type,
+    )
 
 
 @router.get(

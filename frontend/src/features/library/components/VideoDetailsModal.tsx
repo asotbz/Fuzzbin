@@ -80,7 +80,7 @@ function getTagLabels(video: Video): string[] {
 export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }: VideoDetailsModalProps) {
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
-  const [fetchModalSource, setFetchModalSource] = useState<'imvdb' | 'discogs_master' | null>(null)
+  const [fetchModalSource, setFetchModalSource] = useState<'imvdb' | 'discogs_master' | 'musicbrainz' | null>(null)
   const [youtubeSearchOpen, setYoutubeSearchOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [localThumbnailTimestamp, setLocalThumbnailTimestamp] = useState<number | undefined>(thumbnailTimestamp)
@@ -112,6 +112,44 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
   const [editedGenre, setEditedGenre] = useState(typeof anyVideo.genre === 'string' ? anyVideo.genre : '')
   const [editedDirector, setEditedDirector] = useState(typeof anyVideo.director === 'string' ? anyVideo.director : '')
   const [editedLabel, setEditedLabel] = useState(typeof anyVideo.studio === 'string' ? anyVideo.studio : '')
+  const [editedIsrc, setEditedIsrc] = useState(typeof anyVideo.isrc === 'string' ? anyVideo.isrc : '')
+  const [isrcError, setIsrcError] = useState('')
+
+  // ISRC validation function (format: CC-XXX-YY-NNNNN, 12 chars without hyphens)
+  const validateIsrc = (value: string): boolean => {
+    if (!value.trim()) {
+      setIsrcError('')
+      return true // Empty is valid
+    }
+    // Remove hyphens for validation
+    const cleaned = value.replace(/-/g, '')
+    // Must be exactly 12 alphanumeric characters
+    if (cleaned.length !== 12 || !/^[A-Z0-9]{12}$/i.test(cleaned)) {
+      setIsrcError('ISRC must be 12 characters (format: CC-XXX-YY-NNNNN)')
+      return false
+    }
+    setIsrcError('')
+    return true
+  }
+  const [editedIsrc, setEditedIsrc] = useState(typeof anyVideo.isrc === 'string' ? anyVideo.isrc : '')
+  const [isrcError, setIsrcError] = useState('')
+
+  // ISRC validation function (format: CC-XXX-YY-NNNNN, 12 chars without hyphens)
+  const validateIsrc = (value: string): boolean => {
+    if (!value.trim()) {
+      setIsrcError('')
+      return true // Empty is valid
+    }
+    // Remove hyphens for validation
+    const cleaned = value.replace(/-/g, '')
+    // Must be exactly 12 alphanumeric characters
+    if (cleaned.length !== 12 || !/^[A-Z0-9]{12}$/i.test(cleaned)) {
+      setIsrcError('ISRC must be 12 characters (format: CC-XXX-YY-NNNNN)')
+      return false
+    }
+    setIsrcError('')
+    return true
+  }
 
   // Display values
   const title = editedTitle
@@ -256,6 +294,12 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
   })
 
   const handleSave = () => {
+    // Validate ISRC before saving
+    if (!validateIsrc(editedIsrc)) {
+      toast.error('Invalid ISRC format')
+      return
+    }
+
     const updates: Record<string, unknown> = {}
 
     if (editedTitle.trim() !== anyVideo.title) updates.title = editedTitle.trim()
@@ -264,6 +308,7 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     if (editedGenre.trim() !== anyVideo.genre) updates.genre = editedGenre.trim() || null
     if (editedDirector.trim() !== anyVideo.director) updates.director = editedDirector.trim() || null
     if (editedLabel.trim() !== anyVideo.studio) updates.studio = editedLabel.trim() || null
+    if (editedIsrc.trim() !== anyVideo.isrc) updates.isrc = editedIsrc.trim() || null
 
     const yearNum = editedYear ? parseInt(editedYear, 10) : null
     if (yearNum !== anyVideo.year) updates.year = yearNum
@@ -285,6 +330,8 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     setEditedGenre(typeof anyVideo.genre === 'string' ? anyVideo.genre : '')
     setEditedDirector(typeof anyVideo.director === 'string' ? anyVideo.director : '')
     setEditedLabel(typeof anyVideo.studio === 'string' ? anyVideo.studio : '')
+    setEditedIsrc(typeof anyVideo.isrc === 'string' ? anyVideo.isrc : '')
+    setIsrcError('')
     setIsEditing(false)
   }
 
@@ -509,6 +556,32 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
                 )}
               </div>
 
+              <div className="videoDetailsField">                <label className="videoDetailsLabel">ISRC</label>
+                {isEditing ? (
+                  <div>
+                    <input
+                      type="text"
+                      className="videoDetailsInput"
+                      value={editedIsrc}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase()
+                        setEditedIsrc(value)
+                        validateIsrc(value)
+                      }}
+                      placeholder="CC-XXX-YY-NNNNN"
+                      maxLength={15}
+                    />
+                    {isrcError && (
+                      <div style={{ color: 'var(--color-error, #ef4444)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                        {isrcError}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="videoDetailsValue">{editedIsrc || '—'}</div>
+                )}
+              </div>
+
               <div className="videoDetailsField">
                 <label className="videoDetailsLabel">Status</label>
                 <div className="videoDetailsValue">
@@ -524,14 +597,21 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
                   className="videoDetailsFetchButton"
                   onClick={() => setFetchModalSource('imvdb')}
                 >
-                  Fetch from IMVDb
+                  Enrich with IMVDb
                 </button>
                 <button
                   type="button"
                   className="videoDetailsFetchButton"
                   onClick={() => setFetchModalSource('discogs_master')}
                 >
-                  Fetch from Discogs
+                  Enrich with Discogs
+                </button>
+                <button
+                  type="button"
+                  className="videoDetailsFetchButton"
+                  onClick={() => setFetchModalSource('musicbrainz')}
+                >
+                  Enrich with MusicBrainz
                 </button>
               </div>
             )}
@@ -718,6 +798,8 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
         <MetadataFetchModal
           artist={editedArtist}
           title={editedTitle}
+          isrc={editedIsrc}
+          videoId={videoId ?? undefined}
           source={fetchModalSource}
           onApply={handleApplyFetchedMetadata}
           onClose={() => setFetchModalSource(null)}

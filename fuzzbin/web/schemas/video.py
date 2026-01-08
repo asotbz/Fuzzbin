@@ -29,6 +29,9 @@ class VideoBase(BaseModel):
     director: Optional[str] = Field(default=None, max_length=255, description="Video director")
     genre: Optional[str] = Field(default=None, max_length=100, description="Music genre")
     studio: Optional[str] = Field(default=None, max_length=255, description="Production studio")
+    isrc: Optional[str] = Field(
+        default=None, max_length=12, description="International Standard Recording Code"
+    )
 
 
 class VideoCreate(VideoBase):
@@ -162,6 +165,14 @@ class VideoResponse(VideoBase):
     download_attempts: int = 0
     last_download_attempt_at: Optional[datetime] = None
     last_download_error: Optional[str] = None
+
+    # MusicBrainz fields
+    isrc: Optional[str] = None
+    mb_recording_id: Optional[str] = None
+    mb_release_id: Optional[str] = None
+    mb_canonical_title: Optional[str] = None
+    mb_canonical_artist: Optional[str] = None
+    label: Optional[str] = None
 
     # Relationships (populated when requested)
     artists: List[VideoArtistResponse] = Field(default_factory=list)
@@ -306,3 +317,41 @@ class VideoFilters(BaseModel):
             query = query.include_deleted()
 
         return query
+
+
+class MusicBrainzEnrichRequest(BaseModel):
+    """Request schema for MusicBrainz enrichment."""
+
+    isrc: Optional[str] = Field(default=None, max_length=12, description="ISRC code (preferred)")
+    title: Optional[str] = Field(default=None, max_length=500, description="Track title")
+    artist: Optional[str] = Field(default=None, max_length=255, description="Artist name")
+
+
+class MusicBrainzEnrichResponse(BaseModel):
+    """Response schema for MusicBrainz enrichment result."""
+
+    # Source information
+    recording_mbid: Optional[str] = None
+    release_mbid: Optional[str] = None
+
+    # Enriched metadata
+    album: Optional[str] = None
+    year: Optional[int] = None
+    genre: Optional[str] = None
+    label: Optional[str] = None
+
+    # Canonical metadata from MusicBrainz
+    canonical_title: Optional[str] = None
+    canonical_artist: Optional[str] = None
+
+    # Genre classification (broad bucket: Metal, Rock, Pop, etc.)
+    classified_genre: Optional[str] = None
+
+    # Match details
+    match_score: float = 0.0
+    match_method: str = "none"  # 'isrc_search', 'search', 'none'
+    confident_match: bool = False
+
+    # Additional context
+    all_genres: List[str] = Field(default_factory=list)
+    release_type: Optional[str] = None  # 'Album', 'Single', 'EP', etc.
