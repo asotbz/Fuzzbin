@@ -131,25 +131,6 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     setIsrcError('')
     return true
   }
-  const [editedIsrc, setEditedIsrc] = useState(typeof anyVideo.isrc === 'string' ? anyVideo.isrc : '')
-  const [isrcError, setIsrcError] = useState('')
-
-  // ISRC validation function (format: CC-XXX-YY-NNNNN, 12 chars without hyphens)
-  const validateIsrc = (value: string): boolean => {
-    if (!value.trim()) {
-      setIsrcError('')
-      return true // Empty is valid
-    }
-    // Remove hyphens for validation
-    const cleaned = value.replace(/-/g, '')
-    // Must be exactly 12 alphanumeric characters
-    if (cleaned.length !== 12 || !/^[A-Z0-9]{12}$/i.test(cleaned)) {
-      setIsrcError('ISRC must be 12 characters (format: CC-XXX-YY-NNNNN)')
-      return false
-    }
-    setIsrcError('')
-    return true
-  }
 
   // Display values
   const title = editedTitle
