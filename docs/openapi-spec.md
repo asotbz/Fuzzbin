@@ -80,6 +80,8 @@ Video CRUD operations and metadata management
   - Restore a soft-deleted video.
 - `POST` `/videos/{video_id}/download` — Queue video download
   - Queue download job for a video with a YouTube ID. Downloads to temp, organizes to configured path, and generates NFO.
+- `POST` `/videos/{video_id}/enrich/musicbrainz` — Enrich video with MusicBrainz
+  - Enrich video metadata from MusicBrainz using ISRC (preferred) or title/artist search. Returns enrichment result for user preview/approval.
 - `GET` `/videos/{video_id}/jobs` — Get jobs for video
   - Get active and pending jobs associated with a specific video. Returns jobs where metadata.video_id matches the requested video.
 - `DELETE` `/videos/{video_id}/permanent` — Permanently delete video

@@ -2045,6 +2045,94 @@
         }
       }
     },
+    "/videos/{video_id}/enrich/musicbrainz": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Enrich video with MusicBrainz",
+        "description": "Enrich video metadata from MusicBrainz using ISRC (preferred) or title/artist search. Returns enrichment result for user preview/approval.",
+        "operationId": "enrich_video_musicbrainz_videos__video_id__enrich_musicbrainz_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MusicBrainzEnrichRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MusicBrainzEnrichResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/videos/{video_id}/jobs": {
       "get": {
         "tags": [
@@ -14391,6 +14479,191 @@
         "title": "LoginRequest",
         "description": "Request schema for user login."
       },
+      "MusicBrainzEnrichRequest": {
+        "properties": {
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc",
+            "description": "ISRC code (preferred)"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Track title"
+          },
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist",
+            "description": "Artist name"
+          }
+        },
+        "type": "object",
+        "title": "MusicBrainzEnrichRequest",
+        "description": "Request schema for MusicBrainz enrichment."
+      },
+      "MusicBrainzEnrichResponse": {
+        "properties": {
+          "recording_mbid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recording Mbid"
+          },
+          "release_mbid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Mbid"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "canonical_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Title"
+          },
+          "canonical_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Artist"
+          },
+          "classified_genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classified Genre"
+          },
+          "match_score": {
+            "type": "number",
+            "title": "Match Score",
+            "default": 0.0
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method",
+            "default": "none"
+          },
+          "confident_match": {
+            "type": "boolean",
+            "title": "Confident Match",
+            "default": false
+          },
+          "all_genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "All Genres"
+          },
+          "release_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Type"
+          }
+        },
+        "type": "object",
+        "title": "MusicBrainzEnrichResponse",
+        "description": "Response schema for MusicBrainz enrichment result."
+      },
       "MusicBrainzEnrichmentData": {
         "properties": {
           "recording_mbid": {
@@ -17136,6 +17409,19 @@
             "title": "Studio",
             "description": "Production studio"
           },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc",
+            "description": "International Standard Recording Code"
+          },
           "imvdb_video_id": {
             "anyOf": [
               {
@@ -17313,6 +17599,17 @@
             ],
             "title": "Studio",
             "description": "Production studio"
+          },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc"
           },
           "id": {
             "type": "integer",
@@ -17655,6 +17952,61 @@
             ],
             "title": "Last Download Error"
           },
+          "mb_recording_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mb Recording Id"
+          },
+          "mb_release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mb Release Id"
+          },
+          "mb_canonical_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mb Canonical Title"
+          },
+          "mb_canonical_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mb Canonical Artist"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
           "artists": {
             "items": {
               "$ref": "#/components/schemas/VideoArtistResponse"
@@ -17927,6 +18279,19 @@
             ],
             "title": "Studio",
             "description": "Production studio"
+          },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc",
+            "description": "International Standard Recording Code"
           },
           "imvdb_video_id": {
             "anyOf": [

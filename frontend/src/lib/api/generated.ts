@@ -455,6 +455,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/videos/{video_id}/enrich/musicbrainz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrich video with MusicBrainz
+         * @description Enrich video metadata from MusicBrainz using ISRC (preferred) or title/artist search. Returns enrichment result for user preview/approval.
+         */
+        post: operations["enrich_video_musicbrainz_videos__video_id__enrich_musicbrainz_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/videos/{video_id}/jobs": {
         parameters: {
             query?: never;
@@ -5413,6 +5433,70 @@ export interface components {
             password: string;
         };
         /**
+         * MusicBrainzEnrichRequest
+         * @description Request schema for MusicBrainz enrichment.
+         */
+        MusicBrainzEnrichRequest: {
+            /**
+             * Isrc
+             * @description ISRC code (preferred)
+             */
+            isrc?: string | null;
+            /**
+             * Title
+             * @description Track title
+             */
+            title?: string | null;
+            /**
+             * Artist
+             * @description Artist name
+             */
+            artist?: string | null;
+        };
+        /**
+         * MusicBrainzEnrichResponse
+         * @description Response schema for MusicBrainz enrichment result.
+         */
+        MusicBrainzEnrichResponse: {
+            /** Recording Mbid */
+            recording_mbid?: string | null;
+            /** Release Mbid */
+            release_mbid?: string | null;
+            /** Album */
+            album?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Genre */
+            genre?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Canonical Title */
+            canonical_title?: string | null;
+            /** Canonical Artist */
+            canonical_artist?: string | null;
+            /** Classified Genre */
+            classified_genre?: string | null;
+            /**
+             * Match Score
+             * @default 0
+             */
+            match_score: number;
+            /**
+             * Match Method
+             * @default none
+             */
+            match_method: string;
+            /**
+             * Confident Match
+             * @default false
+             */
+            confident_match: boolean;
+            /** All Genres */
+            all_genres?: string[];
+            /** Release Type */
+            release_type?: string | null;
+        };
+        /**
          * MusicBrainzEnrichmentData
          * @description MusicBrainz enrichment results.
          */
@@ -7058,6 +7142,11 @@ export interface components {
              */
             studio?: string | null;
             /**
+             * Isrc
+             * @description International Standard Recording Code
+             */
+            isrc?: string | null;
+            /**
              * Imvdb Video Id
              * @description IMVDb video ID
              */
@@ -7128,6 +7217,8 @@ export interface components {
              * @description Production studio
              */
             studio?: string | null;
+            /** Isrc */
+            isrc?: string | null;
             /** Id */
             id: number;
             /**
@@ -7211,6 +7302,16 @@ export interface components {
             last_download_attempt_at?: string | null;
             /** Last Download Error */
             last_download_error?: string | null;
+            /** Mb Recording Id */
+            mb_recording_id?: string | null;
+            /** Mb Release Id */
+            mb_release_id?: string | null;
+            /** Mb Canonical Title */
+            mb_canonical_title?: string | null;
+            /** Mb Canonical Artist */
+            mb_canonical_artist?: string | null;
+            /** Label */
+            label?: string | null;
             /** Artists */
             artists?: components["schemas"]["VideoArtistResponse"][];
             /** Collections */
@@ -7338,6 +7439,11 @@ export interface components {
              * @description Production studio
              */
             studio?: string | null;
+            /**
+             * Isrc
+             * @description International Standard Recording Code
+             */
+            isrc?: string | null;
             /**
              * Imvdb Video Id
              * @description IMVDb video ID
@@ -8933,6 +9039,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    enrich_video_musicbrainz_videos__video_id__enrich_musicbrainz_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MusicBrainzEnrichRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MusicBrainzEnrichResponse"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Not Found - Resource does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
