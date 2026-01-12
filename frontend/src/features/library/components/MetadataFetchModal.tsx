@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { addSearch, addPreview } from '../../../lib/api/endpoints/add'
+import { apiJson } from '../../../api/client'
 import type { AddSearchResponse, AddPreviewResponse } from '../../../lib/api/types'
 import './MetadataFetchModal.css'
 
@@ -51,25 +52,15 @@ export default function MetadataFetchModal({
         throw new Error('Video ID is required for MusicBrainz enrichment')
       }
       
-      const response = await fetch(`/api/videos/${videoId}/enrich/musicbrainz`, {
+      return await apiJson({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-        },
-        body: JSON.stringify({
+        path: `/videos/${videoId}/enrich/musicbrainz`,
+        body: {
           isrc: isrc || null,
           title: title || null,
           artist: artist || null,
-        }),
+        },
       })
-      
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
-        throw new Error(error.detail || 'Failed to enrich from MusicBrainz')
-      }
-      
-      return await response.json()
     },
     onSuccess: (data) => {
       const anyData = data as Record<string, unknown>
@@ -92,6 +83,9 @@ export default function MetadataFetchModal({
   // Search mutation (for IMVDb and Discogs)
   const searchMutation = useMutation({
     mutationFn: async () => {
+      if (source === 'musicbrainz') {
+        throw new Error('MusicBrainz enrichment does not use search results')
+      }
       const response = await addSearch({
         artist,
         track_title: title,
@@ -220,6 +214,21 @@ export default function MetadataFetchModal({
   }
 
   const results = (searchMutation.data?.results ?? []) as AddSearchResultItem[]
+  const musicbrainzPreview = isMusicBrainz
+    ? (previewData as Record<string, unknown> | null)
+    : null
+  const musicbrainzMatchMethod =
+    musicbrainzPreview && typeof musicbrainzPreview.match_method === 'string'
+      ? musicbrainzPreview.match_method
+      : ''
+  const musicbrainzMatchScore =
+    musicbrainzPreview && typeof musicbrainzPreview.match_score === 'number'
+      ? musicbrainzPreview.match_score
+      : null
+  const musicbrainzConfidentMatch =
+    musicbrainzPreview && typeof musicbrainzPreview.confident_match === 'boolean'
+      ? musicbrainzPreview.confident_match
+      : null
 
   return (
     <div
@@ -351,13 +360,13 @@ export default function MetadataFetchModal({
               {isMusicBrainz && (
                 <div>
                   <h3 className="metadataFetchSectionTitle">MusicBrainz Enrichment Result</h3>
-                  {(previewData as Record<string, unknown>).match_method && (
+                  {musicbrainzMatchMethod && (
                     <div style={{ marginBottom: 'var(--space-3)', fontSize: '0.875rem', color: 'var(--color-text-secondary, #6b7280)' }}>
-                      <div>Match method: {String((previewData as Record<string, unknown>).match_method)}</div>
-                      {typeof (previewData as Record<string, unknown>).match_score === 'number' && (
-                        <div>Match score: {((previewData as Record<string, unknown>).match_score as number).toFixed(1)}%</div>
+                      <div>Match method: {musicbrainzMatchMethod}</div>
+                      {musicbrainzMatchScore !== null && (
+                        <div>Match score: {musicbrainzMatchScore.toFixed(1)}%</div>
                       )}
-                      {(previewData as Record<string, unknown>).confident_match === false && (
+                      {musicbrainzConfidentMatch === false && (
                         <div style={{ color: 'var(--color-warning, #f59e0b)' }}>⚠️ Low confidence match - please review carefully</div>
                       )}
                     </div>

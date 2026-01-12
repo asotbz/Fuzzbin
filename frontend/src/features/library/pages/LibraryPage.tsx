@@ -22,6 +22,11 @@ import { getApiBaseUrl } from '../../../api/client'
 import './LibraryPage.css'
 
 type FacetItem = { value: string; count: number }
+type FacetKey = 'tags' | 'genres' | 'years'
+
+const FACET_LIMIT = 12
+const FACET_NONE_VALUE = '__none__'
+const YEAR_NONE_SENTINEL = -1
 
 type FacetSelections = {
   tag_name?: string
@@ -74,6 +79,16 @@ export default function LibraryPage() {
   const pageSize = 20
 
   const [filters, setFilters] = useState<FacetSelections>({})
+  const [facetExpandedByKey, setFacetExpandedByKey] = useState<Record<FacetKey, boolean>>({
+    tags: false,
+    genres: false,
+    years: false,
+  })
+  const [facetSearch, setFacetSearch] = useState<Record<FacetKey, string>>({
+    tags: '',
+    genres: '',
+    years: '',
+  })
 
   // View mode state
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
@@ -171,6 +186,13 @@ export default function LibraryPage() {
 
   const facetsQuery = useFacets({ include_deleted: false })
   const facets = useMemo(() => getFacets(facetsQuery.data), [facetsQuery.data])
+  const yearFacetItems = useMemo(
+    () =>
+      facets.years.filter(
+        (y) => y.value === FACET_NONE_VALUE || Number.isFinite(Number(y.value))
+      ),
+    [facets.years]
+  )
 
   const videosQueryParams: ListVideosQuery = useMemo(() => {
     const query: Record<string, unknown> = {
@@ -377,6 +399,105 @@ export default function LibraryPage() {
     setShowBulkDeleteConfirm(false)
   }
 
+  const renderFacetSection = (
+    key: FacetKey,
+    label: string,
+    items: FacetItem[],
+    selectedValue: string | null,
+    onSelect: (value: string) => void
+  ) => {
+    const isExpanded = facetExpandedByKey[key]
+    const query = facetSearch[key].trim().toLowerCase()
+    const formatFacetValue = (value: string) =>
+      value === FACET_NONE_VALUE ? '(none)' : value
+    const pinnedItem = selectedValue ? items.find((item) => item.value === selectedValue) : null
+    const pinnedItems = pinnedItem
+      ? [pinnedItem]
+      : selectedValue
+        ? [{ value: selectedValue, count: 0 }]
+        : []
+    const remainingItems = items.filter((item) => item.value !== selectedValue)
+    const filteredItems = query
+      ? remainingItems.filter((item) =>
+          formatFacetValue(item.value).toLowerCase().includes(query)
+        )
+      : remainingItems
+    const visibleItems = isExpanded ? filteredItems : filteredItems.slice(0, FACET_LIMIT)
+    const showToggle = isExpanded || filteredItems.length > FACET_LIMIT
+    const listId = `facet-${key}`
+
+    return (
+      <section className="facetSection">
+        <div className="facetHeader">
+          <h3 className="sectionTitle">{label}</h3>
+          {showToggle && (
+            <button
+              type="button"
+              className="facetToggle"
+              onClick={() =>
+                setFacetExpandedByKey((prev) => ({ ...prev, [key]: !prev[key] }))
+              }
+              aria-expanded={isExpanded}
+              aria-controls={listId}
+            >
+              {isExpanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
+
+        {isExpanded && (
+          <input
+            className="searchInput facetSearchInput"
+            type="search"
+            value={facetSearch[key]}
+            onChange={(event) =>
+              setFacetSearch((prev) => ({ ...prev, [key]: event.target.value }))
+            }
+            placeholder={`Search ${label.toLowerCase()}...`}
+            aria-label={`Filter ${label.toLowerCase()} options`}
+          />
+        )}
+
+        {pinnedItems.length > 0 && (
+          <div className="facetPinned">
+            <div className="facetList facetListPinned">
+              {pinnedItems.map((item) => (
+                <button
+                  key={`${key}:selected:${item.value}`}
+                  type="button"
+                  className="facetItem facetItemActive facetItemPinned"
+                  onClick={() => onSelect(item.value)}
+                >
+                  {formatFacetValue(item.value)}
+                  <span className="facetCount">{item.count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="facetDivider" />
+          </div>
+        )}
+
+        <div id={listId} className={`facetList ${isExpanded ? 'facetListExpanded' : ''}`}>
+          {visibleItems.map((item) => (
+            <button
+              key={`${key}:${item.value}`}
+              type="button"
+              className="facetItem"
+              onClick={() => onSelect(item.value)}
+            >
+              {formatFacetValue(item.value)}
+              <span className="facetCount">{item.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {isExpanded && filteredItems.length === 0 && (
+          <div className="facetEmpty">No matching options</div>
+        )}
+      </section>
+    )
+  }
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -489,72 +610,43 @@ export default function LibraryPage() {
               {facetsQuery.isError ? <div className="statusLine">Filters unavailable</div> : null}
 
               {!facetsQuery.isLoading && !facetsQuery.isError ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', marginTop: 'var(--space-4)' }}>
-              <section>
-                <h3 className="sectionTitle">Tags</h3>
-                <div className="facetList">
-                  {facets.tags.slice(0, 12).map((t) => (
-                    <button
-                      key={`tag:${t.value}`}
-                      type="button"
-                      className={`facetItem ${filters.tag_name === t.value ? 'facetItemActive' : ''}`}
-                      onClick={() => {
-                        setFilters((prev) => ({ ...prev, tag_name: toggle(prev.tag_name, t.value) }))
-                        setPage(1)
-                      }}
-                    >
-                      {t.value}
-                      <span className="facetCount">{t.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="sectionTitle">Genres</h3>
-                <div className="facetList">
-                  {facets.genres.slice(0, 12).map((g) => (
-                    <button
-                      key={`genre:${g.value}`}
-                      type="button"
-                      className={`facetItem ${filters.genre === g.value ? 'facetItemActive' : ''}`}
-                      onClick={() => {
-                        setFilters((prev) => ({ ...prev, genre: toggle(prev.genre, g.value) }))
-                        setPage(1)
-                      }}
-                    >
-                      {g.value}
-                      <span className="facetCount">{g.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="sectionTitle">Years</h3>
-                <div className="facetList">
-                  {facets.years.slice(0, 12).map((y) => {
-                    const year = Number(y.value)
-                    if (!Number.isFinite(year)) return null
-                    return (
-                      <button
-                        key={`year:${y.value}`}
-                        type="button"
-                        className={`facetItem ${filters.year === year ? 'facetItemActive' : ''}`}
-                        onClick={() => {
-                          setFilters((prev) => ({ ...prev, year: toggle(prev.year, year) }))
-                          setPage(1)
-                        }}
-                      >
-                        {y.value}
-                        <span className="facetCount">{y.count}</span>
-                      </button>
-                    )
+                <div className="facetSections">
+                  {renderFacetSection('tags', 'Tags', facets.tags, filters.tag_name ?? null, (value) => {
+                    setFilters((prev) => ({ ...prev, tag_name: toggle(prev.tag_name, value) }))
+                    setPage(1)
                   })}
+
+                  {renderFacetSection('genres', 'Genres', facets.genres, filters.genre ?? null, (value) => {
+                    setFilters((prev) => ({ ...prev, genre: toggle(prev.genre, value) }))
+                    setPage(1)
+                  })}
+
+                  {renderFacetSection(
+                    'years',
+                    'Years',
+                    yearFacetItems,
+                    filters.year === YEAR_NONE_SENTINEL
+                      ? FACET_NONE_VALUE
+                      : typeof filters.year === 'number'
+                        ? String(filters.year)
+                        : null,
+                    (value) => {
+                      if (value === FACET_NONE_VALUE) {
+                        setFilters((prev) => ({
+                          ...prev,
+                          year: toggle(prev.year, YEAR_NONE_SENTINEL),
+                        }))
+                        setPage(1)
+                        return
+                      }
+                      const year = Number(value)
+                      if (!Number.isFinite(year)) return
+                      setFilters((prev) => ({ ...prev, year: toggle(prev.year, year) }))
+                      setPage(1)
+                    }
+                  )}
                 </div>
-              </section>
-            </div>
-          ) : null}
+              ) : null}
             </>
           )}
         </aside>
@@ -634,7 +726,9 @@ export default function LibraryPage() {
       {bulkTagModalOpen && (
         <BulkTagModal
           count={selectedVideoIds.size}
-          availableTags={facets.tags.map((t) => t.value)}
+          availableTags={facets.tags
+            .filter((t) => t.value !== FACET_NONE_VALUE)
+            .map((t) => t.value)}
           onApply={handleBulkTags}
           onCancel={() => setBulkTagModalOpen(false)}
         />
