@@ -28,6 +28,7 @@ function isTerminalJobStatus(status: unknown): boolean {
 interface TrackMetadataOverride {
   title: string
   artist: string
+  isrc: string | null
   year: number | null
   album: string | null
   label: string | null
@@ -213,6 +214,7 @@ export default function SpotifyImport() {
       newMap.set(trackId, {
         title: metadata.title,
         artist: metadata.artist,
+        isrc: metadata.isrc,
         year: metadata.year,
         album: metadata.album,
         label: metadata.label,
@@ -237,6 +239,7 @@ export default function SpotifyImport() {
       const existing = newMap.get(trackId) || {
         title: enrichment?.title ?? track.title,
         artist: enrichment?.artist ?? track.artist,
+        isrc: track.isrc ?? null,
         year: enrichment?.year ?? track.year ?? null,
         album: enrichment?.album ?? track.album ?? null,
         label: enrichment?.label ?? track.label ?? null,
@@ -315,6 +318,7 @@ export default function SpotifyImport() {
         const finalMetadata = {
           title: override?.title ?? enrichment?.title ?? track.title,
           artist: override?.artist ?? enrichment?.artist ?? track.artist,
+          isrc: override?.isrc ?? track.isrc ?? null,
           year: override?.year ?? enrichment?.year ?? track.year,
           album: override?.album ?? enrichment?.album ?? track.album,
           label: override?.label ?? enrichment?.label ?? track.label,

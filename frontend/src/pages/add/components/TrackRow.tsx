@@ -21,6 +21,7 @@ export interface TrackRowState {
 interface TrackMetadata {
   title: string
   artist: string
+  isrc?: string | null
   year: number | null
   album: string | null
   label: string | null

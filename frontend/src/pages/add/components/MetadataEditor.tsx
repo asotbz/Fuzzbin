@@ -6,6 +6,7 @@ import type { TrackRowState } from './TrackRow'
 export interface EditedMetadata {
   title: string
   artist: string
+  isrc: string | null
   year: number | null
   album: string | null
   label: string | null
@@ -18,6 +19,7 @@ export interface EditedMetadata {
 interface TrackMetadataOverride {
   title: string
   artist: string
+  isrc: string | null
   year: number | null
   album: string | null
   label: string | null
@@ -52,6 +54,10 @@ function extractYouTubeId(url: string): string | null {
   return null
 }
 
+function normalizeIsrc(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+}
+
 export default function MetadataEditor({ track, state, currentOverride, onSave, onCancel }: MetadataEditorProps) {
   const enrichmentData = state.enrichmentData
 
@@ -61,6 +67,9 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
   )
   const [artist, setArtist] = useState<string>(
     currentOverride?.artist || enrichmentData?.artist || track.artist
+  )
+  const [isrc, setIsrc] = useState<string>(
+    currentOverride?.isrc || track.isrc || ''
   )
   const [year, setYear] = useState<string>(
     String(currentOverride?.year ?? enrichmentData?.year ?? track.year ?? '')
@@ -91,7 +100,18 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
     return ''
   })
 
+  const [isrcError, setIsrcError] = useState<string | null>(null)
   const [youtubeUrlError, setYoutubeUrlError] = useState<string | null>(null)
+
+  const handleIsrcChange = (value: string) => {
+    setIsrc(value)
+    const normalized = normalizeIsrc(value)
+    if (normalized && normalized.length !== 12) {
+      setIsrcError('ISRC must be 12 characters (format: CCXXXYYNNNNN)')
+    } else {
+      setIsrcError(null)
+    }
+  }
 
   const handleYouTubeUrlChange = (value: string) => {
     setYoutubeUrl(value)
@@ -124,9 +144,11 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
       return
     }
 
+    const normalizedIsrc = normalizeIsrc(isrc).trim()
     const metadata: EditedMetadata = {
       title: title.trim(),
       artist: artist.trim(),
+      isrc: normalizedIsrc || null,
       year: year ? parseInt(year, 10) : null,
       album: album.trim() || null,
       label: label.trim() || null,
@@ -232,6 +254,20 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
                 onChange={(e) => setArtist(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="metadataEditorFormGroup">
+              <label className="metadataEditorLabel">ISRC</label>
+              <input
+                type="text"
+                className={`metadataEditorInput ${isrcError ? 'metadataEditorInputError' : ''}`}
+                value={isrc}
+                onChange={(e) => handleIsrcChange(e.target.value)}
+                placeholder="e.g., USGF19942501"
+              />
+              {isrcError && (
+                <span className="metadataEditorError">{isrcError}</span>
+              )}
             </div>
 
             <div className="metadataEditorFormGroup">
@@ -348,7 +384,7 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
             type="button"
             className="metadataEditorButtonPrimary"
             onClick={handleSave}
-            disabled={!title.trim() || !artist.trim() || !!youtubeUrlError}
+            disabled={!title.trim() || !artist.trim() || !!youtubeUrlError || !!isrcError}
           >
             Save
           </button>

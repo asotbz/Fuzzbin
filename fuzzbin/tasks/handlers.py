@@ -428,6 +428,9 @@ async def handle_spotify_batch_import(job: Job) -> None:
             # Prepare video data
             # Prefer genre field (contains user override) over genre_normalized (from enrichment)
             genre_value = metadata.get("genre") or metadata.get("genre_normalized")
+            isrc_value = metadata.get("isrc") or track_data.get("isrc")
+            if isinstance(isrc_value, str):
+                isrc_value = isrc_value.strip()
 
             video_data = {
                 "title": track_title,
@@ -440,6 +443,9 @@ async def handle_spotify_batch_import(job: Job) -> None:
                 "status": initial_status,
                 "download_source": "spotify",
             }
+
+            if isrc_value:
+                video_data["isrc"] = isrc_value
 
             # Add external IDs if available
             if imvdb_id:
