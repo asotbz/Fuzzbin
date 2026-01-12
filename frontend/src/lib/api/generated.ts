@@ -594,11 +594,45 @@ export interface paths {
          *     Args:
          *         limit: Optional limit on number of videos to process
          *         video_service: Injected video service
+         *         imvdb_client: Injected IMVDb client
          *
          *     Returns:
          *         Dict with counts: total_found, updated, failed
          */
         post: operations["backfill_imvdb_urls_videos_backfill_imvdb_urls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/sync-decade-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Decade Tags
+         * @description Manually trigger decade tag synchronization across the library.
+         *
+         *     This endpoint submits a background job to synchronize auto-decade tags
+         *     across all videos in the library based on the current configuration.
+         *
+         *     The job will:
+         *     - Apply decade tags to all videos with a year field (if enabled)
+         *     - Remove auto-decade tags (if disabled)
+         *     - Update NFO files for affected videos (if auto-export enabled)
+         *
+         *     Use WebSocket connection to track job progress.
+         *
+         *     Returns:
+         *         Job ID and confirmation message
+         */
+        post: operations["sync_decade_tags_videos_sync_decade_tags_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5404,7 +5438,7 @@ export interface components {
          * @description Job type enumeration.
          * @enum {string}
          */
-        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup";
+        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "sync_decade_tags";
         /**
          * JobTypeMetricsResponse
          * @description Metrics for a specific job type.
@@ -9534,6 +9568,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error - Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    sync_decade_tags_videos_sync_decade_tags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Decade tag sync job submitted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "550e8400-e29b-41d4-a716-446655440000",
+                     *       "message": "Decade tag sync job submitted"
+                     *     }
+                     */
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Bad Request - Invalid input or business rule violation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Not Found - Resource does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Conflict - Resource already exists or state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description Internal Server Error - Unexpected server error */
