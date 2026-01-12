@@ -425,6 +425,20 @@ async def handle_spotify_batch_import(job: Job) -> None:
         )
 
         try:
+            logger.debug(
+                "spotify_batch_import_track_payload",
+                spotify_track_id=spotify_track_id,
+                title=track_title,
+                artist=track_artist,
+                isrc=metadata.get("isrc") or track_data.get("isrc"),
+                imvdb_id=imvdb_id,
+                imvdb_url=imvdb_url,
+                youtube_id=youtube_id,
+                youtube_url=track_data.get("youtube_url"),
+                thumbnail_url=thumbnail_url,
+                metadata=metadata,
+            )
+
             # Prepare video data
             # Prefer genre field (contains user override) over genre_normalized (from enrichment)
             genre_value = metadata.get("genre") or metadata.get("genre_normalized")

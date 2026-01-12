@@ -178,6 +178,7 @@ class VideoRepository:
         director: Optional[str] = None,
         genre: Optional[str] = None,
         studio: Optional[str] = None,
+        isrc: Optional[str] = None,
         video_file_path: Optional[str] = None,
         nfo_file_path: Optional[str] = None,
         imvdb_video_id: Optional[str] = None,
@@ -198,6 +199,7 @@ class VideoRepository:
             director: Director name
             genre: Music genre
             studio: Studio/label name
+            isrc: ISRC code
             video_file_path: Absolute path to video file
             nfo_file_path: Absolute path to NFO file
             imvdb_video_id: IMVDb video ID
@@ -234,13 +236,13 @@ class VideoRepository:
             cursor = await self._connection.execute(
                 """
                 INSERT INTO videos (
-                    title, artist, album, year, director, genre, studio,
+                    title, artist, album, year, director, genre, studio, isrc,
                     video_file_path, video_file_path_relative,
                     nfo_file_path, nfo_file_path_relative,
                     imvdb_video_id, youtube_id, vimeo_id,
                     status, status_changed_at, download_source,
                     created_at, updated_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
                 (
                     title,
@@ -250,6 +252,7 @@ class VideoRepository:
                     director,
                     genre,
                     studio,
+                    isrc,
                     video_file_path,
                     video_rel_path,
                     nfo_file_path,
