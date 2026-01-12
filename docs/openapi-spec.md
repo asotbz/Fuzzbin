@@ -101,9 +101,25 @@ imvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).
 Args:
     limit: Optional limit on number of videos to process
     video_service: Injected video service
+    imvdb_client: Injected IMVDb client
 
 Returns:
     Dict with counts: total_found, updated, failed
+- `POST` `/videos/sync-decade-tags` — Sync Decade Tags
+  - Manually trigger decade tag synchronization across the library.
+
+This endpoint submits a background job to synchronize auto-decade tags
+across all videos in the library based on the current configuration.
+
+The job will:
+- Apply decade tags to all videos with a year field (if enabled)
+- Remove auto-decade tags (if disabled)
+- Update NFO files for affected videos (if auto-export enabled)
+
+Use WebSocket connection to track job progress.
+
+Returns:
+    Job ID and confirmation message
 
 ## Artists
 Artist management and video associations

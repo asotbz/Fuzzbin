@@ -31,6 +31,7 @@ class JobType(str, Enum):
     IMPORT = "import"  # Phase 7: Generic import job (YouTube/IMVDb)
     BACKUP = "backup"  # System backup job
     TRASH_CLEANUP = "trash_cleanup"  # Automatic trash cleanup job
+    SYNC_DECADE_TAGS = "sync_decade_tags"  # Synchronize auto-decade tags across library
 
 
 class JobStatus(str, Enum):

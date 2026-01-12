@@ -1,7 +1,7 @@
 """Video schemas for API request/response DTOs."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, ClassVar, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -239,6 +239,9 @@ class VideoResponse(VideoBase):
 class VideoFilters(BaseModel):
     """Filter parameters for video list endpoint."""
 
+    NONE_FACET_VALUE: ClassVar[str] = "__none__"
+    MISSING_YEAR_SENTINEL: ClassVar[int] = -1
+
     # Text filters (case-insensitive LIKE)
     title: Optional[str] = Field(default=None, description="Filter by title (partial match)")
     artist: Optional[str] = Field(default=None, description="Filter by artist name (partial match)")
@@ -287,13 +290,22 @@ class VideoFilters(BaseModel):
         if self.album:
             query = query.where_album(self.album)
         if self.director:
-            query = query.where_director(self.director)
+            if self.director == self.NONE_FACET_VALUE:
+                query = query.where_director_missing()
+            else:
+                query = query.where_director(self.director)
         if self.genre:
-            query = query.where_genre(self.genre)
+            if self.genre == self.NONE_FACET_VALUE:
+                query = query.where_genre_missing()
+            else:
+                query = query.where_genre(self.genre)
         if self.status:
             query = query.where_status(self.status)
-        if self.year:
-            query = query.where_year(self.year)
+        if self.year is not None:
+            if self.year == self.MISSING_YEAR_SENTINEL:
+                query = query.where_year_missing()
+            else:
+                query = query.where_year(self.year)
         elif self.year_min is not None or self.year_max is not None:
             # Use year_range if either min or max is specified
             start = self.year_min or 1900
@@ -308,7 +320,10 @@ class VideoFilters(BaseModel):
         if self.collection_id:
             query = query.where_collection_id(self.collection_id)
         if self.tag_name:
-            query = query.where_tag(self.tag_name)
+            if self.tag_name == self.NONE_FACET_VALUE:
+                query = query.where_tag_missing()
+            else:
+                query = query.where_tag(self.tag_name)
         if self.tag_id:
             query = query.where_tag_id(self.tag_id)
         if self.search:

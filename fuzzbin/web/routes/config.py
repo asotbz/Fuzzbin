@@ -37,6 +37,88 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
 
+async def _handle_auto_decade_changes(
+    updates: dict,
+    old_enabled: bool,
+    old_format: str,
+    new_config,
+) -> None:
+    """
+    Handle auto_decade configuration changes by triggering sync jobs.
+
+    Detects changes to tags.auto_decade.enabled or tags.auto_decade.format
+    and submits appropriate sync jobs.
+
+    Args:
+        updates: Dictionary of config updates
+        old_enabled: Previous enabled state
+        old_format: Previous format string
+        new_config: Updated config object
+    """
+    from fuzzbin.tasks.models import JobPriority, JobType
+    from fuzzbin.tasks.queue import get_job_queue
+
+    # Check if auto_decade settings were updated
+    enabled_changed = "tags.auto_decade.enabled" in updates
+    format_changed = "tags.auto_decade.format" in updates
+
+    if not (enabled_changed or format_changed):
+        return
+
+    new_enabled = new_config.tags.auto_decade.enabled
+    new_format = new_config.tags.auto_decade.format
+
+    # Determine sync mode and metadata
+    if enabled_changed and not old_enabled and new_enabled:
+        # Enabling: apply tags across library
+        mode = "apply"
+        metadata = {"mode": mode, "new_format": new_format}
+        logger.info("auto_decade_enabled_triggering_sync", new_format=new_format)
+
+    elif enabled_changed and old_enabled and not new_enabled:
+        # Disabling: remove tags across library
+        mode = "remove"
+        metadata = {"mode": mode, "old_format": old_format}
+        logger.info("auto_decade_disabled_triggering_cleanup", old_format=old_format)
+
+    elif format_changed and new_enabled:
+        # Format changed while enabled: migrate tags
+        mode = "migrate"
+        metadata = {"mode": mode, "old_format": old_format, "new_format": new_format}
+        logger.info(
+            "auto_decade_format_changed_triggering_migration",
+            old_format=old_format,
+            new_format=new_format,
+        )
+
+    else:
+        # No action needed (e.g., format changed while disabled)
+        return
+
+    # Submit sync job
+    try:
+        queue = get_job_queue()
+        job = await queue.submit(
+            job_type=JobType.SYNC_DECADE_TAGS,
+            metadata=metadata,
+            priority=JobPriority.MEDIUM,
+        )
+        logger.info(
+            "decade_tag_sync_job_submitted",
+            job_id=job.id,
+            mode=mode,
+        )
+    except Exception as e:
+        logger.error(
+            "failed_to_submit_decade_sync_job",
+            mode=mode,
+            error=str(e),
+            exc_info=True,
+        )
+        # Don't fail the config update if job submission fails
+        # The user can manually trigger sync later
+
+
 def get_config_manager() -> ConfigManager:
     """Get the global ConfigManager instance.
 
@@ -256,6 +338,11 @@ async def update_config(
     manager: ConfigManager = Depends(get_config_manager),
 ) -> ConfigUpdateResponse:
     """Update configuration fields."""
+    # Get current config to detect auto_decade changes
+    current_config = manager.get_config()
+    old_auto_decade_enabled = current_config.tags.auto_decade.enabled
+    old_auto_decade_format = current_config.tags.auto_decade.format
+
     # Check safety levels for all updates
     affected_fields: List[ConfigConflictDetail] = []
     all_required_actions: List[RequiredAction] = []
@@ -328,6 +415,14 @@ async def update_config(
             fields=list(request.updates.keys()),
             safety_level=highest_safety.value,
             forced=request.force,
+        )
+
+        # Handle auto_decade config changes by triggering sync job
+        await _handle_auto_decade_changes(
+            request.updates,
+            old_auto_decade_enabled,
+            old_auto_decade_format,
+            manager.get_config(),
         )
 
         return ConfigUpdateResponse(

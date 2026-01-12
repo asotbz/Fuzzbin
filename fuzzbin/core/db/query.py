@@ -154,6 +154,18 @@ class VideoQuery:
         self._params.append(f"%{tag_name}%")
         return self
 
+    def where_tag_missing(self) -> "VideoQuery":
+        """Filter videos with no tags."""
+        self._where_clauses.append(
+            """
+            NOT EXISTS (
+                SELECT 1 FROM video_tags vt
+                WHERE vt.video_id = v.id
+            )
+        """
+        )
+        return self
+
     def where_tag_id(self, tag_id: int) -> "VideoQuery":
         """
         Filter by tag ID.
@@ -175,6 +187,21 @@ class VideoQuery:
         self._params.append(tag_id)
         return self
 
+    def where_genre_missing(self) -> "VideoQuery":
+        """Filter videos with no genre."""
+        self._where_clauses.append("(v.genre IS NULL OR v.genre = '')")
+        return self
+
+    def where_director_missing(self) -> "VideoQuery":
+        """Filter videos with no director."""
+        self._where_clauses.append("(v.director IS NULL OR v.director = '')")
+        return self
+
+    def where_year_missing(self) -> "VideoQuery":
+        """Filter videos with no year."""
+        self._where_clauses.append("v.year IS NULL")
+        return self
+
     def search(self, query: str) -> "VideoQuery":
         """
         Full-text search using FTS5.
@@ -192,6 +219,11 @@ class VideoQuery:
     def include_deleted(self, include: bool = True) -> "VideoQuery":
         """Include soft-deleted records in results."""
         self._include_deleted = include
+        return self
+
+    def where_not_deleted(self) -> "VideoQuery":
+        """Exclude soft-deleted records from results."""
+        self._include_deleted = False
         return self
 
     def order_by(self, field: str, desc: bool = False) -> "VideoQuery":

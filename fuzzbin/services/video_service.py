@@ -395,8 +395,11 @@ class VideoService(BaseService):
         Raises:
             NotFoundError: If video not found
         """
-        # Verify exists
-        await self.get_by_id(video_id)
+        # Get original video for year comparison
+        original_video = await self.get_by_id(video_id)
+        old_year = (
+            original_video.get("year") if isinstance(original_video, dict) else original_video.year
+        )
 
         # Update if there are changes
         if kwargs:
@@ -441,13 +444,39 @@ class VideoService(BaseService):
             except RuntimeError:
                 pass  # Event bus not initialized (tests)
 
-            # Auto-add decade tag if year was updated and auto_decade enabled
-            if "year" in kwargs and kwargs["year"]:
+            # Handle decade tag updates if year changed and auto_decade enabled
+            if "year" in kwargs:
                 config = self._get_config()
                 if config.tags.auto_decade.enabled:
-                    await self.repository.auto_add_decade_tag(
-                        video_id, kwargs["year"], tag_format=config.tags.auto_decade.format
-                    )
+                    new_year = kwargs["year"]
+                    if new_year:
+                        # Atomically update decade tag (removes old, adds new)
+                        await self.repository.update_decade_tag(
+                            video_id,
+                            old_year,
+                            new_year,
+                            tag_format=config.tags.auto_decade.format,
+                        )
+
+                        # Regenerate NFO if auto-export is enabled
+                        from fuzzbin.core.db.exporter import NFOExporter
+
+                        nfo_config = config.nfo
+                        if nfo_config.write_musicvideo_nfo:
+                            try:
+                                nfo_exporter = NFOExporter(self.repository)
+                                await nfo_exporter.export_video_to_nfo(video_id)
+                            except Exception as e:
+                                self.logger.warning(
+                                    "nfo_export_failed_after_year_update",
+                                    video_id=video_id,
+                                    error=str(e),
+                                )
+                    elif old_year:
+                        # Year was removed, clean up decade tag
+                        await self.repository.remove_auto_decade_tags(
+                            video_id, old_format=config.tags.auto_decade.format
+                        )
 
         return await self.get_with_relationships(video_id)
 

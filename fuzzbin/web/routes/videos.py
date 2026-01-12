@@ -2,7 +2,7 @@
 
 import mimetypes
 from pathlib import Path
-from typing import AsyncIterator, List, Optional, Tuple
+from typing import Annotated, AsyncIterator, List, Optional, Tuple
 
 import aiofiles
 import structlog
@@ -10,13 +10,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 import fuzzbin
-from fuzzbin.auth import decode_token
+from fuzzbin.api import IMVDbClient
+from fuzzbin.auth import UserInfo, decode_token
 from fuzzbin.common.path_security import PathSecurityError, validate_contained_path
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import VideoService
 from fuzzbin.services.base import NotFoundError, ServiceError, ValidationError
 
-from ..dependencies import get_repository, get_video_service
+from ..dependencies import get_imvdb_client, get_repository, get_video_service, require_auth
 from ..settings import get_settings
 from ..schemas.common import (
     AUTH_ERROR_RESPONSES,
@@ -1061,6 +1062,7 @@ async def stream_video(
 async def backfill_imvdb_urls(
     limit: Optional[int] = Query(None, description="Limit number of videos to process"),
     video_service: VideoService = Depends(get_video_service),
+    imvdb_client: IMVDbClient = Depends(get_imvdb_client),
 ) -> dict:
     """
     Backfill missing IMVDb URLs for videos that have imvdb_video_id.
@@ -1071,16 +1073,12 @@ async def backfill_imvdb_urls(
     Args:
         limit: Optional limit on number of videos to process
         video_service: Injected video service
+        imvdb_client: Injected IMVDb client
 
     Returns:
         Dict with counts: total_found, updated, failed
     """
     try:
-        # Get IMVDb client from dependencies
-        from ..dependencies import get_imvdb_client
-
-        imvdb_client = await get_imvdb_client()
-
         result = await video_service.backfill_imvdb_urls(
             imvdb_client=imvdb_client,
             limit=limit,
@@ -1096,4 +1094,82 @@ async def backfill_imvdb_urls(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to backfill IMVDb URLs",
+        )
+
+
+@router.post(
+    "/sync-decade-tags",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        **AUTH_ERROR_RESPONSES,
+        **COMMON_ERROR_RESPONSES,
+        202: {
+            "description": "Decade tag sync job submitted",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "job_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "message": "Decade tag sync job submitted",
+                    }
+                }
+            },
+        },
+    },
+)
+async def sync_decade_tags(
+    current_user: Annotated[UserInfo, Depends(require_auth)],
+) -> dict:
+    """
+    Manually trigger decade tag synchronization across the library.
+
+    This endpoint submits a background job to synchronize auto-decade tags
+    across all videos in the library based on the current configuration.
+
+    The job will:
+    - Apply decade tags to all videos with a year field (if enabled)
+    - Remove auto-decade tags (if disabled)
+    - Update NFO files for affected videos (if auto-export enabled)
+
+    Use WebSocket connection to track job progress.
+
+    Returns:
+        Job ID and confirmation message
+    """
+    from fuzzbin.tasks.models import JobPriority, JobType
+    from fuzzbin.tasks.queue import get_job_queue
+
+    config = fuzzbin.get_config()
+
+    # Determine mode based on current config
+    if config.tags.auto_decade.enabled:
+        mode = "apply"
+        metadata = {"mode": mode, "new_format": config.tags.auto_decade.format}
+    else:
+        mode = "remove"
+        metadata = {"mode": mode, "old_format": config.tags.auto_decade.format}
+
+    try:
+        queue = get_job_queue()
+        job = await queue.submit(
+            job_type=JobType.SYNC_DECADE_TAGS,
+            metadata=metadata,
+            priority=JobPriority.MEDIUM,
+        )
+
+        logger.info(
+            "manual_decade_sync_submitted",
+            job_id=job.id,
+            mode=mode,
+        )
+
+        return {
+            "job_id": job.id,
+            "message": "Decade tag sync job submitted",
+        }
+
+    except Exception as e:
+        logger.error("sync_decade_tags_failed", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to submit decade tag sync job: {e}",
         )

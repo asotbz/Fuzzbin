@@ -1824,6 +1824,134 @@ class VideoRepository:
 
         return tag_id
 
+    async def remove_auto_decade_tags(
+        self,
+        video_id: int,
+        old_format: Optional[str] = None,
+    ) -> int:
+        """
+        Remove auto-generated decade tags from a video.
+
+        This method removes decade tags that were automatically added
+        (source='auto'). Can optionally filter by specific format pattern.
+
+        Args:
+            video_id: Video ID
+            old_format: Optional format pattern to match (e.g., "{decade}s")
+                       If None, removes all decade-like tags with source='auto'
+
+        Returns:
+            Number of tags removed
+
+        Example:
+            >>> await repo.remove_auto_decade_tags(video_id=1)
+            # Removes "90s", "00s", "10s" etc. with source='auto'
+            >>> await repo.remove_auto_decade_tags(video_id=1, old_format="decade-{decade}")
+            # Removes only "decade-90", "decade-00" etc. with source='auto'
+        """
+        import re
+
+        async with self._connection.execute(
+            """
+            SELECT t.id, t.name
+            FROM tags t
+            JOIN video_tags vt ON t.id = vt.tag_id
+            WHERE vt.video_id = ? AND vt.source = 'auto'
+            """,
+            (video_id,),
+        ) as cursor:
+            auto_tags = await cursor.fetchall()
+
+        if not auto_tags:
+            return 0
+
+        # Build regex pattern to match decade tags
+        if old_format:
+            # Convert format string to regex pattern
+            # e.g., "{decade}s" -> "^\d{2}s$"
+            # e.g., "decade-{decade}" -> "^decade-\d{2}$"
+            pattern = old_format.replace("{decade}", r"\d{2}")
+            pattern = "^" + re.escape(pattern).replace(r"\\d\{2\}", r"\d{2}") + "$"
+        else:
+            # Default pattern matches common decade formats
+            # Matches: "90s", "00s", "decade-90", "1990s", etc.
+            pattern = r"^(\d{2}s?|decade-\d{2}|\d{4}s?)$"
+
+        removed_count = 0
+        for tag_id, tag_name in auto_tags:
+            if re.match(pattern, tag_name, re.IGNORECASE):
+                await self.remove_video_tag(video_id, tag_id)
+                removed_count += 1
+
+        return removed_count
+
+    async def update_decade_tag(
+        self,
+        video_id: int,
+        old_year: Optional[int],
+        new_year: int,
+        tag_format: str = "{decade}s",
+    ) -> bool:
+        """
+        Atomically update decade tag when video year changes.
+
+        Removes old decade tag (if year changed) and adds new decade tag.
+        Uses transaction to ensure atomicity.
+
+        Args:
+            video_id: Video ID
+            old_year: Previous year value (None if no previous year)
+            new_year: New year value
+            tag_format: Format string for decade tag
+
+        Returns:
+            True if tag was updated, False if years are in same decade
+
+        Example:
+            >>> await repo.update_decade_tag(video_id=1, old_year=1991, new_year=2006)
+            # Removes "90s", adds "00s"
+        """
+        if not new_year or new_year < 1900 or new_year > 2100:
+            return False
+
+        # Calculate decades
+        old_decade = None
+        if old_year and 1900 <= old_year <= 2100:
+            old_decade = (old_year // 10) % 10 * 10
+            if old_year >= 2000 and old_year < 2010:
+                old_decade = 0
+
+        new_decade = (new_year // 10) % 10 * 10
+        if new_year >= 2000 and new_year < 2010:
+            new_decade = 0
+
+        # If decades are the same, no update needed
+        if old_decade == new_decade:
+            return False
+
+        async with self.transaction():
+            # Remove old decade tag if it exists
+            if old_decade is not None:
+                old_tag_name = tag_format.format(decade=str(old_decade).zfill(2))
+                # Find and remove the specific decade tag
+                async with self._connection.execute(
+                    """
+                    SELECT t.id
+                    FROM tags t
+                    JOIN video_tags vt ON t.id = vt.tag_id
+                    WHERE vt.video_id = ? AND t.name = ? AND vt.source = 'auto'
+                    """,
+                    (video_id, old_tag_name),
+                ) as cursor:
+                    result = await cursor.fetchone()
+                    if result:
+                        await self.remove_video_tag(video_id, result[0])
+
+            # Add new decade tag
+            await self.auto_add_decade_tag(video_id, new_year, tag_format)
+
+        return True
+
     # ==================== Status Management Methods ====================
 
     async def update_status(
@@ -2432,6 +2560,7 @@ class VideoRepository:
             raise QueryError("No active connection")
 
         deleted_filter = "" if include_deleted else "AND v.is_deleted = 0"
+        none_facet_value = "__none__"
 
         facets: dict[str, list[Any]] = {
             "tags": [],
@@ -2455,6 +2584,24 @@ class VideoRepository:
         rows = await cursor.fetchall()
         facets["tags"] = [{"value": row["name"], "count": row["count"]} for row in rows]
 
+        cursor = await self._connection.execute(
+            f"""
+            SELECT COUNT(*) as count
+            FROM videos v
+            WHERE 1=1 {deleted_filter}
+            AND NOT EXISTS (
+                SELECT 1 FROM video_tags vt
+                WHERE vt.video_id = v.id
+            )
+            """,
+        )
+        row = await cursor.fetchone()
+        missing_tag_count = row["count"] if row else 0
+        if missing_tag_count:
+            facets["tags"] = [{"value": none_facet_value, "count": missing_tag_count}] + facets[
+                "tags"
+            ]
+
         # Genre facets
         cursor = await self._connection.execute(
             f"""
@@ -2467,6 +2614,20 @@ class VideoRepository:
         )
         rows = await cursor.fetchall()
         facets["genres"] = [{"value": row["genre"], "count": row["count"]} for row in rows]
+
+        cursor = await self._connection.execute(
+            f"""
+            SELECT COUNT(*) as count
+            FROM videos v
+            WHERE (genre IS NULL OR genre = '') {deleted_filter}
+            """,
+        )
+        row = await cursor.fetchone()
+        missing_genre_count = row["count"] if row else 0
+        if missing_genre_count:
+            facets["genres"] = [{"value": none_facet_value, "count": missing_genre_count}] + facets[
+                "genres"
+            ]
 
         # Year facets
         cursor = await self._connection.execute(
@@ -2481,6 +2642,20 @@ class VideoRepository:
         rows = await cursor.fetchall()
         facets["years"] = [{"value": str(row["year"]), "count": row["count"]} for row in rows]
 
+        cursor = await self._connection.execute(
+            f"""
+            SELECT COUNT(*) as count
+            FROM videos v
+            WHERE year IS NULL {deleted_filter}
+            """,
+        )
+        row = await cursor.fetchone()
+        missing_year_count = row["count"] if row else 0
+        if missing_year_count:
+            facets["years"] = [{"value": none_facet_value, "count": missing_year_count}] + facets[
+                "years"
+            ]
+
         # Director facets
         cursor = await self._connection.execute(
             f"""
@@ -2493,6 +2668,20 @@ class VideoRepository:
         )
         rows = await cursor.fetchall()
         facets["directors"] = [{"value": row["director"], "count": row["count"]} for row in rows]
+
+        cursor = await self._connection.execute(
+            f"""
+            SELECT COUNT(*) as count
+            FROM videos v
+            WHERE (director IS NULL OR director = '') {deleted_filter}
+            """,
+        )
+        row = await cursor.fetchone()
+        missing_director_count = row["count"] if row else 0
+        if missing_director_count:
+            facets["directors"] = [
+                {"value": none_facet_value, "count": missing_director_count}
+            ] + facets["directors"]
 
         logger.debug(
             "facets_retrieved",

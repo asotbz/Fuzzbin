@@ -2585,7 +2585,7 @@
           "Videos"
         ],
         "summary": "Backfill Imvdb Urls",
-        "description": "Backfill missing IMVDb URLs for videos that have imvdb_video_id.\n\nThis endpoint is useful for fixing videos that were imported with\nimvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).\n\nArgs:\n    limit: Optional limit on number of videos to process\n    video_service: Injected video service\n\nReturns:\n    Dict with counts: total_found, updated, failed",
+        "description": "Backfill missing IMVDb URLs for videos that have imvdb_video_id.\n\nThis endpoint is useful for fixing videos that were imported with\nimvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).\n\nArgs:\n    limit: Optional limit on number of videos to process\n    video_service: Injected video service\n    imvdb_client: Injected IMVDb client\n\nReturns:\n    Dict with counts: total_found, updated, failed",
         "operationId": "backfill_imvdb_urls_videos_backfill_imvdb_urls_post",
         "security": [
           {
@@ -2696,6 +2696,99 @@
             }
           }
         }
+      }
+    },
+    "/videos/sync-decade-tags": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Sync Decade Tags",
+        "description": "Manually trigger decade tag synchronization across the library.\n\nThis endpoint submits a background job to synchronize auto-decade tags\nacross all videos in the library based on the current configuration.\n\nThe job will:\n- Apply decade tags to all videos with a year field (if enabled)\n- Remove auto-decade tags (if disabled)\n- Update NFO files for affected videos (if auto-export enabled)\n\nUse WebSocket connection to track job progress.\n\nReturns:\n    Job ID and confirmation message",
+        "operationId": "sync_decade_tags_videos_sync_decade_tags_post",
+        "responses": {
+          "202": {
+            "description": "Decade tag sync job submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Sync Decade Tags Videos Sync Decade Tags Post"
+                },
+                "example": {
+                  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+                  "message": "Decade tag sync job submitted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource already exists or state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/artists": {
@@ -14457,7 +14550,8 @@
           "library_scan",
           "import",
           "backup",
-          "trash_cleanup"
+          "trash_cleanup",
+          "sync_decade_tags"
         ],
         "title": "JobType",
         "description": "Job type enumeration."

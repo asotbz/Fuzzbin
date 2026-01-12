@@ -439,7 +439,6 @@ async def handle_spotify_batch_import(job: Job) -> None:
                 "genre": genre_value,
                 "status": initial_status,
                 "download_source": "spotify",
-                "isrc": metadata.get("isrc"),
             }
 
             # Add external IDs if available
@@ -3380,6 +3379,162 @@ async def handle_trash_cleanup(job: Job) -> None:
     )
 
 
+async def handle_sync_decade_tags(job: Job) -> None:
+    """
+    Synchronize auto-decade tags across the library.
+
+    This handler processes all videos with a year field and applies, removes,
+    or migrates decade tags based on the current configuration.
+
+    Metadata Parameters:
+        mode (str): Operation mode - "apply", "remove", or "migrate"
+        old_format (str, optional): Previous format string for migration
+        new_format (str, optional): New format string for migration
+
+    Progress Updates:
+        Reports progress every 100 videos processed
+
+    Result:
+        {
+            "videos_processed": int,
+            "tags_added": int,
+            "tags_removed": int,
+            "nfos_updated": int
+        }
+    """
+    from fuzzbin.core.db.exporter import NFOExporter
+
+    mode = job.metadata.get("mode", "apply")  # apply, remove, or migrate
+    old_format = job.metadata.get("old_format")
+    new_format = job.metadata.get("new_format", "{decade}s")
+
+    logger.info(
+        "sync_decade_tags_started",
+        job_id=job.id,
+        mode=mode,
+        old_format=old_format,
+        new_format=new_format,
+    )
+
+    repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
+
+    # Get NFO export configuration
+    should_export_nfo = config.nfo.write_musicvideo_nfo
+
+    # Get all videos with a year field
+    videos = await repository.list_videos(
+        include_deleted=False,
+        limit=None,  # Get all videos
+    )
+
+    # Filter to videos with year
+    videos_with_year = [v for v in videos if v.get("year")]
+    total_videos = len(videos_with_year)
+
+    if total_videos == 0:
+        logger.info("sync_decade_tags_no_videos", job_id=job.id)
+        job.mark_completed(
+            {
+                "videos_processed": 0,
+                "tags_added": 0,
+                "tags_removed": 0,
+                "nfos_updated": 0,
+            }
+        )
+        return
+
+    job.update_progress(0, total_videos, f"Starting decade tag sync ({mode} mode)")
+
+    tags_added = 0
+    tags_removed = 0
+    nfos_updated = 0
+    batch_size = 100
+
+    nfo_exporter = NFOExporter(repository)
+
+    for i, video in enumerate(videos_with_year):
+        # Check for cancellation
+        if job.status == JobStatus.CANCELLED:
+            logger.info("sync_decade_tags_cancelled", job_id=job.id, progress=i)
+            return
+
+        video_id = video["id"]
+        video_year = video["year"]
+
+        try:
+            if mode == "remove":
+                # Remove auto-decade tags
+                removed = await repository.remove_auto_decade_tags(video_id, old_format=old_format)
+                tags_removed += removed
+
+            elif mode == "apply":
+                # Add decade tag with current format
+                tag_id = await repository.auto_add_decade_tag(
+                    video_id, video_year, tag_format=new_format
+                )
+                if tag_id:
+                    tags_added += 1
+
+            elif mode == "migrate":
+                # Remove old format, add new format
+                removed = await repository.remove_auto_decade_tags(video_id, old_format=old_format)
+                tags_removed += removed
+
+                tag_id = await repository.auto_add_decade_tag(
+                    video_id, video_year, tag_format=new_format
+                )
+                if tag_id:
+                    tags_added += 1
+
+            # Update NFO file if tags were changed and auto-export is enabled
+            if should_export_nfo and (tags_added > 0 or tags_removed > 0):
+                try:
+                    await nfo_exporter.export_video_to_nfo(video_id)
+                    nfos_updated += 1
+                except Exception as e:
+                    logger.warning(
+                        "sync_decade_tags_nfo_export_failed",
+                        job_id=job.id,
+                        video_id=video_id,
+                        error=str(e),
+                    )
+
+        except Exception as e:
+            logger.warning(
+                "sync_decade_tags_video_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+
+        # Report progress every batch_size videos
+        if (i + 1) % batch_size == 0 or (i + 1) == total_videos:
+            job.update_progress(
+                i + 1,
+                total_videos,
+                f"Processed {i + 1}/{total_videos} videos",
+            )
+
+    logger.info(
+        "sync_decade_tags_completed",
+        job_id=job.id,
+        videos_processed=total_videos,
+        tags_added=tags_added,
+        tags_removed=tags_removed,
+        nfos_updated=nfos_updated,
+    )
+
+    job.mark_completed(
+        {
+            "videos_processed": total_videos,
+            "tags_added": tags_added,
+            "tags_removed": tags_removed,
+            "nfos_updated": nfos_updated,
+        }
+    )
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -3407,6 +3562,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.IMPORT_NFO_GENERATE, handle_import_nfo_generate)
     queue.register_handler(JobType.BACKUP, handle_backup)
     queue.register_handler(JobType.TRASH_CLEANUP, handle_trash_cleanup)
+    queue.register_handler(JobType.SYNC_DECADE_TAGS, handle_sync_decade_tags)
 
     logger.info(
         "job_handlers_registered",
@@ -3428,5 +3584,6 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.IMPORT_NFO_GENERATE.value,
             JobType.BACKUP.value,
             JobType.TRASH_CLEANUP.value,
+            JobType.SYNC_DECADE_TAGS.value,
         ],
     )
