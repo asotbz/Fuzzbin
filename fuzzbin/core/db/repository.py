@@ -182,6 +182,7 @@ class VideoRepository:
         video_file_path: Optional[str] = None,
         nfo_file_path: Optional[str] = None,
         imvdb_video_id: Optional[str] = None,
+        imvdb_url: Optional[str] = None,
         youtube_id: Optional[str] = None,
         vimeo_id: Optional[str] = None,
         status: str = "discovered",
@@ -203,6 +204,7 @@ class VideoRepository:
             video_file_path: Absolute path to video file
             nfo_file_path: Absolute path to NFO file
             imvdb_video_id: IMVDb video ID
+            imvdb_url: IMVDb video URL
             youtube_id: YouTube video ID
             vimeo_id: Vimeo video ID
             status: Initial status (default: discovered)
@@ -239,10 +241,10 @@ class VideoRepository:
                     title, artist, album, year, director, genre, studio, isrc,
                     video_file_path, video_file_path_relative,
                     nfo_file_path, nfo_file_path_relative,
-                    imvdb_video_id, youtube_id, vimeo_id,
+                    imvdb_video_id, imvdb_url, youtube_id, vimeo_id,
                     status, status_changed_at, download_source,
                     created_at, updated_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
                 (
                     title,
@@ -258,6 +260,7 @@ class VideoRepository:
                     nfo_file_path,
                     nfo_rel_path,
                     imvdb_video_id,
+                    imvdb_url,
                     youtube_id,
                     vimeo_id,
                     status,
