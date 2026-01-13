@@ -1582,6 +1582,7 @@ class VideoService(BaseService):
         self,
         imvdb_client: Any,
         limit: Optional[int] = None,
+        video_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Backfill missing IMVDb URLs for videos that have imvdb_video_id.
@@ -1593,6 +1594,7 @@ class VideoService(BaseService):
         Args:
             imvdb_client: IMVDbClient instance for API calls
             limit: Optional limit on number of videos to process
+            video_id: Optional video ID to target a single video
 
         Returns:
             Dict with counts: total_found, updated, failed
@@ -1606,10 +1608,15 @@ class VideoService(BaseService):
             AND deleted_at IS NULL
         """
 
+        params: list[Any] = []
+        if video_id is not None:
+            query += " AND id = ?"
+            params.append(video_id)
         if limit:
-            query += f" LIMIT {limit}"
+            query += " LIMIT ?"
+            params.append(limit)
 
-        cursor = await self.repository._connection.execute(query)
+        cursor = await self.repository._connection.execute(query, params)
         rows = await cursor.fetchall()
         videos = [{"id": row[0], "imvdb_video_id": row[1]} for row in rows]
 

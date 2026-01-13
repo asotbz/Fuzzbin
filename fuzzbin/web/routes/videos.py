@@ -1061,6 +1061,7 @@ async def stream_video(
 )
 async def backfill_imvdb_urls(
     limit: Optional[int] = Query(None, description="Limit number of videos to process"),
+    video_id: Optional[int] = Query(None, description="Target a specific video ID"),
     video_service: VideoService = Depends(get_video_service),
     imvdb_client: IMVDbClient = Depends(get_imvdb_client),
 ) -> dict:
@@ -1072,6 +1073,7 @@ async def backfill_imvdb_urls(
 
     Args:
         limit: Optional limit on number of videos to process
+        video_id: Optional video ID to target a single video
         video_service: Injected video service
         imvdb_client: Injected IMVDb client
 
@@ -1082,6 +1084,7 @@ async def backfill_imvdb_urls(
         result = await video_service.backfill_imvdb_urls(
             imvdb_client=imvdb_client,
             limit=limit,
+            video_id=video_id,
         )
 
         return result
