@@ -227,7 +227,12 @@ export default function TrackRow({
           <>
             {track.already_exists ? (
               // Track already exists in library (enrichment was skipped)
-              <span className="trackRowBadge trackRowBadgeExists">EXISTS</span>
+              <span
+                className="trackRowBadge trackRowBadgeExists"
+                title="Already in library (matched by artist + normalized title during preview)"
+              >
+                EXISTS
+              </span>
             ) : (
               // Track was enriched successfully - show stacked indicators
               <div className="trackRowEnrichmentStack">
@@ -284,7 +289,12 @@ export default function TrackRow({
                 </div>
 
                 {enrichmentData?.already_exists && (
-                  <span className="trackRowBadge trackRowBadgeExists">Exists</span>
+                  <span
+                    className="trackRowBadge trackRowBadgeExists"
+                    title="Already in library (matched by ISRC, MusicBrainz recording ID, IMVDb ID, or YouTube ID)"
+                  >
+                    Exists
+                  </span>
                 )}
               </div>
             )}
