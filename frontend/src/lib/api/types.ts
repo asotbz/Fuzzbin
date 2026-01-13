@@ -14,6 +14,7 @@ type BodyOf<T> = T extends { requestBody: { content: { 'application/json': infer
 
 export type ListVideosQuery = QueryOf<paths['/videos']['get']>
 export type ListVideosResponse = JsonOfStatus<paths['/videos']['get'], 200>
+export type GetVideoResponse = JsonOfStatus<paths['/videos/{video_id}']['get'], 200>
 
 export type FacetsQuery = QueryOf<paths['/search/facets']['get']>
 export type FacetsResponse = JsonOfStatus<paths['/search/facets']['get'], 200>

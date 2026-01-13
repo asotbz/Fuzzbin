@@ -4,6 +4,7 @@ export const videosKeys = {
   all: ['videos'] as const,
   lists: () => [...videosKeys.all, 'list'] as const,
   list: (query: ListVideosQuery) => [...videosKeys.lists(), query] as const,
+  byId: (videoId: number) => [...videosKeys.all, 'detail', videoId] as const,
 }
 
 export const searchKeys = {

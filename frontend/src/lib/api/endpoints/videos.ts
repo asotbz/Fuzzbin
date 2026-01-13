@@ -1,10 +1,16 @@
 import { apiJson } from '../../../api/client'
-import type { ListVideosQuery, ListVideosResponse } from '../types'
+import type { GetVideoResponse, ListVideosQuery, ListVideosResponse } from '../types'
 import { toQueryString } from '../queryString'
 
 export async function listVideos(query: ListVideosQuery): Promise<ListVideosResponse> {
   return apiJson<ListVideosResponse>({
     path: `/videos${toQueryString(query as Record<string, unknown>)}`,
+  })
+}
+
+export async function getVideo(videoId: number): Promise<GetVideoResponse> {
+  return apiJson<GetVideoResponse>({
+    path: `/videos/${videoId}`,
   })
 }
 

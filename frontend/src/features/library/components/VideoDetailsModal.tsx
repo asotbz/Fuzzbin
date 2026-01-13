@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Video } from '../../../lib/api/types'
 import { videosKeys } from '../../../lib/api/queryKeys'
-import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
+import { bulkDeleteVideos, getVideo } from '../../../lib/api/endpoints/videos'
 import { apiJson } from '../../../api/client'
 import { useVideoThumbnail } from '../../../api/useVideoThumbnail'
 import MetadataFetchModal from './MetadataFetchModal'
@@ -85,8 +85,17 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [localThumbnailTimestamp, setLocalThumbnailTimestamp] = useState<number | undefined>(thumbnailTimestamp)
 
-  const anyVideo = video as Record<string, unknown>
-  const videoId = typeof anyVideo.id === 'number' ? anyVideo.id : null
+  const initialVideo = video as Record<string, unknown>
+  const videoId = typeof initialVideo.id === 'number' ? initialVideo.id : null
+
+  const videoQuery = useQuery({
+    queryKey: videosKeys.byId(videoId ?? 0),
+    queryFn: () => getVideo(videoId as number),
+    enabled: !!videoId,
+  })
+
+  const currentVideo = (videoQuery.data ?? video) as Video
+  const anyVideo = currentVideo as Record<string, unknown>
 
   // Track if we've already attempted backfill for this video to avoid repeated attempts
   const backfillAttemptedRef = useRef<number | null>(null)
@@ -105,18 +114,48 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
 
   // Form state
   const [editedTitle, setEditedTitle] = useState(
-    (typeof anyVideo.title === 'string' && anyVideo.title.trim().length > 0 ? anyVideo.title : 'Untitled') as string
+    (typeof initialVideo.title === 'string' && initialVideo.title.trim().length > 0 ? initialVideo.title : 'Untitled') as string
   )
   const [editedArtist, setEditedArtist] = useState(
-    (typeof anyVideo.artist === 'string' && anyVideo.artist.trim().length > 0 ? anyVideo.artist : '') as string
+    (typeof initialVideo.artist === 'string' && initialVideo.artist.trim().length > 0 ? initialVideo.artist : '') as string
   )
-  const [editedAlbum, setEditedAlbum] = useState(typeof anyVideo.album === 'string' ? anyVideo.album : '')
-  const [editedYear, setEditedYear] = useState(typeof anyVideo.year === 'number' ? String(anyVideo.year) : '')
-  const [editedGenre, setEditedGenre] = useState(typeof anyVideo.genre === 'string' ? anyVideo.genre : '')
-  const [editedDirector, setEditedDirector] = useState(typeof anyVideo.director === 'string' ? anyVideo.director : '')
-  const [editedLabel, setEditedLabel] = useState(typeof anyVideo.studio === 'string' ? anyVideo.studio : '')
-  const [editedIsrc, setEditedIsrc] = useState(typeof anyVideo.isrc === 'string' ? anyVideo.isrc : '')
+  const [editedAlbum, setEditedAlbum] = useState(typeof initialVideo.album === 'string' ? initialVideo.album : '')
+  const [editedYear, setEditedYear] = useState(typeof initialVideo.year === 'number' ? String(initialVideo.year) : '')
+  const [editedGenre, setEditedGenre] = useState(typeof initialVideo.genre === 'string' ? initialVideo.genre : '')
+  const [editedDirector, setEditedDirector] = useState(typeof initialVideo.director === 'string' ? initialVideo.director : '')
+  const [editedLabel, setEditedLabel] = useState(typeof initialVideo.studio === 'string' ? initialVideo.studio : '')
+  const [editedIsrc, setEditedIsrc] = useState(typeof initialVideo.isrc === 'string' ? initialVideo.isrc : '')
   const [isrcError, setIsrcError] = useState('')
+
+  const normalizedTitle = typeof anyVideo.title === 'string' && anyVideo.title.trim().length > 0 ? anyVideo.title : 'Untitled'
+  const normalizedArtist = typeof anyVideo.artist === 'string' && anyVideo.artist.trim().length > 0 ? anyVideo.artist : ''
+  const normalizedAlbum = typeof anyVideo.album === 'string' ? anyVideo.album : ''
+  const normalizedYear = typeof anyVideo.year === 'number' ? String(anyVideo.year) : ''
+  const normalizedGenre = typeof anyVideo.genre === 'string' ? anyVideo.genre : ''
+  const normalizedDirector = typeof anyVideo.director === 'string' ? anyVideo.director : ''
+  const normalizedLabel = typeof anyVideo.studio === 'string' ? anyVideo.studio : ''
+  const normalizedIsrc = typeof anyVideo.isrc === 'string' ? anyVideo.isrc : ''
+
+  const resetEdits = () => {
+    setEditedTitle(normalizedTitle)
+    setEditedArtist(normalizedArtist)
+    setEditedAlbum(normalizedAlbum)
+    setEditedYear(normalizedYear)
+    setEditedGenre(normalizedGenre)
+    setEditedDirector(normalizedDirector)
+    setEditedLabel(normalizedLabel)
+    setEditedIsrc(normalizedIsrc)
+    setIsrcError('')
+  }
+
+  const currentTitle = isEditing ? editedTitle : normalizedTitle
+  const currentArtist = isEditing ? editedArtist : normalizedArtist
+  const currentAlbum = isEditing ? editedAlbum : normalizedAlbum
+  const currentYear = isEditing ? editedYear : normalizedYear
+  const currentGenre = isEditing ? editedGenre : normalizedGenre
+  const currentDirector = isEditing ? editedDirector : normalizedDirector
+  const currentLabel = isEditing ? editedLabel : normalizedLabel
+  const currentIsrc = isEditing ? editedIsrc : normalizedIsrc
 
   // ISRC validation function (format: CC-XXX-YY-NNNNN, 12 chars without hyphens)
   const validateIsrc = (value: string): boolean => {
@@ -136,13 +175,13 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
   }
 
   // Display values
-  const title = editedTitle
-  const artist = editedArtist || '—'
-  const album = editedAlbum || '—'
-  const year = editedYear || '—'
-  const genre = editedGenre || '—'
-  const director = editedDirector || '—'
-  const label = editedLabel || '—'
+  const title = currentTitle
+  const artist = currentArtist || '—'
+  const album = currentAlbum || '—'
+  const year = currentYear || '—'
+  const genre = currentGenre || '—'
+  const director = currentDirector || '—'
+  const label = currentLabel || '—'
   const status = typeof anyVideo.status === 'string' ? anyVideo.status : 'unknown'
 
   const imvdbUrl = typeof anyVideo.imvdb_url === 'string' ? anyVideo.imvdb_url : null
@@ -158,8 +197,8 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
   const audioCodec = typeof anyVideo.audio_codec === 'string' ? anyVideo.audio_codec : '—'
   const fileSize = formatFileSize(anyVideo.file_size)
 
-  const featuredArtists = getFeaturedArtists(video)
-  const tags = getTagLabels(video)
+  const featuredArtists = getFeaturedArtists(currentVideo)
+  const tags = getTagLabels(currentVideo)
 
   // Update mutation
   const updateMutation = useMutation({
@@ -280,15 +319,16 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
   // Backfill IMVDb URL mutation
   const backfillImvdbUrlMutation = useMutation({
     mutationFn: async () => {
+      if (!videoId) throw new Error('No video ID')
       return await apiJson<{ total_found: number; updated: number; failed: number }>({
         method: 'POST',
-        path: '/videos/backfill-imvdb-urls?limit=1',
+        path: `/videos/backfill-imvdb-urls?video_id=${videoId}`,
       })
     },
     onSuccess: (data) => {
-      if (data.updated > 0) {
+      if (data.updated > 0 && videoId) {
         // Refresh the video data to get the new URL
-        queryClient.invalidateQueries({ queryKey: videosKeys.all })
+        queryClient.invalidateQueries({ queryKey: videosKeys.byId(videoId) })
       }
     },
     onError: (error) => {
@@ -340,16 +380,14 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
 
   const handleCancel = () => {
     // Reset to original values
-    setEditedTitle((typeof anyVideo.title === 'string' && anyVideo.title.trim().length > 0 ? anyVideo.title : 'Untitled') as string)
-    setEditedArtist((typeof anyVideo.artist === 'string' ? anyVideo.artist : '') as string)
-    setEditedAlbum(typeof anyVideo.album === 'string' ? anyVideo.album : '')
-    setEditedYear(typeof anyVideo.year === 'number' ? String(anyVideo.year) : '')
-    setEditedGenre(typeof anyVideo.genre === 'string' ? anyVideo.genre : '')
-    setEditedDirector(typeof anyVideo.director === 'string' ? anyVideo.director : '')
-    setEditedLabel(typeof anyVideo.studio === 'string' ? anyVideo.studio : '')
-    setEditedIsrc(typeof anyVideo.isrc === 'string' ? anyVideo.isrc : '')
-    setIsrcError('')
+    resetEdits()
     setIsEditing(false)
+  }
+
+  const handleEditStart = () => {
+    if (isEditing) return
+    resetEdits()
+    setIsEditing(true)
   }
 
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -421,6 +459,9 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     setShowDeleteConfirm(false)
   }
 
+  const youtubeSearchLabel = youtubeId ? 'Change YouTube Video' : 'Search YouTube'
+  const downloadLabel = downloadMutation.isPending ? 'Queueing download' : 'Download Video'
+
   return (
     <div
       className="videoDetailsModalOverlay"
@@ -435,15 +476,54 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
           <h2 id="video-details-title" className="videoDetailsModalTitle">
             Video Details
           </h2>
-          <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+          <div className="videoDetailsHeaderActions">
+            {!isEditing && youtubeId ? (
+              <button
+                type="button"
+                className="videoDetailsHeaderActionButton"
+                onClick={() => downloadMutation.mutate()}
+                disabled={downloadMutation.isPending}
+                title={downloadLabel}
+                aria-label={downloadLabel}
+                aria-busy={downloadMutation.isPending}
+              >
+                {downloadMutation.isPending ? (
+                  <span className="videoDetailsHeaderActionSpinner" aria-hidden="true">⟳</span>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" x2="12" y1="15" y2="3" />
+                  </svg>
+                )}
+              </button>
+            ) : null}
             {!isEditing ? (
               <button
                 type="button"
-                className="videoDetailsModalHeaderButton"
-                onClick={() => setIsEditing(true)}
-                aria-label="Edit video"
+                className="videoDetailsHeaderActionButton"
+                onClick={() => setYoutubeSearchOpen(true)}
+                title={youtubeSearchLabel}
+                aria-label={youtubeSearchLabel}
               >
-                Edit
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" />
+                </svg>
+              </button>
+            ) : null}
+            {!isEditing ? (
+              <button
+                type="button"
+                className="videoDetailsHeaderActionButton"
+                onClick={handleEditStart}
+                aria-label="Edit video"
+                title="Edit video"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
               </button>
             ) : null}
             <button
@@ -573,7 +653,8 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
                 )}
               </div>
 
-              <div className="videoDetailsField">                <label className="videoDetailsLabel">ISRC</label>
+              <div className="videoDetailsField">
+                <label className="videoDetailsLabel">ISRC</label>
                 {isEditing ? (
                   <div>
                     <input
@@ -595,7 +676,7 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
                     )}
                   </div>
                 ) : (
-                  <div className="videoDetailsValue">{editedIsrc || '—'}</div>
+                  <div className="videoDetailsValue">{currentIsrc || '—'}</div>
                 )}
               </div>
 
@@ -607,89 +688,94 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
               </div>
             </div>
 
-            {!isEditing && (
-              <div className="videoDetailsFetchActions">
-                <button
-                  type="button"
-                  className="videoDetailsFetchButton"
-                  onClick={() => setFetchModalSource('imvdb')}
-                >
-                  Enrich with IMVDb
-                </button>
-                <button
-                  type="button"
-                  className="videoDetailsFetchButton"
-                  onClick={() => setFetchModalSource('discogs_master')}
-                >
-                  Enrich with Discogs
-                </button>
-                <button
-                  type="button"
-                  className="videoDetailsFetchButton"
-                  onClick={() => setFetchModalSource('musicbrainz')}
-                >
-                  Enrich with MusicBrainz
-                </button>
-              </div>
-            )}
           </section>
+
+          {!isEditing && (
+            <section className="videoDetailsSection">
+              <div className="videoDetailsSectionRow">
+                <div className="videoDetailsSectionHeading">
+                  <h3 className="videoDetailsSectionTitle videoDetailsSectionTitleInline">Metadata Search</h3>
+                  <span className="videoDetailsSectionHelper videoDetailsSectionHelperInline">
+                    Search external catalogs to enrich titles, artists, and credits.
+                  </span>
+                </div>
+                <div className="videoDetailsFetchActions">
+                  <button
+                    type="button"
+                    className="videoDetailsFetchButton"
+                    onClick={() => setFetchModalSource('imvdb')}
+                  >
+                    IMVDb
+                  </button>
+                  <button
+                    type="button"
+                    className="videoDetailsFetchButton"
+                    onClick={() => setFetchModalSource('discogs_master')}
+                  >
+                    Discogs
+                  </button>
+                  <button
+                    type="button"
+                    className="videoDetailsFetchButton"
+                    onClick={() => setFetchModalSource('musicbrainz')}
+                  >
+                    MusicBrainz
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* External Links */}
           <section className="videoDetailsSection">
-            <h3 className="videoDetailsSectionTitle">External Links</h3>
-            <div className="videoDetailsLinks">
-              {imvdbUrl && (
-                <a
-                  href={imvdbUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="videoDetailsLinkButton"
-                >
-                  View on IMVDb
-                </a>
-              )}
-              {youtubeId && (
-                <a
-                  href={`https://youtube.com/watch?v=${youtubeId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="videoDetailsLinkButton"
-                >
-                  View on YouTube
-                </a>
-              )}
-              {youtubeId && !isEditing && (
-                <button
-                  type="button"
-                  className="videoDetailsLinkButton"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    downloadMutation.mutate()
-                  }}
-                  disabled={downloadMutation.isPending}
-                >
-                  {downloadMutation.isPending ? 'Queueing...' : 'Download Video'}
-                </button>
-              )}
-              {vimeoId && (
-                <a
-                  href={`https://vimeo.com/${vimeoId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="videoDetailsLinkButton"
-                >
-                  View on Vimeo
-                </a>
-              )}
-              {!isEditing && (
-                <button
-                  type="button"
-                  className="videoDetailsLinkButton"
-                  onClick={() => setYoutubeSearchOpen(true)}
-                >
-                  {youtubeId ? 'Change YouTube Video' : 'Search YouTube'}
-                </button>
-              )}
+            <div className="videoDetailsSectionRow">
+              <div className="videoDetailsSectionHeading">
+                <h3 className="videoDetailsSectionTitle videoDetailsSectionTitleInline">External Links</h3>
+                <span className="videoDetailsSectionHelper videoDetailsSectionHelperInline">
+                  Open source pages for this video.
+                </span>
+              </div>
+              <div className="videoDetailsLinks">
+                {imvdbUrl ? (
+                  <a
+                    href={imvdbUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="videoDetailsLinkButton"
+                  >
+                    View on IMVDb
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="videoDetailsLinkButton"
+                    disabled
+                    title="No IMVDb URL available"
+                  >
+                    View on IMVDb
+                  </button>
+                )}
+                {youtubeId && (
+                  <a
+                    href={`https://youtube.com/watch?v=${youtubeId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="videoDetailsLinkButton"
+                  >
+                    View on YouTube
+                  </a>
+                )}
+                {vimeoId && (
+                  <a
+                    href={`https://vimeo.com/${vimeoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="videoDetailsLinkButton"
+                  >
+                    View on Vimeo
+                  </a>
+                )}
+              </div>
             </div>
           </section>
 
@@ -813,9 +899,9 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
 
       {fetchModalSource && (
         <MetadataFetchModal
-          artist={editedArtist}
-          title={editedTitle}
-          isrc={editedIsrc}
+          artist={currentArtist}
+          title={currentTitle}
+          isrc={currentIsrc}
           videoId={videoId ?? undefined}
           source={fetchModalSource}
           onApply={handleApplyFetchedMetadata}
@@ -825,8 +911,8 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
 
       {youtubeSearchOpen && (
         <YouTubeSearchModal
-          artist={editedArtist}
-          trackTitle={editedTitle}
+          artist={currentArtist}
+          trackTitle={currentTitle}
           onSelect={handleYouTubeSelect}
           onCancel={() => setYoutubeSearchOpen(false)}
         />
