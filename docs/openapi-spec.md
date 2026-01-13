@@ -100,6 +100,7 @@ imvdb_video_id but missing imvdb_url (e.g., due to bugs or data migration).
 
 Args:
     limit: Optional limit on number of videos to process
+    video_id: Optional video ID to target a single video
     video_service: Injected video service
     imvdb_client: Injected IMVDb client
 

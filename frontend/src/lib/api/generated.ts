@@ -593,6 +593,7 @@ export interface paths {
          *
          *     Args:
          *         limit: Optional limit on number of videos to process
+         *         video_id: Optional video ID to target a single video
          *         video_service: Injected video service
          *         imvdb_client: Injected IMVDb client
          *
@@ -9498,6 +9499,8 @@ export interface operations {
             query?: {
                 /** @description Limit number of videos to process */
                 limit?: number | null;
+                /** @description Target a specific video ID */
+                video_id?: number | null;
             };
             header?: never;
             path?: never;
