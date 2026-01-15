@@ -10,7 +10,6 @@
 
 .libraryTableHeader {
   display: grid;
-  grid-template-columns: 40px 200px 250px 180px 80px 150px 120px 80px 100px;
   gap: var(--space-4);
   padding: var(--space-4);
   background: var(--bg-base);
@@ -39,7 +38,6 @@
 
 .libraryTableRow {
   display: grid;
-  grid-template-columns: 40px 200px 250px 180px 80px 150px 120px 80px 100px;
   gap: var(--space-4);
   padding: var(--space-4);
   background: var(--bg-surface);
@@ -51,7 +49,6 @@
 
 .libraryTableRow:hover {
   border-color: var(--channel-library);
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 240, 255, 0.3);
 }
 
@@ -108,7 +105,6 @@
 
 .libraryTableActionButton:hover {
   border-color: var(--channel-library);
-  transform: translateY(-2px) scale(1.05);
   box-shadow: 0 4px 12px rgba(0, 240, 255, 0.3);
 }
 
@@ -118,11 +114,36 @@
   gap: var(--space-2);
 }
 
+.libraryTableColumnsFull .libraryTableHeader,
+.libraryTableColumnsFull .libraryTableRow {
+  grid-template-columns: 40px 200px 250px 180px 80px 150px 120px 80px 100px;
+}
+
+.libraryTableColumnsCore .libraryTableHeader,
+.libraryTableColumnsCore .libraryTableRow {
+  grid-template-columns: 40px 200px 1fr 200px 140px 100px;
+}
+
+.libraryTableColumnsCuration .libraryTableHeader,
+.libraryTableColumnsCuration .libraryTableRow {
+  grid-template-columns: 40px 200px 220px 160px 140px 1fr 100px;
+}
+
 /* Responsive */
 @media (max-width: 1279px) {
-  .libraryTableHeader,
-  .libraryTableRow {
+  .libraryTableColumnsFull .libraryTableHeader,
+  .libraryTableColumnsFull .libraryTableRow {
     grid-template-columns: 40px 200px 250px 180px 80px 80px 100px;
+  }
+
+  .libraryTableColumnsCuration .libraryTableHeader,
+  .libraryTableColumnsCuration .libraryTableRow {
+    grid-template-columns: 40px 180px 220px 140px 120px 1fr 100px;
+  }
+
+  .libraryTableColumnsCore .libraryTableHeader,
+  .libraryTableColumnsCore .libraryTableRow {
+    grid-template-columns: 40px 180px 1fr 160px 120px 100px;
   }
 
   .libraryTableCellHideTablet {

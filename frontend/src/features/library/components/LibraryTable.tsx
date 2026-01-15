@@ -2,9 +2,12 @@ import type { Video } from '../../../lib/api/types'
 import LibraryTableRow from './LibraryTableRow'
 import './LibraryTable.css'
 
+export type LibraryTableColumns = 'full' | 'core' | 'curation'
+
 interface LibraryTableProps {
   videos: Video[]
   selectedIds: Set<number>
+  columns: LibraryTableColumns
   onToggleSelection: (id: number) => void
   onSelectAll: () => void
   onClearAll: () => void
@@ -15,6 +18,7 @@ interface LibraryTableProps {
 export default function LibraryTable({
   videos,
   selectedIds,
+  columns,
   onToggleSelection,
   onSelectAll,
   onClearAll,
@@ -34,8 +38,19 @@ export default function LibraryTable({
     }
   }
 
+  const columnsClass =
+    columns === 'full'
+      ? 'libraryTableColumnsFull'
+      : columns === 'core'
+        ? 'libraryTableColumnsCore'
+        : 'libraryTableColumnsCuration'
+
+  const showFull = columns === 'full'
+  const showCore = columns === 'core'
+  const showCuration = columns === 'curation'
+
   return (
-    <div className="libraryTable" role="grid" aria-label="Video library table">
+    <div className={`libraryTable ${columnsClass}`} role="grid" aria-label="Video library table">
       <div className="libraryTableHeader" role="row">
         <div className="libraryTableHeaderCell">
           <input
@@ -47,11 +62,27 @@ export default function LibraryTable({
         </div>
         <div className="libraryTableHeaderCell">Artist</div>
         <div className="libraryTableHeaderCell">Title</div>
-        <div className="libraryTableHeaderCell">Album</div>
-        <div className="libraryTableHeaderCell">Year</div>
-        <div className="libraryTableHeaderCell libraryTableCellHideTablet">Director</div>
-        <div className="libraryTableHeaderCell libraryTableCellHideTablet">Label</div>
-        <div className="libraryTableHeaderCell">Duration</div>
+        {(showFull || showCore) && (
+          <div className="libraryTableHeaderCell">Album</div>
+        )}
+        {showFull && (
+          <>
+            <div className="libraryTableHeaderCell">Year</div>
+            <div className="libraryTableHeaderCell libraryTableCellHideTablet">Director</div>
+            <div className="libraryTableHeaderCell libraryTableCellHideTablet">Label</div>
+            <div className="libraryTableHeaderCell">Duration</div>
+          </>
+        )}
+        {showCore && (
+          <div className="libraryTableHeaderCell">Genre</div>
+        )}
+        {showCuration && (
+          <>
+            <div className="libraryTableHeaderCell">Genre</div>
+            <div className="libraryTableHeaderCell">ISRC</div>
+            <div className="libraryTableHeaderCell">Tags</div>
+          </>
+        )}
         <div className="libraryTableHeaderCell">Actions</div>
       </div>
 
@@ -66,6 +97,7 @@ export default function LibraryTable({
               key={key}
               video={video}
               selected={selectedIds.has(videoId)}
+              columns={columns}
               onToggleSelection={onToggleSelection}
               onVideoClick={onVideoClick}
               onPlayVideo={onPlayVideo}

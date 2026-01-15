@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { addSearch, addPreview, addImport, checkVideoExists, getYouTubeMetadata } from '../../lib/api/endpoints/add'
-import { addKeys, videosKeys } from '../../lib/api/queryKeys'
+import { addKeys, searchKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useSearchWizard } from '../../hooks/add/useSearchWizard'
 import PageHeader from '../../components/layout/PageHeader'
 import SourceComparison, { type ComparisonField } from '../../components/add/metadata/SourceComparison'
@@ -302,6 +302,7 @@ export default function SearchWizard() {
       })
       // Invalidate videos query so library shows new video
       queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      queryClient.invalidateQueries({ queryKey: searchKeys.all })
       // Navigate back to library after submission
       navigate('/library')
     },

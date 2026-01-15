@@ -4,6 +4,33 @@ export function toQueryString(params: Record<string, unknown>): string {
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null) continue
 
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (entry === undefined || entry === null) continue
+
+        if (typeof entry === 'string') {
+          const trimmed = entry.trim()
+          if (trimmed.length === 0) continue
+          search.append(key, trimmed)
+          continue
+        }
+
+        if (typeof entry === 'number') {
+          if (!Number.isFinite(entry)) continue
+          search.append(key, String(entry))
+          continue
+        }
+
+        if (typeof entry === 'boolean') {
+          search.append(key, entry ? 'true' : 'false')
+          continue
+        }
+
+        search.append(key, String(entry))
+      }
+      continue
+    }
+
     if (typeof value === 'string') {
       const trimmed = value.trim()
       if (trimmed.length === 0) continue

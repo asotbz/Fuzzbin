@@ -1,8 +1,10 @@
 import type { Video } from '../../../lib/api/types'
+import type { LibraryTableColumns } from './LibraryTable'
 
 interface LibraryTableRowProps {
   video: Video
   selected: boolean
+  columns: LibraryTableColumns
   onToggleSelection: (id: number) => void
   onVideoClick: (video: Video) => void
   onPlayVideo?: (video: Video) => void
@@ -35,9 +37,24 @@ function getFeaturedArtists(video: Video): string {
   return featured.join(', ')
 }
 
+function getTagLabels(video: Video): string[] {
+  const anyVideo = video as unknown as Record<string, unknown>
+  const tags = Array.isArray(anyVideo.tags) ? anyVideo.tags : []
+
+  return tags
+    .map((tag: unknown) => {
+      if (!tag || typeof tag !== 'object') return null
+      const tagObj = tag as Record<string, unknown>
+      const label = tagObj.name ?? tagObj.tag_name ?? tagObj.value
+      return typeof label === 'string' && label.trim().length > 0 ? label.trim() : null
+    })
+    .filter((t): t is string => Boolean(t))
+}
+
 export default function LibraryTableRow({
   video,
   selected,
+  columns,
   onToggleSelection,
   onVideoClick,
   onPlayVideo,
@@ -50,8 +67,15 @@ export default function LibraryTableRow({
   const year = typeof anyVideo.year === 'number' ? String(anyVideo.year) : '—'
   const director = typeof anyVideo.director === 'string' ? anyVideo.director : '—'
   const studio = typeof anyVideo.studio === 'string' ? anyVideo.studio : '—'
+  const genre = typeof anyVideo.genre === 'string' && anyVideo.genre.trim().length > 0 ? anyVideo.genre : '—'
+  const isrc = typeof anyVideo.isrc === 'string' && anyVideo.isrc.trim().length > 0 ? anyVideo.isrc : '—'
+  const tags = getTagLabels(video)
+  const tagsLabel = tags.length > 0 ? tags.join(', ') : '—'
   const duration = formatDuration(anyVideo.duration)
   const featuredArtists = getFeaturedArtists(video)
+  const showFull = columns === 'full'
+  const showCore = columns === 'core'
+  const showCuration = columns === 'curation'
 
   const handleRowClick = () => {
     onVideoClick(video)
@@ -92,25 +116,59 @@ export default function LibraryTableRow({
         <div className="libraryTableCellPrimary" title={title}>{title}</div>
       </div>
 
-      <div className="libraryTableCell">
-        <div className="libraryTableCellPrimary" title={album}>{album}</div>
-      </div>
+      {(showFull || showCore) && (
+        <div className="libraryTableCell">
+          <div className="libraryTableCellPrimary" title={album}>{album}</div>
+        </div>
+      )}
 
-      <div className="libraryTableCell libraryTableCellCenter">
-        {year}
-      </div>
+      {showFull && (
+        <div className="libraryTableCell libraryTableCellCenter">
+          {year}
+        </div>
+      )}
 
-      <div className="libraryTableCell libraryTableCellHideTablet">
-        <div className="libraryTableCellPrimary" title={director}>{director}</div>
-      </div>
+      {showFull && (
+        <div className="libraryTableCell libraryTableCellHideTablet">
+          <div className="libraryTableCellPrimary" title={director}>{director}</div>
+        </div>
+      )}
 
-      <div className="libraryTableCell libraryTableCellHideTablet">
-        <div className="libraryTableCellPrimary" title={studio}>{studio}</div>
-      </div>
+      {showFull && (
+        <div className="libraryTableCell libraryTableCellHideTablet">
+          <div className="libraryTableCellPrimary" title={studio}>{studio}</div>
+        </div>
+      )}
 
-      <div className="libraryTableCell libraryTableCellCenter">
-        {duration}
-      </div>
+      {showFull && (
+        <div className="libraryTableCell libraryTableCellCenter">
+          {duration}
+        </div>
+      )}
+
+      {showCore && (
+        <div className="libraryTableCell">
+          <div className="libraryTableCellPrimary" title={genre}>{genre}</div>
+        </div>
+      )}
+
+      {showCuration && (
+        <div className="libraryTableCell">
+          <div className="libraryTableCellPrimary" title={genre}>{genre}</div>
+        </div>
+      )}
+
+      {showCuration && (
+        <div className="libraryTableCell libraryTableCellCenter">
+          {isrc}
+        </div>
+      )}
+
+      {showCuration && (
+        <div className="libraryTableCell">
+          <div className="libraryTableCellPrimary" title={tagsLabel}>{tagsLabel}</div>
+        </div>
+      )}
 
       <div className="libraryTableCell libraryTableActions">
         {onPlayVideo && (

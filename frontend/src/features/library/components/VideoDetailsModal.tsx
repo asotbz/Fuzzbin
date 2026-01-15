@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Video } from '../../../lib/api/types'
-import { videosKeys } from '../../../lib/api/queryKeys'
+import { searchKeys, videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos, getVideo } from '../../../lib/api/endpoints/videos'
 import { apiJson } from '../../../api/client'
 import { useVideoThumbnail } from '../../../api/useVideoThumbnail'
@@ -232,6 +232,7 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
     onSuccess: () => {
       toast.success('Video updated successfully')
       queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      queryClient.invalidateQueries({ queryKey: searchKeys.all })
       setIsEditing(false)
     },
     onError: (error) => {
@@ -255,6 +256,7 @@ export default function VideoDetailsModal({ video, onClose, thumbnailTimestamp }
         toast.success('Video deleted successfully')
       }
       queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      queryClient.invalidateQueries({ queryKey: searchKeys.all })
       onClose()
     },
     onError: (error) => {

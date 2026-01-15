@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { addPreviewBatch, addNFOScan } from '../../lib/api/endpoints/add'
 import { getJob } from '../../lib/api/endpoints/jobs'
-import { jobsKeys, videosKeys } from '../../lib/api/queryKeys'
+import { jobsKeys, searchKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
 import { useJobEvents } from '../../lib/ws/useJobEvents'
 import PageHeader from '../../components/layout/PageHeader'
@@ -130,6 +130,7 @@ export default function NFOImport() {
     }
 
     queryClient.invalidateQueries({ queryKey: videosKeys.all })
+    queryClient.invalidateQueries({ queryKey: searchKeys.all })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- jobQuery.data?.error only needed when status becomes 'failed'
   }, [jobId, jobQuery.data?.status, wsJobData?.status, queryClient, navigate])
 

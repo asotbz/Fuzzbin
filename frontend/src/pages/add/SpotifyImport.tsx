@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { addPreviewBatch } from '../../lib/api/endpoints/add'
 import { importSelectedTracks } from '../../lib/api/endpoints/spotify'
 import { getJob } from '../../lib/api/endpoints/jobs'
-import { jobsKeys, videosKeys } from '../../lib/api/queryKeys'
+import { jobsKeys, searchKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
 import { useJobEvents } from '../../lib/ws/useJobEvents'
 import PageHeader from '../../components/layout/PageHeader'
@@ -185,6 +185,7 @@ export default function SpotifyImport() {
           description: `Imported ${result?.imported || 0} tracks${downloadJobs > 0 ? `. ${downloadJobs} download jobs queued.` : ''}`,
         })
         queryClient.invalidateQueries({ queryKey: videosKeys.all })
+        queryClient.invalidateQueries({ queryKey: searchKeys.all })
         navigate('/library')
       } else if (status === 'failed') {
         toast.error('Import failed', {

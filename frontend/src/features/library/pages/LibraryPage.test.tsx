@@ -1,5 +1,5 @@
 import { MemoryRouter } from 'react-router-dom'
-import { screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { setTokens, clearTokens } from '../../../auth/tokenStore'
 import { renderWithQueryClient } from '../../../test/testUtils'
 import LibraryPage from './LibraryPage'
@@ -57,7 +57,11 @@ describe('LibraryPage', () => {
     const importLink = screen.getByRole('link', { name: /import/i })
     expect(importLink).toHaveAttribute('href', '/add')
 
-    expect(await screen.findByText('rock')).toBeInTheDocument()
+    const tagsButton = await screen.findByRole('button', { name: /tags filters/i })
+    await waitFor(() => expect(tagsButton).not.toBeDisabled())
+    fireEvent.click(tagsButton)
+
+    expect(await screen.findByRole('button', { name: /rock/i })).toBeInTheDocument()
   })
 
   it('initializes search from URL query param', async () => {

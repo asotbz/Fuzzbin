@@ -20,20 +20,9 @@
 
 .libraryMain {
   padding: var(--space-6);
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-6);
-}
-
-@media (min-width: 1024px) {
-  .libraryMain {
-    grid-template-columns: 360px 1fr;
-    align-items: start;
-  }
-
-  .libraryMain:has(.libraryFacetsCollapsed) {
-    grid-template-columns: 60px 1fr;
-  }
 }
 
 .panelCard {
@@ -233,24 +222,198 @@
   color: var(--text-tertiary);
 }
 
+.libraryFacetsBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.libraryFacetsBarRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: nowrap;
+}
+
+.libraryFacetsBarTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.libraryFacetsBarStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.libraryColumnsControl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.libraryColumnsLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.libraryColumnsSelect {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  min-width: 200px;
+}
+
+.facetClearButton {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--bg-surface-light);
+  background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.facetClearButton:hover {
+  border-color: var(--mtv-blue);
+  color: var(--mtv-blue);
+}
+
+.libraryFacetButtons {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+}
+
+.libraryFacetGroup {
+  position: relative;
+}
+
+.libraryFacetButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--bg-surface-light);
+  background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.libraryFacetButton:hover:not(:disabled) {
+  border-color: var(--mtv-blue);
+  color: var(--mtv-blue);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mtv-blue) 35%, transparent);
+}
+
+.libraryFacetButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.libraryFacetButtonActive {
+  border-color: var(--mtv-blue);
+  color: var(--mtv-blue);
+  background: color-mix(in srgb, var(--mtv-blue) 18%, var(--bg-surface));
+}
+
+.libraryFacetButtonLabel {
+  white-space: nowrap;
+}
+
+.libraryFacetButtonValue {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+
+.libraryFacetButtonActive .libraryFacetButtonValue {
+  color: var(--text-primary);
+}
+
+.libraryFacetButtonCaret {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.facetPopover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 20;
+  width: min(340px, 90vw);
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4);
+}
+
+.facetPopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.facetPopoverTitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.facetPopoverBody {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.facetPopoverSearch {
+  margin-top: 0;
+}
+
 .statusLine {
   font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
-.pagination {
+.libraryLoadMore {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  margin-top: var(--space-6);
-}
-
-.paginationInfo {
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+  padding: var(--space-6) 0 var(--space-2);
 }
 
 /* View Toggle */
@@ -295,67 +458,13 @@
   color: var(--text-on-dark);
 }
 
-/* Collapsible Facets */
-.libraryFacets {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.libraryFacetsCollapsed {
-  width: 60px;
-  min-width: 60px;
-}
-
-.libraryFacetsHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.libraryFacetsCollapsed .libraryFacetsHeader {
-  justify-content: center;
-  margin-bottom: 0;
-}
-
-.libraryFacetsToggle {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  background: var(--bg-base);
-  border: 3px solid var(--mtv-blue);
-  border-radius: 0;
-  color: var(--mtv-blue);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-sm);
-}
-
-.libraryFacetsToggle:hover {
-  background: var(--mtv-blue);
-  color: var(--text-on-dark);
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.9);
-}
-
 .libraryVideos {
   flex: 1;
   min-width: 0;
 }
 
-/* Mobile: Hide facets toggle, always show expanded */
-@media (max-width: 1023px) {
-  .libraryFacetsToggle {
-    display: none;
-  }
-
-  .libraryFacets {
-    width: 100% !important;
-    min-width: auto !important;
+@media (max-width: 720px) {
+  .facetPopover {
+    width: min(320px, 92vw);
   }
 }

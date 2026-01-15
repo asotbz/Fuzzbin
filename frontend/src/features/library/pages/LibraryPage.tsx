@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import PageHeader from '../../../components/layout/PageHeader'
 import VideoCard, { type VideoCardJobStatus } from '../../../components/video/VideoCard'
 import VideoGrid from '../../../components/video/VideoGrid'
-import LibraryTable from '../components/LibraryTable'
+import LibraryTable, { type LibraryTableColumns } from '../components/LibraryTable'
 import MultiSelectToolbar from '../components/MultiSelectToolbar'
 import BulkTagModal from '../components/BulkTagModal'
 import VideoDetailsModal from '../components/VideoDetailsModal'
@@ -13,12 +13,12 @@ import VideoPlayerModal from '../components/VideoPlayerModal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { FacetsResponse, ListVideosQuery, SortOrder, Video } from '../../../lib/api/types'
 import { useFacets } from '../hooks/useFacets'
-import { useVideos } from '../hooks/useVideos'
-import { videosKeys } from '../../../lib/api/queryKeys'
+import { searchKeys, videosKeys } from '../../../lib/api/queryKeys'
 import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
 import { useJobEvents, type VideoUpdateEvent } from '../../../lib/ws/useJobEvents'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
 import { getApiBaseUrl } from '../../../api/client'
+import { listVideos } from '../../../lib/api/endpoints/videos'
 import './LibraryPage.css'
 
 type FacetItem = { value: string; count: number }
@@ -29,10 +29,10 @@ const FACET_NONE_VALUE = '__none__'
 const YEAR_NONE_SENTINEL = -1
 
 type FacetSelections = {
-  tag_name?: string
-  genre?: string
+  tag_name?: string[]
+  genre?: string[]
   director?: string
-  year?: number
+  year?: number[]
 }
 
 function asFacetList(list: unknown): FacetItem[] {
@@ -64,8 +64,30 @@ function getFacets(facets: FacetsResponse | undefined): {
   }
 }
 
-function toggle<T>(current: T | undefined, next: T): T | undefined {
-  return current === next ? undefined : next
+function toggleListValue<T>(current: T[] | undefined, next: T): T[] {
+  const list = current ? [...current] : []
+  const index = list.indexOf(next)
+  if (index >= 0) {
+    list.splice(index, 1)
+    return list
+  }
+  list.push(next)
+  return list
+}
+
+function updateListFilter<T>(current: T[] | undefined, next: T): T[] | undefined {
+  const updated = toggleListValue(current, next)
+  return updated.length > 0 ? updated : undefined
+}
+
+function formatFacetValue(value: string): string {
+  return value === FACET_NONE_VALUE ? '(none)' : value
+}
+
+function getFacetDisplay(values: string[]): string | null {
+  if (values.length === 0) return null
+  if (values.length === 1) return formatFacetValue(values[0])
+  return `${values.length} selected`
 }
 
 export default function LibraryPage() {
@@ -73,9 +95,8 @@ export default function LibraryPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const [sortBy, setSortBy] = useState<string>('created_at')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [page, setPage] = useState(1)
+  const [sortBy, setSortBy] = useState<string>('artist')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
   const pageSize = 20
 
   const [filters, setFilters] = useState<FacetSelections>({})
@@ -92,9 +113,12 @@ export default function LibraryPage() {
 
   // View mode state
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const [tableColumns, setTableColumns] = useState<LibraryTableColumns>('full')
 
-  // Facets sidebar state
-  const [facetsExpanded, setFacetsExpanded] = useState(true)
+  // Facet popover state
+  const [openFacet, setOpenFacet] = useState<FacetKey | null>(null)
+  const facetBarRef = useRef<HTMLDivElement | null>(null)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
 
   // Multi-select state
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<number>>(new Set())
@@ -119,6 +143,7 @@ export default function LibraryPage() {
         toast.success(`Deleted ${videoIds.length} video${videoIds.length !== 1 ? 's' : ''}`)
       }
       queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      queryClient.invalidateQueries({ queryKey: searchKeys.all })
       clearSelection()
     },
     onError: (error) => {
@@ -135,13 +160,11 @@ export default function LibraryPage() {
 
     setSearch(urlSearch)
     setDebouncedSearch(urlSearch)
-    setPage(1)
   }, [location.search])
 
   useEffect(() => {
     const t = window.setTimeout(() => {
       setDebouncedSearch(search)
-      setPage(1)
     }, 300)
     return () => window.clearTimeout(t)
   }, [search])
@@ -157,17 +180,6 @@ export default function LibraryPage() {
     localStorage.setItem('library-view-mode', viewMode)
   }, [viewMode])
 
-  // Load facets expanded state from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('library-facets-expanded')
-    if (saved !== null) setFacetsExpanded(saved === 'true')
-  }, [])
-
-  // Save facets expanded state to localStorage
-  useEffect(() => {
-    localStorage.setItem('library-facets-expanded', String(facetsExpanded))
-  }, [facetsExpanded])
-
   // Force grid view on mobile
   useEffect(() => {
     const handleResize = () => {
@@ -179,10 +191,23 @@ export default function LibraryPage() {
     return () => window.removeEventListener('resize', handleResize)
   }, [viewMode])
 
-  // Clear selection on page change
+  // Clear selection on filter/sort/search changes
   useEffect(() => {
     setSelectedVideoIds(new Set())
-  }, [page])
+  }, [debouncedSearch, sortBy, sortOrder, filters.tag_name, filters.genre, filters.year])
+
+  useEffect(() => {
+    if (!openFacet) return
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target || !facetBarRef.current) return
+      if (!facetBarRef.current.contains(target)) {
+        setOpenFacet(null)
+      }
+    }
+    window.addEventListener('mousedown', handleClickOutside)
+    return () => window.removeEventListener('mousedown', handleClickOutside)
+  }, [openFacet])
 
   const facetsQuery = useFacets({ include_deleted: false })
   const facets = useMemo(() => getFacets(facetsQuery.data), [facetsQuery.data])
@@ -194,9 +219,8 @@ export default function LibraryPage() {
     [facets.years]
   )
 
-  const videosQueryParams: ListVideosQuery = useMemo(() => {
+  const videosQueryBase: ListVideosQuery = useMemo(() => {
     const query: Record<string, unknown> = {
-      page,
       page_size: pageSize,
       sort_by: sortBy,
       sort_order: sortOrder,
@@ -205,38 +229,48 @@ export default function LibraryPage() {
 
     if (debouncedSearch.trim().length > 0) query.search = debouncedSearch
 
-    if (filters.tag_name) query.tag_name = filters.tag_name
-    if (filters.genre) query.genre = filters.genre
+    if (filters.tag_name && filters.tag_name.length > 0) query.tag_name = filters.tag_name
+    if (filters.genre && filters.genre.length > 0) query.genre = filters.genre
     if (filters.director) query.director = filters.director
-    if (typeof filters.year === 'number') query.year = filters.year
+    if (filters.year && filters.year.length > 0) query.year = filters.year
 
     return query as ListVideosQuery
-  }, [page, pageSize, sortBy, sortOrder, debouncedSearch, filters])
+  }, [pageSize, sortBy, sortOrder, debouncedSearch, filters])
 
-  const videosQuery = useVideos(videosQueryParams)
+  const videosQuery = useInfiniteQuery({
+    queryKey: videosKeys.list(videosQueryBase),
+    queryFn: ({ pageParam = 1 }) => listVideos({ ...videosQueryBase, page: pageParam as number }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage || typeof lastPage.page !== 'number' || typeof lastPage.total_pages !== 'number') {
+        return undefined
+      }
+      return lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined
+    },
+    initialPageParam: 1,
+  })
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = videosQuery
 
-  const respAny = videosQuery.data as unknown as Record<string, unknown> | undefined
-  const items = useMemo(
-    () => (respAny?.items as unknown as Video[] | undefined) ?? [],
-    [respAny?.items]
-  )
-  const totalPages = typeof respAny?.total_pages === 'number' ? respAny.total_pages : 1
+  const items = useMemo(() => {
+    const pages = videosQuery.data?.pages ?? []
+    const merged = pages.flatMap((page) => (page.items as unknown as Video[] | undefined) ?? [])
+    return merged
+  }, [videosQuery.data?.pages])
 
-  // Extract video IDs from current page for WebSocket subscription
+  // Extract video IDs from loaded items for WebSocket subscription
   const pageVideoIds = useMemo(() => {
     return items
       .map((v) => (v as unknown as Record<string, unknown>).id)
       .filter((id): id is number => typeof id === 'number')
   }, [items])
 
-  // Subscribe to job events for videos on current page
+  // Subscribe to job events for loaded videos
   const tokens = useAuthTokens()
   const { jobs: wsJobs, hasActiveJobForVideo, getThumbnailTimestamp } = useJobEvents(tokens.accessToken, {
     videoIds: pageVideoIds.length > 0 ? pageVideoIds : null,
     includeActiveState: true,
     autoConnect: pageVideoIds.length > 0,
     onVideoUpdate: useCallback((event: VideoUpdateEvent) => {
-      // Only invalidate if video is on current page and non-thumbnail fields changed
+    // Only invalidate if video is loaded and non-thumbnail fields changed
       // Thumbnail changes are handled via thumbnailTimestamp cache-busting
       if (pageVideoIds.includes(event.video_id)) {
         const nonThumbnailFields = event.fields_changed.filter(f => 
@@ -284,12 +318,8 @@ export default function LibraryPage() {
     }
   }, [wsJobs, pageVideoIds, queryClient])
 
-  const canPrev = page > 1
-  const canNext = page < totalPages
-
   function resetFilters() {
     setFilters({})
-    setPage(1)
   }
 
   // Selection management
@@ -403,20 +433,16 @@ export default function LibraryPage() {
     key: FacetKey,
     label: string,
     items: FacetItem[],
-    selectedValue: string | null,
+    selectedValues: string[],
     onSelect: (value: string) => void
   ) => {
     const isExpanded = facetExpandedByKey[key]
     const query = facetSearch[key].trim().toLowerCase()
-    const formatFacetValue = (value: string) =>
-      value === FACET_NONE_VALUE ? '(none)' : value
-    const pinnedItem = selectedValue ? items.find((item) => item.value === selectedValue) : null
-    const pinnedItems = pinnedItem
-      ? [pinnedItem]
-      : selectedValue
-        ? [{ value: selectedValue, count: 0 }]
-        : []
-    const remainingItems = items.filter((item) => item.value !== selectedValue)
+    const selectedSet = new Set(selectedValues)
+    const pinnedItems = selectedValues
+      .map((value) => items.find((item) => item.value === value) ?? { value, count: 0 })
+      .filter((item) => item.value)
+    const remainingItems = items.filter((item) => !selectedSet.has(item.value))
     const filteredItems = query
       ? remainingItems.filter((item) =>
           formatFacetValue(item.value).toLowerCase().includes(query)
@@ -424,12 +450,16 @@ export default function LibraryPage() {
       : remainingItems
     const visibleItems = isExpanded ? filteredItems : filteredItems.slice(0, FACET_LIMIT)
     const showToggle = isExpanded || filteredItems.length > FACET_LIMIT
-    const listId = `facet-${key}`
+    const listId = `facet-popover-${key}`
+
+    const handleSelect = (value: string) => {
+      onSelect(value)
+    }
 
     return (
-      <section className="facetSection">
-        <div className="facetHeader">
-          <h3 className="sectionTitle">{label}</h3>
+      <div id={listId} className="facetPopover" role="dialog" aria-label={`${label} filters`}>
+        <div className="facetPopoverHeader">
+          <span className="facetPopoverTitle">{label}</span>
           {showToggle && (
             <button
               type="button"
@@ -445,9 +475,9 @@ export default function LibraryPage() {
           )}
         </div>
 
-        {isExpanded && (
+        <div className="facetPopoverBody">
           <input
-            className="searchInput facetSearchInput"
+            className="searchInput facetSearchInput facetPopoverSearch"
             type="search"
             value={facetSearch[key]}
             onChange={(event) =>
@@ -456,51 +486,55 @@ export default function LibraryPage() {
             placeholder={`Search ${label.toLowerCase()}...`}
             aria-label={`Filter ${label.toLowerCase()} options`}
           />
-        )}
 
-        {pinnedItems.length > 0 && (
-          <div className="facetPinned">
-            <div className="facetList facetListPinned">
-              {pinnedItems.map((item) => (
-                <button
-                  key={`${key}:selected:${item.value}`}
-                  type="button"
-                  className="facetItem facetItemActive facetItemPinned"
-                  onClick={() => onSelect(item.value)}
-                >
-                  {formatFacetValue(item.value)}
-                  <span className="facetCount">{item.count}</span>
-                </button>
-              ))}
+          {pinnedItems.length > 0 && (
+            <div className="facetPinned">
+              <div className="facetList facetListPinned">
+                {pinnedItems.map((item) => (
+                  <button
+                    key={`${key}:selected:${item.value}`}
+                    type="button"
+                    className="facetItem facetItemActive facetItemPinned"
+                    onClick={() => handleSelect(item.value)}
+                  >
+                    {formatFacetValue(item.value)}
+                    <span className="facetCount">{item.count}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="facetDivider" />
             </div>
-            <div className="facetDivider" />
+          )}
+
+          <div className={`facetList ${isExpanded ? 'facetListExpanded' : ''}`}>
+            {visibleItems.map((item) => (
+              <button
+                key={`${key}:${item.value}`}
+                type="button"
+                className="facetItem"
+                onClick={() => handleSelect(item.value)}
+              >
+                {formatFacetValue(item.value)}
+                <span className="facetCount">{item.count}</span>
+              </button>
+            ))}
           </div>
-        )}
 
-        <div id={listId} className={`facetList ${isExpanded ? 'facetListExpanded' : ''}`}>
-          {visibleItems.map((item) => (
-            <button
-              key={`${key}:${item.value}`}
-              type="button"
-              className="facetItem"
-              onClick={() => onSelect(item.value)}
-            >
-              {formatFacetValue(item.value)}
-              <span className="facetCount">{item.count}</span>
-            </button>
-          ))}
+          {isExpanded && filteredItems.length === 0 && (
+            <div className="facetEmpty">No matching options</div>
+          )}
         </div>
-
-        {isExpanded && filteredItems.length === 0 && (
-          <div className="facetEmpty">No matching options</div>
-        )}
-      </section>
+      </div>
     )
   }
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && openFacet) {
+        setOpenFacet(null)
+        return
+      }
       // Ctrl+A or Cmd+A to select all
       if ((e.ctrlKey || e.metaKey) && e.key === 'a' && items.length > 0) {
         e.preventDefault()
@@ -515,7 +549,37 @@ export default function LibraryPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectAll is stable, only re-bind when items/selection changes
-  }, [items.length, selectedVideoIds.size])
+  }, [items.length, selectedVideoIds.size, openFacet])
+
+  useEffect(() => {
+    const loadMoreNode = loadMoreRef.current
+    if (!loadMoreNode) return
+    if (!hasNextPage) return
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0]
+        if (first?.isIntersecting && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { rootMargin: '200px' }
+    )
+
+    observer.observe(loadMoreNode)
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  const activeYearValues = (filters.year ?? []).map((year) =>
+    year === YEAR_NONE_SENTINEL ? FACET_NONE_VALUE : String(year)
+  )
+
+  const hasActiveFilters = Boolean(
+    (filters.tag_name?.length ?? 0) > 0 ||
+    (filters.genre?.length ?? 0) > 0 ||
+    (filters.year?.length ?? 0) > 0
+  )
 
   return (
     <div className="libraryPage">
@@ -581,75 +645,100 @@ export default function LibraryPage() {
       />
 
       <main className="libraryMain">
-        <aside className={`panelCard libraryFacets ${facetsExpanded ? 'libraryFacetsExpanded' : 'libraryFacetsCollapsed'}`} aria-label="Filters">
-          <div className="libraryFacetsHeader">
-            <button
-              className="libraryFacetsToggle"
-              type="button"
-              onClick={() => setFacetsExpanded(!facetsExpanded)}
-              aria-label={facetsExpanded ? 'Collapse filters' : 'Expand filters'}
-              aria-expanded={facetsExpanded}
-            >
-              {facetsExpanded ? '◀' : '▶'}
-            </button>
-            {facetsExpanded && (
-              <>
-                <h2 className="sectionTitle" style={{ marginBottom: 0 }}>
-                  Facets
-                </h2>
-                <button className="facetItem" type="button" onClick={resetFilters}>
-                  Reset
+        <section className="panelCard libraryFacetsBar" aria-label="Filters">
+          <div className="libraryFacetsBarRow" ref={facetBarRef}>
+            <div className="libraryFacetsBarTitle">
+              <h2 className="sectionTitle" style={{ marginBottom: 0 }}>
+                Filters
+              </h2>
+              {hasActiveFilters && (
+                <button className="facetClearButton" type="button" onClick={resetFilters}>
+                  Clear
                 </button>
-              </>
-            )}
-          </div>
+              )}
+            </div>
 
-          {facetsExpanded && (
-            <>
-              {facetsQuery.isLoading ? <div className="statusLine">Loading filters…</div> : null}
-              {facetsQuery.isError ? <div className="statusLine">Filters unavailable</div> : null}
+            <div className="libraryFacetButtons">
+              {([
+                { key: 'tags', label: 'Tags', items: facets.tags, selected: filters.tag_name ?? [] },
+                { key: 'genres', label: 'Genres', items: facets.genres, selected: filters.genre ?? [] },
+                { key: 'years', label: 'Years', items: yearFacetItems, selected: activeYearValues },
+              ] as Array<{ key: FacetKey; label: string; items: FacetItem[]; selected: string[] }>).map(
+                ({ key, label, items, selected }) => {
+                  const isOpen = openFacet === key
+                  const isActive = selected.length > 0
+                  const displayValue = getFacetDisplay(selected)
+                  const disableFacet = facetsQuery.isLoading || facetsQuery.isError
 
-              {!facetsQuery.isLoading && !facetsQuery.isError ? (
-                <div className="facetSections">
-                  {renderFacetSection('tags', 'Tags', facets.tags, filters.tag_name ?? null, (value) => {
-                    setFilters((prev) => ({ ...prev, tag_name: toggle(prev.tag_name, value) }))
-                    setPage(1)
-                  })}
-
-                  {renderFacetSection('genres', 'Genres', facets.genres, filters.genre ?? null, (value) => {
-                    setFilters((prev) => ({ ...prev, genre: toggle(prev.genre, value) }))
-                    setPage(1)
-                  })}
-
-                  {renderFacetSection(
-                    'years',
-                    'Years',
-                    yearFacetItems,
-                    filters.year === YEAR_NONE_SENTINEL
-                      ? FACET_NONE_VALUE
-                      : typeof filters.year === 'number'
-                        ? String(filters.year)
-                        : null,
-                    (value) => {
-                      if (value === FACET_NONE_VALUE) {
-                        setFilters((prev) => ({
-                          ...prev,
-                          year: toggle(prev.year, YEAR_NONE_SENTINEL),
-                        }))
-                        setPage(1)
-                        return
-                      }
-                      const year = Number(value)
-                      if (!Number.isFinite(year)) return
-                      setFilters((prev) => ({ ...prev, year: toggle(prev.year, year) }))
-                      setPage(1)
+                  const handleSelect = (value: string) => {
+                    if (key === 'tags') {
+                      setFilters((prev) => ({
+                        ...prev,
+                        tag_name: updateListFilter(prev.tag_name, value),
+                      }))
+                      return
                     }
-                  )}
-                </div>
-              ) : null}
-            </>
-          )}
-        </aside>
+                    if (key === 'genres') {
+                      setFilters((prev) => ({
+                        ...prev,
+                        genre: updateListFilter(prev.genre, value),
+                      }))
+                      return
+                    }
+                    if (key === 'years') {
+                      const year = value === FACET_NONE_VALUE ? YEAR_NONE_SENTINEL : Number(value)
+                      if (!Number.isFinite(year)) return
+                      setFilters((prev) => ({
+                        ...prev,
+                        year: updateListFilter(prev.year, year),
+                      }))
+                    }
+                  }
+
+                  return (
+                    <div key={key} className="libraryFacetGroup">
+                      <button
+                        type="button"
+                        className={`libraryFacetButton ${isActive ? 'libraryFacetButtonActive' : ''}`}
+                        onClick={() => setOpenFacet((prev) => (prev === key ? null : key))}
+                        aria-expanded={isOpen}
+                        aria-controls={`facet-popover-${key}`}
+                        aria-label={`${label} filters`}
+                        disabled={disableFacet}
+                      >
+                        <span className="libraryFacetButtonLabel">{label}</span>
+                        {displayValue && <span className="libraryFacetButtonValue">{displayValue}</span>}
+                        <span className="libraryFacetButtonCaret" aria-hidden="true">▾</span>
+                      </button>
+                      {isOpen && !disableFacet && renderFacetSection(key, label, items, selected, handleSelect)}
+                    </div>
+                  )
+                }
+              )}
+            </div>
+
+            {viewMode === 'table' && (
+              <label className="libraryColumnsControl">
+                <span className="libraryColumnsLabel">Columns</span>
+                <select
+                  className="select libraryColumnsSelect"
+                  value={tableColumns}
+                  onChange={(event) => setTableColumns(event.target.value as LibraryTableColumns)}
+                  aria-label="Select table columns"
+                >
+                  <option value="full">Full</option>
+                  <option value="core">Core (Title, Artist, Album, Genre)</option>
+                  <option value="curation">Curation (Genre, ISRC, Tags)</option>
+                </select>
+              </label>
+            )}
+
+            <div className="libraryFacetsBarStatus">
+              {facetsQuery.isLoading ? <span className="statusLine">Loading filters…</span> : null}
+              {facetsQuery.isError ? <span className="statusLine">Filters unavailable</span> : null}
+            </div>
+          </div>
+        </section>
 
         <section className="panelCard libraryVideos" aria-label="Videos">
           {videosQuery.isLoading ? <div className="statusLine">Loading videos…</div> : null}
@@ -686,6 +775,7 @@ export default function LibraryPage() {
                 <LibraryTable
                   videos={items}
                   selectedIds={selectedVideoIds}
+                  columns={tableColumns}
                   onToggleSelection={toggleSelection}
                   onSelectAll={selectAll}
                   onClearAll={clearSelection}
@@ -694,16 +784,12 @@ export default function LibraryPage() {
                 />
               )}
 
-              <div className="pagination">
-                <button className="primaryButton" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!canPrev}>
-                  Prev
-                </button>
-                <div className="paginationInfo">
-                  Page {page} / {totalPages}
-                </div>
-                <button className="primaryButton" type="button" onClick={() => setPage((p) => p + 1)} disabled={!canNext}>
-                  Next
-                </button>
+              <div className="libraryLoadMore" ref={loadMoreRef}>
+                {videosQuery.isFetchingNextPage ? (
+                  <div className="statusLine">Loading more…</div>
+                ) : videosQuery.hasNextPage ? (
+                  <div className="statusLine">Scroll for more</div>
+                ) : null}
               </div>
             </>
           ) : null}
