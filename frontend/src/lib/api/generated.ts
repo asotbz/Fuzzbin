@@ -8525,11 +8525,11 @@ export interface operations {
                 /** @description Filter by director */
                 director?: string | null;
                 /** @description Filter by genre */
-                genre?: string | null;
+                genre?: string[] | null;
                 /** @description Filter by status */
                 status?: string | null;
                 /** @description Filter by year */
-                year?: number | null;
+                year?: number[] | null;
                 /** @description Minimum year */
                 year_min?: number | null;
                 /** @description Maximum year */
@@ -8543,7 +8543,7 @@ export interface operations {
                 /** @description Filter by collection ID */
                 collection_id?: number | null;
                 /** @description Filter by tag */
-                tag_name?: string | null;
+                tag_name?: string[] | null;
                 /** @description Filter by tag ID */
                 tag_id?: number | null;
                 /** @description Full-text search */
