@@ -50,6 +50,25 @@ class VideoQuery:
         self._params.append(f"%{genre}%")
         return self
 
+    def where_genre_any(self, genres: List[str], include_missing: bool = False) -> "VideoQuery":
+        """Filter by one or more genres (case-insensitive LIKE)."""
+        clauses: List[str] = []
+        params: List[Any] = []
+
+        if genres:
+            genre_clause = " OR ".join(["LOWER(v.genre) LIKE LOWER(?)"] * len(genres))
+            clauses.append(f"({genre_clause})")
+            params.extend([f"%{genre}%" for genre in genres])
+
+        if include_missing:
+            clauses.append("(v.genre IS NULL OR v.genre = '')")
+
+        if clauses:
+            self._where_clauses.append(f"({' OR '.join(clauses)})")
+            self._params.extend(params)
+
+        return self
+
     def where_director(self, director: str) -> "VideoQuery":
         """Filter by director name (case-insensitive LIKE)."""
         self._where_clauses.append("LOWER(v.director) LIKE LOWER(?)")
@@ -60,6 +79,25 @@ class VideoQuery:
         """Filter by exact year."""
         self._where_clauses.append("v.year = ?")
         self._params.append(year)
+        return self
+
+    def where_year_any(self, years: List[int], include_missing: bool = False) -> "VideoQuery":
+        """Filter by one or more years."""
+        clauses: List[str] = []
+        params: List[Any] = []
+
+        if years:
+            placeholders = ", ".join(["?"] * len(years))
+            clauses.append(f"v.year IN ({placeholders})")
+            params.extend(years)
+
+        if include_missing:
+            clauses.append("v.year IS NULL")
+
+        if clauses:
+            self._where_clauses.append(f"({' OR '.join(clauses)})")
+            self._params.extend(params)
+
         return self
 
     def where_year_range(self, start_year: int, end_year: int) -> "VideoQuery":
@@ -152,6 +190,41 @@ class VideoQuery:
         """
         )
         self._params.append(f"%{tag_name}%")
+        return self
+
+    def where_tag_any(self, tag_names: List[str], include_missing: bool = False) -> "VideoQuery":
+        """Filter by one or more tag names."""
+        clauses: List[str] = []
+        params: List[Any] = []
+
+        if tag_names:
+            tag_clause = " OR ".join(["LOWER(t.name) LIKE LOWER(?)"] * len(tag_names))
+            clauses.append(
+                f"""
+                EXISTS (
+                    SELECT 1 FROM video_tags vt
+                    JOIN tags t ON vt.tag_id = t.id
+                    WHERE vt.video_id = v.id
+                    AND ({tag_clause})
+                )
+            """
+            )
+            params.extend([f"%{tag_name}%" for tag_name in tag_names])
+
+        if include_missing:
+            clauses.append(
+                """
+                NOT EXISTS (
+                    SELECT 1 FROM video_tags vt
+                    WHERE vt.video_id = v.id
+                )
+            """
+            )
+
+        if clauses:
+            self._where_clauses.append(f"({' OR '.join(clause.strip() for clause in clauses)})")
+            self._params.extend(params)
+
         return self
 
     def where_tag_missing(self) -> "VideoQuery":

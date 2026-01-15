@@ -247,11 +247,11 @@ class VideoFilters(BaseModel):
     artist: Optional[str] = Field(default=None, description="Filter by artist name (partial match)")
     album: Optional[str] = Field(default=None, description="Filter by album name (partial match)")
     director: Optional[str] = Field(default=None, description="Filter by director (partial match)")
-    genre: Optional[str] = Field(default=None, description="Filter by genre (partial match)")
+    genre: Optional[List[str]] = Field(default=None, description="Filter by genre (partial match)")
 
     # Exact match filters
     status: Optional[VIDEO_STATUSES] = Field(default=None, description="Filter by status")
-    year: Optional[int] = Field(default=None, description="Filter by exact year")
+    year: Optional[List[int]] = Field(default=None, description="Filter by exact year")
     year_min: Optional[int] = Field(default=None, ge=1900, description="Filter by minimum year")
     year_max: Optional[int] = Field(default=None, le=2100, description="Filter by maximum year")
 
@@ -264,7 +264,9 @@ class VideoFilters(BaseModel):
         default=None, description="Filter by collection name (partial match)"
     )
     collection_id: Optional[int] = Field(default=None, description="Filter by collection ID")
-    tag_name: Optional[str] = Field(default=None, description="Filter by tag name (partial match)")
+    tag_name: Optional[List[str]] = Field(
+        default=None, description="Filter by tag name (partial match)"
+    )
     tag_id: Optional[int] = Field(default=None, description="Filter by tag ID")
 
     # Full-text search
@@ -295,17 +297,21 @@ class VideoFilters(BaseModel):
             else:
                 query = query.where_director(self.director)
         if self.genre:
-            if self.genre == self.NONE_FACET_VALUE:
+            include_missing = self.NONE_FACET_VALUE in self.genre
+            values = [genre for genre in self.genre if genre != self.NONE_FACET_VALUE]
+            if values:
+                query = query.where_genre_any(values, include_missing=include_missing)
+            elif include_missing:
                 query = query.where_genre_missing()
-            else:
-                query = query.where_genre(self.genre)
         if self.status:
             query = query.where_status(self.status)
-        if self.year is not None:
-            if self.year == self.MISSING_YEAR_SENTINEL:
+        if self.year:
+            include_missing = self.MISSING_YEAR_SENTINEL in self.year
+            values = [year for year in self.year if year != self.MISSING_YEAR_SENTINEL]
+            if values:
+                query = query.where_year_any(values, include_missing=include_missing)
+            elif include_missing:
                 query = query.where_year_missing()
-            else:
-                query = query.where_year(self.year)
         elif self.year_min is not None or self.year_max is not None:
             # Use year_range if either min or max is specified
             start = self.year_min or 1900
@@ -320,10 +326,12 @@ class VideoFilters(BaseModel):
         if self.collection_id:
             query = query.where_collection_id(self.collection_id)
         if self.tag_name:
-            if self.tag_name == self.NONE_FACET_VALUE:
+            include_missing = self.NONE_FACET_VALUE in self.tag_name
+            values = [tag for tag in self.tag_name if tag != self.NONE_FACET_VALUE]
+            if values:
+                query = query.where_tag_any(values, include_missing=include_missing)
+            elif include_missing:
                 query = query.where_tag_missing()
-            else:
-                query = query.where_tag(self.tag_name)
         if self.tag_id:
             query = query.where_tag_id(self.tag_id)
         if self.search:
