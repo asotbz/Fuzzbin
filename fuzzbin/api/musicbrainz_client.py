@@ -203,8 +203,8 @@ class MusicBrainzClient(RateLimitedAPIClient):
         Build a Lucene-style query string for MusicBrainz search.
 
         Constructs a properly escaped query using MusicBrainz's supported
-        Lucene query fields. When searching by artist+recording, automatically
-        excludes live recordings to prefer studio versions.
+        Lucene query fields. When searching by BOTH artist AND recording,
+        automatically excludes live recordings to prefer studio versions.
 
         Args:
             artist: Artist name to search for
@@ -221,6 +221,9 @@ class MusicBrainzClient(RateLimitedAPIClient):
         Example:
             >>> MusicBrainzClient._build_query(artist="Nirvana", recording="Smells Like Teen Spirit")
             'recording:"Smells Like Teen Spirit" AND artist:"Nirvana" AND NOT comment:(live OR concert OR "live at")'
+
+            >>> MusicBrainzClient._build_query(recording="Smells Like Teen Spirit")
+            'recording:"Smells Like Teen Spirit"'
 
             >>> MusicBrainzClient._build_query(isrc="USGF19942501")
             'isrc:USGF19942501'
@@ -248,9 +251,9 @@ class MusicBrainzClient(RateLimitedAPIClient):
 
         query = " AND ".join(parts)
 
-        # When searching by artist+recording (not ISRC), exclude live recordings
+        # When searching by BOTH artist AND recording (not ISRC), exclude live recordings
         # to prefer studio versions. ISRC searches are already specific enough.
-        if (artist or recording) and not isrc:
+        if artist and recording and not isrc:
             query += ' AND NOT comment:(live OR concert OR "live at")'
 
         return query
