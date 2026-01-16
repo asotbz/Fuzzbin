@@ -27,12 +27,23 @@ type FacetKey = 'tags' | 'genres' | 'years'
 const FACET_LIMIT = 12
 const FACET_NONE_VALUE = '__none__'
 const YEAR_NONE_SENTINEL = -1
+const LIBRARY_PREFS_KEY = 'library-preferences'
+const LEGACY_VIEW_KEY = 'library-view-mode'
+const SORT_FIELDS = new Set(['created_at', 'title', 'artist', 'year'])
 
 type FacetSelections = {
   tag_name?: string[]
   genre?: string[]
   director?: string
   year?: number[]
+}
+
+type LibraryPreferences = {
+  viewMode?: 'grid' | 'table'
+  tableColumns?: LibraryTableColumns
+  sortBy?: string
+  sortOrder?: SortOrder
+  filters?: FacetSelections
 }
 
 function asFacetList(list: unknown): FacetItem[] {
@@ -80,6 +91,77 @@ function updateListFilter<T>(current: T[] | undefined, next: T): T[] | undefined
   return updated.length > 0 ? updated : undefined
 }
 
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const cleaned = value
+    .filter((item) => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+  if (cleaned.length === 0) return undefined
+  return Array.from(new Set(cleaned))
+}
+
+function normalizeNumberList(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const cleaned = value
+    .map((item) => (typeof item === 'number' ? item : Number(item)))
+    .filter((item) => Number.isFinite(item))
+  if (cleaned.length === 0) return undefined
+  return Array.from(new Set(cleaned))
+}
+
+function parsePreferences(raw: string | null): LibraryPreferences {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const prefs: LibraryPreferences = {}
+
+    if (parsed.viewMode === 'grid' || parsed.viewMode === 'table') {
+      prefs.viewMode = parsed.viewMode
+    }
+
+    if (parsed.tableColumns === 'full' || parsed.tableColumns === 'core' || parsed.tableColumns === 'curation') {
+      prefs.tableColumns = parsed.tableColumns
+    }
+
+    if (typeof parsed.sortBy === 'string' && SORT_FIELDS.has(parsed.sortBy)) {
+      prefs.sortBy = parsed.sortBy
+    }
+
+    if (parsed.sortOrder === 'asc' || parsed.sortOrder === 'desc') {
+      prefs.sortOrder = parsed.sortOrder
+    }
+
+    if (parsed.filters && typeof parsed.filters === 'object') {
+      const filtersObj = parsed.filters as Record<string, unknown>
+      const tag_name = normalizeStringList(filtersObj.tag_name)
+      const genre = normalizeStringList(filtersObj.genre)
+      const year = normalizeNumberList(filtersObj.year)
+      const filters: FacetSelections = {}
+
+      if (tag_name) filters.tag_name = tag_name
+      if (genre) filters.genre = genre
+      if (year) filters.year = year
+
+      if (Object.keys(filters).length > 0) prefs.filters = filters
+    }
+
+    return prefs
+  } catch {
+    return {}
+  }
+}
+
+function getInitialPreferences(): LibraryPreferences {
+  if (typeof window === 'undefined') return {}
+  const prefs = parsePreferences(localStorage.getItem(LIBRARY_PREFS_KEY))
+  const legacyView = localStorage.getItem(LEGACY_VIEW_KEY)
+  if (!prefs.viewMode && (legacyView === 'grid' || legacyView === 'table')) {
+    prefs.viewMode = legacyView
+  }
+  return prefs
+}
+
 function formatFacetValue(value: string): string {
   return value === FACET_NONE_VALUE ? '(none)' : value
 }
@@ -92,14 +174,15 @@ function getFacetDisplay(values: string[]): string | null {
 
 export default function LibraryPage() {
   const location = useLocation()
+  const initialPreferences = useMemo(() => getInitialPreferences(), [])
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const [sortBy, setSortBy] = useState<string>('artist')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [sortBy, setSortBy] = useState<string>(() => initialPreferences.sortBy ?? 'artist')
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => initialPreferences.sortOrder ?? 'asc')
   const pageSize = 20
 
-  const [filters, setFilters] = useState<FacetSelections>({})
+  const [filters, setFilters] = useState<FacetSelections>(() => initialPreferences.filters ?? {})
   const [facetExpandedByKey, setFacetExpandedByKey] = useState<Record<FacetKey, boolean>>({
     tags: false,
     genres: false,
@@ -112,8 +195,8 @@ export default function LibraryPage() {
   })
 
   // View mode state
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
-  const [tableColumns, setTableColumns] = useState<LibraryTableColumns>('full')
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => initialPreferences.viewMode ?? 'grid')
+  const [tableColumns, setTableColumns] = useState<LibraryTableColumns>(() => initialPreferences.tableColumns ?? 'full')
 
   // Facet popover state
   const [openFacet, setOpenFacet] = useState<FacetKey | null>(null)
@@ -169,16 +252,24 @@ export default function LibraryPage() {
     return () => window.clearTimeout(t)
   }, [search])
 
-  // Load view mode from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('library-view-mode')
-    if (saved === 'grid' || saved === 'table') setViewMode(saved)
-  }, [])
+    if (typeof window === 'undefined') return
+    const persistedFilters: FacetSelections = {
+      ...(filters.tag_name?.length ? { tag_name: filters.tag_name } : {}),
+      ...(filters.genre?.length ? { genre: filters.genre } : {}),
+      ...(filters.year?.length ? { year: filters.year } : {}),
+    }
+    const preferences: LibraryPreferences = {
+      viewMode,
+      tableColumns,
+      sortBy,
+      sortOrder,
+      filters: persistedFilters,
+    }
 
-  // Save view mode to localStorage
-  useEffect(() => {
-    localStorage.setItem('library-view-mode', viewMode)
-  }, [viewMode])
+    localStorage.setItem(LIBRARY_PREFS_KEY, JSON.stringify(preferences))
+    localStorage.setItem(LEGACY_VIEW_KEY, viewMode)
+  }, [viewMode, tableColumns, sortBy, sortOrder, filters])
 
   // Force grid view on mobile
   useEffect(() => {
