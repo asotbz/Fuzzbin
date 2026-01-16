@@ -7,6 +7,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import structlog
 
+import fuzzbin
+
 from ..common.genre_buckets import classify_single_genre
 from ..core.db.repository import VideoRepository
 from ..parsers.models import MusicVideoNFO
@@ -599,6 +601,14 @@ class NFOImporter:
 
         # Create video record
         video_id = await self.repository.create_video(**video_data)
+
+        # Auto-add decade tag if year provided and auto_decade enabled
+        if nfo.year:
+            config = fuzzbin.get_config()
+            if config.tags.auto_decade.enabled:
+                await self.repository.auto_add_decade_tag(
+                    video_id, nfo.year, tag_format=config.tags.auto_decade.format
+                )
 
         # Upsert primary artist and link
         if nfo.artist:

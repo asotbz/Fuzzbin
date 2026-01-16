@@ -55,7 +55,7 @@ async def _handle_auto_decade_changes(
         old_format: Previous format string
         new_config: Updated config object
     """
-    from fuzzbin.tasks.models import JobPriority, JobType
+    from fuzzbin.tasks.models import Job, JobPriority, JobType
     from fuzzbin.tasks.queue import get_job_queue
 
     # Check if auto_decade settings were updated
@@ -98,14 +98,15 @@ async def _handle_auto_decade_changes(
     # Submit sync job
     try:
         queue = get_job_queue()
-        job = await queue.submit(
-            job_type=JobType.SYNC_DECADE_TAGS,
+        job = Job(
+            type=JobType.SYNC_DECADE_TAGS,
             metadata=metadata,
-            priority=JobPriority.MEDIUM,
+            priority=JobPriority.NORMAL,
         )
+        job_id = await queue.submit(job)
         logger.info(
             "decade_tag_sync_job_submitted",
-            job_id=job.id,
+            job_id=job_id,
             mode=mode,
         )
     except Exception as e:

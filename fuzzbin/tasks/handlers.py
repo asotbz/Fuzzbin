@@ -508,6 +508,14 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     artist=track_artist,
                 )
 
+            # Auto-add decade tag if year provided and auto_decade enabled
+            if video_data.get("year"):
+                config = fuzzbin.get_config()
+                if config.tags.auto_decade.enabled:
+                    await repository.auto_add_decade_tag(
+                        video_id, video_data["year"], tag_format=config.tags.auto_decade.format
+                    )
+
             # Link primary artist to video
             if track_artist:
                 primary_artist_id = await repository.upsert_artist(name=track_artist)
@@ -1962,7 +1970,24 @@ async def handle_import(job: Job) -> None:
                             "video_file_path": None,  # Not downloaded yet
                             "status": "pending",
                         }
-                        await repository.create_video(**video_data)
+                        video_id = await repository.create_video(**video_data)
+
+                        # Auto-add decade tag if year provided and auto_decade enabled
+                        # Note: YouTube metadata rarely includes year, but check anyway
+                        year = info.get("release_year") or info.get("upload_date", "")[:4]
+                        if year:
+                            try:
+                                year_int = int(year)
+                                config = fuzzbin.get_config()
+                                if config.tags.auto_decade.enabled:
+                                    await repository.auto_add_decade_tag(
+                                        video_id,
+                                        year_int,
+                                        tag_format=config.tags.auto_decade.format,
+                                    )
+                            except (ValueError, TypeError):
+                                pass
+
                         imported += 1
                 except Exception as e:
                     logger.error("youtube_import_error", url=url, error=str(e))
@@ -2008,7 +2033,18 @@ async def handle_import(job: Job) -> None:
                                 "year": video_data.year,
                                 "status": "complete",
                             }
-                            await repository.create_video(**record)
+                            video_id = await repository.create_video(**record)
+
+                            # Auto-add decade tag if year provided and auto_decade enabled
+                            if record.get("year"):
+                                config = fuzzbin.get_config()
+                                if config.tags.auto_decade.enabled:
+                                    await repository.auto_add_decade_tag(
+                                        video_id,
+                                        record["year"],
+                                        tag_format=config.tags.auto_decade.format,
+                                    )
+
                             imported += 1
                     except Exception as e:
                         logger.error("imvdb_import_error", video_id=vid, error=str(e))
@@ -2042,7 +2078,18 @@ async def handle_import(job: Job) -> None:
                                     "year": video_data.year,
                                     "status": "complete",
                                 }
-                                await repository.create_video(**record)
+                                video_id = await repository.create_video(**record)
+
+                                # Auto-add decade tag if year provided and auto_decade enabled
+                                if record.get("year"):
+                                    config = fuzzbin.get_config()
+                                    if config.tags.auto_decade.enabled:
+                                        await repository.auto_add_decade_tag(
+                                            video_id,
+                                            record["year"],
+                                            tag_format=config.tags.auto_decade.format,
+                                        )
+
                                 imported += 1
                     except Exception as e:
                         logger.error("imvdb_search_error", query=query, error=str(e))
@@ -2285,6 +2332,14 @@ async def handle_add_single_import(job: Job) -> None:
             )
             created = True
 
+            # Auto-add decade tag if year provided and auto_decade enabled
+            if year:
+                config = fuzzbin.get_config()
+                if config.tags.auto_decade.enabled:
+                    await repository.auto_add_decade_tag(
+                        video_id, year, tag_format=config.tags.auto_decade.format
+                    )
+
             # Link primary artists to video_artists table
             for position, art_name in enumerate(primary_artists):
                 artist_id = await repository.upsert_artist(name=art_name)
@@ -2419,6 +2474,14 @@ async def handle_add_single_import(job: Job) -> None:
             )
             created = True
 
+            # Auto-add decade tag if year provided and auto_decade enabled
+            if year and isinstance(year, int):
+                config = fuzzbin.get_config()
+                if config.tags.auto_decade.enabled:
+                    await repository.auto_add_decade_tag(
+                        video_id, year, tag_format=config.tags.auto_decade.format
+                    )
+
     elif source == "youtube":
         target = youtube_url or item_id
         youtube_id = youtube_id_override
@@ -2499,6 +2562,18 @@ async def handle_add_single_import(job: Job) -> None:
                 status=initial_status,
             )
             created = True
+
+            # Auto-add decade tag if year available from metadata and auto_decade enabled
+            # Check prefetched metadata or yt-dlp info for year
+            year_from_metadata = None
+            if prefetched_metadata:
+                year_from_metadata = prefetched_metadata.get("year")
+            if year_from_metadata:
+                config = fuzzbin.get_config()
+                if config.tags.auto_decade.enabled:
+                    await repository.auto_add_decade_tag(
+                        video_id, year_from_metadata, tag_format=config.tags.auto_decade.format
+                    )
 
     else:
         raise ValueError(f"Unsupported source: {source}")
@@ -3705,6 +3780,14 @@ async def handle_imvdb_artist_import(job: Job) -> None:
                     title=video_title,
                     artist=video_artist,
                 )
+
+            # Auto-add decade tag if year provided and auto_decade enabled
+            if db_video_data.get("year"):
+                config = fuzzbin.get_config()
+                if config.tags.auto_decade.enabled:
+                    await repository.auto_add_decade_tag(
+                        video_id, db_video_data["year"], tag_format=config.tags.auto_decade.format
+                    )
 
             # Link primary artist to video
             if video_artist:

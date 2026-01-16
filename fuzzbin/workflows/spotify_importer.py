@@ -7,6 +7,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 
+import fuzzbin
+
 from ..api.spotify_client import SpotifyClient
 from ..common.genre_buckets import classify_genres
 from ..common.string_utils import normalize_spotify_title
@@ -310,6 +312,14 @@ class SpotifyPlaylistImporter:
 
         # Create video record
         video_id = await self.repository.create_video(**video_data)
+
+        # Auto-add decade tag if year provided and auto_decade enabled
+        if video_data.get("year"):
+            config = fuzzbin.get_config()
+            if config.tags.auto_decade.enabled:
+                await self.repository.auto_add_decade_tag(
+                    video_id, video_data["year"], tag_format=config.tags.auto_decade.format
+                )
 
         # Upsert artists and link to video
         for position, artist in enumerate(track.artists):
