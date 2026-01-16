@@ -5,6 +5,13 @@ import type {
   AddSearchResponse,
   AddSingleImportRequest,
   AddSingleImportResponse,
+  ArtistBatchImportRequest,
+  ArtistBatchImportResponse,
+  ArtistSearchRequest,
+  ArtistSearchResponse,
+  ArtistVideoEnrichRequest,
+  ArtistVideoEnrichResponse,
+  ArtistVideosPreviewResponse,
   BatchPreviewRequest,
   BatchPreviewResponse,
   NFOScanRequest,
@@ -90,5 +97,45 @@ export async function checkVideoExists(params: {
 
   return apiJson<CheckExistsResponse>({
     path: `/add/check-exists?${queryParams.toString()}`,
+  })
+}
+
+// Artist Import API Functions
+
+export async function searchArtists(request: ArtistSearchRequest): Promise<ArtistSearchResponse> {
+  return apiJson<ArtistSearchResponse>({
+    method: 'POST',
+    path: '/add/search/artist',
+    body: request,
+  })
+}
+
+export async function previewArtistVideos(
+  entityId: number,
+  page: number = 1,
+  perPage: number = 50
+): Promise<ArtistVideosPreviewResponse> {
+  const queryParams = new URLSearchParams({
+    page: String(page),
+    per_page: String(perPage),
+  })
+  return apiJson<ArtistVideosPreviewResponse>({
+    path: `/add/artist/preview/${entityId}?${queryParams.toString()}`,
+  })
+}
+
+export async function enrichImvdbVideo(request: ArtistVideoEnrichRequest): Promise<ArtistVideoEnrichResponse> {
+  return apiJson<ArtistVideoEnrichResponse>({
+    method: 'POST',
+    path: '/add/enrich/imvdb-video',
+    body: request,
+  })
+}
+
+export async function importArtistVideos(request: ArtistBatchImportRequest): Promise<ArtistBatchImportResponse> {
+  return apiJson<ArtistBatchImportResponse>({
+    method: 'POST',
+    path: '/add/artist/import',
+    body: request,
   })
 }

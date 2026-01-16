@@ -6,6 +6,7 @@ import ActivityMonitorPage from '../features/activity/pages/ActivityMonitorPage'
 import SettingsPage from '../features/settings/pages/SettingsPage'
 import SearchWizard from '../pages/add/SearchWizard'
 import SpotifyImport from '../pages/add/SpotifyImport'
+import ArtistImport from '../pages/add/ArtistImport'
 import NFOImport from '../pages/add/NFOImport'
 import LoginPage from '../pages/Login'
 import SetInitialPasswordPage from '../pages/SetInitialPassword'
@@ -54,6 +55,15 @@ export default function AppRoutes() {
         element={
           <RequireAuth>
             <SpotifyImport />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/add/artist"
+        element={
+          <RequireAuth>
+            <ArtistImport />
           </RequireAuth>
         }
       />

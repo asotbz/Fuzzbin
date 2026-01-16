@@ -69,3 +69,121 @@ export interface YouTubeMetadataResponse {
 }
 
 export type GetJobResponse = JsonOfStatus<paths['/jobs/{job_id}']['get'], 200>
+
+// Artist Import Types (manual until OpenAPI schema is regenerated)
+export interface ArtistSearchRequest {
+  artist_name: string
+  per_page?: number
+}
+
+export interface ArtistSearchResultItem {
+  id: number
+  name: string | null
+  slug: string | null
+  url: string | null
+  image: string | null
+  discogs_id: number | null
+  artist_video_count: number
+  featured_video_count: number
+  sample_tracks: string[]
+}
+
+export interface ArtistSearchResponse {
+  artist_name: string
+  total_results: number
+  results: ArtistSearchResultItem[]
+}
+
+export interface ArtistVideoPreviewItem {
+  id: number
+  song_title: string | null
+  year: number | null
+  url: string | null
+  thumbnail_url: string | null
+  production_status: string | null
+  version_name: string | null
+  already_exists: boolean
+  existing_video_id: number | null
+}
+
+export interface ArtistVideosPreviewResponse {
+  entity_id: number
+  entity_name: string | null
+  entity_slug: string | null
+  total_videos: number
+  current_page: number
+  per_page: number
+  total_pages: number
+  has_more: boolean
+  videos: ArtistVideoPreviewItem[]
+  existing_count: number
+  new_count: number
+}
+
+export interface ArtistVideoEnrichRequest {
+  imvdb_id: number
+  artist: string
+  track_title: string
+  year?: number | null
+  thumbnail_url?: string | null
+}
+
+export interface MusicBrainzEnrichmentData {
+  recording_mbid: string | null
+  release_mbid: string | null
+  canonical_title: string | null
+  canonical_artist: string | null
+  album: string | null
+  year: number | null
+  label: string | null
+  genre: string | null
+  classified_genre: string | null
+  all_genres: string[]
+  match_score: number
+  match_method: string
+  confident_match: boolean
+}
+
+export interface ArtistVideoEnrichResponse {
+  imvdb_id: number
+  directors: string | null
+  featured_artists: string | null
+  youtube_ids: string[]
+  imvdb_url: string | null
+  musicbrainz: MusicBrainzEnrichmentData
+  title: string
+  artist: string
+  album: string | null
+  year: number | null
+  label: string | null
+  genre: string | null
+  thumbnail_url: string | null
+  enrichment_status: 'success' | 'partial' | 'not_found'
+  already_exists: boolean
+  existing_video_id: number | null
+}
+
+export interface SelectedArtistVideoImport {
+  imvdb_id: number
+  metadata: Record<string, unknown>
+  imvdb_url?: string | null
+  youtube_id?: string | null
+  youtube_url?: string | null
+  thumbnail_url?: string | null
+}
+
+export interface ArtistBatchImportRequest {
+  entity_id: number
+  entity_name?: string | null
+  videos: SelectedArtistVideoImport[]
+  initial_status?: string
+  auto_download?: boolean
+}
+
+export interface ArtistBatchImportResponse {
+  job_id: string
+  entity_id: number
+  video_count: number
+  auto_download: boolean
+  status: string
+}

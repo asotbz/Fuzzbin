@@ -35,6 +35,7 @@ interface MetadataEditorProps {
   currentOverride?: TrackMetadataOverride
   onSave: (metadata: EditedMetadata) => void
   onCancel: () => void
+  showSpotifyColumn?: boolean
 }
 
 function extractYouTubeId(url: string): string | null {
@@ -58,7 +59,7 @@ function normalizeIsrc(value: string): string {
   return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
 }
 
-export default function MetadataEditor({ track, state, currentOverride, onSave, onCancel }: MetadataEditorProps) {
+export default function MetadataEditor({ track, state, currentOverride, onSave, onCancel, showSpotifyColumn = true }: MetadataEditorProps) {
   const enrichmentData = state.enrichmentData
 
   // Initialize form with priority: currentOverride > enrichmentData > track
@@ -179,39 +180,39 @@ export default function MetadataEditor({ track, state, currentOverride, onSave, 
           {enrichmentData && (
             <div className="metadataEditorComparison">
               <div className="metadataEditorComparisonHeader">
-                <div className="metadataEditorComparisonLabel">Spotify</div>
+                {showSpotifyColumn && <div className="metadataEditorComparisonLabel">Spotify</div>}
                 <div className="metadataEditorComparisonLabel">MusicBrainz + IMVDb</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Title:</strong> {track.title}</div>
+                {showSpotifyColumn && <div><strong>Title:</strong> {track.title}</div>}
                 <div><strong>Title:</strong> {enrichmentData.title || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Artist:</strong> {track.artist}</div>
+                {showSpotifyColumn && <div><strong>Artist:</strong> {track.artist}</div>}
                 <div><strong>Artist:</strong> {enrichmentData.artist || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Album:</strong> {track.album || '-'}</div>
+                {showSpotifyColumn && <div><strong>Album:</strong> {track.album || '-'}</div>}
                 <div><strong>Album:</strong> {enrichmentData.album || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Year:</strong> {track.year || '-'}</div>
+                {showSpotifyColumn && <div><strong>Year:</strong> {track.year || '-'}</div>}
                 <div><strong>Year:</strong> {enrichmentData.year || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Label:</strong> {track.label || '-'}</div>
+                {showSpotifyColumn && <div><strong>Label:</strong> {track.label || '-'}</div>}
                 <div><strong>Label:</strong> {enrichmentData.label || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Genre:</strong> {'-'}</div>
+                {showSpotifyColumn && <div><strong>Genre:</strong> {'-'}</div>}
                 <div><strong>Genre:</strong> {enrichmentData.genre || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Directors:</strong> {'-'}</div>
+                {showSpotifyColumn && <div><strong>Directors:</strong> {'-'}</div>}
                 <div><strong>Directors:</strong> {enrichmentData.directors || '-'}</div>
               </div>
               <div className="metadataEditorComparisonRow">
-                <div><strong>Featured Artists:</strong> {'-'}</div>
+                {showSpotifyColumn && <div><strong>Featured Artists:</strong> {'-'}</div>}
                 <div><strong>Featured Artists:</strong> {enrichmentData.featured_artists || '-'}</div>
               </div>
               {enrichmentData.title && enrichmentData.artist && (

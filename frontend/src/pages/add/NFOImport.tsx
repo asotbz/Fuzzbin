@@ -179,6 +179,7 @@ export default function NFOImport() {
         subNavItems={[
           { label: 'Search', to: '/add', end: true },
           { label: 'Spotify Playlist', to: '/add/spotify' },
+          { label: 'Artist Videos', to: '/add/artist' },
           { label: 'NFO Scan', to: '/add/nfo' },
         ]}
       />
