@@ -11,6 +11,7 @@ from .imvdb_models import (
     IMVDbEntity,
     IMVDbEntitySearchResponse,
     IMVDbEntityVideo,
+    IMVDbEntityVideosPage,
     IMVDbPagination,
     IMVDbVideo,
     IMVDbVideoSearchResult,
@@ -144,6 +145,68 @@ class IMVDbParser:
         return IMVDbEntitySearchResponse(
             pagination=pagination,
             results=data.get("results", []),
+        )
+
+    @staticmethod
+    def parse_entity_videos_page(
+        data: Dict[str, Any],
+        page: int = 1,
+        per_page: int = 50,
+    ) -> IMVDbEntityVideosPage:
+        """
+        Parse IMVDb entity response into paginated videos page.
+
+        Args:
+            data: Raw entity response from IMVDb API (with include=artist_videos)
+            page: Current page number (for metadata)
+            per_page: Results per page (for pagination calculation)
+
+        Returns:
+            IMVDbEntityVideosPage with videos and pagination metadata
+
+        Example:
+            >>> response = await client.get("/entity/838673?include=artist_videos&page=1")
+            >>> page = IMVDbParser.parse_entity_videos_page(response.json(), page=1)
+            >>> print(f"Page {page.current_page}/{page.total_pages}: {len(page.videos)} videos")
+        """
+        # Extract entity metadata
+        entity_id = data.get("id", 0)
+        entity_slug = data.get("slug")
+        entity_name = data.get("name")
+
+        # Extract nested video list
+        artist_videos_data = data.get("artist_videos", {})
+        total_videos = artist_videos_data.get("total_videos", 0)
+        videos_raw = artist_videos_data.get("videos", [])
+
+        # If entity name is null, try to extract from first video's artist
+        if not entity_name and videos_raw:
+            first_video = videos_raw[0]
+            artists = first_video.get("artists", [])
+            if artists:
+                entity_name = artists[0].get("name")
+
+        # Final fallback to slug if still no name
+        if not entity_name:
+            entity_name = entity_slug
+
+        # Parse videos into models
+        videos = [IMVDbEntityVideo.model_validate(v) for v in videos_raw]
+
+        # Calculate pagination
+        total_pages = (total_videos + per_page - 1) // per_page if per_page > 0 else 1
+        has_more = page < total_pages
+
+        return IMVDbEntityVideosPage(
+            entity_id=entity_id,
+            entity_slug=entity_slug,
+            entity_name=entity_name,
+            total_videos=total_videos,
+            current_page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            has_more=has_more,
+            videos=videos,
         )
 
     @staticmethod

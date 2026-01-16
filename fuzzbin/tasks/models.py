@@ -17,6 +17,7 @@ class JobType(str, Enum):
     IMPORT_NFO = "import_nfo"
     IMPORT_SPOTIFY = "import_spotify"
     IMPORT_SPOTIFY_BATCH = "import_spotify_batch"  # Enhanced Spotify import (selected tracks)
+    IMPORT_IMVDB_ARTIST = "import_imvdb_artist"  # Artist videos import from IMVDb
     IMPORT_ADD_SINGLE = "import_add_single"
     IMPORT_DOWNLOAD = "import_download"  # Download video from YouTube
     IMPORT_ORGANIZE = "import_organize"  # Organize video file to library structure

@@ -12,6 +12,7 @@ from ..common.string_utils import normalize_for_matching
 from ..parsers.imvdb_models import (
     IMVDbEntity,
     IMVDbEntitySearchResponse,
+    IMVDbEntityVideosPage,
     IMVDbVideo,
     IMVDbVideoSearchResult,
 )
@@ -332,6 +333,69 @@ class IMVDbClient(RateLimitedAPIClient):
         response = await self.get(f"/entity/{entity_id}", params=params)
         response.raise_for_status()
         return IMVDbParser.parse_entity(response.json())
+
+    async def get_entity_videos(
+        self,
+        entity_id: int,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> IMVDbEntityVideosPage:
+        """
+        Get paginated artist videos for an entity.
+
+        This method retrieves a specific page of videos for an artist, supporting
+        lazy loading in the frontend. The API returns videos in the order they
+        appear on IMVDb (typically by release year descending).
+
+        Args:
+            entity_id: IMVDb entity ID
+            page: Page number (1-indexed, default: 1)
+            per_page: Results per page (default: 50, max varies by API)
+
+        Returns:
+            IMVDbEntityVideosPage containing:
+            - entity_id: The entity ID
+            - entity_slug: Entity URL slug
+            - entity_name: Entity display name
+            - total_videos: Total number of artist videos
+            - current_page: Current page number
+            - per_page: Results per page
+            - total_pages: Total number of pages
+            - has_more: Whether more pages are available
+            - videos: List of IMVDbEntityVideo objects for this page
+
+        Raises:
+            httpx.HTTPStatusError: If the API returns an error status
+
+        Example:
+            >>> # Fetch first page
+            >>> page1 = await client.get_entity_videos(838673, page=1)
+            >>> print(f"Showing {len(page1.videos)} of {page1.total_videos} videos")
+            >>>
+            >>> # Fetch remaining pages if needed
+            >>> if page1.has_more:
+            ...     page2 = await client.get_entity_videos(838673, page=2)
+        """
+        params = {
+            "include": "artist_videos",
+            "page": page,
+            "per_page": per_page,
+        }
+
+        self.logger.info(
+            "imvdb_get_entity_videos",
+            entity_id=entity_id,
+            page=page,
+            per_page=per_page,
+        )
+
+        response = await self.get(f"/entity/{entity_id}", params=params)
+        response.raise_for_status()
+        return IMVDbParser.parse_entity_videos_page(
+            response.json(),
+            page=page,
+            per_page=per_page,
+        )
 
     async def search_video_by_artist_title(
         self,

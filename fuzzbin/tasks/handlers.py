@@ -3555,6 +3555,274 @@ async def handle_sync_decade_tags(job: Job) -> None:
     )
 
 
+async def handle_imvdb_artist_import(job: Job) -> None:
+    """Handle IMVDb artist batch import job.
+
+    This handler imports selected videos from an IMVDb artist with
+    metadata overrides and optional auto-download capability.
+
+    Job metadata parameters:
+        entity_id (int, required): IMVDb entity (artist) ID
+        entity_name (str, optional): Artist name for logging
+        videos (list[dict], required): Selected videos with metadata
+        initial_status (str, optional): Status for new videos (default: "discovered")
+        auto_download (bool, optional): Queue download jobs for videos with YouTube IDs
+
+    Job result on completion:
+        imported: Number of videos imported
+        download_jobs: Number of download jobs queued
+        total_videos: Total videos selected for import
+
+    Args:
+        job: Job instance with metadata containing import parameters
+
+    Raises:
+        ValueError: If required parameters are missing
+    """
+    import fuzzbin
+
+    # Extract parameters
+    entity_id = job.metadata.get("entity_id")
+    entity_name = job.metadata.get("entity_name", "Unknown Artist")
+    videos = job.metadata.get("videos")
+
+    if not entity_id:
+        raise ValueError("Missing required parameter: entity_id")
+    if not videos or not isinstance(videos, list):
+        raise ValueError("Missing or invalid required parameter: videos")
+
+    initial_status = job.metadata.get("initial_status", "discovered")
+    auto_download = job.metadata.get("auto_download", False)
+
+    logger.info(
+        "imvdb_artist_import_job_starting",
+        job_id=job.id,
+        entity_id=entity_id,
+        entity_name=entity_name,
+        video_count=len(videos),
+        initial_status=initial_status,
+        auto_download=auto_download,
+    )
+
+    job.update_progress(0, len(videos), f"Starting import for {entity_name}...")
+
+    # Get repository
+    repository = await fuzzbin.get_repository()
+
+    # Import each video
+    imported_count = 0
+    download_jobs = []
+
+    for idx, video_data in enumerate(videos):
+        if job.status == JobStatus.CANCELLED:
+            logger.info("imvdb_artist_import_cancelled", job_id=job.id)
+            return
+
+        imvdb_id = video_data.get("imvdb_id")
+        metadata = video_data.get("metadata", {})
+        imvdb_url = video_data.get("imvdb_url")
+        youtube_id = video_data.get("youtube_id")
+        thumbnail_url = video_data.get("thumbnail_url")
+
+        video_title = metadata.get("title", "Unknown")
+        video_artist = metadata.get("artist", entity_name)
+
+        job.update_progress(
+            idx,
+            len(videos),
+            f"Importing {video_artist} - {video_title}...",
+        )
+
+        try:
+            logger.debug(
+                "imvdb_artist_import_video_payload",
+                imvdb_id=imvdb_id,
+                title=video_title,
+                artist=video_artist,
+                imvdb_url=imvdb_url,
+                youtube_id=youtube_id,
+                thumbnail_url=thumbnail_url,
+                metadata=metadata,
+            )
+
+            # Prepare video data
+            db_video_data = {
+                "title": video_title,
+                "artist": video_artist,
+                "album": metadata.get("album"),
+                "year": metadata.get("year"),
+                "studio": metadata.get("label"),
+                "director": metadata.get("directors"),
+                "genre": metadata.get("genre"),
+                "status": initial_status,
+                "download_source": "imvdb",
+            }
+
+            # Add external IDs if available
+            if imvdb_id:
+                db_video_data["imvdb_video_id"] = str(imvdb_id)
+            if imvdb_url:
+                db_video_data["imvdb_url"] = imvdb_url
+            if youtube_id:
+                db_video_data["youtube_id"] = youtube_id
+
+            # Check if video already exists by IMVDb ID or YouTube ID
+            existing_video = None
+            if imvdb_id:
+                try:
+                    existing_video = await repository.get_video_by_imvdb_id(
+                        str(imvdb_id), include_deleted=False
+                    )
+                except Exception:
+                    pass
+
+            if not existing_video and youtube_id:
+                try:
+                    existing_video = await repository.get_video_by_youtube_id(
+                        youtube_id, include_deleted=False
+                    )
+                except Exception:
+                    pass
+
+            if existing_video:
+                # Update existing video
+                video_id = existing_video.get("id")
+                await repository.update_video(video_id, **db_video_data)
+                logger.info(
+                    "imvdb_artist_import_video_updated",
+                    video_id=video_id,
+                    imvdb_id=imvdb_id,
+                    title=video_title,
+                    artist=video_artist,
+                )
+            else:
+                # Create new video
+                video_id = await repository.create_video(**db_video_data)
+                logger.info(
+                    "imvdb_artist_import_video_created",
+                    video_id=video_id,
+                    imvdb_id=imvdb_id,
+                    title=video_title,
+                    artist=video_artist,
+                )
+
+            # Link primary artist to video
+            if video_artist:
+                primary_artist_id = await repository.upsert_artist(name=video_artist)
+                await repository.link_video_artist(
+                    video_id=video_id,
+                    artist_id=primary_artist_id,
+                    role="primary",
+                    position=0,
+                )
+
+            # Handle featured artists if present
+            featured_artists_str = metadata.get("featured_artists")
+            if featured_artists_str:
+                featured_artists = [
+                    fa.strip() for fa in featured_artists_str.split(",") if fa.strip()
+                ]
+
+                for position, featured_artist in enumerate(featured_artists, start=1):
+                    artist_id = await repository.upsert_artist(name=featured_artist)
+                    await repository.link_video_artist(
+                        video_id=video_id,
+                        artist_id=artist_id,
+                        role="featured",
+                        position=position,
+                    )
+
+            imported_count += 1
+
+            # Download thumbnail if URL provided
+            if thumbnail_url and video_id:
+                try:
+                    config = fuzzbin.get_config()
+                    from fuzzbin.core.file_manager import FileManager
+                    from fuzzbin.common.http_client import AsyncHTTPClient
+
+                    file_manager = FileManager.from_config(
+                        config.trash,
+                        library_dir=config.library_dir or Path.cwd(),
+                        config_dir=config.config_dir or Path.cwd() / "config",
+                    )
+
+                    async with AsyncHTTPClient(config.http) as http_client:
+                        response = await http_client.get(thumbnail_url)
+                        response.raise_for_status()
+
+                        thumbnail_path = file_manager.get_thumbnail_path(video_id)
+                        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        with open(thumbnail_path, "wb") as f:
+                            f.write(response.content)
+
+                        logger.info(
+                            "imvdb_artist_import_thumbnail_downloaded",
+                            video_id=video_id,
+                            thumbnail_url=thumbnail_url,
+                            thumbnail_path=str(thumbnail_path),
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "imvdb_artist_import_thumbnail_download_failed",
+                        video_id=video_id,
+                        thumbnail_url=thumbnail_url,
+                        error=str(e),
+                    )
+
+            # Queue download job if auto_download enabled and YouTube ID available
+            if auto_download and youtube_id:
+                download_job = Job(
+                    type=JobType.DOWNLOAD_YOUTUBE,
+                    priority=JobPriority.NORMAL,
+                    metadata={
+                        "video_ids": [video_id],
+                        "youtube_url": f"https://youtube.com/watch?v={youtube_id}",
+                    },
+                )
+                download_jobs.append(download_job)
+
+        except Exception as e:
+            logger.error(
+                "imvdb_artist_import_video_failed",
+                imvdb_id=imvdb_id,
+                title=video_title,
+                artist=video_artist,
+                error=str(e),
+            )
+            # Continue with next video on error
+
+    # Submit download jobs if any
+    if download_jobs:
+        queue = get_job_queue()
+        for dj in download_jobs:
+            await queue.submit(dj)
+        logger.info(
+            "imvdb_artist_import_downloads_queued",
+            job_id=job.id,
+            download_job_count=len(download_jobs),
+        )
+
+    # Mark completed
+    job.mark_completed(
+        {
+            "imported": imported_count,
+            "download_jobs": len(download_jobs),
+            "total_videos": len(videos),
+        }
+    )
+
+    logger.info(
+        "imvdb_artist_import_job_completed",
+        job_id=job.id,
+        entity_id=entity_id,
+        entity_name=entity_name,
+        imported=imported_count,
+        download_jobs=len(download_jobs),
+    )
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -3566,6 +3834,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.IMPORT_NFO, handle_nfo_import)
     queue.register_handler(JobType.IMPORT_SPOTIFY, handle_spotify_import)
     queue.register_handler(JobType.IMPORT_SPOTIFY_BATCH, handle_spotify_batch_import)
+    queue.register_handler(JobType.IMPORT_IMVDB_ARTIST, handle_imvdb_artist_import)
     queue.register_handler(JobType.DOWNLOAD_YOUTUBE, handle_youtube_download)
     queue.register_handler(JobType.FILE_ORGANIZE, handle_file_organize)
     queue.register_handler(JobType.FILE_DUPLICATE_RESOLVE, handle_duplicate_resolution)
@@ -3590,6 +3859,7 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.IMPORT_NFO.value,
             JobType.IMPORT_SPOTIFY.value,
             JobType.IMPORT_SPOTIFY_BATCH.value,
+            JobType.IMPORT_IMVDB_ARTIST.value,
             JobType.IMPORT_ADD_SINGLE.value,
             JobType.DOWNLOAD_YOUTUBE.value,
             JobType.FILE_ORGANIZE.value,

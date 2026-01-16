@@ -340,3 +340,25 @@ class IMVDbEntitySearchResponse(BaseModel):
         "extra": "ignore",
         "validate_assignment": True,
     }
+
+
+class IMVDbEntityVideosPage(BaseModel):
+    """Model for paginated entity artist videos response.
+
+    Used for lazy-loading artist videos in the artist import workflow.
+    """
+
+    entity_id: int = Field(description="IMVDb entity ID")
+    entity_slug: Optional[str] = Field(default=None, description="Entity URL slug")
+    entity_name: Optional[str] = Field(default=None, description="Entity display name")
+    total_videos: int = Field(description="Total number of artist videos")
+    current_page: int = Field(description="Current page number (1-indexed)")
+    per_page: int = Field(description="Results per page")
+    total_pages: int = Field(description="Total number of pages")
+    has_more: bool = Field(description="Whether more pages are available")
+    videos: List[IMVDbEntityVideo] = Field(default_factory=list, description="Videos for this page")
+
+    model_config = {
+        "extra": "ignore",
+        "validate_assignment": True,
+    }

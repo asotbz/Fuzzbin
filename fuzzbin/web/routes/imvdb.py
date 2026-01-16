@@ -13,6 +13,7 @@ from ..dependencies import get_imvdb_client
 from ..schemas.imvdb import (
     IMVDbEntityDetail,
     IMVDbEntitySearchResponse,
+    IMVDbEntityVideosPageResponse,
     IMVDbVideoDetail,
     IMVDbVideoSearchResponse,
 )
@@ -304,4 +305,65 @@ async def get_entity(
         featured_video_count=entity.featured_video_count,
         artist_videos=artist_videos,
         featured_videos=featured_videos,
+    )
+
+
+@router.get(
+    "/entities/{entity_id}/videos",
+    response_model=IMVDbEntityVideosPageResponse,
+    summary="Get paginated artist videos",
+    response_description="Paginated list of videos for the artist",
+)
+async def get_entity_videos(
+    entity_id: int,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(50, ge=1, le=100, description="Results per page"),
+    client: IMVDbClient = Depends(get_imvdb_client),
+) -> IMVDbEntityVideosPageResponse:
+    """
+    Get paginated artist videos for an IMVDb entity.
+
+    Supports lazy loading for the artist import workflow. Returns videos
+    in the order they appear on IMVDb (typically by release year descending).
+
+    Use `has_more` to determine if additional pages are available.
+
+    **Rate Limited:** Shares rate limit with other IMVDb endpoints.
+
+    **Cached:** Results are cached for 30 minutes.
+    """
+    logger.info("imvdb_get_entity_videos", entity_id=entity_id, page=page, per_page=per_page)
+
+    result = await client.get_entity_videos(entity_id, page=page, per_page=per_page)
+
+    return IMVDbEntityVideosPageResponse(
+        entity_id=result.entity_id,
+        entity_slug=result.entity_slug,
+        entity_name=result.entity_name,
+        total_videos=result.total_videos,
+        current_page=result.current_page,
+        per_page=result.per_page,
+        total_pages=result.total_pages,
+        has_more=result.has_more,
+        videos=[
+            {
+                "id": v.id,
+                "production_status": v.production_status,
+                "song_title": v.song_title,
+                "song_slug": v.song_slug,
+                "url": v.url,
+                "multiple_versions": v.multiple_versions,
+                "version_name": v.version_name,
+                "version_number": v.version_number,
+                "is_imvdb_pick": v.is_imvdb_pick,
+                "aspect_ratio": v.aspect_ratio,
+                "year": v.year,
+                "verified_credits": v.verified_credits,
+                "artists": [
+                    {"name": a.name, "slug": a.slug, "url": a.url} for a in (v.artists or [])
+                ],
+                "image": v.image,
+            }
+            for v in result.videos
+        ],
     )

@@ -178,6 +178,7 @@ class MusicBrainzEnrichmentService:
                     recording_title=recording.title,
                     first_release_date=recording.first_release_date,
                     recordings_count=len(search_response.recordings),
+                    releases_count=len(recording.releases or []),
                 )
 
                 return await self._build_result_from_recording(
@@ -244,11 +245,25 @@ class MusicBrainzEnrichmentService:
                     )
                     return self._empty_result()
 
+                # Filter recordings to studio audio tracks with official releases
+                # before fuzzy matching to avoid matching videos/bootlegs/live recordings
+                filtered_recordings = self._filter_studio_recordings(search_response.recordings)
+
+                if not filtered_recordings:
+                    logger.warning(
+                        "musicbrainz_enrichment_search_no_studio_recordings",
+                        artist=artist,
+                        title=normalized_title,
+                        total_recordings=len(search_response.recordings),
+                    )
+                    return self._empty_result()
+
                 # Find best match using fuzzy matching on title
-                best_match = None
+                # Track all recordings with max score to break ties by release quality
+                best_matches = []
                 best_score = 0.0
 
-                for recording in search_response.recordings:
+                for recording in filtered_recordings:
                     score = fuzz.token_sort_ratio(
                         normalized_title.lower(),
                         recording.title.lower(),
@@ -267,7 +282,23 @@ class MusicBrainzEnrichmentService:
 
                     if combined_score > best_score:
                         best_score = combined_score
-                        best_match = recording
+                        best_matches = [recording]
+                    elif combined_score == best_score:
+                        best_matches.append(recording)
+
+                # If multiple recordings have same score, prefer by release quality
+                best_match = None
+                if len(best_matches) > 1:
+                    logger.debug(
+                        "musicbrainz_enrichment_tie_breaking",
+                        title=normalized_title,
+                        tied_count=len(best_matches),
+                        score=best_score,
+                    )
+                    # Prefer recordings with Album releases over EP/Single only
+                    best_match = self._prefer_album_recordings(best_matches)
+                elif best_matches:
+                    best_match = best_matches[0]
 
                 if not best_match or best_score < self.match_threshold:
                     logger.info(
@@ -305,27 +336,184 @@ class MusicBrainzEnrichmentService:
             )
             return self._empty_result()
 
+    def _prefer_album_recordings(
+        self, recordings: List[MusicBrainzRecording]
+    ) -> MusicBrainzRecording:
+        """Prefer recordings with suitable Album releases over EP/Single/Compilation-only recordings.
+
+        When multiple recordings have the same fuzzy match score, this breaks
+        ties by preferring recordings that have at least one suitable Album release
+        (excluding Compilations, Live, Remix, DJ-mix secondary types).
+
+        Args:
+            recordings: List of recordings with same match score
+
+        Returns:
+            Recording with best release type (suitable Album preferred)
+        """
+        # Types to skip (same as _select_best_release)
+        skip_types = {"Compilation", "Live", "Remix", "DJ-mix"}
+
+        # First pass: prefer recordings with suitable Album releases
+        suitable_album_recordings = []
+        for rec in recordings:
+            if rec.releases:
+                has_suitable_album = any(
+                    release.release_group
+                    and release.release_group.primary_type == "Album"
+                    and release.release_group.primary_type not in skip_types
+                    and not any(
+                        st in skip_types for st in (release.release_group.secondary_types or [])
+                    )
+                    for release in rec.releases
+                )
+                if has_suitable_album:
+                    suitable_album_recordings.append(rec)
+
+        if suitable_album_recordings:
+            logger.debug(
+                "musicbrainz_tie_break_suitable_album_preferred",
+                suitable_album_count=len(suitable_album_recordings),
+                total_count=len(recordings),
+            )
+            # Among suitable album recordings, prefer earliest release
+            return self._select_best_recording(suitable_album_recordings)
+
+        # No suitable albums found, fall back to standard selection (earliest)
+        logger.debug(
+            "musicbrainz_tie_break_no_suitable_albums",
+            total_count=len(recordings),
+        )
+        return self._select_best_recording(recordings)
+
+    def _filter_studio_recordings(
+        self, recordings: List[MusicBrainzRecording]
+    ) -> List[MusicBrainzRecording]:
+        """Filter recordings to studio audio tracks with official releases.
+
+        Filters out:
+        - Video recordings (music videos)
+        - Live recordings (by disambiguation field)
+        - Recordings with only bootleg/promotional releases
+
+        Args:
+            recordings: List of recordings to filter
+
+        Returns:
+            Filtered list of studio audio recordings
+        """
+        logger.debug(
+            "musicbrainz_recording_filter_start",
+            total_recordings=len(recordings),
+        )
+
+        studio_recordings = []
+        for rec in recordings:
+            # Skip video recordings (music videos, not audio tracks)
+            if rec.video is True:
+                logger.debug(
+                    "musicbrainz_recording_filtered",
+                    recording_id=rec.id,
+                    title=rec.title,
+                    video=rec.video,
+                    reason="video_recording",
+                )
+                continue
+
+            # Skip live recordings (check disambiguation field)
+            disambiguation_lower = (rec.disambiguation or "").lower()
+            is_live = "live" in disambiguation_lower
+
+            if is_live:
+                logger.debug(
+                    "musicbrainz_recording_filtered",
+                    recording_id=rec.id,
+                    title=rec.title,
+                    disambiguation=rec.disambiguation,
+                    reason="live_recording",
+                )
+                continue
+
+            # Skip recordings that only have bootleg/promotional releases
+            if rec.releases:
+                has_official_release = any(release.status == "Official" for release in rec.releases)
+                if not has_official_release:
+                    logger.debug(
+                        "musicbrainz_recording_filtered",
+                        recording_id=rec.id,
+                        title=rec.title,
+                        release_statuses=[r.status for r in rec.releases],
+                        reason="no_official_releases",
+                    )
+                    continue
+
+            studio_recordings.append(rec)
+
+        logger.debug(
+            "musicbrainz_recording_filter_complete",
+            total_input=len(recordings),
+            total_output=len(studio_recordings),
+            filtered_count=len(recordings) - len(studio_recordings),
+        )
+
+        return studio_recordings
+
     def _select_best_recording(
         self, recordings: List[MusicBrainzRecording]
     ) -> MusicBrainzRecording:
-        """Select the best recording from a list (earliest first-release-date).
+        """Select the best recording from a list (earliest studio audio recording).
+
+        Filters out video recordings, live recordings, and bootleg-only recordings,
+        then selects the earliest by first-release-date.
 
         Args:
             recordings: List of recordings
 
         Returns:
-            Best recording (earliest release date)
+            Best recording (earliest studio audio recording)
         """
-        if len(recordings) == 1:
-            return recordings[0]
+        # Filter to studio recordings
+        studio_recordings = self._filter_studio_recordings(recordings)
+
+        # If all recordings filtered out, fall back to original list
+        if not studio_recordings:
+            logger.warning(
+                "musicbrainz_no_studio_recordings_fallback",
+                total_recordings=len(recordings),
+                fallback_recording_id=recordings[0].id,
+            )
+            studio_recordings = recordings
+
+        if len(studio_recordings) == 1:
+            selected = studio_recordings[0]
+            logger.info(
+                "musicbrainz_recording_selected",
+                recording_id=selected.id,
+                title=selected.title,
+                disambiguation=selected.disambiguation,
+                first_release_date=selected.first_release_date,
+                total_candidates=len(studio_recordings),
+            )
+            return selected
 
         # Sort by first-release-date, earliest first
         # Recordings without dates go to the end
         def sort_key(rec: MusicBrainzRecording) -> str:
             return rec.first_release_date or "9999-99-99"
 
-        sorted_recordings = sorted(recordings, key=sort_key)
-        return sorted_recordings[0]
+        sorted_recordings = sorted(studio_recordings, key=sort_key)
+        selected = sorted_recordings[0]
+
+        logger.info(
+            "musicbrainz_recording_selected",
+            recording_id=selected.id,
+            title=selected.title,
+            disambiguation=selected.disambiguation,
+            first_release_date=selected.first_release_date,
+            total_candidates=len(studio_recordings),
+        )
+
+        return selected
 
     def _select_best_release(
         self, releases: List[MusicBrainzRelease]
@@ -347,12 +535,45 @@ class MusicBrainzEnrichmentService:
         if not releases:
             return None
 
+        logger.debug(
+            "musicbrainz_release_selection_start",
+            total_releases=len(releases),
+            release_titles=[r.title for r in releases[:10]],  # First 10 for brevity
+        )
+
         # Filter and score releases
         scored_releases: List[tuple[int, str, MusicBrainzRelease]] = []
 
         for release in releases:
             score = 0
             date = release.date or "9999-99-99"
+            skip_reason = None
+
+            # Title-based filtering for live albums (fallback when MusicBrainz metadata is incomplete)
+            # Common patterns: dates in title, "Live at", "Live in", venue names
+            title_lower = release.title.lower()
+            live_patterns = [
+                "live at",
+                "live in",
+                "live from",
+                ": live",
+                "(live)",
+                "[live]",
+            ]
+            # Check for date patterns like "1993-10-13" or "1993.10.13"
+            has_date_pattern = any(char in release.title for char in ["-", ".", "/"]) and any(
+                year in release.title for year in [str(y) for y in range(1950, 2030)]
+            )
+
+            if any(pattern in title_lower for pattern in live_patterns) or has_date_pattern:
+                skip_reason = "live_title_pattern"
+                logger.debug(
+                    "musicbrainz_release_skipped",
+                    release_id=release.id,
+                    title=release.title,
+                    reason=skip_reason,
+                )
+                continue
 
             # Prefer Official status
             if release.status == "Official":
@@ -366,7 +587,29 @@ class MusicBrainzEnrichmentService:
                 # Skip compilations, live albums, remixes (but NOT soundtracks - many
                 # classic songs were released on movie soundtracks like Purple Rain)
                 skip_types = {"Compilation", "Live", "Remix", "DJ-mix"}
+
+                # Check both primary type and secondary types for live/compilation/etc
+                if primary_type in skip_types:
+                    skip_reason = f"primary_type_{primary_type}"
+                    logger.debug(
+                        "musicbrainz_release_skipped",
+                        release_id=release.id,
+                        title=release.title,
+                        primary_type=primary_type,
+                        reason=skip_reason,
+                    )
+                    continue
                 if any(st in skip_types for st in secondary_types):
+                    skip_reason = (
+                        f"secondary_type_{[st for st in secondary_types if st in skip_types]}"
+                    )
+                    logger.debug(
+                        "musicbrainz_release_skipped",
+                        release_id=release.id,
+                        title=release.title,
+                        secondary_types=secondary_types,
+                        reason=skip_reason,
+                    )
                     continue
 
                 # Prefer Albums over Singles/EPs
@@ -377,30 +620,65 @@ class MusicBrainzEnrichmentService:
                 elif primary_type == "Single":
                     score += 10
 
+                logger.debug(
+                    "musicbrainz_release_scored",
+                    release_id=release.id,
+                    title=release.title,
+                    status=release.status,
+                    primary_type=primary_type,
+                    secondary_types=secondary_types,
+                    date=date,
+                    score=score,
+                )
+
             scored_releases.append((score, date, release))
 
         if not scored_releases:
             # No suitable releases found, return first available
+            logger.warning(
+                "musicbrainz_no_suitable_releases",
+                total_releases=len(releases),
+                fallback_title=releases[0].title if releases else None,
+            )
             return releases[0] if releases else None
 
         # Sort by score descending, then date ascending
         scored_releases.sort(key=lambda x: (-x[0], x[1]))
-        return scored_releases[0][2]
+        selected = scored_releases[0][2]
+
+        logger.info(
+            "musicbrainz_release_selected",
+            release_id=selected.id,
+            title=selected.title,
+            status=selected.status,
+            primary_type=selected.release_group.primary_type if selected.release_group else None,
+            secondary_types=selected.release_group.secondary_types
+            if selected.release_group
+            else None,
+            date=selected.date,
+            score=scored_releases[0][0],
+            total_candidates=len(scored_releases),
+        )
+
+        return selected
 
     def _extract_top_genre(self, recording: MusicBrainzRecording) -> Optional[str]:
-        """Extract the top genre tag from a recording.
+        """Extract the top genre tag from a recording with count >= 2.
+
+        Only includes tags with at least 2 votes to filter out noise.
 
         Args:
             recording: MusicBrainz recording
 
         Returns:
-            Top genre tag by vote count, or None
+            Top genre tag by vote count (with count >= 2), or None
         """
         if not recording.tags:
             return None
 
-        # Sort tags by count descending
-        sorted_tags = sorted(recording.tags, key=lambda t: t.count, reverse=True)
+        # Filter by count >= 2 and sort by vote count
+        filtered_tags = [t for t in recording.tags if t.count >= 2]
+        sorted_tags = sorted(filtered_tags, key=lambda t: t.count, reverse=True)
         return sorted_tags[0].name if sorted_tags else None
 
     def _extract_all_genres(self, recording: MusicBrainzRecording) -> List[str]:

@@ -524,3 +524,175 @@ class YouTubeMetadataResponse(BaseModel):
     channel: Optional[str] = Field(default=None, description="Channel name")
     title: Optional[str] = Field(default=None, description="Video title")
     error: Optional[str] = Field(default=None, description="Error message if unavailable")
+
+
+# ==================== Artist Import Schemas ====================
+
+
+class ArtistSearchRequest(BaseModel):
+    """Request to search for artists on IMVDb."""
+
+    artist_name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Artist name to search for",
+    )
+    per_page: int = Field(
+        default=25,
+        ge=1,
+        le=100,
+        description="Max results to return",
+    )
+
+
+class ArtistSearchResultItem(BaseModel):
+    """Individual artist in search results."""
+
+    id: int = Field(description="IMVDb entity ID")
+    name: Optional[str] = Field(default=None, description="Artist name")
+    slug: Optional[str] = Field(default=None, description="URL-friendly slug")
+    url: Optional[str] = Field(default=None, description="IMVDb profile URL")
+    image: Optional[str] = Field(default=None, description="Profile image URL")
+    discogs_id: Optional[int] = Field(default=None, description="Linked Discogs ID")
+    artist_video_count: int = Field(
+        default=0, description="Accurate number of videos from entity details"
+    )
+    featured_video_count: int = Field(default=0, description="Number of videos as featured")
+    sample_tracks: list[str] = Field(
+        default_factory=list,
+        description="First 3 track titles from artist's videos",
+        max_length=3,
+    )
+
+    model_config = {"extra": "ignore"}
+
+
+class ArtistSearchResponse(BaseModel):
+    """Response from artist search."""
+
+    artist_name: str = Field(description="Search query")
+    total_results: int = Field(description="Total matching results")
+    results: list[ArtistSearchResultItem] = Field(
+        default_factory=list,
+        description="Artists with video_count > 0",
+    )
+
+
+class ArtistVideoPreviewItem(BaseModel):
+    """Single video in artist preview (for selection grid)."""
+
+    id: int = Field(description="IMVDb video ID")
+    song_title: Optional[str] = Field(default=None, description="Song title")
+    year: Optional[int] = Field(default=None, description="Release year")
+    url: Optional[str] = Field(default=None, description="IMVDb video URL")
+    thumbnail_url: Optional[str] = Field(default=None, description="Thumbnail image URL")
+    production_status: Optional[str] = Field(default=None, description="Production status code")
+    version_name: Optional[str] = Field(default=None, description="Version name if multiple")
+    already_exists: bool = Field(default=False, description="Whether video is already in library")
+    existing_video_id: Optional[int] = Field(default=None, description="Existing video ID if dupe")
+
+    model_config = {"extra": "ignore"}
+
+
+class ArtistVideosPreviewResponse(BaseModel):
+    """Paginated preview of artist videos for selection grid."""
+
+    entity_id: int = Field(description="IMVDb entity ID")
+    entity_name: Optional[str] = Field(default=None, description="Artist name")
+    entity_slug: Optional[str] = Field(default=None, description="Artist slug")
+    total_videos: int = Field(description="Total artist videos on IMVDb")
+    current_page: int = Field(description="Current page number (1-indexed)")
+    per_page: int = Field(description="Results per page")
+    total_pages: int = Field(description="Total number of pages")
+    has_more: bool = Field(description="Whether more pages are available")
+    videos: list[ArtistVideoPreviewItem] = Field(
+        default_factory=list,
+        description="Videos for this page",
+    )
+    existing_count: int = Field(default=0, description="Videos already in library")
+    new_count: int = Field(default=0, description="Videos not yet in library")
+
+
+class ArtistVideoEnrichRequest(BaseModel):
+    """Request for single IMVDb video enrichment via MusicBrainz."""
+
+    imvdb_id: int = Field(description="IMVDb video ID")
+    artist: str = Field(min_length=1, max_length=200, description="Artist name")
+    track_title: str = Field(min_length=1, max_length=200, description="Song title")
+    year: Optional[int] = Field(default=None, description="Release year from IMVDb")
+    thumbnail_url: Optional[str] = Field(default=None, description="IMVDb thumbnail URL")
+
+
+class ArtistVideoEnrichResponse(BaseModel):
+    """Enrichment response for a single IMVDb video."""
+
+    imvdb_id: int = Field(description="IMVDb video ID")
+
+    # Source data from IMVDb video detail (fetched during enrichment)
+    directors: Optional[str] = Field(default=None, description="Directors from IMVDb")
+    featured_artists: Optional[str] = Field(default=None, description="Featured artists from IMVDb")
+    youtube_ids: list[str] = Field(
+        default_factory=list,
+        description="YouTube video IDs from IMVDb sources",
+    )
+    imvdb_url: Optional[str] = Field(default=None, description="Full IMVDb video URL")
+
+    # MusicBrainz enrichment
+    musicbrainz: MusicBrainzEnrichmentData = Field(description="MusicBrainz enrichment data")
+
+    # Resolved final values
+    title: str = Field(description="Resolved track title")
+    artist: str = Field(description="Resolved artist name")
+    album: Optional[str] = Field(default=None, description="Album from MusicBrainz")
+    year: Optional[int] = Field(default=None, description="Resolved release year")
+    label: Optional[str] = Field(default=None, description="Record label from MusicBrainz")
+    genre: Optional[str] = Field(default=None, description="Classified genre")
+    thumbnail_url: Optional[str] = Field(default=None, description="Thumbnail URL")
+
+    # Status
+    enrichment_status: str = Field(
+        default="success",
+        description="Enrichment status: 'success', 'partial', or 'not_found'",
+    )
+    already_exists: bool = Field(default=False, description="Whether video exists in library")
+    existing_video_id: Optional[int] = Field(default=None, description="Existing video ID if dupe")
+
+
+class SelectedArtistVideoImport(BaseModel):
+    """Single video to import from artist import workflow."""
+
+    imvdb_id: int = Field(description="IMVDb video ID")
+    metadata: dict[str, Any] = Field(
+        description="Video metadata (title, artist, year, album, directors, genre, label)",
+    )
+    imvdb_url: Optional[str] = Field(default=None, description="Full IMVDb video URL")
+    youtube_id: Optional[str] = Field(default=None, description="Selected YouTube video ID")
+    youtube_url: Optional[str] = Field(default=None, description="YouTube URL")
+    thumbnail_url: Optional[str] = Field(default=None, description="Thumbnail image URL")
+
+
+class ArtistBatchImportRequest(BaseModel):
+    """Request to import selected videos from an artist."""
+
+    entity_id: int = Field(description="IMVDb entity ID")
+    entity_name: Optional[str] = Field(default=None, description="Artist name for logging")
+    videos: list[SelectedArtistVideoImport] = Field(description="Selected videos to import")
+    initial_status: str = Field(
+        default="discovered",
+        description="Initial status for created video records",
+        examples=["discovered", "imported"],
+    )
+    auto_download: bool = Field(
+        default=False,
+        description="Automatically queue download jobs for videos with YouTube IDs",
+    )
+
+
+class ArtistBatchImportResponse(BaseModel):
+    """Response after submitting an artist batch import job."""
+
+    job_id: str = Field(description="Background job ID")
+    entity_id: int = Field(description="IMVDb entity ID")
+    video_count: int = Field(description="Number of videos being imported")
+    auto_download: bool = Field(description="Whether auto-download is enabled")
+    status: str = Field(default="pending", description="Initial job status")

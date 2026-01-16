@@ -41,6 +41,15 @@ from fuzzbin.web.schemas.add import (
     AddSearchResultItem,
     AddSearchSkippedSource,
     AddSearchSource,
+    ArtistBatchImportRequest,
+    ArtistBatchImportResponse,
+    ArtistSearchRequest,
+    ArtistSearchResponse,
+    ArtistSearchResultItem,
+    ArtistVideoEnrichRequest,
+    ArtistVideoEnrichResponse,
+    ArtistVideoPreviewItem,
+    ArtistVideosPreviewResponse,
     BatchPreviewItem,
     BatchPreviewRequest,
     BatchPreviewResponse,
@@ -1398,3 +1407,484 @@ async def get_youtube_metadata(
             title=None,
             error=error_msg,
         )
+
+
+# ==================== Artist Import Routes ====================
+
+
+@router.post(
+    "/search/artist",
+    response_model=ArtistSearchResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Search for artists on IMVDb",
+    description="Search for artists by name and return those with videos available.",
+)
+async def search_artists(
+    request: ArtistSearchRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> ArtistSearchResponse:
+    """
+    Search IMVDb for artists by name.
+
+    Returns artists with artist_video_count > 0 to support the artist import workflow.
+    """
+    user_label = current_user.username if current_user else "anonymous"
+    logger.info(
+        "add_artist_search_start",
+        artist_name=request.artist_name,
+        per_page=request.per_page,
+        user=user_label,
+    )
+
+    api_config = _get_api_config("imvdb")
+    if not api_config:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IMVDb API is not configured",
+        )
+
+    try:
+        async with IMVDbClient.from_config(api_config) as imvdb_client:
+            search_result = await imvdb_client.search_entities(
+                artist_name=request.artist_name,
+                page=1,
+                per_page=request.per_page,
+            )
+
+            # Filter to artists with videos (based on initial search result)
+            candidates = [e for e in search_result.results if (e.artist_video_count or 0) > 0]
+
+            # Fetch entity details for each candidate to get accurate counts and sample tracks
+            results_with_videos = []
+            for entity in candidates:
+                try:
+                    # Fetch first page of entity videos to get accurate count and sample tracks
+                    entity_videos = await imvdb_client.get_entity_videos(
+                        entity_id=entity.id,
+                        page=1,
+                        per_page=3,  # Only need first 3 for sample tracks
+                    )
+
+                    # Extract sample track titles (first 3)
+                    sample_tracks = [
+                        video.song_title for video in entity_videos.videos if video.song_title
+                    ][:3]
+
+                    # Use entity_name from videos page (which extracts from first video if needed)
+                    artist_name = entity_videos.entity_name or entity.name or entity.slug
+
+                    results_with_videos.append(
+                        ArtistSearchResultItem(
+                            id=entity.id,
+                            name=artist_name,
+                            slug=entity.slug,
+                            url=entity.url,
+                            image=entity.image,
+                            discogs_id=entity.discogs_id,
+                            artist_video_count=entity_videos.total_videos,  # Accurate count from entity details
+                            featured_video_count=entity.featured_video_count or 0,
+                            sample_tracks=sample_tracks,
+                        )
+                    )
+                except Exception as e:
+                    # If entity fetch fails, log and skip this result
+                    logger.warning(
+                        "add_artist_search_entity_fetch_failed",
+                        entity_id=entity.id,
+                        entity_slug=entity.slug,
+                        error=str(e),
+                    )
+                    continue
+
+        logger.info(
+            "add_artist_search_complete",
+            artist_name=request.artist_name,
+            total_results=search_result.pagination.total_results,
+            results_with_videos=len(results_with_videos),
+        )
+
+        return ArtistSearchResponse(
+            artist_name=request.artist_name,
+            total_results=search_result.pagination.total_results,
+            results=results_with_videos,
+        )
+
+    except Exception as e:
+        logger.error(
+            "add_artist_search_error",
+            artist_name=request.artist_name,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to search IMVDb: {str(e)}",
+        )
+
+
+@router.get(
+    "/artist/preview/{entity_id}",
+    response_model=ArtistVideosPreviewResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Get paginated artist videos for selection",
+    description="Fetch videos for an artist with duplicate detection against existing library.",
+)
+async def preview_artist_videos(
+    entity_id: int,
+    page: int = 1,
+    per_page: int = 50,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)] = None,
+) -> ArtistVideosPreviewResponse:
+    """
+    Get paginated artist videos for the selection grid.
+
+    Checks each video against the existing library for duplicate detection.
+    """
+    user_label = current_user.username if current_user else "anonymous"
+    logger.info(
+        "add_artist_preview_start",
+        entity_id=entity_id,
+        page=page,
+        per_page=per_page,
+        user=user_label,
+    )
+
+    api_config = _get_api_config("imvdb")
+    if not api_config:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IMVDb API is not configured",
+        )
+
+    try:
+        async with IMVDbClient.from_config(api_config) as imvdb_client:
+            videos_page = await imvdb_client.get_entity_videos(
+                entity_id=entity_id,
+                page=page,
+                per_page=per_page,
+            )
+
+        # Check for duplicates against existing library
+        repository = await fuzzbin_module.get_repository()
+
+        preview_items: list[ArtistVideoPreviewItem] = []
+        existing_count = 0
+        new_count = 0
+
+        for v in videos_page.videos:
+            # Extract thumbnail URL
+            thumbnail_url = None
+            image = getattr(v, "image", None)
+            if isinstance(image, dict):
+                thumbnail_url = image.get("o") or image.get("l") or image.get("b")
+
+            # Check for existing video by IMVDb ID
+            already_exists = False
+            existing_video_id = None
+
+            try:
+                existing = await repository.get_video_by_imvdb_id(str(v.id), include_deleted=False)
+                already_exists = True
+                existing_video_id = existing.get("id")
+            except Exception:
+                pass  # Video not found, check by artist + title match
+
+            if not already_exists:
+                # Also check by artist + title match
+                title = v.song_title or ""
+                if title and videos_page.entity_name:
+                    normalized_title = normalize_spotify_title(
+                        title,
+                        remove_version_qualifiers_flag=True,
+                        remove_featured=True,
+                    )
+                    query = repository.query().where_artist(videos_page.entity_name)
+                    results = await query.execute()
+
+                    for result in results:
+                        db_title = result.get("title", "")
+                        db_normalized = normalize_spotify_title(
+                            db_title,
+                            remove_version_qualifiers_flag=True,
+                            remove_featured=True,
+                        )
+                        if db_normalized == normalized_title:
+                            already_exists = True
+                            existing_video_id = result.get("id")
+                            break
+
+            if already_exists:
+                existing_count += 1
+            else:
+                new_count += 1
+
+            preview_items.append(
+                ArtistVideoPreviewItem(
+                    id=v.id,
+                    song_title=v.song_title,
+                    year=v.year,
+                    url=v.url,
+                    thumbnail_url=thumbnail_url,
+                    production_status=v.production_status,
+                    version_name=v.version_name,
+                    already_exists=already_exists,
+                    existing_video_id=existing_video_id,
+                )
+            )
+
+        logger.info(
+            "add_artist_preview_complete",
+            entity_id=entity_id,
+            page=page,
+            videos_on_page=len(preview_items),
+            existing_count=existing_count,
+            new_count=new_count,
+        )
+
+        return ArtistVideosPreviewResponse(
+            entity_id=videos_page.entity_id,
+            entity_name=videos_page.entity_name,
+            entity_slug=videos_page.entity_slug,
+            total_videos=videos_page.total_videos,
+            current_page=videos_page.current_page,
+            per_page=videos_page.per_page,
+            total_pages=videos_page.total_pages,
+            has_more=videos_page.has_more,
+            videos=preview_items,
+            existing_count=existing_count,
+            new_count=new_count,
+        )
+
+    except Exception as e:
+        logger.error(
+            "add_artist_preview_error",
+            entity_id=entity_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch artist videos: {str(e)}",
+        )
+
+
+@router.post(
+    "/enrich/imvdb-video",
+    response_model=ArtistVideoEnrichResponse,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Enrich a single IMVDb video with MusicBrainz data",
+    description="Fetch full video details from IMVDb and enrich with MusicBrainz metadata.",
+)
+async def enrich_imvdb_video(
+    request: ArtistVideoEnrichRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> ArtistVideoEnrichResponse:
+    """
+    Enrich a single IMVDb video with MusicBrainz metadata.
+
+    This endpoint:
+    1. Fetches full video details from IMVDb (directors, sources, featured artists)
+    2. Queries MusicBrainz for album, year, label, and genre
+    3. Returns merged data with enrichment status indicator
+    """
+    user_label = current_user.username if current_user else "anonymous"
+    logger.info(
+        "add_enrich_imvdb_video_start",
+        imvdb_id=request.imvdb_id,
+        artist=request.artist,
+        track_title=request.track_title,
+        user=user_label,
+    )
+
+    api_config = _get_api_config("imvdb")
+    if not api_config:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IMVDb API is not configured",
+        )
+
+    # Fetch full video details from IMVDb
+    directors = None
+    featured_artists = None
+    youtube_ids: list[str] = []
+    imvdb_url = None
+
+    try:
+        async with IMVDbClient.from_config(api_config) as imvdb_client:
+            video = await imvdb_client.get_video(request.imvdb_id)
+
+        imvdb_url = video.url
+
+        # Extract directors
+        if video.directors:
+            directors = ", ".join(d.entity_name for d in video.directors)
+
+        # Extract featured artists
+        if video.featured_artists:
+            featured_artists = ", ".join(a.name for a in video.featured_artists)
+
+        # Extract YouTube IDs from sources
+        if video.sources:
+            for source in video.sources:
+                if source.source_slug == "youtube" and source.source_data:
+                    youtube_ids.append(str(source.source_data))
+
+    except Exception as e:
+        logger.warning(
+            "add_enrich_imvdb_video_fetch_failed",
+            imvdb_id=request.imvdb_id,
+            error=str(e),
+        )
+        # Continue with enrichment even if IMVDb details fail
+
+    # MusicBrainz enrichment
+    mb_config = _get_api_config("musicbrainz")
+    mb_data = MusicBrainzEnrichmentData(
+        match_method="none",
+        confident_match=False,
+    )
+    enrichment_status = "not_found"
+
+    try:
+        mb_service = MusicBrainzEnrichmentService(config=mb_config)
+        mb_result = await mb_service.enrich(
+            artist=request.artist,
+            title=request.track_title,
+            isrc=None,  # No ISRC available from IMVDb
+        )
+
+        if mb_result:
+            mb_data = MusicBrainzEnrichmentData(
+                recording_mbid=mb_result.recording_mbid,
+                release_mbid=mb_result.release_mbid,
+                canonical_title=mb_result.canonical_title,
+                canonical_artist=mb_result.canonical_artist,
+                album=mb_result.album,
+                year=mb_result.year,
+                label=mb_result.label,
+                genre=mb_result.genre,
+                classified_genre=mb_result.classified_genre,
+                all_genres=mb_result.all_genres or [],
+                match_score=mb_result.match_score or 0.0,
+                match_method=mb_result.match_method or "search",
+                confident_match=mb_result.confident_match or False,
+            )
+
+            if mb_result.confident_match:
+                enrichment_status = "success"
+            else:
+                enrichment_status = "partial"
+
+    except Exception as e:
+        logger.warning(
+            "add_enrich_imvdb_video_musicbrainz_failed",
+            imvdb_id=request.imvdb_id,
+            error=str(e),
+        )
+        enrichment_status = "not_found"
+
+    # Resolve final values (MusicBrainz takes priority where available)
+    resolved_title = mb_data.canonical_title or request.track_title
+    resolved_artist = mb_data.canonical_artist or request.artist
+    resolved_year = mb_data.year or request.year
+    resolved_album = mb_data.album
+    resolved_label = mb_data.label
+    resolved_genre = mb_data.classified_genre or mb_data.genre
+
+    # Check for existing video
+    repository = await fuzzbin_module.get_repository()
+    already_exists = False
+    existing_video_id = None
+
+    try:
+        existing = await repository.get_video_by_imvdb_id(
+            str(request.imvdb_id), include_deleted=False
+        )
+        already_exists = True
+        existing_video_id = existing.get("id")
+    except Exception:
+        pass  # Video not found
+
+    logger.info(
+        "add_enrich_imvdb_video_complete",
+        imvdb_id=request.imvdb_id,
+        enrichment_status=enrichment_status,
+        has_directors=bool(directors),
+        youtube_ids_count=len(youtube_ids),
+        already_exists=already_exists,
+    )
+
+    return ArtistVideoEnrichResponse(
+        imvdb_id=request.imvdb_id,
+        directors=directors,
+        featured_artists=featured_artists,
+        youtube_ids=youtube_ids,
+        imvdb_url=imvdb_url,
+        musicbrainz=mb_data,
+        title=resolved_title,
+        artist=resolved_artist,
+        album=resolved_album,
+        year=resolved_year,
+        label=resolved_label,
+        genre=resolved_genre,
+        thumbnail_url=request.thumbnail_url,
+        enrichment_status=enrichment_status,
+        already_exists=already_exists,
+        existing_video_id=existing_video_id,
+    )
+
+
+@router.post(
+    "/artist/import",
+    response_model=ArtistBatchImportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES, 400: COMMON_ERROR_RESPONSES[400]},
+    summary="Import selected videos from an artist",
+    description="Submit a batch import job for selected artist videos.",
+)
+async def submit_artist_import(
+    request: ArtistBatchImportRequest,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> ArtistBatchImportResponse:
+    """
+    Submit a batch import job for selected artist videos.
+
+    Creates video records with provided metadata and optionally queues
+    download jobs for videos with YouTube IDs.
+    """
+    user_label = current_user.username if current_user else "anonymous"
+
+    if not request.videos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one video is required",
+        )
+
+    logger.info(
+        "add_artist_import_job_submitting",
+        entity_id=request.entity_id,
+        entity_name=request.entity_name,
+        video_count=len(request.videos),
+        initial_status=request.initial_status,
+        auto_download=request.auto_download,
+        user=user_label,
+    )
+
+    job = Job(
+        type=JobType.IMPORT_IMVDB_ARTIST,
+        metadata={
+            "entity_id": request.entity_id,
+            "entity_name": request.entity_name,
+            "videos": [v.model_dump() for v in request.videos],
+            "initial_status": request.initial_status,
+            "auto_download": request.auto_download,
+        },
+    )
+
+    queue = get_job_queue()
+    await queue.submit(job)
+
+    return ArtistBatchImportResponse(
+        job_id=job.id,
+        entity_id=request.entity_id,
+        video_count=len(request.videos),
+        auto_download=request.auto_download,
+    )
