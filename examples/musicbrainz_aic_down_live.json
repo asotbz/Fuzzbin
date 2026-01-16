@@ -1,0 +1,1172 @@
+{
+    "length": 346000,
+    "artist-credit": [
+        {
+            "joinphrase": "",
+            "name": "Alice in Chains",
+            "artist": {
+                "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                "type": "Group",
+                "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                "sort-name": "Alice in Chains",
+                "aliases": [
+                    {
+                        "begin": null,
+                        "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                        "sort-name": "Alice and Chains",
+                        "type": "Search hint",
+                        "locale": null,
+                        "ended": false,
+                        "name": "Alice and Chains",
+                        "end": null,
+                        "primary": null
+                    },
+                    {
+                        "type": "Artist name",
+                        "sort-name": "Alice in Chains",
+                        "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                        "begin": null,
+                        "primary": true,
+                        "name": "Alice in Chains",
+                        "end": null,
+                        "ended": false,
+                        "locale": "en"
+                    },
+                    {
+                        "locale": "en",
+                        "ended": true,
+                        "name": "Diamond Lie",
+                        "end": null,
+                        "primary": false,
+                        "begin": null,
+                        "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                        "sort-name": "Diamond Lie",
+                        "type": "Artist name"
+                    }
+                ],
+                "name": "Alice in Chains",
+                "disambiguation": "",
+                "country": "US"
+            }
+        }
+    ],
+    "id": "cab031ca-fb14-470b-9336-528524007ed1",
+    "title": "Down in a Hole",
+    "releases": [
+        {
+            "aliases": [],
+            "title": "MTV Unplugged",
+            "date": "1996-07-29",
+            "disambiguation": "",
+            "quality": "normal",
+            "packaging-id": "f7101ce3-0384-39ce-9fde-fbbd0044d35f",
+            "barcode": "5099748430014",
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "artist-credit": [
+                {
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type": "Group",
+                        "aliases": [
+                            {
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "begin": null,
+                                "primary": null,
+                                "name": "Alice and Chains",
+                                "end": null,
+                                "ended": false,
+                                "locale": null
+                            },
+                            {
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "ended": false,
+                                "locale": "en",
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null
+                            },
+                            {
+                                "begin": null,
+                                "type": "Artist name",
+                                "sort-name": "Diamond Lie",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "ended": true,
+                                "locale": "en",
+                                "primary": false,
+                                "name": "Diamond Lie",
+                                "end": null
+                            }
+                        ],
+                        "name": "Alice in Chains",
+                        "disambiguation": "",
+                        "country": "US"
+                    },
+                    "joinphrase": ""
+                }
+            ],
+            "packaging": "Cardboard/Paper Sleeve",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "country": "NL",
+            "status": "Official",
+            "id": "0cb9ccb0-487b-409b-992e-c41577b9a426",
+            "release-events": [
+                {
+                    "date": "1996-07-29",
+                    "area": {
+                        "iso-3166-1-codes": [
+                            "NL"
+                        ],
+                        "disambiguation": "",
+                        "sort-name": "Netherlands",
+                        "id": "ef1b7cc0-cd26-36f4-8ea0-04d9623786c7",
+                        "name": "Netherlands",
+                        "type": null,
+                        "type-id": null
+                    }
+                }
+            ]
+        },
+        {
+            "quality": "normal",
+            "barcode": "074646770320",
+            "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "artist": {
+                        "country": "US",
+                        "disambiguation": "",
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "begin": null,
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "ended": false,
+                                "locale": null,
+                                "primary": null,
+                                "name": "Alice and Chains",
+                                "end": null
+                            },
+                            {
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "ended": false,
+                                "locale": "en",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "begin": null
+                            },
+                            {
+                                "locale": "en",
+                                "ended": true,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "primary": false,
+                                "begin": null,
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc"
+                            }
+                        ],
+                        "type": "Group",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    },
+                    "name": "Alice in Chains"
+                }
+            ],
+            "packaging": "Jewel Case",
+            "aliases": [],
+            "title": "MTV Unplugged",
+            "date": "1996-07-30",
+            "disambiguation": "",
+            "id": "0e3ef21b-12b7-4fa2-b430-f3579391e41e",
+            "status": "Official",
+            "release-events": [
+                {
+                    "area": {
+                        "type-id": null,
+                        "sort-name": "United States",
+                        "id": "489ce91b-6658-3307-9877-795b68554c98",
+                        "name": "United States",
+                        "type": null,
+                        "disambiguation": "",
+                        "iso-3166-1-codes": [
+                            "US"
+                        ]
+                    },
+                    "date": "1996-07-30"
+                }
+            ],
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "country": "US"
+        },
+        {
+            "country": "CA",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "release-events": [
+                {
+                    "area": {
+                        "iso-3166-1-codes": [
+                            "CA"
+                        ],
+                        "disambiguation": "",
+                        "name": "Canada",
+                        "id": "71bbafaa-e825-3e15-8ca9-017dcad1748b",
+                        "sort-name": "Canada",
+                        "type": null,
+                        "type-id": null
+                    },
+                    "date": "1996-07-30"
+                }
+            ],
+            "id": "8077f4e8-6b51-35ff-affb-be8a8323ed0f",
+            "status": "Official",
+            "disambiguation": "",
+            "date": "1996-07-30",
+            "title": "MTV Unplugged",
+            "aliases": [],
+            "packaging": "Jewel Case",
+            "artist-credit": [
+                {
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "country": "US",
+                        "disambiguation": "",
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "ended": false,
+                                "locale": null,
+                                "primary": null,
+                                "end": null,
+                                "name": "Alice and Chains",
+                                "begin": null,
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+                            },
+                            {
+                                "locale": "en",
+                                "ended": false,
+                                "name": "Alice in Chains",
+                                "end": null,
+                                "primary": true,
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Alice in Chains",
+                                "type": "Artist name"
+                            },
+                            {
+                                "locale": "en",
+                                "ended": true,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "primary": false,
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name"
+                            }
+                        ],
+                        "sort-name": "Alice in Chains",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "type": "Group",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    },
+                    "joinphrase": ""
+                }
+            ],
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "barcode": "074646770320",
+            "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+            "quality": "normal"
+        },
+        {
+            "aliases": [],
+            "disambiguation": "",
+            "date": "1996-08-07",
+            "title": "MTV Unplugged",
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+            "barcode": "4988009806594",
+            "quality": "normal",
+            "packaging": "Jewel Case",
+            "artist-credit": [
+                {
+                    "artist": {
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "type": "Group",
+                        "sort-name": "Alice in Chains",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "disambiguation": "",
+                        "country": "US",
+                        "aliases": [
+                            {
+                                "sort-name": "Alice and Chains",
+                                "type": "Search hint",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "begin": null,
+                                "end": null,
+                                "name": "Alice and Chains",
+                                "primary": null,
+                                "locale": null,
+                                "ended": false
+                            },
+                            {
+                                "locale": "en",
+                                "ended": false,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "primary": true,
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Alice in Chains",
+                                "type": "Artist name"
+                            },
+                            {
+                                "primary": false,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "ended": true,
+                                "locale": "en",
+                                "type": "Artist name",
+                                "sort-name": "Diamond Lie",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null
+                            }
+                        ],
+                        "name": "Alice in Chains"
+                    },
+                    "name": "Alice in Chains",
+                    "joinphrase": ""
+                }
+            ],
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "country": "JP",
+            "id": "743af689-856c-4f72-be8b-6036f64c9615",
+            "status": "Official",
+            "release-events": [
+                {
+                    "date": "1996-08-07",
+                    "area": {
+                        "type": null,
+                        "sort-name": "Japan",
+                        "id": "2db42837-c832-3c27-b4a3-08198f75693c",
+                        "name": "Japan",
+                        "type-id": null,
+                        "iso-3166-1-codes": [
+                            "JP"
+                        ],
+                        "disambiguation": ""
+                    }
+                }
+            ]
+        },
+        {
+            "barcode": "5099748430021",
+            "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "quality": "normal",
+            "packaging": "Jewel Case",
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "aliases": [
+                            {
+                                "begin": null,
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "ended": false,
+                                "locale": null,
+                                "primary": null,
+                                "name": "Alice and Chains",
+                                "end": null
+                            },
+                            {
+                                "ended": false,
+                                "locale": "en",
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "begin": null,
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc"
+                            },
+                            {
+                                "locale": "en",
+                                "ended": true,
+                                "end": null,
+                                "name": "Diamond Lie",
+                                "primary": false,
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name"
+                            }
+                        ],
+                        "name": "Alice in Chains",
+                        "disambiguation": "",
+                        "country": "US",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "type": "Group",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains"
+                    }
+                }
+            ],
+            "aliases": [],
+            "date": "1996",
+            "disambiguation": "",
+            "title": "MTV Unplugged",
+            "status": "Official",
+            "id": "9b596161-4a62-3b90-a93a-a55e9d5d7630",
+            "release-events": [
+                {
+                    "date": "1996",
+                    "area": {
+                        "disambiguation": "",
+                        "iso-3166-1-codes": [
+                            "XE"
+                        ],
+                        "type-id": null,
+                        "type": null,
+                        "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+                        "name": "Europe",
+                        "sort-name": "Europe"
+                    }
+                },
+                {
+                    "area": {
+                        "type-id": null,
+                        "sort-name": "United Kingdom",
+                        "id": "8a754a16-0027-3a29-b6d7-2b40ea0481ed",
+                        "name": "United Kingdom",
+                        "type": null,
+                        "disambiguation": "",
+                        "iso-3166-1-codes": [
+                            "GB"
+                        ]
+                    },
+                    "date": "1996"
+                }
+            ],
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "country": "XE"
+        },
+        {
+            "date": "1996",
+            "disambiguation": "",
+            "title": "MTV Unplugged",
+            "aliases": [],
+            "packaging": null,
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "locale": null,
+                                "ended": false,
+                                "end": null,
+                                "name": "Alice and Chains",
+                                "primary": null,
+                                "begin": null,
+                                "sort-name": "Alice and Chains",
+                                "type": "Search hint",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+                            },
+                            {
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "primary": true,
+                                "locale": "en",
+                                "ended": false,
+                                "sort-name": "Alice in Chains",
+                                "type": "Artist name",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null
+                            },
+                            {
+                                "begin": null,
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "locale": "en",
+                                "ended": true,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "primary": false
+                            }
+                        ],
+                        "country": "US",
+                        "disambiguation": "",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type": "Group",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    }
+                }
+            ],
+            "packaging-id": null,
+            "barcode": "6007689151133",
+            "text-representation": {
+                "language": "eng",
+                "script": null
+            },
+            "quality": "normal",
+            "country": "ZA",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "release-events": [
+                {
+                    "area": {
+                        "type": null,
+                        "id": "50cc7852-862e-30ae-aa82-385fe7135b7f",
+                        "sort-name": "South Africa",
+                        "name": "South Africa",
+                        "type-id": null,
+                        "iso-3166-1-codes": [
+                            "ZA"
+                        ],
+                        "disambiguation": ""
+                    },
+                    "date": "1996"
+                }
+            ],
+            "status": "Official",
+            "id": "6fe7810b-81f9-4269-9a3c-33a8e14838ce"
+        },
+        {
+            "disambiguation": "",
+            "date": "2006-04-02",
+            "title": "Dirt / MTV Unplugged",
+            "aliases": [],
+            "packaging": null,
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "begin": null,
+                                "primary": null,
+                                "name": "Alice and Chains",
+                                "end": null,
+                                "ended": false,
+                                "locale": null
+                            },
+                            {
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "ended": false,
+                                "locale": "en",
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null
+                            },
+                            {
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name",
+                                "locale": "en",
+                                "ended": true,
+                                "end": null,
+                                "name": "Diamond Lie",
+                                "primary": false
+                            }
+                        ],
+                        "country": "US",
+                        "disambiguation": "",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type": "Group",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    }
+                }
+            ],
+            "text-representation": {
+                "script": "Latn",
+                "language": "eng"
+            },
+            "barcode": "828768180921",
+            "packaging-id": null,
+            "quality": "normal",
+            "country": "XE",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "release-events": [
+                {
+                    "area": {
+                        "type": null,
+                        "name": "Europe",
+                        "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+                        "sort-name": "Europe",
+                        "type-id": null,
+                        "iso-3166-1-codes": [
+                            "XE"
+                        ],
+                        "disambiguation": ""
+                    },
+                    "date": "2006-04-02"
+                }
+            ],
+            "status": "Official",
+            "id": "c3f0d95f-e58f-4688-aba4-145e7a7de130"
+        },
+        {
+            "quality": "normal",
+            "barcode": "886971245325",
+            "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+            "text-representation": {
+                "script": "Latn",
+                "language": "eng"
+            },
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "country": "US",
+                        "disambiguation": "",
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "begin": null,
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "ended": false,
+                                "locale": null,
+                                "primary": null,
+                                "end": null,
+                                "name": "Alice and Chains"
+                            },
+                            {
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "ended": false,
+                                "locale": "en",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "begin": null
+                            },
+                            {
+                                "ended": true,
+                                "locale": "en",
+                                "primary": false,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "type": "Artist name",
+                                "sort-name": "Diamond Lie"
+                            }
+                        ],
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type": "Group",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    }
+                }
+            ],
+            "packaging": "Jewel Case",
+            "aliases": [],
+            "title": "MTV Unplugged",
+            "date": "2007-09-18",
+            "disambiguation": "",
+            "id": "44b9f31a-a590-4af4-8b25-aa5197eaa9ef",
+            "status": "Official",
+            "release-events": [
+                {
+                    "date": "2007-09-18",
+                    "area": {
+                        "type-id": null,
+                        "type": null,
+                        "id": "489ce91b-6658-3307-9877-795b68554c98",
+                        "name": "United States",
+                        "sort-name": "United States",
+                        "disambiguation": "",
+                        "iso-3166-1-codes": [
+                            "US"
+                        ]
+                    }
+                }
+            ],
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "country": "US"
+        },
+        {
+            "packaging": "Gatefold Cover",
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "artist": {
+                        "disambiguation": "",
+                        "country": "US",
+                        "aliases": [
+                            {
+                                "primary": null,
+                                "end": null,
+                                "name": "Alice and Chains",
+                                "ended": false,
+                                "locale": null,
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "begin": null
+                            },
+                            {
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Alice in Chains",
+                                "type": "Artist name",
+                                "locale": "en",
+                                "ended": false,
+                                "name": "Alice in Chains",
+                                "end": null,
+                                "primary": true
+                            },
+                            {
+                                "type": "Artist name",
+                                "sort-name": "Diamond Lie",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null,
+                                "primary": false,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "ended": true,
+                                "locale": "en"
+                            }
+                        ],
+                        "name": "Alice in Chains",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "type": "Group",
+                        "sort-name": "Alice in Chains",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553"
+                    },
+                    "name": "Alice in Chains"
+                }
+            ],
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "barcode": "8713748980344",
+            "packaging-id": "e724a489-a7e8-30a1-a17c-30dfd6831202",
+            "quality": "normal",
+            "disambiguation": "",
+            "date": "2010-08-26",
+            "title": "MTV Unplugged",
+            "aliases": [],
+            "release-events": [
+                {
+                    "date": "2010-08-26",
+                    "area": {
+                        "type": null,
+                        "sort-name": "Europe",
+                        "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+                        "name": "Europe",
+                        "type-id": null,
+                        "iso-3166-1-codes": [
+                            "XE"
+                        ],
+                        "disambiguation": ""
+                    }
+                }
+            ],
+            "status": "Official",
+            "id": "ecf4099d-6f88-49b6-bb55-829abf387487",
+            "country": "XE",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe"
+        },
+        {
+            "packaging": null,
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "artist": {
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type": "Group",
+                        "aliases": [
+                            {
+                                "type": "Search hint",
+                                "sort-name": "Alice and Chains",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "begin": null,
+                                "primary": null,
+                                "end": null,
+                                "name": "Alice and Chains",
+                                "ended": false,
+                                "locale": null
+                            },
+                            {
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "ended": false,
+                                "locale": "en",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "begin": null
+                            },
+                            {
+                                "ended": true,
+                                "locale": "en",
+                                "primary": false,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "type": "Artist name",
+                                "sort-name": "Diamond Lie"
+                            }
+                        ],
+                        "name": "Alice in Chains",
+                        "disambiguation": "",
+                        "country": "US"
+                    },
+                    "name": "Alice in Chains"
+                }
+            ],
+            "text-representation": {
+                "script": "Latn",
+                "language": "eng"
+            },
+            "barcode": "886977262524",
+            "packaging-id": null,
+            "quality": "normal",
+            "disambiguation": "",
+            "date": "2010-09-27",
+            "title": "Dirt / MTV Unplugged",
+            "aliases": [],
+            "release-events": [
+                {
+                    "date": "2010-09-27",
+                    "area": {
+                        "disambiguation": "",
+                        "iso-3166-1-codes": [
+                            "XE"
+                        ],
+                        "type-id": null,
+                        "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+                        "sort-name": "Europe",
+                        "name": "Europe",
+                        "type": null
+                    }
+                }
+            ],
+            "status": "Official",
+            "id": "3c91192c-20cf-4441-b480-948f56fef05b",
+            "country": "XE",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe"
+        },
+        {
+            "packaging": "Cardboard/Paper Sleeve",
+            "artist-credit": [
+                {
+                    "artist": {
+                        "country": "US",
+                        "disambiguation": "",
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "locale": null,
+                                "ended": false,
+                                "end": null,
+                                "name": "Alice and Chains",
+                                "primary": null,
+                                "begin": null,
+                                "sort-name": "Alice and Chains",
+                                "type": "Search hint",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+                            },
+                            {
+                                "begin": null,
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "ended": false,
+                                "locale": "en",
+                                "primary": true,
+                                "name": "Alice in Chains",
+                                "end": null
+                            },
+                            {
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name",
+                                "begin": null,
+                                "end": null,
+                                "name": "Diamond Lie",
+                                "primary": false,
+                                "locale": "en",
+                                "ended": true
+                            }
+                        ],
+                        "type": "Group",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+                    },
+                    "name": "Alice in Chains",
+                    "joinphrase": ""
+                }
+            ],
+            "packaging-id": "f7101ce3-0384-39ce-9fde-fbbd0044d35f",
+            "barcode": "886979444829",
+            "text-representation": {
+                "language": "eng",
+                "script": "Latn"
+            },
+            "quality": "normal",
+            "date": "2011-09-26",
+            "disambiguation": "",
+            "title": "Original Album Classics",
+            "aliases": [],
+            "release-events": [
+                {
+                    "area": {
+                        "iso-3166-1-codes": [
+                            "XE"
+                        ],
+                        "disambiguation": "",
+                        "type": null,
+                        "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+                        "sort-name": "Europe",
+                        "name": "Europe",
+                        "type-id": null
+                    },
+                    "date": "2011-09-26"
+                }
+            ],
+            "status": "Official",
+            "id": "fdc69cd6-8abb-4dd2-80d8-e88154adfb25",
+            "country": "XE",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe"
+        },
+        {
+            "status": "Official",
+            "id": "5a60515a-d4ce-482b-a4dc-34ba08e50fdf",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "text-representation": {
+                "script": "Latn",
+                "language": "eng"
+            },
+            "packaging-id": "119eba76-b343-3e02-a292-f0f00644bb9b",
+            "barcode": "884977724899",
+            "quality": "normal",
+            "packaging": "None",
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "name": "Alice in Chains",
+                    "artist": {
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "type": "Group",
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "name": "Alice in Chains",
+                        "aliases": [
+                            {
+                                "locale": null,
+                                "ended": false,
+                                "name": "Alice and Chains",
+                                "end": null,
+                                "primary": null,
+                                "begin": null,
+                                "sort-name": "Alice and Chains",
+                                "type": "Search hint",
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+                            },
+                            {
+                                "ended": false,
+                                "locale": "en",
+                                "primary": true,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "begin": null,
+                                "type": "Artist name",
+                                "sort-name": "Alice in Chains",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc"
+                            },
+                            {
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null,
+                                "name": "Diamond Lie",
+                                "end": null,
+                                "primary": false,
+                                "locale": "en",
+                                "ended": true
+                            }
+                        ],
+                        "country": "US",
+                        "disambiguation": ""
+                    }
+                }
+            ],
+            "aliases": [],
+            "disambiguation": "",
+            "title": "MTV Unplugged"
+        },
+        {
+            "country": "US",
+            "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+            "release-events": [
+                {
+                    "area": {
+                        "iso-3166-1-codes": [
+                            "US"
+                        ],
+                        "disambiguation": "",
+                        "type": null,
+                        "id": "489ce91b-6658-3307-9877-795b68554c98",
+                        "name": "United States",
+                        "sort-name": "United States",
+                        "type-id": null
+                    },
+                    "date": ""
+                }
+            ],
+            "id": "26a10905-3e71-4d60-bc40-f03c8d78960a",
+            "status": "Official",
+            "disambiguation": "",
+            "date": "",
+            "title": "MTV Unplugged",
+            "aliases": [],
+            "packaging": "Jewel Case",
+            "artist-credit": [
+                {
+                    "joinphrase": "",
+                    "artist": {
+                        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+                        "type": "Group",
+                        "id": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+                        "sort-name": "Alice in Chains",
+                        "disambiguation": "",
+                        "country": "US",
+                        "aliases": [
+                            {
+                                "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+                                "sort-name": "Alice and Chains",
+                                "type": "Search hint",
+                                "begin": null,
+                                "name": "Alice and Chains",
+                                "end": null,
+                                "primary": null,
+                                "locale": null,
+                                "ended": false
+                            },
+                            {
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "sort-name": "Alice in Chains",
+                                "type": "Artist name",
+                                "begin": null,
+                                "end": null,
+                                "name": "Alice in Chains",
+                                "primary": true,
+                                "locale": "en",
+                                "ended": false
+                            },
+                            {
+                                "sort-name": "Diamond Lie",
+                                "type": "Artist name",
+                                "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+                                "begin": null,
+                                "end": null,
+                                "name": "Diamond Lie",
+                                "primary": false,
+                                "locale": "en",
+                                "ended": true
+                            }
+                        ],
+                        "name": "Alice in Chains"
+                    },
+                    "name": "Alice in Chains"
+                }
+            ],
+            "text-representation": {
+                "language": "eng",
+                "script": null
+            },
+            "barcode": "886919794724",
+            "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+            "quality": "normal"
+        }
+    ],
+    "disambiguation": "live, 1996‐04‐10: Majestic Theatre, Brooklyn, NY, USA",
+    "video": false,
+    "aliases": [
+        {
+            "ended": false,
+            "locale": null,
+            "primary": null,
+            "end": null,
+            "name": "Down In A Hole",
+            "begin": null,
+            "type-id": null,
+            "type": null,
+            "sort-name": "Down In A Hole"
+        },
+        {
+            "type": null,
+            "sort-name": "Down In A Hole (Live at the Majestic Theatre, Brooklyn, NY - April 1996)",
+            "type-id": null,
+            "begin": null,
+            "primary": null,
+            "end": null,
+            "name": "Down In A Hole (Live at the Majestic Theatre, Brooklyn, NY - April 1996)",
+            "ended": false,
+            "locale": null
+        }
+    ],
+    "first-release-date": "1996-07-29"
+}
