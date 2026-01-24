@@ -2,6 +2,51 @@
 
 Fuzzbin is a full-stack music video library organizer. It ingests music videos from the web and local disks, enriches metadata from multiple sources, downloads and organizes files, and serves a real-time UI for browsing, tagging, and monitoring background jobs. The Python/FastAPI backend exposes a rich API and WebSocket event stream; the React/TypeScript frontend rides on those APIs for day-to-day use.
 
+## Docker Deployment (Recommended)
+
+The easiest way to run Fuzzbin is with Docker. The image includes everything: Python backend, React frontend, ffmpeg, and yt-dlp.
+
+### Quick Start
+
+```bash
+# Build the image
+docker build -t fuzzbin:latest .
+
+# Run with docker-compose (recommended)
+docker-compose up -d
+
+# Or run directly
+docker run -d \
+  --name fuzzbin \
+  -p 8000:8000 \
+  -v fuzzbin_config:/config \
+  -v fuzzbin_videos:/music_videos \
+  fuzzbin:latest
+```
+
+Open http://localhost:8000 and log in with username `admin` and password `changeme`.
+
+> ⚠️ **CRITICAL SECURITY**: Change the default admin password immediately after first run:
+> ```bash
+> docker exec -it fuzzbin fuzzbin-user set-password -u admin
+> ```
+
+### Docker Details
+
+- **JWT Secret**: Auto-generated on first run and persisted in `/config/jwt_secret.txt`. No manual configuration required.
+- **Volumes**:
+  - `/config` — Database, caches, thumbnails, backups, and configuration
+  - `/music_videos` — Video files, NFO metadata, and trash
+- **API Keys** (optional): Set environment variables for external services:
+  ```yaml
+  environment:
+    IMVDB_APP_KEY: your-key
+    DISCOGS_API_KEY: your-key
+    DISCOGS_API_SECRET: your-secret
+    SPOTIFY_CLIENT_ID: your-id
+    SPOTIFY_CLIENT_SECRET: your-secret
+  ```
+
 ## Highlights
 - Library management: CRUD for videos, artists, tags, and collections with status history, thumbnails, Range-enabled streaming, soft-delete/trash, and permanent delete.
 - Imports everywhere: multi-source search (IMVDb, Discogs, YouTube/yt-dlp), Spotify playlist import, directory/NFO scan (full or discovery mode), single-video import, bulk download, and metadata enrichment (MusicBrainz via ISRC).
@@ -21,9 +66,8 @@ Fuzzbin is a full-stack music video library organizer. It ingests music videos f
 - Python 3.9+ (3.10+ recommended) and Node.js 18+.
 - ffprobe/ffmpeg and yt-dlp on PATH for analysis, thumbnails, and downloads.
 - API credentials as needed: IMVDb, Discogs, Spotify (optional but required for those features).
-- Generate a JWT secret for the API: `python - <<'PY'\nimport secrets; print(secrets.token_urlsafe(32))\nPY`.
 
-## Quick start (local)
+## Local Development Setup
 1. **Backend deps**
    ```bash
    python -m venv .venv
@@ -34,6 +78,10 @@ Fuzzbin is a full-stack music video library organizer. It ingests music videos f
    Copy the template and fill in API keys as needed:
    ```bash
    cp config.example.yaml config.yaml
+   ```
+   Generate a JWT secret:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
    Environment overrides:
    - `FUZZBIN_CONFIG_DIR`, `FUZZBIN_LIBRARY_DIR` to change storage paths.

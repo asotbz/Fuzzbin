@@ -729,7 +729,7 @@ export default function LibraryPage() {
         }
         navItems={[
           { label: 'Library', to: '/library' },
-          { label: 'Import', to: '/add' },
+          { label: 'Import', to: '/import' },
           { label: 'Activity', to: '/activity' },
           { label: 'Settings', to: '/settings' },
         ]}

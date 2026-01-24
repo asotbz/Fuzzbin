@@ -1,0 +1,35 @@
+services:
+  fuzzbin:
+    build: .
+    container_name: fuzzbin
+    ports:
+      - "8000:8000"
+    volumes:
+      - fuzzbin_config:/config
+      - fuzzbin_videos:/music_videos
+    # Environment variables (uncomment as needed):
+    # environment:
+    #   # JWT secret is auto-generated and persisted in /config/jwt_secret.txt
+    #   # Uncomment to override with your own secret:
+    #   FUZZBIN_API_JWT_SECRET: your-secret-here
+    #
+    #   # Optional: API keys for external services
+    #   IMVDB_APP_KEY: your-imvdb-key
+    #   DISCOGS_API_KEY: your-discogs-key
+    #   DISCOGS_API_SECRET: your-discogs-secret
+    #   SPOTIFY_CLIENT_ID: your-spotify-client-id
+    #   SPOTIFY_CLIENT_SECRET: your-spotify-client-secret
+    #
+    #   # Optional: Debug mode (default: false)
+    #   FUZZBIN_API_DEBUG: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  fuzzbin_config:
+  fuzzbin_videos:

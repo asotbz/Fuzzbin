@@ -76,18 +76,18 @@ describe('routing', () => {
     expect(await screen.findByText('Video Library')).toBeInTheDocument()
   })
 
-  it('renders /add when authenticated', async () => {
+  it('renders /import when authenticated', async () => {
     setTokens({ accessToken: 'test' })
 
     renderWithQueryClient(
-      <MemoryRouter initialEntries={['/add']}>
+      <MemoryRouter initialEntries={['/import']}>
         <AppRoutes />
       </MemoryRouter>
     )
 
     expect(await screen.findByText('Artist/Title Search')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /^search$/i })).toHaveAttribute('href', '/add')
-    expect(screen.getByRole('link', { name: /spotify playlist/i })).toHaveAttribute('href', '/add/spotify')
-    expect(screen.getByRole('link', { name: /nfo scan/i })).toHaveAttribute('href', '/add/nfo')
+    expect(screen.getByRole('link', { name: /^search$/i })).toHaveAttribute('href', '/import')
+    expect(screen.getByRole('link', { name: /spotify playlist/i })).toHaveAttribute('href', '/import/spotify')
+    expect(screen.getByRole('link', { name: /nfo scan/i })).toHaveAttribute('href', '/import/nfo')
   })
 })

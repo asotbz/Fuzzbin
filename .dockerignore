@@ -1,0 +1,60 @@
+# Python artifacts
+__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+htmlcov/
+.coverage
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+*.egg
+dist/
+build/
+
+# Frontend artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+
+# Development and test files
+.git/
+.github/
+tests/
+docs/
+examples/
+*.md
+!README.md
+LICENSE
+.gitignore
+.editorconfig
+.pre-commit-config.yaml
+
+# Docker files (avoid recursive copy)
+Dockerfile
+docker-compose.yml
+docker-compose*.yml
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local configuration (don't copy into image)
+config.yaml
+*.log
+
+# Whitelist files
+vulture_whitelist.py

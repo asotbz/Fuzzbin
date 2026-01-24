@@ -2,11 +2,12 @@
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["fuzzbin"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fuzzbin*"]
 
 [tool.setuptools.package-data]
-fuzzbin = ["py.typed"]
+fuzzbin = ["py.typed", "core/db/migrations/*.sql"]
 
 [project]
 name = "fuzzbin"
@@ -40,6 +41,10 @@ fuzzbin-api = "fuzzbin.web.main:run"
 fuzzbin-user = "fuzzbin.cli.user:main"
 
 [project.optional-dependencies]
+prod = [
+    # Production dependencies are already in [project.dependencies]
+    # This group exists to exclude dev tools when installing in Docker
+]
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",

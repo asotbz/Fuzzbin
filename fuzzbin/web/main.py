@@ -9,6 +9,8 @@ import uvicorn
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 import fuzzbin
 from fuzzbin.auth import is_default_password
@@ -502,6 +504,96 @@ ws://localhost:8000/ws/jobs/{job_id}
         return app.openapi_schema
 
     app.openapi = custom_openapi
+
+    # SPA static file serving (for Docker production deployment)
+    # Only enabled when frontend/dist exists (i.e., in Docker image)
+    # Check multiple possible locations:
+    # 1. /app/frontend/dist (Docker deployment)
+    # 2. Relative to source (local development with built frontend)
+    frontend_dist = None
+    possible_paths = [
+        Path("/app/frontend/dist"),  # Docker container path
+        Path(__file__).parent.parent.parent / "frontend" / "dist",  # Relative to source
+    ]
+    for path in possible_paths:
+        if path.exists() and path.is_dir():
+            frontend_dist = path
+            break
+
+    if frontend_dist is not None:
+        # Mount static assets (JS, CSS, images)
+        assets_dir = frontend_dist / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="static_assets")
+            logger.info("spa_assets_mounted", path="/assets", directory=str(assets_dir))
+
+        # API route prefixes to exclude from SPA catch-all
+        # These must be passed through to the API, not served as frontend routes
+        API_PREFIXES = (
+            "/add",
+            "/artists",
+            "/auth",
+            "/backup",
+            "/collections",
+            "/config",
+            "/discogs",
+            "/exports",
+            "/files",
+            "/genres",
+            "/health",
+            "/imvdb",
+            "/jobs",
+            "/scan",
+            "/search",
+            "/spotify",
+            "/tags",
+            "/videos",
+            "/ytdlp",
+            "/ws",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+        )
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str) -> FileResponse:
+            """
+            Serve the SPA index.html for all non-API routes.
+
+            This enables client-side routing in the React frontend.
+            API routes are excluded and handled by their respective routers.
+            Static files (images, etc.) are served directly if they exist.
+            """
+            # Check if path starts with an API prefix
+            path_to_check = f"/{full_path}"
+            if any(path_to_check.startswith(prefix) for prefix in API_PREFIXES):
+                # This shouldn't normally be reached since API routes are registered first,
+                # but provides a safety net
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=404, detail="Not found")
+
+            # Check if requesting a static file that exists (e.g., images from public/)
+            if full_path:
+                static_file = frontend_dist / full_path
+                if static_file.exists() and static_file.is_file():
+                    # Determine media type based on extension
+                    import mimetypes
+
+                    media_type, _ = mimetypes.guess_type(str(static_file))
+                    return FileResponse(static_file, media_type=media_type)
+
+            # Serve index.html for SPA routing
+            index_file = frontend_dist / "index.html"
+            if index_file.exists():
+                return FileResponse(index_file, media_type="text/html")
+
+            # Fallback if index.html doesn't exist
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail="Frontend not found")
+
+        logger.info("spa_serving_enabled", frontend_dist=str(frontend_dist))
 
     logger.info("api_app_created", routes=len(app.routes))
 

@@ -33,7 +33,7 @@ export default function AppRoutes() {
       />
 
       <Route
-        path="/add"
+        path="/import"
         element={
           <RequireAuth>
             <SearchWizard />
@@ -42,16 +42,16 @@ export default function AppRoutes() {
       />
 
       <Route
-        path="/add/search"
+        path="/import/search"
         element={
           <RequireAuth>
-            <Navigate to="/add" replace />
+            <Navigate to="/import" replace />
           </RequireAuth>
         }
       />
 
       <Route
-        path="/add/spotify"
+        path="/import/spotify"
         element={
           <RequireAuth>
             <SpotifyImport />
@@ -60,7 +60,7 @@ export default function AppRoutes() {
       />
 
       <Route
-        path="/add/artist"
+        path="/import/artist"
         element={
           <RequireAuth>
             <ArtistImport />
@@ -69,7 +69,7 @@ export default function AppRoutes() {
       />
 
       <Route
-        path="/add/nfo"
+        path="/import/nfo"
         element={
           <RequireAuth>
             <NFOImport />

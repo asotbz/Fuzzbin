@@ -171,16 +171,16 @@ export default function NFOImport() {
         accent="var(--channel-import)"
         navItems={[
           { label: 'Library', to: '/library' },
-          { label: 'Import', to: '/add' },
+          { label: 'Import', to: '/import' },
           { label: 'Activity', to: '/activity' },
           { label: 'Settings', to: '/settings' },
         ]}
         subNavLabel="Import workflows"
         subNavItems={[
-          { label: 'Search', to: '/add', end: true },
-          { label: 'Spotify Playlist', to: '/add/spotify' },
-          { label: 'Artist Videos', to: '/add/artist' },
-          { label: 'NFO Scan', to: '/add/nfo' },
+          { label: 'Search', to: '/import', end: true },
+          { label: 'Spotify Playlist', to: '/import/spotify' },
+          { label: 'Artist Videos', to: '/import/artist' },
+          { label: 'NFO Scan', to: '/import/nfo' },
         ]}
       />
 

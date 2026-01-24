@@ -55,7 +55,7 @@ describe('LibraryPage', () => {
     )
 
     const importLink = screen.getByRole('link', { name: /import/i })
-    expect(importLink).toHaveAttribute('href', '/add')
+    expect(importLink).toHaveAttribute('href', '/import')
 
     const tagsButton = await screen.findByRole('button', { name: /tags filters/i })
     await waitFor(() => expect(tagsButton).not.toBeDisabled())
