@@ -9,6 +9,11 @@ import {
   addSpotifyImport,
   addNFOScan,
   checkVideoExists,
+  getYouTubeMetadata,
+  searchArtists,
+  previewArtistVideos,
+  enrichImvdbVideo,
+  importArtistVideos,
 } from '../add'
 
 describe('add endpoints', () => {
@@ -119,6 +124,74 @@ describe('add endpoints', () => {
       const result = await checkVideoExists({ youtube_id: 'yt-unknown' })
 
       expect(result.exists).toBe(false)
+    })
+  })
+
+  describe('getYouTubeMetadata', () => {
+    it('fetches YouTube video metadata', async () => {
+      const result = await getYouTubeMetadata({ youtube_id: 'test-yt-id' })
+
+      expect(result).toHaveProperty('youtube_id')
+      expect(result).toHaveProperty('title')
+      expect(result).toHaveProperty('channel')
+      expect(result).toHaveProperty('duration')
+    })
+  })
+
+  describe('searchArtists', () => {
+    it('searches for artists', async () => {
+      const result = await searchArtists({ artist_name: 'Test Artist' })
+
+      expect(result).toHaveProperty('results')
+      expect(Array.isArray(result.results)).toBe(true)
+      expect(result.results.length).toBeGreaterThan(0)
+      expect(result.results[0]).toHaveProperty('name')
+    })
+  })
+
+  describe('previewArtistVideos', () => {
+    it('fetches artist videos preview with default pagination', async () => {
+      const result = await previewArtistVideos(123)
+
+      expect(result).toHaveProperty('entity_id')
+      expect(result).toHaveProperty('videos')
+      expect(result).toHaveProperty('current_page')
+      expect(result).toHaveProperty('per_page')
+    })
+
+    it('fetches artist videos with custom pagination', async () => {
+      const result = await previewArtistVideos(456, 2, 25)
+
+      expect(result).toHaveProperty('entity_id')
+    })
+  })
+
+  describe('enrichImvdbVideo', () => {
+    it('enriches IMVDb video data', async () => {
+      const result = await enrichImvdbVideo({
+        imvdb_id: 123,
+        artist: 'Test Artist',
+        track_title: 'Test Track',
+      })
+
+      expect(result).toHaveProperty('imvdb_id')
+      expect(result).toHaveProperty('title')
+      expect(result).toHaveProperty('enrichment_status')
+    })
+  })
+
+  describe('importArtistVideos', () => {
+    it('starts artist video import job', async () => {
+      const result = await importArtistVideos({
+        entity_id: 123,
+        videos: [
+          { imvdb_id: 1, metadata: {} },
+          { imvdb_id: 2, metadata: {} },
+        ],
+      })
+
+      expect(result).toHaveProperty('job_id')
+      expect(result).toHaveProperty('status')
     })
   })
 })

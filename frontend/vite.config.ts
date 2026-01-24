@@ -16,22 +16,24 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'node_modules/**',
         'src/test/**',
         'src/mocks/**',
         'src/lib/api/generated.ts',
+        'src/lib/api/types.ts',
         '**/*.d.ts',
         '**/*.config.ts',
         '**/index.ts',
+        'src/main.tsx',
       ],
       thresholds: {
-        // Start at 15% and incrementally increase as coverage improves
-        // Current coverage: ~17% - set threshold slightly below to allow CI to pass
-        lines: 15,
-        branches: 15,
-        functions: 15,
-        statements: 15,
+        // Phase 1 target: 30% coverage
+        lines: 30,
+        branches: 30,
+        functions: 30,
+        statements: 30,
       },
     },
   },

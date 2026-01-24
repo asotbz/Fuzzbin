@@ -5,6 +5,7 @@ import { setTokens, clearTokens } from '../../../../auth/tokenStore'
 import { TEST_TOKENS, mockVideos } from '../../../../mocks/handlers'
 import {
   listVideos,
+  getVideo,
   bulkDeleteVideos,
   listTrash,
   getTrashStats,
@@ -44,6 +45,17 @@ describe('videos endpoints', () => {
 
       expect(result.items).toHaveLength(0)
       expect(result.total).toBe(0)
+    })
+  })
+
+  describe('getVideo', () => {
+    it('fetches single video by ID', async () => {
+      const result = await getVideo(1)
+
+      expect(result).toHaveProperty('id')
+      expect(result).toHaveProperty('title')
+      expect(result).toHaveProperty('artist')
+      expect(result.id).toBe(1)
     })
   })
 
