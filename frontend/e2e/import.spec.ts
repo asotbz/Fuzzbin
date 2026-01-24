@@ -119,12 +119,12 @@ test.describe('Directory Scan Import', () => {
 })
 
 test.describe('Import Preview', () => {
-  test.skip('shows import preview with video details', async ({ page }) => {
+  test.skip('shows import preview with video details', async () => {
     // Skip - requires going through full wizard flow
     // Would test: title, artist, year, director, duration are shown
   })
 
-  test.skip('can confirm import from preview', async ({ page }) => {
+  test.skip('can confirm import from preview', async () => {
     // Skip - requires going through full wizard flow  
     // Would test: confirm button works, success message shown
   })

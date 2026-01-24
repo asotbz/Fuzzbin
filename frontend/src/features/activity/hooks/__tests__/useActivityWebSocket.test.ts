@@ -19,13 +19,13 @@ describe('useActivityWebSocket', () => {
       job_id: '123',
       job_type: 'IMPORT_NFO',
       status: 'pending',
-      priority: 5,
+      progress: 0,
+      current_step: 'Initializing',
+      processed_items: 0,
+      total_items: 100,
       created_at: '2024-01-01T00:00:00Z',
-      current: 0,
-      total: 100,
-      message: 'Test job',
-      result: undefined,
-      error: undefined,
+      started_at: null,
+      metadata: {},
     }
     expect(job.job_id).toBe('123')
   })

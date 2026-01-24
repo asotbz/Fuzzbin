@@ -31,13 +31,13 @@ test.describe('Login Page', () => {
   test('successful login redirects to library', async ({ page }) => {
     await page.goto('/login')
 
-    // Use test credentials (default admin/admin for local dev)
+    // Use test credentials (default admin/changeme from DB seed)
     await page.getByPlaceholder('Username').fill('admin')
-    await page.getByPlaceholder('Password').fill('admin')
+    await page.getByPlaceholder('Password').fill('changeme')
     await page.getByRole('button', { name: /sign in|log in/i }).click()
 
-    // Should redirect to library
-    await expect(page).toHaveURL(/\/library/, { timeout: 10000 })
+    // Should redirect to library (or password change if required)
+    await expect(page).toHaveURL(/\/library|\/set-initial-password/, { timeout: 10000 })
   })
 
   test('redirects to login when accessing protected route unauthenticated', async ({ page }) => {
