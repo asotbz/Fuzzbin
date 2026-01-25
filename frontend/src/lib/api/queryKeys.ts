@@ -29,3 +29,8 @@ export const configKeys = {
   field: (path: string) => [...configKeys.all, 'field', path] as const,
   safety: (path: string) => [...configKeys.all, 'safety', path] as const,
 }
+
+export const healthKeys = {
+  all: ['health'] as const,
+  status: () => [...healthKeys.all, 'status'] as const,
+}

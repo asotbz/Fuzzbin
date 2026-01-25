@@ -9,9 +9,12 @@ include = ["fuzzbin*"]
 [tool.setuptools.package-data]
 fuzzbin = ["py.typed", "core/db/migrations/*.sql"]
 
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
 [project]
 name = "fuzzbin"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Music video metadata manager"
 readme = "README.md"
 requires-python = ">=3.9"

@@ -1,6 +1,8 @@
 # Stage 1: Build frontend
 FROM node:24 AS frontend-build
 
+ARG VERSION=0.0.0
+
 WORKDIR /app/frontend
 
 # Copy package files first for better caching
@@ -12,13 +14,16 @@ RUN npm ci
 # Copy remaining frontend files
 COPY frontend/ ./
 
-# Build with empty API base URL for same-origin requests
+# Build with empty API base URL for same-origin requests and version
 ENV VITE_API_BASE_URL=""
+ENV VITE_APP_VERSION=${VERSION}
 RUN npm run build
 
 
 # Stage 2: Final image with Python backend
 FROM python:3.14
+
+ARG VERSION=0.0.0
 
 WORKDIR /app
 
@@ -28,9 +33,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python project files and source code
-COPY pyproject.toml README.md ./
+# Copy VERSION file and Python project files
+COPY VERSION pyproject.toml README.md ./
 COPY fuzzbin/ ./fuzzbin/
+
+# Set version environment variable
+ENV FUZZBIN_VERSION=${VERSION}
 
 # Install Python dependencies (production only) and yt-dlp
 RUN pip install --no-cache-dir yt-dlp ".[prod]"

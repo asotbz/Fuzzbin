@@ -144,7 +144,29 @@ from .workflows import (
     SpotifyPlaylistImporter,
 )
 
-__version__ = "0.1.0"
+
+def _get_version() -> str:
+    """Read version from VERSION file or fall back to default."""
+    import os
+
+    # Check for VERSION file in multiple locations
+    possible_paths = [
+        Path(__file__).parent.parent / "VERSION",  # Development: repo root
+        Path("/app/VERSION"),  # Docker container
+    ]
+
+    for version_file in possible_paths:
+        if version_file.exists():
+            return version_file.read_text().strip()
+
+    # Check environment variable (set during Docker build)
+    if env_version := os.environ.get("FUZZBIN_VERSION"):
+        return env_version
+
+    return "0.0.0-dev"
+
+
+__version__ = _get_version()
 __all__ = [
     "AsyncHTTPClient",
     "RateLimitedAPIClient",

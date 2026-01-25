@@ -5,6 +5,7 @@ import APISettings from '../components/sections/APISettings'
 import MediaSettings from '../components/sections/MediaSettings'
 import LibrarySettings from '../components/sections/LibrarySettings'
 import AdvancedSettings from '../components/sections/AdvancedSettings'
+import AboutSettings from '../components/sections/AboutSettings'
 import PageHeader from '../../../components/layout/PageHeader'
 import './SettingsPage.css'
 
@@ -16,6 +17,7 @@ interface ConfigSection {
 
 const CONFIG_SECTIONS: ConfigSection[] = [
   // System
+  { id: 'about', title: 'About', group: 'System' },
   { id: 'logging', title: 'Logging', group: 'System' },
   { id: 'backup', title: 'Backup', group: 'System' },
 
@@ -38,7 +40,7 @@ const CONFIG_SECTIONS: ConfigSection[] = [
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<string>(
-    () => localStorage.getItem('fuzzbin-settings-section') || 'api-imvdb'
+    () => localStorage.getItem('fuzzbin-settings-section') || 'about'
   )
 
   const configQuery = useConfig()
@@ -142,6 +144,7 @@ export default function SettingsPage() {
             {configQuery.isSuccess && activeConfig && (
               <div className="settingsFields">
                 {/* System */}
+                {activeSection === 'about' && <AboutSettings />}
                 {activeSection === 'logging' && <LoggingSettings config={activeConfig} />}
                 {activeSection === 'backup' && <AdvancedSettings config={activeConfig} section="backup" />}
 
