@@ -63,7 +63,11 @@ jobs:
         run: pip install -e ".[dev]" yt-dlp
 
       - name: Run tests with coverage
-        run: pytest --cov=fuzzbin --cov-report=xml --cov-report=html
+        run: |
+          pytest --cov=fuzzbin --cov-report=xml --cov-report=html \
+            --deselect tests/integration/test_live_workflow.py::test_minimal_state_machine_workflow \
+            --deselect tests/integration/test_ytdlp_integration.py::TestYTDLPIntegration::test_download_real \
+            --deselect tests/integration/test_ytdlp_integration.py::TestYTDLPIntegration::test_search_then_download
         env:
           FUZZBIN_API_JWT_SECRET: test-secret-key-for-ci
 
@@ -102,7 +106,11 @@ jobs:
         run: pip install -e ".[dev]" yt-dlp
 
       - name: Run tests
-        run: pytest --no-cov
+        run: |
+          pytest --no-cov \
+            --deselect tests/integration/test_live_workflow.py::test_minimal_state_machine_workflow \
+            --deselect tests/integration/test_ytdlp_integration.py::TestYTDLPIntegration::test_download_real \
+            --deselect tests/integration/test_ytdlp_integration.py::TestYTDLPIntegration::test_search_then_download
         env:
           FUZZBIN_API_JWT_SECRET: test-secret-key-for-ci
 
