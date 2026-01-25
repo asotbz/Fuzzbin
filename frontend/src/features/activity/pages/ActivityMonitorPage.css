@@ -126,6 +126,104 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--channel-manage) 20%, transparent);
 }
 
+/* ==================== MAINTENANCE PANEL ==================== */
+
+.maintenancePanel {
+  max-width: 1400px;
+  margin: 0 auto 2rem;
+  padding: 0 2rem;
+}
+
+.maintenanceContainer {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.maintenanceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.maintenanceSubtitle {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.maintenanceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.maintenanceCard {
+  background: color-mix(in srgb, var(--bg-base) 70%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--bg-surface-light) 70%, transparent);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.maintenanceCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.maintenanceTitle {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.maintenanceDescription {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.maintenanceButton {
+  align-self: flex-start;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--channel-manage);
+  color: var(--text-on-dark);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.maintenanceButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--channel-manage) 40%, transparent);
+}
+
+.maintenanceButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ==================== JOB SECTIONS ==================== */
 
 .jobSections {

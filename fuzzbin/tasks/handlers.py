@@ -3151,7 +3151,9 @@ async def handle_import_organize(job: Job) -> None:
                             new_name=primary_artist_name,
                         )
                         exporter = NFOExporter(repository)
-                        await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
+                        await exporter.export_artist_to_nfo(
+                            primary_artist_id, artist_nfo_path
+                        )  # Ignore written flag
                     else:
                         # Existing artist.nfo is correct
                         logger.debug(
@@ -3167,7 +3169,9 @@ async def handle_import_organize(job: Job) -> None:
                         artist_name=primary_artist_name,
                     )
                     exporter = NFOExporter(repository)
-                    await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
+                    await exporter.export_artist_to_nfo(
+                        primary_artist_id, artist_nfo_path
+                    )  # Ignore written flag
 
             except Exception as e:
                 # Fail the operation if artist.nfo creation/validation fails
@@ -3311,7 +3315,7 @@ async def handle_import_nfo_generate(job: Job) -> None:
 
         # Create NFO exporter and export
         exporter = NFOExporter(repository)
-        nfo_path = await exporter.export_video_to_nfo(video_id)
+        nfo_path, _ = await exporter.export_video_to_nfo(video_id)
     else:
         job.update_progress(1, 2, "NFO generation disabled, skipping...")
         logger.debug(
@@ -3585,8 +3589,9 @@ async def handle_sync_decade_tags(job: Job) -> None:
             # Update NFO file if tags were changed and auto-export is enabled
             if should_export_nfo and (tags_added > 0 or tags_removed > 0):
                 try:
-                    await nfo_exporter.export_video_to_nfo(video_id)
-                    nfos_updated += 1
+                    _, written = await nfo_exporter.export_video_to_nfo(video_id)
+                    if written:
+                        nfos_updated += 1
                 except Exception as e:
                     logger.warning(
                         "sync_decade_tags_nfo_export_failed",
@@ -3906,6 +3911,209 @@ async def handle_imvdb_artist_import(job: Job) -> None:
     )
 
 
+async def handle_export_nfo(job: Job) -> None:
+    """Handle scheduled NFO export job.
+
+    Exports all video and artist NFO files from the database to disk.
+    Uses content hash comparison to skip writing files that haven't changed
+    when incremental mode is enabled.
+
+    Job metadata parameters:
+        incremental (bool, optional): Skip unchanged files (default: True)
+        include_deleted (bool, optional): Include soft-deleted videos (default: False)
+
+    Job result on completion:
+        videos_exported: Number of video NFO files written
+        videos_skipped: Number of video NFO files skipped (unchanged or no path)
+        videos_failed: Number of video NFO export failures
+        artists_exported: Number of artist NFO files written
+        artists_skipped: Number of artist NFO files skipped (unchanged)
+        artists_failed: Number of artist NFO export failures
+        total_videos: Total videos processed
+        total_artists: Total unique artist directories processed
+
+    Args:
+        job: Job instance with metadata containing export parameters
+    """
+    import fuzzbin
+    from fuzzbin.core.db.exporter import NFOExporter
+
+    logger.info("export_nfo_job_starting", job_id=job.id)
+    job.update_progress(0, 100, "Initializing NFO export...")
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Get config and repository
+    config = fuzzbin.get_config()
+    repository = await fuzzbin.get_repository()
+    exporter = NFOExporter(repository)
+
+    # Extract parameters with config defaults
+    incremental = job.metadata.get("incremental", config.nfo_export.incremental)
+    include_deleted = job.metadata.get("include_deleted", config.nfo_export.include_deleted)
+
+    # Get library directory for artist directory resolution
+    library_dir = config.library_dir
+    path_pattern = config.organizer.path_pattern
+
+    # Get all videos
+    query = repository.query()
+    if include_deleted:
+        query = query.include_deleted()
+    videos = await query.execute()
+
+    total_videos = len(videos)
+    videos_exported = 0
+    videos_skipped = 0
+    videos_failed = 0
+
+    # Track unique artist directories for artist.nfo export
+    # Key: artist_dir path string, Value: (artist_id, artist_name)
+    artist_directories: dict[str, tuple[int, str]] = {}
+
+    job.update_progress(0, total_videos + 1, f"Exporting {total_videos} video NFO files...")
+
+    # Phase 1: Export video NFO files
+    for i, video in enumerate(videos):
+        # Check for cancellation periodically
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        video_id = video["id"]
+        video_path_str = video.get("video_file_path")
+        nfo_path_str = video.get("nfo_file_path")
+
+        # Determine NFO path
+        if nfo_path_str:
+            nfo_path = Path(nfo_path_str)
+        elif video_path_str:
+            nfo_path = Path(video_path_str).with_suffix(".nfo")
+        else:
+            # No path available, skip
+            videos_skipped += 1
+            continue
+
+        try:
+            _, written = await exporter.export_video_to_nfo(
+                video_id, nfo_path, skip_unchanged=incremental
+            )
+            if written:
+                videos_exported += 1
+            else:
+                videos_skipped += 1
+        except Exception as e:
+            videos_failed += 1
+            logger.warning(
+                "export_nfo_video_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+
+        # Collect artist directory info if path pattern includes {artist}
+        if video_path_str and library_dir and "{artist}" in path_pattern:
+            video_path = Path(video_path_str)
+            artist_dir = _get_artist_directory_from_pattern(path_pattern, video_path, library_dir)
+            if artist_dir:
+                artist_dir_str = str(artist_dir)
+                if artist_dir_str not in artist_directories:
+                    # Get primary artist for this video
+                    try:
+                        artists = await repository.get_video_artists(video_id)
+                        primary_artists = [a for a in artists if a["role"] == "primary"]
+                        if primary_artists:
+                            artist_directories[artist_dir_str] = (
+                                primary_artists[0]["id"],
+                                primary_artists[0]["name"],
+                            )
+                    except Exception:
+                        pass  # Skip if artist lookup fails
+
+        # Report progress every 100 videos
+        if (i + 1) % 100 == 0 or (i + 1) == total_videos:
+            job.update_progress(
+                i + 1,
+                total_videos + len(artist_directories),
+                f"Exported {videos_exported} video NFOs, skipped {videos_skipped}...",
+            )
+
+    # Phase 2: Export artist NFO files
+    artists_exported = 0
+    artists_skipped = 0
+    artists_failed = 0
+    total_artists = len(artist_directories)
+
+    if total_artists > 0 and config.nfo.write_artist_nfo:
+        job.update_progress(
+            total_videos,
+            total_videos + total_artists,
+            f"Exporting {total_artists} artist NFO files...",
+        )
+
+        for j, (artist_dir_str, (artist_id, artist_name)) in enumerate(artist_directories.items()):
+            # Check for cancellation
+            if job.status == JobStatus.CANCELLED:
+                return
+
+            artist_nfo_path = Path(artist_dir_str) / "artist.nfo"
+
+            try:
+                _, written = await exporter.export_artist_to_nfo(
+                    artist_id, artist_nfo_path, skip_unchanged=incremental
+                )
+                if written:
+                    artists_exported += 1
+                else:
+                    artists_skipped += 1
+            except Exception as e:
+                artists_failed += 1
+                logger.warning(
+                    "export_nfo_artist_failed",
+                    job_id=job.id,
+                    artist_id=artist_id,
+                    artist_name=artist_name,
+                    error=str(e),
+                )
+
+            # Report progress every 100 artists
+            if (j + 1) % 100 == 0 or (j + 1) == total_artists:
+                job.update_progress(
+                    total_videos + j + 1,
+                    total_videos + total_artists,
+                    f"Exported {artists_exported} artist NFOs, skipped {artists_skipped}...",
+                )
+
+    # Final progress update
+    job.update_progress(
+        total_videos + total_artists,
+        total_videos + total_artists,
+        "NFO export complete",
+    )
+
+    # Mark completed with result
+    result = {
+        "videos_exported": videos_exported,
+        "videos_skipped": videos_skipped,
+        "videos_failed": videos_failed,
+        "artists_exported": artists_exported,
+        "artists_skipped": artists_skipped,
+        "artists_failed": artists_failed,
+        "total_videos": total_videos,
+        "total_artists": total_artists,
+        "incremental": incremental,
+        "include_deleted": include_deleted,
+    }
+    job.mark_completed(result)
+
+    logger.info(
+        "export_nfo_job_completed",
+        job_id=job.id,
+        **result,
+    )
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -3935,6 +4143,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.BACKUP, handle_backup)
     queue.register_handler(JobType.TRASH_CLEANUP, handle_trash_cleanup)
     queue.register_handler(JobType.SYNC_DECADE_TAGS, handle_sync_decade_tags)
+    queue.register_handler(JobType.EXPORT_NFO, handle_export_nfo)
 
     logger.info(
         "job_handlers_registered",
@@ -3958,5 +4167,6 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.BACKUP.value,
             JobType.TRASH_CLEANUP.value,
             JobType.SYNC_DECADE_TAGS.value,
+            JobType.EXPORT_NFO.value,
         ],
     )

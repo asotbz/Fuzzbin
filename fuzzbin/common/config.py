@@ -502,6 +502,31 @@ class TrashConfig(BaseModel):
     )
 
 
+class NFOExportConfig(BaseModel):
+    """Configuration for automatic NFO file export.
+
+    Exports all video and artist NFO files from the database to disk on a schedule.
+    Uses content hash comparison to skip writing files that haven't changed.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable automatic scheduled NFO export",
+    )
+    schedule: str = Field(
+        default="0 4 * * *",
+        description="Cron expression for export schedule (default: daily at 4 AM)",
+    )
+    incremental: bool = Field(
+        default=True,
+        description="Skip exporting NFO files whose content hasn't changed (uses MD5 hash)",
+    )
+    include_deleted: bool = Field(
+        default=False,
+        description="Include soft-deleted videos in export",
+    )
+
+
 def _get_default_config_dir() -> Path:
     """
     Get default config directory based on environment.
@@ -625,6 +650,10 @@ class Config(BaseModel):
     trash: TrashConfig = Field(
         default_factory=TrashConfig,
         description="Trash directory and automatic cleanup configuration",
+    )
+    nfo_export: NFOExportConfig = Field(
+        default_factory=NFOExportConfig,
+        description="Automatic NFO file export configuration",
     )
 
     def resolve_paths(self, create_dirs: bool = True) -> "Config":
@@ -973,6 +1002,10 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     "trash.enabled": ConfigSafetyLevel.SAFE,
     "trash.schedule": ConfigSafetyLevel.SAFE,
     "trash.retention_days": ConfigSafetyLevel.SAFE,
+    "nfo_export.enabled": ConfigSafetyLevel.SAFE,
+    "nfo_export.schedule": ConfigSafetyLevel.SAFE,
+    "nfo_export.incremental": ConfigSafetyLevel.SAFE,
+    "nfo_export.include_deleted": ConfigSafetyLevel.SAFE,
     # API auth - safe because ConfigManager auto-reloads clients with rollback on failure
     "apis.*.auth.*": ConfigSafetyLevel.SAFE,
     # Affects state - changes persistent files/connections

@@ -2,6 +2,7 @@
 
 Provides endpoints for:
 - NFO file regeneration (bulk export)
+- NFO file export job (scheduled/on-demand)
 - Playlist export (M3U, CSV, JSON)
 """
 
@@ -21,6 +22,8 @@ from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.common.path_security import PathSecurityError, validate_contained_path
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.core.db.exporter import NFOExporter
+from fuzzbin.tasks import Job, JobType, get_job_queue
+from fuzzbin.web.schemas.jobs import JobResponse
 
 from ..dependencies import get_repository, require_auth
 from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
@@ -51,6 +54,20 @@ class NFOExportResult(BaseModel):
     failed_count: int = Field(description="Failed to export")
     library_dir: str = Field(description="Library directory where NFO files are written")
     manifest_path: Optional[str] = Field(description="Path to manifest file")
+
+
+class NFOExportJobRequest(BaseModel):
+    """Request for NFO export background job."""
+
+    incremental: Optional[bool] = Field(
+        default=None,
+        description="Skip exporting NFO files whose content hasn't changed. "
+        "If not specified, uses config default.",
+    )
+    include_deleted: Optional[bool] = Field(
+        default=None,
+        description="Include soft-deleted videos in export. If not specified, uses config default.",
+    )
 
 
 class PlaylistExportRequest(BaseModel):
@@ -172,7 +189,7 @@ async def export_nfo_files(
             continue
 
         try:
-            exported_path = await exporter.export_video_to_nfo(video_id, nfo_path)
+            exported_path, _ = await exporter.export_video_to_nfo(video_id, nfo_path)
             exported_count += 1
             manifest_entries.append(
                 {
@@ -224,6 +241,63 @@ async def export_nfo_files(
         library_dir=str(library_dir),
         manifest_path=manifest_path,
     )
+
+
+@router.post(
+    "/nfo/all",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**AUTH_ERROR_RESPONSES},
+    summary="Export all NFO files (background job)",
+    description="Start a background job to export all video and artist NFO files from the database. "
+    "Uses content hash comparison to skip writing files that haven't changed.",
+)
+async def export_all_nfo_files(
+    request: NFOExportJobRequest,
+    current_user: Annotated[UserInfo, Depends(require_auth)],
+) -> JobResponse:
+    """
+    Export all NFO files from the database to disk as a background job.
+
+    This starts an EXPORT_NFO job that:
+    1. Exports all video NFO files (derived from database records)
+    2. Exports all artist.nfo files in artist directories
+    3. Uses MD5 hash comparison to skip unchanged files (when incremental=True)
+
+    The job progress can be monitored via WebSocket or the /jobs/{id} endpoint.
+    """
+    config = fuzzbin.get_config()
+
+    # Build metadata, using config defaults for unspecified values
+    metadata = {}
+    if request.incremental is not None:
+        metadata["incremental"] = request.incremental
+    else:
+        metadata["incremental"] = config.nfo_export.incremental
+
+    if request.include_deleted is not None:
+        metadata["include_deleted"] = request.include_deleted
+    else:
+        metadata["include_deleted"] = config.nfo_export.include_deleted
+
+    # Create and submit job
+    job = Job(
+        type=JobType.EXPORT_NFO,
+        metadata=metadata,
+    )
+
+    queue = get_job_queue()
+    await queue.submit(job)
+
+    logger.info(
+        "nfo_export_job_submitted",
+        job_id=job.id,
+        incremental=metadata["incremental"],
+        include_deleted=metadata["include_deleted"],
+        user=current_user.username,
+    )
+
+    return JobResponse.model_validate(job)
 
 
 # ==================== Playlist Export ====================

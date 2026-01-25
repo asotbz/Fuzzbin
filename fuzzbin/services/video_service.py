@@ -465,7 +465,9 @@ class VideoService(BaseService):
                         if nfo_config.write_musicvideo_nfo:
                             try:
                                 nfo_exporter = NFOExporter(self.repository)
-                                await nfo_exporter.export_video_to_nfo(video_id)
+                                await nfo_exporter.export_video_to_nfo(
+                                    video_id
+                                )  # Ignore written flag
                             except Exception as e:
                                 self.logger.warning(
                                     "nfo_export_failed_after_year_update",

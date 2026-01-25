@@ -421,7 +421,7 @@ class TestNFOExportWithTags:
         # Export to NFO
         exporter = NFOExporter(test_repository)
         nfo_path = tmp_path / "musicvideo.nfo"
-        exported_path = await exporter.export_video_to_nfo(video_id, nfo_path)
+        exported_path, _ = await exporter.export_video_to_nfo(video_id, nfo_path)
 
         # Read back NFO and verify tags
         parser = MusicVideoNFOParser()

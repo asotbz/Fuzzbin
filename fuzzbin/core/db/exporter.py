@@ -1,5 +1,6 @@
 """NFO file exporter for database records."""
 
+import hashlib
 from pathlib import Path
 from typing import Optional
 
@@ -27,34 +28,41 @@ class NFOExporter:
         self.video_parser = MusicVideoNFOParser()
         self.artist_parser = ArtistNFOParser()
 
-    async def export_video_to_nfo(
-        self,
-        video_id: int,
-        nfo_path: Optional[Path] = None,
-    ) -> Path:
+    @staticmethod
+    def _content_matches(path: Path, content: str) -> bool:
         """
-        Export video record to NFO file.
+        Check if existing file content matches new content using MD5 hash.
+
+        Args:
+            path: Path to existing file
+            content: New content to compare
+
+        Returns:
+            True if file exists and content matches, False otherwise
+        """
+        if not path.exists():
+            return False
+
+        try:
+            existing = path.read_text(encoding="utf-8")
+            existing_hash = hashlib.md5(existing.encode("utf-8")).hexdigest()
+            new_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
+            return existing_hash == new_hash
+        except Exception:
+            return False
+
+    async def _build_video_nfo(self, video_id: int) -> MusicVideoNFO:
+        """
+        Build MusicVideoNFO model from database record.
 
         Args:
             video_id: Video ID
-            nfo_path: Path for NFO file (uses video.nfo_file_path if not provided)
 
         Returns:
-            Path to created NFO file
-
-        Raises:
-            VideoNotFoundError: If video not found
-            ValueError: If no nfo_path provided and video.nfo_file_path is None
+            MusicVideoNFO model instance
         """
         # Get video record
         video = await self.repository.get_video_by_id(video_id)
-
-        # Determine output path
-        if nfo_path is None:
-            if video.get("nfo_file_path"):
-                nfo_path = Path(video["nfo_file_path"])
-            else:
-                raise ValueError(f"No nfo_path provided and video {video_id} has no nfo_file_path")
 
         # Get video artists
         artists = await self.repository.get_video_artists(video_id)
@@ -75,7 +83,7 @@ class NFOExporter:
         tag_names = [tag["name"] for tag in video_tags]
 
         # Create MusicVideoNFO model
-        nfo = MusicVideoNFO(
+        return MusicVideoNFO(
             title=video["title"],
             album=video.get("album"),
             studio=video.get("studio"),
@@ -87,11 +95,93 @@ class NFOExporter:
             tags=tag_names,
         )
 
+    async def generate_video_nfo_content(self, video_id: int) -> str:
+        """
+        Generate NFO XML content for a video without writing to disk.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            XML string content for the NFO file
+        """
+        nfo = await self._build_video_nfo(video_id)
+        return self.video_parser.to_xml_string(nfo)
+
+    async def _build_artist_nfo(self, artist_id: int) -> ArtistNFO:
+        """
+        Build ArtistNFO model from database record.
+
+        Args:
+            artist_id: Artist ID
+
+        Returns:
+            ArtistNFO model instance
+        """
+        artist = await self.repository.get_artist_by_id(artist_id)
+        return ArtistNFO(name=artist["name"])
+
+    async def generate_artist_nfo_content(self, artist_id: int) -> str:
+        """
+        Generate NFO XML content for an artist without writing to disk.
+
+        Args:
+            artist_id: Artist ID
+
+        Returns:
+            XML string content for the NFO file
+        """
+        nfo = await self._build_artist_nfo(artist_id)
+        return self.artist_parser.to_xml_string(nfo)
+
+    async def export_video_to_nfo(
+        self,
+        video_id: int,
+        nfo_path: Optional[Path] = None,
+        skip_unchanged: bool = False,
+    ) -> tuple[Path, bool]:
+        """
+        Export video record to NFO file.
+
+        Args:
+            video_id: Video ID
+            nfo_path: Path for NFO file (uses video.nfo_file_path if not provided)
+            skip_unchanged: If True, skip writing if content matches existing file
+
+        Returns:
+            Tuple of (path to NFO file, whether file was actually written)
+            When skip_unchanged=True and content matches, returns (path, False)
+
+        Raises:
+            VideoNotFoundError: If video not found
+            ValueError: If no nfo_path provided and video.nfo_file_path is None
+        """
+        # Determine output path
+        if nfo_path is None:
+            video = await self.repository.get_video_by_id(video_id)
+            if video.get("nfo_file_path"):
+                nfo_path = Path(video["nfo_file_path"])
+            else:
+                raise ValueError(f"No nfo_path provided and video {video_id} has no nfo_file_path")
+
+        # Generate content
+        content = await self.generate_video_nfo_content(video_id)
+
+        # Check if content matches existing file
+        if skip_unchanged and self._content_matches(nfo_path, content):
+            logger.debug(
+                "video_nfo_unchanged",
+                video_id=video_id,
+                nfo_path=str(nfo_path),
+            )
+            return nfo_path, False
+
         # Ensure parent directory exists
         nfo_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write NFO file
-        self.video_parser.write_file(nfo, nfo_path)
+        with open(nfo_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
         logger.info(
             "video_nfo_exported",
@@ -99,39 +189,47 @@ class NFOExporter:
             nfo_path=str(nfo_path),
         )
 
-        return nfo_path
+        return nfo_path, True
 
     async def export_artist_to_nfo(
         self,
         artist_id: int,
         nfo_path: Path,
-    ) -> Path:
+        skip_unchanged: bool = False,
+    ) -> tuple[Path, bool]:
         """
         Export artist record to NFO file.
 
         Args:
             artist_id: Artist ID
             nfo_path: Path for NFO file
+            skip_unchanged: If True, skip writing if content matches existing file
 
         Returns:
-            Path to created NFO file
+            Tuple of (path to NFO file, whether file was actually written)
+            When skip_unchanged=True and content matches, returns (path, False)
 
         Raises:
             ArtistNotFoundError: If artist not found
         """
-        # Get artist record
-        artist = await self.repository.get_artist_by_id(artist_id)
+        # Generate content
+        content = await self.generate_artist_nfo_content(artist_id)
 
-        # Create ArtistNFO model
-        nfo = ArtistNFO(
-            name=artist["name"],
-        )
+        # Check if content matches existing file
+        if skip_unchanged and self._content_matches(nfo_path, content):
+            logger.debug(
+                "artist_nfo_unchanged",
+                artist_id=artist_id,
+                nfo_path=str(nfo_path),
+            )
+            return nfo_path, False
 
         # Ensure parent directory exists
         nfo_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write NFO file
-        self.artist_parser.write_file(nfo, nfo_path)
+        with open(nfo_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
         logger.info(
             "artist_nfo_exported",
@@ -139,4 +237,4 @@ class NFOExporter:
             nfo_path=str(nfo_path),
         )
 
-        return nfo_path
+        return nfo_path, True

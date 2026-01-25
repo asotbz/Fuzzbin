@@ -101,6 +101,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             retention_days=config.trash.retention_days,
         )
 
+    # Schedule automatic NFO export if enabled
+    if config.nfo_export.enabled:
+        nfo_export_job = Job(
+            type=JobType.EXPORT_NFO,
+            schedule=config.nfo_export.schedule,
+            metadata={
+                "incremental": config.nfo_export.incremental,
+                "include_deleted": config.nfo_export.include_deleted,
+            },
+        )
+        await queue.submit(nfo_export_job)
+        logger.info(
+            "scheduled_nfo_export_enabled",
+            schedule=config.nfo_export.schedule,
+            incremental=config.nfo_export.incremental,
+            include_deleted=config.nfo_export.include_deleted,
+        )
+
     # Check for default password if auth is enabled
     if settings.auth_enabled:
         logger.info("api_auth_enabled", jwt_algorithm=settings.jwt_algorithm)

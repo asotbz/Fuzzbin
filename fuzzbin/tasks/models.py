@@ -33,6 +33,7 @@ class JobType(str, Enum):
     BACKUP = "backup"  # System backup job
     TRASH_CLEANUP = "trash_cleanup"  # Automatic trash cleanup job
     SYNC_DECADE_TAGS = "sync_decade_tags"  # Synchronize auto-decade tags across library
+    EXPORT_NFO = "export_nfo"  # Export all NFO files to disk from database
 
 
 class JobStatus(str, Enum):

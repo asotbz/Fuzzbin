@@ -9,6 +9,8 @@ import JobCard from '../components/JobCard'
 import JobFilterBar from '../components/JobFilterBar'
 import './ActivityMonitorPage.css'
 
+const SCHEDULED_JOB_TYPES = new Set(['backup', 'trash_cleanup', 'export_nfo'])
+
 function groupJobsByStatus(jobs: JobData[]): {
   active: JobData[]
   completed: JobData[]
@@ -28,6 +30,10 @@ function filterJobs(
   searchQuery: string
 ): JobData[] {
   return Array.from(jobs.values()).filter(job => {
+    if (SCHEDULED_JOB_TYPES.has(job.job_type) && ['pending', 'waiting'].includes(job.status)) {
+      return false
+    }
+
     // Status filter
     if (statusFilter.size > 0) {
       const isActiveStatus = ['pending', 'waiting', 'running'].includes(job.status)
@@ -74,6 +80,31 @@ export default function ActivityMonitorPage() {
   const [activeSectionCollapsed, setActiveSectionCollapsed] = useState(false)
   const [completedSectionCollapsed, setCompletedSectionCollapsed] = useState(false)
   const [failedSectionCollapsed, setFailedSectionCollapsed] = useState(false)
+  const [maintenancePending, setMaintenancePending] = useState<Record<string, boolean>>({})
+
+  const maintenanceJobs = useMemo(
+    () => [
+      {
+        type: 'backup',
+        title: 'System Backup',
+        description: 'Create a full backup of config, database, and thumbnails.',
+        actionLabel: 'Run Backup',
+      },
+      {
+        type: 'trash_cleanup',
+        title: 'Trash Cleanup',
+        description: 'Delete items older than your configured retention window.',
+        actionLabel: 'Clean Trash',
+      },
+      {
+        type: 'export_nfo',
+        title: 'Export NFO',
+        description: 'Write NFO files from the current library metadata.',
+        actionLabel: 'Export NFO',
+      },
+    ],
+    []
+  )
 
   const availableJobTypes = useMemo(() => {
     const types = new Set<string>()
@@ -124,6 +155,37 @@ export default function ActivityMonitorPage() {
     }
   }
 
+  const handleRunMaintenanceJob = async (jobType: string, label: string) => {
+    setMaintenancePending(prev => ({ ...prev, [jobType]: true }))
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/jobs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          type: jobType,
+          metadata: {},
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to submit job')
+      }
+
+      const result = await response.json()
+      toast.success(`${label} queued`, {
+        description: result.job_id ? `Job ID: ${result.job_id}` : undefined,
+      })
+    } catch (error) {
+      console.error('Failed to submit job:', error)
+      toast.error(`Failed to run ${label.toLowerCase()}`)
+    } finally {
+      setMaintenancePending(prev => ({ ...prev, [jobType]: false }))
+    }
+  }
+
   const handleClearJob = (_jobId: string) => {
     // For now, just remove from local state
     // In production, you might want to persist this to localStorage or backend
@@ -160,6 +222,37 @@ export default function ActivityMonitorPage() {
         onSearchQueryChange={setSearchQuery}
         availableJobTypes={availableJobTypes}
       />
+
+      <section className="maintenancePanel">
+        <div className="maintenanceContainer">
+          <div className="maintenanceHeader">
+            <div>
+              <h2 className="sectionTitle">Maintenance</h2>
+              <p className="maintenanceSubtitle">
+                Run scheduled tasks on-demand without waiting for the next cycle.
+              </p>
+            </div>
+          </div>
+          <div className="maintenanceGrid">
+            {maintenanceJobs.map(job => (
+              <div key={job.type} className="maintenanceCard">
+                <div className="maintenanceCardHeader">
+                  <div className="maintenanceTitle">{job.title}</div>
+                </div>
+                <p className="maintenanceDescription">{job.description}</p>
+                <button
+                  type="button"
+                  className="maintenanceButton"
+                  onClick={() => handleRunMaintenanceJob(job.type, job.title)}
+                  disabled={maintenancePending[job.type]}
+                >
+                  {maintenancePending[job.type] ? 'Queueing…' : job.actionLabel}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <div className="jobSections">
         {/* Active Jobs */}
