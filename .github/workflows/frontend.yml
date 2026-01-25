@@ -120,7 +120,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.14'
           cache: 'pip'
 
       - name: Install frontend dependencies
@@ -144,8 +144,17 @@ jobs:
         run: |
           # Copy example config
           cp config.example.yaml /tmp/fuzzbin-e2e/config/config.yaml
-          # Start server in background with E2E test configuration
-          fuzzbin-api &
+          # Start server in background, redirect output to log file
+          nohup fuzzbin-api > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+          # Give the server a moment to start
+          sleep 3
+          # Check if process is still running
+          if ! kill -0 $(cat /tmp/backend.pid) 2>/dev/null; then
+            echo "Backend failed to start. Logs:"
+            cat /tmp/backend.log
+            exit 1
+          fi
         env:
           FUZZBIN_CONFIG_DIR: /tmp/fuzzbin-e2e/config
           FUZZBIN_LIBRARY_DIR: /tmp/fuzzbin-e2e/library
@@ -153,13 +162,22 @@ jobs:
           FUZZBIN_API_AUTH_ENABLED: 'true'
 
       - name: Start frontend dev server
-        run: npm run dev &
+        run: |
+          nohup npm run dev > /tmp/frontend.log 2>&1 &
+          echo $! > /tmp/frontend.pid
+          sleep 3
         env:
           VITE_API_BASE_URL: http://localhost:8000
 
       - name: Wait for servers
         run: |
-          npx wait-on http://localhost:8000/health http://localhost:5173 --timeout 60000
+          npx wait-on http://localhost:8000/health http://localhost:5173 --timeout 60000 || {
+            echo "=== Backend logs ==="
+            cat /tmp/backend.log || true
+            echo "=== Frontend logs ==="
+            cat /tmp/frontend.log || true
+            exit 1
+          }
 
       - name: Run Playwright tests
         run: npm run test:e2e
