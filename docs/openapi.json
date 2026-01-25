@@ -6984,6 +6984,335 @@
         ]
       }
     },
+    "/add/search/artist": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Search for artists on IMVDb",
+        "description": "Search for artists by name and return those with videos available.",
+        "operationId": "search_artists_add_search_artist_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtistSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistSearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/artist/preview/{entity_id}": {
+      "get": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Get paginated artist videos for selection",
+        "description": "Fetch videos for an artist with duplicate detection against existing library.",
+        "operationId": "preview_artist_videos_add_artist_preview__entity_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Per Page"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistVideosPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/add/enrich/imvdb-video": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Enrich a single IMVDb video with MusicBrainz data",
+        "description": "Fetch full video details from IMVDb and enrich with MusicBrainz metadata.",
+        "operationId": "enrich_imvdb_video_add_enrich_imvdb_video_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtistVideoEnrichRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistVideoEnrichResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/add/artist/import": {
+      "post": {
+        "tags": [
+          "Add"
+        ],
+        "summary": "Import selected videos from an artist",
+        "description": "Submit a batch import job for selected artist videos.",
+        "operationId": "submit_artist_import_add_artist_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtistBatchImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistBatchImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/imvdb/search/videos": {
       "get": {
         "tags": [
@@ -7228,6 +7557,81 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/IMVDbEntityDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imvdb/entities/{entity_id}/videos": {
+      "get": {
+        "tags": [
+          "IMVDb"
+        ],
+        "summary": "Get paginated artist videos",
+        "description": "Get paginated artist videos for an IMVDb entity.\n\nSupports lazy loading for the artist import workflow. Returns videos\nin the order they appear on IMVDb (typically by release year descending).\n\nUse `has_more` to determine if additional pages are available.\n\n**Rate Limited:** Shares rate limit with other IMVDb endpoints.\n\n**Cached:** Results are cached for 30 minutes.",
+        "operationId": "get_entity_videos_imvdb_entities__entity_id__videos_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number (1-indexed)",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number (1-indexed)"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Results per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Results per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of videos for the artist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IMVDbEntityVideosPageResponse"
                 }
               }
             }
@@ -7842,6 +8246,73 @@
           },
           "400": {
             "description": "Bad Request - Invalid input or business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/exports/nfo/all": {
+      "post": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "Export all NFO files (background job)",
+        "description": "Start a background job to export all video and artist NFO files from the database. Uses content hash comparison to skip writing files that haven't changed.",
+        "operationId": "export_all_nfo_files_exports_nfo_all_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NFOExportJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions or account disabled",
             "content": {
               "application/json": {
                 "schema": {
@@ -10042,6 +10513,97 @@
         "title": "AddSingleImportResponse",
         "description": "Response after submitting a single-video import job."
       },
+      "ArtistBatchImportRequest": {
+        "properties": {
+          "entity_id": {
+            "type": "integer",
+            "title": "Entity Id",
+            "description": "IMVDb entity ID"
+          },
+          "entity_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Name",
+            "description": "Artist name for logging"
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/SelectedArtistVideoImport"
+            },
+            "type": "array",
+            "title": "Videos",
+            "description": "Selected videos to import"
+          },
+          "initial_status": {
+            "type": "string",
+            "title": "Initial Status",
+            "description": "Initial status for created video records",
+            "default": "discovered",
+            "examples": [
+              "discovered",
+              "imported"
+            ]
+          },
+          "auto_download": {
+            "type": "boolean",
+            "title": "Auto Download",
+            "description": "Automatically queue download jobs for videos with YouTube IDs",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "videos"
+        ],
+        "title": "ArtistBatchImportRequest",
+        "description": "Request to import selected videos from an artist."
+      },
+      "ArtistBatchImportResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Background job ID"
+          },
+          "entity_id": {
+            "type": "integer",
+            "title": "Entity Id",
+            "description": "IMVDb entity ID"
+          },
+          "video_count": {
+            "type": "integer",
+            "title": "Video Count",
+            "description": "Number of videos being imported"
+          },
+          "auto_download": {
+            "type": "boolean",
+            "title": "Auto Download",
+            "description": "Whether auto-download is enabled"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Initial job status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "entity_id",
+          "video_count",
+          "auto_download"
+        ],
+        "title": "ArtistBatchImportResponse",
+        "description": "Response after submitting an artist batch import job."
+      },
       "ArtistCreate": {
         "properties": {
           "name": {
@@ -10216,6 +10778,156 @@
         "title": "ArtistResponse",
         "description": "Full artist response with all fields."
       },
+      "ArtistSearchRequest": {
+        "properties": {
+          "artist_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Artist Name",
+            "description": "Artist name to search for"
+          },
+          "per_page": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Per Page",
+            "description": "Max results to return",
+            "default": 25
+          }
+        },
+        "type": "object",
+        "required": [
+          "artist_name"
+        ],
+        "title": "ArtistSearchRequest",
+        "description": "Request to search for artists on IMVDb."
+      },
+      "ArtistSearchResponse": {
+        "properties": {
+          "artist_name": {
+            "type": "string",
+            "title": "Artist Name",
+            "description": "Search query"
+          },
+          "total_results": {
+            "type": "integer",
+            "title": "Total Results",
+            "description": "Total matching results"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ArtistSearchResultItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Artists with video_count > 0"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artist_name",
+          "total_results"
+        ],
+        "title": "ArtistSearchResponse",
+        "description": "Response from artist search."
+      },
+      "ArtistSearchResultItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "IMVDb entity ID"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Artist name"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug",
+            "description": "URL-friendly slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb profile URL"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image",
+            "description": "Profile image URL"
+          },
+          "discogs_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discogs Id",
+            "description": "Linked Discogs ID"
+          },
+          "artist_video_count": {
+            "type": "integer",
+            "title": "Artist Video Count",
+            "description": "Accurate number of videos from entity details",
+            "default": 0
+          },
+          "featured_video_count": {
+            "type": "integer",
+            "title": "Featured Video Count",
+            "description": "Number of videos as featured",
+            "default": 0
+          },
+          "sample_tracks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Sample Tracks",
+            "description": "First 3 track titles from artist's videos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ArtistSearchResultItem",
+        "description": "Individual artist in search results."
+      },
       "ArtistUpdate": {
         "properties": {
           "name": {
@@ -10285,6 +10997,415 @@
         "type": "object",
         "title": "ArtistUpdate",
         "description": "Schema for updating an existing artist (all fields optional)."
+      },
+      "ArtistVideoEnrichRequest": {
+        "properties": {
+          "imvdb_id": {
+            "type": "integer",
+            "title": "Imvdb Id",
+            "description": "IMVDb video ID"
+          },
+          "artist": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Artist",
+            "description": "Artist name"
+          },
+          "track_title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Track Title",
+            "description": "Song title"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year from IMVDb"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "IMVDb thumbnail URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imvdb_id",
+          "artist",
+          "track_title"
+        ],
+        "title": "ArtistVideoEnrichRequest",
+        "description": "Request for single IMVDb video enrichment via MusicBrainz."
+      },
+      "ArtistVideoEnrichResponse": {
+        "properties": {
+          "imvdb_id": {
+            "type": "integer",
+            "title": "Imvdb Id",
+            "description": "IMVDb video ID"
+          },
+          "directors": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directors",
+            "description": "Directors from IMVDb"
+          },
+          "featured_artists": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Featured Artists",
+            "description": "Featured artists from IMVDb"
+          },
+          "youtube_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Youtube Ids",
+            "description": "YouTube video IDs from IMVDb sources"
+          },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
+          },
+          "musicbrainz": {
+            "$ref": "#/components/schemas/MusicBrainzEnrichmentData",
+            "description": "MusicBrainz enrichment data"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Resolved track title"
+          },
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "description": "Resolved artist name"
+          },
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album",
+            "description": "Album from MusicBrainz"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Resolved release year"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Record label from MusicBrainz"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre",
+            "description": "Classified genre"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "Thumbnail URL"
+          },
+          "enrichment_status": {
+            "type": "string",
+            "title": "Enrichment Status",
+            "description": "Enrichment status: 'success', 'partial', or 'not_found'",
+            "default": "success"
+          },
+          "already_exists": {
+            "type": "boolean",
+            "title": "Already Exists",
+            "description": "Whether video exists in library",
+            "default": false
+          },
+          "existing_video_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Video Id",
+            "description": "Existing video ID if dupe"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imvdb_id",
+          "musicbrainz",
+          "title",
+          "artist"
+        ],
+        "title": "ArtistVideoEnrichResponse",
+        "description": "Enrichment response for a single IMVDb video."
+      },
+      "ArtistVideoPreviewItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "IMVDb video ID"
+          },
+          "song_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Song Title",
+            "description": "Song title"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year",
+            "description": "Release year"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "IMVDb video URL"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "Thumbnail image URL"
+          },
+          "production_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Status",
+            "description": "Production status code"
+          },
+          "version_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Name",
+            "description": "Version name if multiple"
+          },
+          "already_exists": {
+            "type": "boolean",
+            "title": "Already Exists",
+            "description": "Whether video is already in library",
+            "default": false
+          },
+          "existing_video_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Video Id",
+            "description": "Existing video ID if dupe"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ArtistVideoPreviewItem",
+        "description": "Single video in artist preview (for selection grid)."
+      },
+      "ArtistVideosPreviewResponse": {
+        "properties": {
+          "entity_id": {
+            "type": "integer",
+            "title": "Entity Id",
+            "description": "IMVDb entity ID"
+          },
+          "entity_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Name",
+            "description": "Artist name"
+          },
+          "entity_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Slug",
+            "description": "Artist slug"
+          },
+          "total_videos": {
+            "type": "integer",
+            "title": "Total Videos",
+            "description": "Total artist videos on IMVDb"
+          },
+          "current_page": {
+            "type": "integer",
+            "title": "Current Page",
+            "description": "Current page number (1-indexed)"
+          },
+          "per_page": {
+            "type": "integer",
+            "title": "Per Page",
+            "description": "Results per page"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages",
+            "description": "Total number of pages"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "description": "Whether more pages are available"
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/ArtistVideoPreviewItem"
+            },
+            "type": "array",
+            "title": "Videos",
+            "description": "Videos for this page"
+          },
+          "existing_count": {
+            "type": "integer",
+            "title": "Existing Count",
+            "description": "Videos already in library",
+            "default": 0
+          },
+          "new_count": {
+            "type": "integer",
+            "title": "New Count",
+            "description": "Videos not yet in library",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "total_videos",
+          "current_page",
+          "per_page",
+          "total_pages",
+          "has_more"
+        ],
+        "title": "ArtistVideosPreviewResponse",
+        "description": "Paginated preview of artist videos for selection grid."
       },
       "BackupCreateRequest": {
         "properties": {
@@ -13758,6 +14879,83 @@
         "title": "IMVDbEntitySearchResponse",
         "description": "Response from IMVDb entity search endpoint."
       },
+      "IMVDbEntityVideosPageResponse": {
+        "properties": {
+          "entity_id": {
+            "type": "integer",
+            "title": "Entity Id",
+            "description": "IMVDb entity ID"
+          },
+          "entity_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Slug",
+            "description": "Entity URL slug"
+          },
+          "entity_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Name",
+            "description": "Entity display name"
+          },
+          "total_videos": {
+            "type": "integer",
+            "title": "Total Videos",
+            "description": "Total number of artist videos"
+          },
+          "current_page": {
+            "type": "integer",
+            "title": "Current Page",
+            "description": "Current page number (1-indexed)"
+          },
+          "per_page": {
+            "type": "integer",
+            "title": "Per Page",
+            "description": "Results per page"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages",
+            "description": "Total number of pages"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "description": "Whether more pages are available"
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/IMVDbVideoSearchItem"
+            },
+            "type": "array",
+            "title": "Videos",
+            "description": "Videos for this page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "total_videos",
+          "current_page",
+          "per_page",
+          "total_pages",
+          "has_more"
+        ],
+        "title": "IMVDbEntityVideosPageResponse",
+        "description": "Paginated artist videos response for lazy loading."
+      },
       "IMVDbImageSet": {
         "properties": {
           "o": {
@@ -14564,6 +15762,7 @@
           "import_nfo",
           "import_spotify",
           "import_spotify_batch",
+          "import_imvdb_artist",
           "import_add_single",
           "import_download",
           "import_organize",
@@ -14578,7 +15777,8 @@
           "import",
           "backup",
           "trash_cleanup",
-          "sync_decade_tags"
+          "sync_decade_tags",
+          "export_nfo"
         ],
         "title": "JobType",
         "description": "Job type enumeration."
@@ -15044,6 +16244,37 @@
         "type": "object",
         "title": "MusicBrainzEnrichmentData",
         "description": "MusicBrainz enrichment results."
+      },
+      "NFOExportJobRequest": {
+        "properties": {
+          "incremental": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incremental",
+            "description": "Skip exporting NFO files whose content hasn't changed. If not specified, uses config default."
+          },
+          "include_deleted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Deleted",
+            "description": "Include soft-deleted videos in export. If not specified, uses config default."
+          }
+        },
+        "type": "object",
+        "title": "NFOExportJobRequest",
+        "description": "Request for NFO export background job."
       },
       "NFOExportRequest": {
         "properties": {
@@ -16332,6 +17563,76 @@
         "type": "object",
         "title": "SearchSuggestionsResponse",
         "description": "Search suggestions response for autocomplete."
+      },
+      "SelectedArtistVideoImport": {
+        "properties": {
+          "imvdb_id": {
+            "type": "integer",
+            "title": "Imvdb Id",
+            "description": "IMVDb video ID"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Video metadata (title, artist, year, album, directors, genre, label)"
+          },
+          "imvdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imvdb Url",
+            "description": "Full IMVDb video URL"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id",
+            "description": "Selected YouTube video ID"
+          },
+          "youtube_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Url",
+            "description": "YouTube URL"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url",
+            "description": "Thumbnail image URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imvdb_id",
+          "metadata"
+        ],
+        "title": "SelectedArtistVideoImport",
+        "description": "Single video to import from artist import workflow."
       },
       "SelectedTrackImport": {
         "properties": {

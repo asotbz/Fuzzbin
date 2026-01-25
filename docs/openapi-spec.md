@@ -318,6 +318,17 @@ Returns full entity information including:
 **Rate Limited:** Shares rate limit with other IMVDb endpoints.
 
 **Cached:** Results are cached for 30 minutes.
+- `GET` `/imvdb/entities/{entity_id}/videos` — Get paginated artist videos
+  - Get paginated artist videos for an IMVDb entity.
+
+Supports lazy loading for the artist import workflow. Returns videos
+in the order they appear on IMVDb (typically by release year descending).
+
+Use `has_more` to determine if additional pages are available.
+
+**Rate Limited:** Shares rate limit with other IMVDb endpoints.
+
+**Cached:** Results are cached for 30 minutes.
 
 ## Discogs
 Discogs music database: search releases, get master/release details and artist discographies
@@ -407,6 +418,8 @@ Export NFO metadata files and generate playlists
 
 - `POST` `/exports/nfo` — Export NFO files
   - Regenerate NFO files for videos. NFO files are written alongside video files in the library.
+- `POST` `/exports/nfo/all` — Export all NFO files (background job)
+  - Start a background job to export all video and artist NFO files from the database. Uses content hash comparison to skip writing files that haven't changed.
 - `POST` `/exports/playlist` — Export playlist
   - Export videos as a playlist in M3U, CSV, or JSON format.
 
@@ -603,3 +616,11 @@ Import hub endpoints: batch preview and import job submission
   - Submit a job to import only the selected tracks from a Spotify playlist with optional metadata overrides and auto-download.
 - `POST` `/add/youtube/metadata` — Get YouTube video metadata
   - Fetch YouTube video metadata (view count, duration, channel) using yt-dlp.
+- `POST` `/add/search/artist` — Search for artists on IMVDb
+  - Search for artists by name and return those with videos available.
+- `GET` `/add/artist/preview/{entity_id}` — Get paginated artist videos for selection
+  - Fetch videos for an artist with duplicate detection against existing library.
+- `POST` `/add/enrich/imvdb-video` — Enrich a single IMVDb video with MusicBrainz data
+  - Fetch full video details from IMVDb and enrich with MusicBrainz metadata.
+- `POST` `/add/artist/import` — Import selected videos from an artist
+  - Submit a batch import job for selected artist videos.

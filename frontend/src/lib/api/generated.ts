@@ -1628,6 +1628,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/add/search/artist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search for artists on IMVDb
+         * @description Search for artists by name and return those with videos available.
+         */
+        post: operations["search_artists_add_search_artist_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/add/artist/preview/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paginated artist videos for selection
+         * @description Fetch videos for an artist with duplicate detection against existing library.
+         */
+        get: operations["preview_artist_videos_add_artist_preview__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/add/enrich/imvdb-video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrich a single IMVDb video with MusicBrainz data
+         * @description Fetch full video details from IMVDb and enrich with MusicBrainz metadata.
+         */
+        post: operations["enrich_imvdb_video_add_enrich_imvdb_video_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/add/artist/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import selected videos from an artist
+         * @description Submit a batch import job for selected artist videos.
+         */
+        post: operations["submit_artist_import_add_artist_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/imvdb/search/videos": {
         parameters: {
             query?: never;
@@ -1735,6 +1815,35 @@ export interface paths {
          *     **Cached:** Results are cached for 30 minutes.
          */
         get: operations["get_entity_imvdb_entities__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imvdb/entities/{entity_id}/videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paginated artist videos
+         * @description Get paginated artist videos for an IMVDb entity.
+         *
+         *     Supports lazy loading for the artist import workflow. Returns videos
+         *     in the order they appear on IMVDb (typically by release year descending).
+         *
+         *     Use `has_more` to determine if additional pages are available.
+         *
+         *     **Rate Limited:** Shares rate limit with other IMVDb endpoints.
+         *
+         *     **Cached:** Results are cached for 30 minutes.
+         */
+        get: operations["get_entity_videos_imvdb_entities__entity_id__videos_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1976,6 +2085,26 @@ export interface paths {
          * @description Regenerate NFO files for videos. NFO files are written alongside video files in the library.
          */
         post: operations["export_nfo_files_exports_nfo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/nfo/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export all NFO files (background job)
+         * @description Start a background job to export all video and artist NFO files from the database. Uses content hash comparison to skip writing files that haven't changed.
+         */
+        post: operations["export_all_nfo_files_exports_nfo_all_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2813,6 +2942,73 @@ export interface components {
             status: string;
         };
         /**
+         * ArtistBatchImportRequest
+         * @description Request to import selected videos from an artist.
+         */
+        ArtistBatchImportRequest: {
+            /**
+             * Entity Id
+             * @description IMVDb entity ID
+             */
+            entity_id: number;
+            /**
+             * Entity Name
+             * @description Artist name for logging
+             */
+            entity_name?: string | null;
+            /**
+             * Videos
+             * @description Selected videos to import
+             */
+            videos: components["schemas"]["SelectedArtistVideoImport"][];
+            /**
+             * Initial Status
+             * @description Initial status for created video records
+             * @default discovered
+             * @example discovered
+             * @example imported
+             */
+            initial_status: string;
+            /**
+             * Auto Download
+             * @description Automatically queue download jobs for videos with YouTube IDs
+             * @default false
+             */
+            auto_download: boolean;
+        };
+        /**
+         * ArtistBatchImportResponse
+         * @description Response after submitting an artist batch import job.
+         */
+        ArtistBatchImportResponse: {
+            /**
+             * Job Id
+             * @description Background job ID
+             */
+            job_id: string;
+            /**
+             * Entity Id
+             * @description IMVDb entity ID
+             */
+            entity_id: number;
+            /**
+             * Video Count
+             * @description Number of videos being imported
+             */
+            video_count: number;
+            /**
+             * Auto Download
+             * @description Whether auto-download is enabled
+             */
+            auto_download: boolean;
+            /**
+             * Status
+             * @description Initial job status
+             * @default pending
+             */
+            status: string;
+        };
+        /**
          * ArtistCreate
          * @description Schema for creating or upserting an artist.
          */
@@ -2890,6 +3086,97 @@ export interface components {
             video_count?: number | null;
         };
         /**
+         * ArtistSearchRequest
+         * @description Request to search for artists on IMVDb.
+         */
+        ArtistSearchRequest: {
+            /**
+             * Artist Name
+             * @description Artist name to search for
+             */
+            artist_name: string;
+            /**
+             * Per Page
+             * @description Max results to return
+             * @default 25
+             */
+            per_page: number;
+        };
+        /**
+         * ArtistSearchResponse
+         * @description Response from artist search.
+         */
+        ArtistSearchResponse: {
+            /**
+             * Artist Name
+             * @description Search query
+             */
+            artist_name: string;
+            /**
+             * Total Results
+             * @description Total matching results
+             */
+            total_results: number;
+            /**
+             * Results
+             * @description Artists with video_count > 0
+             */
+            results?: components["schemas"]["ArtistSearchResultItem"][];
+        };
+        /**
+         * ArtistSearchResultItem
+         * @description Individual artist in search results.
+         */
+        ArtistSearchResultItem: {
+            /**
+             * Id
+             * @description IMVDb entity ID
+             */
+            id: number;
+            /**
+             * Name
+             * @description Artist name
+             */
+            name?: string | null;
+            /**
+             * Slug
+             * @description URL-friendly slug
+             */
+            slug?: string | null;
+            /**
+             * Url
+             * @description IMVDb profile URL
+             */
+            url?: string | null;
+            /**
+             * Image
+             * @description Profile image URL
+             */
+            image?: string | null;
+            /**
+             * Discogs Id
+             * @description Linked Discogs ID
+             */
+            discogs_id?: number | null;
+            /**
+             * Artist Video Count
+             * @description Accurate number of videos from entity details
+             * @default 0
+             */
+            artist_video_count: number;
+            /**
+             * Featured Video Count
+             * @description Number of videos as featured
+             * @default 0
+             */
+            featured_video_count: number;
+            /**
+             * Sample Tracks
+             * @description First 3 track titles from artist's videos
+             */
+            sample_tracks?: string[];
+        };
+        /**
          * ArtistUpdate
          * @description Schema for updating an existing artist (all fields optional).
          */
@@ -2919,6 +3206,237 @@ export interface components {
              * @description Discogs artist ID
              */
             discogs_artist_id?: number | null;
+        };
+        /**
+         * ArtistVideoEnrichRequest
+         * @description Request for single IMVDb video enrichment via MusicBrainz.
+         */
+        ArtistVideoEnrichRequest: {
+            /**
+             * Imvdb Id
+             * @description IMVDb video ID
+             */
+            imvdb_id: number;
+            /**
+             * Artist
+             * @description Artist name
+             */
+            artist: string;
+            /**
+             * Track Title
+             * @description Song title
+             */
+            track_title: string;
+            /**
+             * Year
+             * @description Release year from IMVDb
+             */
+            year?: number | null;
+            /**
+             * Thumbnail Url
+             * @description IMVDb thumbnail URL
+             */
+            thumbnail_url?: string | null;
+        };
+        /**
+         * ArtistVideoEnrichResponse
+         * @description Enrichment response for a single IMVDb video.
+         */
+        ArtistVideoEnrichResponse: {
+            /**
+             * Imvdb Id
+             * @description IMVDb video ID
+             */
+            imvdb_id: number;
+            /**
+             * Directors
+             * @description Directors from IMVDb
+             */
+            directors?: string | null;
+            /**
+             * Featured Artists
+             * @description Featured artists from IMVDb
+             */
+            featured_artists?: string | null;
+            /**
+             * Youtube Ids
+             * @description YouTube video IDs from IMVDb sources
+             */
+            youtube_ids?: string[];
+            /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
+            /** @description MusicBrainz enrichment data */
+            musicbrainz: components["schemas"]["MusicBrainzEnrichmentData"];
+            /**
+             * Title
+             * @description Resolved track title
+             */
+            title: string;
+            /**
+             * Artist
+             * @description Resolved artist name
+             */
+            artist: string;
+            /**
+             * Album
+             * @description Album from MusicBrainz
+             */
+            album?: string | null;
+            /**
+             * Year
+             * @description Resolved release year
+             */
+            year?: number | null;
+            /**
+             * Label
+             * @description Record label from MusicBrainz
+             */
+            label?: string | null;
+            /**
+             * Genre
+             * @description Classified genre
+             */
+            genre?: string | null;
+            /**
+             * Thumbnail Url
+             * @description Thumbnail URL
+             */
+            thumbnail_url?: string | null;
+            /**
+             * Enrichment Status
+             * @description Enrichment status: 'success', 'partial', or 'not_found'
+             * @default success
+             */
+            enrichment_status: string;
+            /**
+             * Already Exists
+             * @description Whether video exists in library
+             * @default false
+             */
+            already_exists: boolean;
+            /**
+             * Existing Video Id
+             * @description Existing video ID if dupe
+             */
+            existing_video_id?: number | null;
+        };
+        /**
+         * ArtistVideoPreviewItem
+         * @description Single video in artist preview (for selection grid).
+         */
+        ArtistVideoPreviewItem: {
+            /**
+             * Id
+             * @description IMVDb video ID
+             */
+            id: number;
+            /**
+             * Song Title
+             * @description Song title
+             */
+            song_title?: string | null;
+            /**
+             * Year
+             * @description Release year
+             */
+            year?: number | null;
+            /**
+             * Url
+             * @description IMVDb video URL
+             */
+            url?: string | null;
+            /**
+             * Thumbnail Url
+             * @description Thumbnail image URL
+             */
+            thumbnail_url?: string | null;
+            /**
+             * Production Status
+             * @description Production status code
+             */
+            production_status?: string | null;
+            /**
+             * Version Name
+             * @description Version name if multiple
+             */
+            version_name?: string | null;
+            /**
+             * Already Exists
+             * @description Whether video is already in library
+             * @default false
+             */
+            already_exists: boolean;
+            /**
+             * Existing Video Id
+             * @description Existing video ID if dupe
+             */
+            existing_video_id?: number | null;
+        };
+        /**
+         * ArtistVideosPreviewResponse
+         * @description Paginated preview of artist videos for selection grid.
+         */
+        ArtistVideosPreviewResponse: {
+            /**
+             * Entity Id
+             * @description IMVDb entity ID
+             */
+            entity_id: number;
+            /**
+             * Entity Name
+             * @description Artist name
+             */
+            entity_name?: string | null;
+            /**
+             * Entity Slug
+             * @description Artist slug
+             */
+            entity_slug?: string | null;
+            /**
+             * Total Videos
+             * @description Total artist videos on IMVDb
+             */
+            total_videos: number;
+            /**
+             * Current Page
+             * @description Current page number (1-indexed)
+             */
+            current_page: number;
+            /**
+             * Per Page
+             * @description Results per page
+             */
+            per_page: number;
+            /**
+             * Total Pages
+             * @description Total number of pages
+             */
+            total_pages: number;
+            /**
+             * Has More
+             * @description Whether more pages are available
+             */
+            has_more: boolean;
+            /**
+             * Videos
+             * @description Videos for this page
+             */
+            videos?: components["schemas"]["ArtistVideoPreviewItem"][];
+            /**
+             * Existing Count
+             * @description Videos already in library
+             * @default 0
+             */
+            existing_count: number;
+            /**
+             * New Count
+             * @description Videos not yet in library
+             * @default 0
+             */
+            new_count: number;
         };
         /**
          * BackupCreateRequest
@@ -5010,6 +5528,57 @@ export interface components {
             results?: components["schemas"]["IMVDbEntitySearchItem"][];
         };
         /**
+         * IMVDbEntityVideosPageResponse
+         * @description Paginated artist videos response for lazy loading.
+         */
+        IMVDbEntityVideosPageResponse: {
+            /**
+             * Entity Id
+             * @description IMVDb entity ID
+             */
+            entity_id: number;
+            /**
+             * Entity Slug
+             * @description Entity URL slug
+             */
+            entity_slug?: string | null;
+            /**
+             * Entity Name
+             * @description Entity display name
+             */
+            entity_name?: string | null;
+            /**
+             * Total Videos
+             * @description Total number of artist videos
+             */
+            total_videos: number;
+            /**
+             * Current Page
+             * @description Current page number (1-indexed)
+             */
+            current_page: number;
+            /**
+             * Per Page
+             * @description Results per page
+             */
+            per_page: number;
+            /**
+             * Total Pages
+             * @description Total number of pages
+             */
+            total_pages: number;
+            /**
+             * Has More
+             * @description Whether more pages are available
+             */
+            has_more: boolean;
+            /**
+             * Videos
+             * @description Videos for this page
+             */
+            videos?: components["schemas"]["IMVDbVideoSearchItem"][];
+        };
+        /**
          * IMVDbImageSet
          * @description Image URLs at various sizes.
          */
@@ -5439,7 +6008,7 @@ export interface components {
          * @description Job type enumeration.
          * @enum {string}
          */
-        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "sync_decade_tags";
+        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "sync_decade_tags" | "export_nfo";
         /**
          * JobTypeMetricsResponse
          * @description Metrics for a specific job type.
@@ -5634,6 +6203,22 @@ export interface components {
              * @default false
              */
             confident_match: boolean;
+        };
+        /**
+         * NFOExportJobRequest
+         * @description Request for NFO export background job.
+         */
+        NFOExportJobRequest: {
+            /**
+             * Incremental
+             * @description Skip exporting NFO files whose content hasn't changed. If not specified, uses config default.
+             */
+            incremental?: boolean | null;
+            /**
+             * Include Deleted
+             * @description Include soft-deleted videos in export. If not specified, uses config default.
+             */
+            include_deleted?: boolean | null;
         };
         /**
          * NFOExportRequest
@@ -6471,6 +7056,44 @@ export interface components {
              * @description Matching album names
              */
             albums?: string[];
+        };
+        /**
+         * SelectedArtistVideoImport
+         * @description Single video to import from artist import workflow.
+         */
+        SelectedArtistVideoImport: {
+            /**
+             * Imvdb Id
+             * @description IMVDb video ID
+             */
+            imvdb_id: number;
+            /**
+             * Metadata
+             * @description Video metadata (title, artist, year, album, directors, genre, label)
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /**
+             * Imvdb Url
+             * @description Full IMVDb video URL
+             */
+            imvdb_url?: string | null;
+            /**
+             * Youtube Id
+             * @description Selected YouTube video ID
+             */
+            youtube_id?: string | null;
+            /**
+             * Youtube Url
+             * @description YouTube URL
+             */
+            youtube_url?: string | null;
+            /**
+             * Thumbnail Url
+             * @description Thumbnail image URL
+             */
+            thumbnail_url?: string | null;
         };
         /**
          * SelectedTrackImport
@@ -12393,6 +13016,247 @@ export interface operations {
             };
         };
     };
+    search_artists_add_search_artist_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistSearchResponse"];
+                };
+            };
+            /** @description Bad Request - Invalid input or business rule violation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_artist_videos_add_artist_preview__entity_id__get: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                entity_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistVideosPreviewResponse"];
+                };
+            };
+            /** @description Bad Request - Invalid input or business rule violation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enrich_imvdb_video_add_enrich_imvdb_video_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistVideoEnrichRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistVideoEnrichResponse"];
+                };
+            };
+            /** @description Bad Request - Invalid input or business rule violation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_artist_import_add_artist_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistBatchImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistBatchImportResponse"];
+                };
+            };
+            /** @description Bad Request - Invalid input or business rule violation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_videos_imvdb_search_videos_get: {
         parameters: {
             query: {
@@ -12516,6 +13380,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IMVDbEntityDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entity_videos_imvdb_entities__entity_id__videos_get: {
+        parameters: {
+            query?: {
+                /** @description Page number (1-indexed) */
+                page?: number;
+                /** @description Results per page */
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                entity_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of videos for the artist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IMVDbEntityVideosPageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -12831,6 +13731,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Unauthorized - Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions or account disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_all_nfo_files_exports_nfo_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NFOExportJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
                 };
             };
             /** @description Unauthorized - Authentication required or token invalid */
