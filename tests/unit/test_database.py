@@ -1,15 +1,10 @@
 """Basic database functionality tests."""
 
 import pytest
-import pytest_asyncio
-from pathlib import Path
 
-from fuzzbin.common.config import DatabaseConfig
 from fuzzbin.core.db import (
     VideoRepository,
-    VideoQuery,
     VideoNotFoundError,
-    ArtistNotFoundError,
 )
 
 
@@ -165,9 +160,7 @@ class TestDatabaseBasics:
         )
 
         # Update
-        await test_repository.update_video(
-            video_id, title="Updated Title", year=2021
-        )
+        await test_repository.update_video(video_id, title="Updated Title", year=2021)
 
         # Verify
         video = await test_repository.get_video_by_id(video_id)
@@ -182,9 +175,7 @@ class TestDatabaseBasics:
                 title="Transaction Video",
                 artist="Transaction Artist",
             )
-            artist_id = await test_repository.upsert_artist(
-                name="Transaction Artist"
-            )
+            artist_id = await test_repository.upsert_artist(name="Transaction Artist")
             await test_repository.link_video_artist(video_id, artist_id)
 
         # Verify all operations completed
@@ -199,9 +190,7 @@ class TestDatabaseBasics:
         """Test retrieving video by YouTube ID."""
         await test_repository.create_video(**sample_video_metadata)
 
-        video = await test_repository.get_video_by_youtube_id(
-            sample_video_metadata["youtube_id"]
-        )
+        video = await test_repository.get_video_by_youtube_id(sample_video_metadata["youtube_id"])
         assert video["title"] == sample_video_metadata["title"]
 
     async def test_get_video_by_imvdb_id(
@@ -210,14 +199,12 @@ class TestDatabaseBasics:
         """Test retrieving video by IMVDb ID."""
         await test_repository.create_video(**sample_video_metadata)
 
-        video = await test_repository.get_video_by_imvdb_id(
-            sample_video_metadata["imvdb_video_id"]
-        )
+        video = await test_repository.get_video_by_imvdb_id(sample_video_metadata["imvdb_video_id"])
         assert video["title"] == sample_video_metadata["title"]
 
     async def test_relative_paths(self, test_repository: VideoRepository):
         """Test relative path calculation."""
-        library_dir = getattr(test_repository, 'library_dir', None)
+        library_dir = getattr(test_repository, "library_dir", None)
         if library_dir:
             abs_path = str(library_dir / "videos" / "test.mp4")
             video_id = await test_repository.create_video(
@@ -229,6 +216,7 @@ class TestDatabaseBasics:
             video = await test_repository.get_video_by_id(video_id)
             assert video["video_file_path"] == abs_path
             assert video["video_file_path_relative"] == "videos/test.mp4"
+
 
 @pytest.mark.asyncio
 class TestStatusTracking:
@@ -353,9 +341,7 @@ class TestStatusTracking:
         history = await test_repository.get_status_history(video_id)
         assert len(history) == 1  # Only initial creation
 
-    async def test_update_video_tracks_status_change(
-        self, test_repository: VideoRepository
-    ):
+    async def test_update_video_tracks_status_change(self, test_repository: VideoRepository):
         """Test that update_video automatically tracks status changes."""
         video_id = await test_repository.create_video(
             title="Auto Track Test",

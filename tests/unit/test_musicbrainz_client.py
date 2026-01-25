@@ -249,7 +249,7 @@ class TestSearchRecordings:
         async with MusicBrainzClient.from_config(
             config=musicbrainz_config, config_dir=temp_cache_dir
         ) as client:
-            result = await client.search_recordings(
+            _result = await client.search_recordings(
                 artist="Nirvana",
                 recording="Smells Like Teen Spirit",
                 limit=10,
@@ -342,9 +342,7 @@ class TestGetRecording:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_get_recording(
-        self, musicbrainz_config, recording_response, temp_cache_dir
-    ):
+    async def test_get_recording(self, musicbrainz_config, recording_response, temp_cache_dir):
         """Test getting recording by MBID."""
         mbid = "5fb524f1-8cc8-4c04-a921-e34c0a911ea7"
         route = respx.get(f"https://musicbrainz.org/ws/2/recording/{mbid}").mock(
@@ -436,9 +434,7 @@ class TestRecordingModel:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_recording_artist_name(
-        self, musicbrainz_config, search_response, temp_cache_dir
-    ):
+    async def test_recording_artist_name(self, musicbrainz_config, search_response, temp_cache_dir):
         """Test artist_name property."""
         respx.get("https://musicbrainz.org/ws/2/recording").mock(
             return_value=httpx.Response(200, json=search_response)

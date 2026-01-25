@@ -1,7 +1,5 @@
 """Tests for string normalization utilities."""
 
-import pytest
-
 from fuzzbin.common.string_utils import (
     normalize_string,
     remove_featured_artists,
@@ -161,9 +159,7 @@ class TestNormalizeForMatching:
 
     def test_preserve_featured_when_disabled(self):
         """Test that featured text is preserved when removal disabled."""
-        result = normalize_for_matching(
-            "Artist featuring Other", remove_featured=False
-        )
+        result = normalize_for_matching("Artist featuring Other", remove_featured=False)
         assert result == "artist featuring other"
 
 
@@ -315,7 +311,10 @@ class TestRemoveVersionQualifiers:
 
     def test_parenthetical_anniversary_edition(self):
         """Test removing anniversary edition qualifiers."""
-        assert remove_version_qualifiers("Footloose (15th Anniversary Collectors' Edition)") == "Footloose"
+        assert (
+            remove_version_qualifiers("Footloose (15th Anniversary Collectors' Edition)")
+            == "Footloose"
+        )
         assert remove_version_qualifiers("Album (10th Anniversary Edition)") == "Album"
         assert remove_version_qualifiers("Songs (25th Anniversary)") == "Songs"
 
@@ -376,7 +375,10 @@ class TestRemoveVersionQualifiers:
         """Test that titles starting with parentheses are preserved."""
         result = remove_version_qualifiers("(What's the Story) Morning Glory?")
         assert result == "(What's the Story) Morning Glory?"
-        assert remove_version_qualifiers("(I Can't Get No) Satisfaction") == "(I Can't Get No) Satisfaction"
+        assert (
+            remove_version_qualifiers("(I Can't Get No) Satisfaction")
+            == "(I Can't Get No) Satisfaction"
+        )
 
     def test_case_insensitive(self):
         """Test that pattern matching is case-insensitive."""
@@ -512,15 +514,18 @@ class TestNormalizeSpotifyTitle:
         """Test with real Spotify metadata examples."""
         # Van Halen example
         assert normalize_spotify_title("Jump - 2015 Remaster") == "jump"
-        
+
         # Kenny Loggins example
         result = normalize_spotify_title('Footloose - From "Footloose" Soundtrack')
         assert result == "footloose"
-        
+
         # The Cars example
         assert normalize_spotify_title("You Might Think") == "you might think"
-        
+
         # Album examples
         assert normalize_spotify_title("1984 (Remastered)") == "1984"
-        assert normalize_spotify_title("Footloose (15th Anniversary Collectors' Edition)") == "footloose"
+        assert (
+            normalize_spotify_title("Footloose (15th Anniversary Collectors' Edition)")
+            == "footloose"
+        )
         assert normalize_spotify_title("Heartbeat City (Expanded Edition)") == "heartbeat city"

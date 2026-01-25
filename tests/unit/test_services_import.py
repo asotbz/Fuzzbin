@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.services.import_service import ImportService, NFOImportResult, SpotifyImportResult
 from fuzzbin.services.base import ServiceCallback, ServiceError, ValidationError
@@ -32,10 +31,12 @@ def mock_spotify_client():
     """Mock SpotifyClient for testing."""
     client = AsyncMock()
     client.get_playlist = AsyncMock(return_value=MagicMock(name="Test Playlist"))
-    client.get_playlist_tracks = AsyncMock(return_value=[
-        {"track": {"name": "Song 1", "artists": [{"name": "Artist 1"}]}},
-        {"track": {"name": "Song 2", "artists": [{"name": "Artist 2"}]}},
-    ])
+    client.get_playlist_tracks = AsyncMock(
+        return_value=[
+            {"track": {"name": "Song 1", "artists": [{"name": "Artist 1"}]}},
+            {"track": {"name": "Song 2", "artists": [{"name": "Artist 2"}]}},
+        ]
+    )
     return client
 
 
@@ -52,6 +53,7 @@ def import_service(mock_repository, mock_spotify_client):
 @dataclass
 class MockImportResult:
     """Mock ImportResult from workflow."""
+
     playlist_id: str = ""
     playlist_name: str = ""
     total_tracks: int = 0
@@ -60,7 +62,7 @@ class MockImportResult:
     failed_count: int = 0
     failed_tracks: list = None
     duration_seconds: float = 0.0
-    
+
     def __post_init__(self):
         if self.failed_tracks is None:
             self.failed_tracks = []

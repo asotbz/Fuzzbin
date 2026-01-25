@@ -1,7 +1,6 @@
 """Fixtures specific to unit tests."""
 
 import pytest
-from unittest.mock import AsyncMock
 
 from fuzzbin.common.config import HTTPConfig, RetryConfig
 

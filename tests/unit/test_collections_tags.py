@@ -1,9 +1,8 @@
 """Tests for collections and tags functionality."""
 
 import pytest
-import pytest_asyncio
 
-from fuzzbin.core.db import VideoRepository, QueryError
+from fuzzbin.core.db import VideoRepository
 
 
 @pytest.mark.asyncio
@@ -57,9 +56,7 @@ class TestVideoCollections:
     async def test_link_video_to_collection(self, test_repository: VideoRepository):
         """Test linking a video to a collection."""
         # Create video and collection
-        video_id = await test_repository.create_video(
-            title="Test Video", artist="Test Artist"
-        )
+        video_id = await test_repository.create_video(title="Test Video", artist="Test Artist")
         collection_id = await test_repository.upsert_collection(name="My Playlist")
 
         # Link them
@@ -79,15 +76,9 @@ class TestVideoCollections:
         collection_id = await test_repository.upsert_collection(name="Top Videos")
 
         # Create videos
-        video_id1 = await test_repository.create_video(
-            title="Video 1", artist="Artist A"
-        )
-        video_id2 = await test_repository.create_video(
-            title="Video 2", artist="Artist B"
-        )
-        video_id3 = await test_repository.create_video(
-            title="Video 3", artist="Artist C"
-        )
+        video_id1 = await test_repository.create_video(title="Video 1", artist="Artist A")
+        video_id2 = await test_repository.create_video(title="Video 2", artist="Artist B")
+        video_id3 = await test_repository.create_video(title="Video 3", artist="Artist C")
 
         # Link with different positions
         await test_repository.link_video_collection(video_id1, collection_id, position=2)
@@ -95,9 +86,7 @@ class TestVideoCollections:
         await test_repository.link_video_collection(video_id3, collection_id, position=1)
 
         # Get videos (should be ordered by position)
-        videos = await test_repository.get_collection_videos(
-            collection_id, order_by_position=True
-        )
+        videos = await test_repository.get_collection_videos(collection_id, order_by_position=True)
         assert len(videos) == 3
         assert videos[0]["title"] == "Video 2"  # position 0
         assert videos[1]["title"] == "Video 3"  # position 1
@@ -105,9 +94,7 @@ class TestVideoCollections:
 
     async def test_duplicate_link_ignored(self, test_repository: VideoRepository):
         """Test that duplicate links are ignored."""
-        video_id = await test_repository.create_video(
-            title="Test", artist="Test Artist"
-        )
+        video_id = await test_repository.create_video(title="Test", artist="Test Artist")
         collection_id = await test_repository.upsert_collection(name="Test Collection")
 
         # Link twice
@@ -226,6 +213,7 @@ class TestVideoTags:
         # Tag should be auto-deleted when usage_count reaches 0
         # We verify by trying to get it - it should raise TagNotFoundError
         from fuzzbin.core.db import TagNotFoundError
+
         with pytest.raises(TagNotFoundError):
             await test_repository.get_tag_by_id(tag_id)
 
@@ -233,7 +221,7 @@ class TestVideoTags:
         """Test getting all videos with a specific tag."""
         # Create videos
         video_id1 = await test_repository.create_video(title="Video 1", artist="Artist A")
-        video_id2 = await test_repository.create_video(title="Video 2", artist="Artist B")
+        _video_id2 = await test_repository.create_video(title="Video 2", artist="Artist B")
         video_id3 = await test_repository.create_video(title="Video 3", artist="Artist C")
 
         # Create tag
@@ -277,7 +265,7 @@ class TestAutoDecadeTag:
             title="Crazy", artist="Gnarls Barkley", year=2006
         )
 
-        tag_id = await test_repository.auto_add_decade_tag(video_id, 2006)
+        _tag_id = await test_repository.auto_add_decade_tag(video_id, 2006)
 
         tags = await test_repository.get_video_tags(video_id)
         assert len(tags) == 1
@@ -289,18 +277,16 @@ class TestAutoDecadeTag:
             title="Blurred Lines", artist="Robin Thicke", year=2013
         )
 
-        tag_id = await test_repository.auto_add_decade_tag(video_id, 2013)
+        _tag_id = await test_repository.auto_add_decade_tag(video_id, 2013)
 
         tags = await test_repository.get_video_tags(video_id)
         assert tags[0]["name"] == "10s"
 
     async def test_auto_add_decade_tag_custom_format(self, test_repository: VideoRepository):
         """Test auto-generating decade tag with custom format."""
-        video_id = await test_repository.create_video(
-            title="Test", artist="Test Artist", year=1985
-        )
+        video_id = await test_repository.create_video(title="Test", artist="Test Artist", year=1985)
 
-        tag_id = await test_repository.auto_add_decade_tag(
+        _tag_id = await test_repository.auto_add_decade_tag(
             video_id, 1985, tag_format="decade-{decade}"
         )
 
@@ -360,7 +346,7 @@ class TestTagQueries:
         collection_id = await test_repository.upsert_collection(name="My Favorites")
         video_id1 = await test_repository.create_video(title="Fav 1", artist="Artist")
         video_id2 = await test_repository.create_video(title="Fav 2", artist="Artist")
-        video_id3 = await test_repository.create_video(title="Not Fav", artist="Artist")
+        _video_id3 = await test_repository.create_video(title="Not Fav", artist="Artist")
 
         # Add to collection
         await test_repository.link_video_collection(video_id1, collection_id)

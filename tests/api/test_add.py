@@ -9,7 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fuzzbin.api.spotify_client import SpotifyClient
-from fuzzbin.parsers.spotify_models import SpotifyAlbum, SpotifyArtist, SpotifyPlaylist, SpotifyTrack
+from fuzzbin.parsers.spotify_models import (
+    SpotifyAlbum,
+    SpotifyArtist,
+    SpotifyPlaylist,
+    SpotifyTrack,
+)
 from fuzzbin.common.config import APIClientConfig
 import fuzzbin
 
@@ -180,7 +185,6 @@ class TestAddPreviewBatchSpotify:
         assert len(data["items"]) == 2
         assert data["items"][0]["kind"] == "spotify_track"
         assert data["items"][0]["spotify_playlist_id"] == "37i9dQZF1DXcBWIGoYBM5M"
-
 
 
 class TestAddSpotifyImport:
@@ -458,7 +462,7 @@ class TestYouTubeSearch:
 
         # May fail if yt-dlp not available, but should return valid response or error
         assert response.status_code in (200, 500, 503)
-        
+
         if response.status_code == 200:
             data = response.json()
             assert data["artist"] == "Nirvana"

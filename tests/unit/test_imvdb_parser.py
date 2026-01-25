@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from fuzzbin.parsers.imvdb_models import (
     EmptySearchResultsError,
@@ -57,7 +56,7 @@ class TestIMVDbVideoModel:
     def test_parse_video_response(self, video_response):
         """Test parsing a real video response."""
         video = IMVDbVideo.model_validate(video_response)
-        
+
         assert video.id == 121779770452
         assert video.song_title == "Blurred Lines"
         assert video.year == 2013
@@ -72,7 +71,7 @@ class TestIMVDbVideoModel:
     def test_video_sources(self, video_response):
         """Test parsing video sources."""
         video = IMVDbVideo.model_validate(video_response)
-        
+
         # Check YouTube primary source
         primary_sources = [s for s in video.sources if s.is_primary]
         assert len(primary_sources) == 1
@@ -83,7 +82,7 @@ class TestIMVDbVideoModel:
         """Test that optional fields work correctly."""
         minimal_data = {"id": 12345}
         video = IMVDbVideo.model_validate(minimal_data)
-        
+
         assert video.id == 12345
         assert video.song_title is None
         assert video.year is None
@@ -99,7 +98,7 @@ class TestIMVDbVideoModel:
             "another_unknown": 999,
         }
         video = IMVDbVideo.model_validate(data)
-        
+
         assert video.id == 12345
         assert video.song_title == "Test"
         assert not hasattr(video, "unknown_field")
@@ -111,7 +110,7 @@ class TestIMVDbEntityModel:
     def test_parse_entity_response(self, entity_response):
         """Test parsing a real entity response via parser."""
         entity = IMVDbParser.parse_entity(entity_response)
-        
+
         assert entity.id == 838673
         assert entity.slug == "robin-thicke"
         assert entity.artist_video_count == 4
@@ -122,7 +121,7 @@ class TestIMVDbEntityModel:
     def test_entity_video_list(self, entity_response):
         """Test entity video list parsing."""
         entity = IMVDbParser.parse_entity(entity_response)
-        
+
         # Check first video
         first_video = entity.artist_videos[0]
         assert isinstance(first_video, IMVDbEntityVideo)
@@ -140,7 +139,7 @@ class TestIMVDbEntityModel:
             "featured_video_count": 0,
         }
         entity = IMVDbEntity.model_validate(minimal_data)
-        
+
         assert entity.id == 12345
         assert entity.slug == "test-artist"
         assert entity.name is None
@@ -153,7 +152,7 @@ class TestIMVDbSearchResultModel:
     def test_parse_search_results(self, search_videos_response):
         """Test parsing search results."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         assert results.pagination.total_results == 196
         assert results.pagination.current_page == 1
         assert results.pagination.per_page == 25
@@ -163,7 +162,7 @@ class TestIMVDbSearchResultModel:
     def test_search_result_videos(self, search_videos_response):
         """Test individual video results."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         first_result = results.results[0]
         assert isinstance(first_result, IMVDbEntityVideo)
         assert first_result.id == 121779770452
@@ -177,7 +176,7 @@ class TestIMVDbParser:
     def test_parse_video(self, video_response):
         """Test parse_video method."""
         video = IMVDbParser.parse_video(video_response)
-        
+
         assert isinstance(video, IMVDbVideo)
         assert video.id == 121779770452
         assert video.song_title == "Blurred Lines"
@@ -185,7 +184,7 @@ class TestIMVDbParser:
     def test_parse_entity(self, entity_response):
         """Test parse_entity method."""
         entity = IMVDbParser.parse_entity(entity_response)
-        
+
         assert isinstance(entity, IMVDbEntity)
         assert entity.id == 838673
         assert entity.slug == "robin-thicke"
@@ -193,30 +192,30 @@ class TestIMVDbParser:
     def test_parse_search_results(self, search_videos_response):
         """Test parse_search_results method."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         assert isinstance(results, IMVDbVideoSearchResult)
         assert results.pagination.total_results == 196
 
     def test_parse_entity_search_results(self, search_entities_response):
         """Test parse_entity_search_results method."""
         from fuzzbin.parsers.imvdb_models import IMVDbEntitySearchResponse, IMVDbEntitySearchResult
-        
+
         results = IMVDbParser.parse_entity_search_results(search_entities_response)
-        
+
         assert isinstance(results, IMVDbEntitySearchResponse)
         assert results.pagination.total_results == 386
         assert results.pagination.current_page == 1
         assert results.pagination.per_page == 25
         assert results.pagination.total_pages == 16
         assert len(results.results) == 25
-        
+
         # Check first result
         first_result = results.results[0]
         assert isinstance(first_result, IMVDbEntitySearchResult)
         assert first_result.id == 677510
         assert first_result.slug == "mike-cruz"
         assert first_result.discogs_id == 61556
-        
+
         # Check Robin Thicke result (second in list)
         robin_thicke = results.results[1]
         assert robin_thicke.id == 838673
@@ -231,13 +230,9 @@ class TestFindBestVideoMatch:
     def test_exact_match(self, search_videos_response):
         """Test exact match found."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
-        video = IMVDbParser.find_best_video_match(
-            results.results,
-            "Robin Thicke",
-            "Blurred Lines"
-        )
-        
+
+        video = IMVDbParser.find_best_video_match(results.results, "Robin Thicke", "Blurred Lines")
+
         assert video.id == 121779770452
         assert video.song_title == "Blurred Lines"
         assert video.is_exact_match is True
@@ -245,107 +240,89 @@ class TestFindBestVideoMatch:
     def test_case_insensitive_match(self, search_videos_response):
         """Test case-insensitive matching."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
-        video = IMVDbParser.find_best_video_match(
-            results.results,
-            "robin thicke",
-            "BLURRED LINES"
-        )
-        
+
+        video = IMVDbParser.find_best_video_match(results.results, "robin thicke", "BLURRED LINES")
+
         assert video.id == 121779770452
         assert video.is_exact_match is True
 
     def test_whitespace_normalization(self, search_videos_response):
         """Test whitespace normalization in matching."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         video = IMVDbParser.find_best_video_match(
-            results.results,
-            "  Robin Thicke  ",
-            "  Blurred Lines  "
+            results.results, "  Robin Thicke  ", "  Blurred Lines  "
         )
-        
+
         assert video.id == 121779770452
         assert video.is_exact_match is True
 
     def test_empty_results_raises_error(self):
         """Test that empty results raises EmptySearchResultsError."""
         with pytest.raises(EmptySearchResultsError) as exc_info:
-            IMVDbParser.find_best_video_match(
-                [],
-                "Artist",
-                "Title"
-            )
-        
+            IMVDbParser.find_best_video_match([], "Artist", "Title")
+
         assert "Artist" in str(exc_info.value)
         assert "Title" in str(exc_info.value)
 
     def test_no_match_raises_error(self, search_videos_response):
         """Test that no match raises VideoNotFoundError."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         with pytest.raises(VideoNotFoundError) as exc_info:
             IMVDbParser.find_best_video_match(
-                results.results,
-                "Nonexistent Artist",
-                "Nonexistent Title"
+                results.results, "Nonexistent Artist", "Nonexistent Title"
             )
-        
+
         assert "Nonexistent Artist" in str(exc_info.value)
         assert "Nonexistent Title" in str(exc_info.value)
 
     def test_fuzzy_match_with_typo(self, search_videos_response):
         """Test fuzzy matching with minor typo."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         # Intentional typo: "Blured" instead of "Blurred"
         video = IMVDbParser.find_best_video_match(
             results.results,
             "Robin Thicke",
             "Blured Lines",
-            threshold=0.7  # Lower threshold for typo
+            threshold=0.7,  # Lower threshold for typo
         )
-        
+
         assert video.song_title == "Blurred Lines"
         assert video.is_exact_match is False
 
     def test_fuzzy_match_below_threshold(self, search_videos_response):
         """Test that fuzzy match below threshold raises error."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         with pytest.raises(VideoNotFoundError):
             IMVDbParser.find_best_video_match(
                 results.results,
                 "Completely Different Artist",
                 "Totally Different Title",
-                threshold=0.8
+                threshold=0.8,
             )
 
     def test_featured_artists_stripped(self, search_videos_response):
         """Test that featured artists are stripped in matching."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         # Search with featured artist notation
         video = IMVDbParser.find_best_video_match(
-            results.results,
-            "Robin Thicke ft. T.I.",
-            "Blurred Lines"
+            results.results, "Robin Thicke ft. T.I.", "Blurred Lines"
         )
-        
+
         assert video.id == 121779770452
         assert video.is_exact_match is True
 
     def test_multiple_artists_in_results(self, search_videos_response):
         """Test matching when multiple artists in results."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         # "Rollacoasta" is second result
-        video = IMVDbParser.find_best_video_match(
-            results.results,
-            "Robin Thicke",
-            "Rollacoasta"
-        )
-        
+        video = IMVDbParser.find_best_video_match(results.results, "Robin Thicke", "Rollacoasta")
+
         assert video.id == 968122970313
         assert video.song_title == "Rollacoasta"
         assert video.is_exact_match is True
@@ -353,7 +330,7 @@ class TestFindBestVideoMatch:
     def test_primary_artists_only_matched(self, search_videos_response):
         """Test that only primary artists are matched, not featured."""
         results = IMVDbParser.parse_search_results(search_videos_response)
-        
+
         # Try to match by featured artist name (should not work for exact match)
         # T.I. is a featured artist on "Blurred Lines"
         with pytest.raises(VideoNotFoundError):
@@ -361,7 +338,7 @@ class TestFindBestVideoMatch:
                 results.results,
                 "T.I.",
                 "Blurred Lines",
-                threshold=0.9  # High threshold to avoid fuzzy matches
+                threshold=0.9,  # High threshold to avoid fuzzy matches
             )
 
 
@@ -394,6 +371,6 @@ class TestExceptionHierarchy:
     def test_empty_search_results_is_video_not_found(self):
         """Test that EmptySearchResultsError is subclass of VideoNotFoundError."""
         assert issubclass(EmptySearchResultsError, VideoNotFoundError)
-        
+
         error = EmptySearchResultsError()
         assert isinstance(error, VideoNotFoundError)

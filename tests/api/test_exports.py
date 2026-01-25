@@ -1,7 +1,5 @@
 """Tests for export workflow API endpoints (Phase 7)."""
 
-import json
-import pytest
 from pathlib import Path
 from fastapi.testclient import TestClient
 
@@ -46,9 +44,7 @@ class TestNFOExport:
         # Without video file paths, videos will be skipped
         assert data["skipped_count"] == 2 or data["failed_count"] >= 0
 
-    def test_nfo_export_all_videos(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_nfo_export_all_videos(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test exporting NFO for all videos."""
         test_app.post("/videos", json=sample_video_data)
 
@@ -155,7 +151,11 @@ class TestPlaylistExport:
         assert data["file_path"].endswith(".csv")
 
     def test_export_json_playlist(
-        self, test_app: TestClient, sample_video_data: dict, sample_video_data_2: dict, test_config_dir: Path
+        self,
+        test_app: TestClient,
+        sample_video_data: dict,
+        sample_video_data_2: dict,
+        test_config_dir: Path,
     ) -> None:
         """Test exporting JSON playlist."""
         test_app.post("/videos", json=sample_video_data)
@@ -178,11 +178,15 @@ class TestPlaylistExport:
         assert data["file_path"].endswith(".json")
 
     def test_export_playlist_specific_videos(
-        self, test_app: TestClient, sample_video_data: dict, sample_video_data_2: dict, test_config_dir: Path
+        self,
+        test_app: TestClient,
+        sample_video_data: dict,
+        sample_video_data_2: dict,
+        test_config_dir: Path,
     ) -> None:
         """Test exporting playlist with specific videos."""
         r1 = test_app.post("/videos", json=sample_video_data)
-        r2 = test_app.post("/videos", json=sample_video_data_2)
+        _r2 = test_app.post("/videos", json=sample_video_data_2)
         video_id_1 = r1.json()["id"]
 
         output_file = test_config_dir / "Selected Videos.json"
@@ -238,7 +242,9 @@ class TestPlaylistExport:
         # User controls the output path now
         assert data["file_path"] == str(output_file)
 
-    def test_export_playlist_requires_name(self, test_app: TestClient, test_config_dir: Path) -> None:
+    def test_export_playlist_requires_name(
+        self, test_app: TestClient, test_config_dir: Path
+    ) -> None:
         """Test that playlist export requires a name."""
         response = test_app.post(
             "/exports/playlist",
@@ -262,7 +268,9 @@ class TestPlaylistExport:
 
         assert response.status_code == 422  # Validation error
 
-    def test_export_playlist_invalid_format(self, test_app: TestClient, test_config_dir: Path) -> None:
+    def test_export_playlist_invalid_format(
+        self, test_app: TestClient, test_config_dir: Path
+    ) -> None:
         """Test that invalid export format is rejected."""
         response = test_app.post(
             "/exports/playlist",

@@ -2,15 +2,13 @@
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.clients.ffmpeg_client import FFmpegClient
 from fuzzbin.common.config import ThumbnailConfig
 from fuzzbin.core.exceptions import (
-    FFmpegError,
     FFmpegNotFoundError,
     FFmpegExecutionError,
     ThumbnailTooLargeError,
@@ -85,7 +83,7 @@ class TestFFmpegClientExtractFrame:
     @pytest.fixture
     def mock_config(self) -> ThumbnailConfig:
         """Provide mock thumbnail config.
-        
+
         Note: ThumbnailConfig only has cache_dir; other settings use class defaults.
         """
         return ThumbnailConfig()
@@ -128,14 +126,12 @@ class TestFFmpegClientExtractFrame:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_bytes(b"fake jpeg data")
 
-                result = await client.extract_frame(video_path, output_path)
+                _result = await client.extract_frame(video_path, output_path)
 
         assert output_path.parent.exists()
 
     @pytest.mark.asyncio
-    async def test_extract_frame_success(
-        self, client: FFmpegClient, tmp_path: Path
-    ) -> None:
+    async def test_extract_frame_success(self, client: FFmpegClient, tmp_path: Path) -> None:
         """Test successful frame extraction."""
         video_path = tmp_path / "video.mp4"
         video_path.write_bytes(b"fake video content")
@@ -159,9 +155,7 @@ class TestFFmpegClientExtractFrame:
         assert output_path.exists()
 
     @pytest.mark.asyncio
-    async def test_extract_frame_ffmpeg_failure(
-        self, client: FFmpegClient, tmp_path: Path
-    ) -> None:
+    async def test_extract_frame_ffmpeg_failure(self, client: FFmpegClient, tmp_path: Path) -> None:
         """Test extract_frame raises on ffmpeg failure."""
         video_path = tmp_path / "video.mp4"
         video_path.write_bytes(b"fake video content")
@@ -178,16 +172,14 @@ class TestFFmpegClientExtractFrame:
                     await client.extract_frame(video_path, output_path)
 
     @pytest.mark.asyncio
-    async def test_extract_frame_timeout(
-        self, client: FFmpegClient, tmp_path: Path
-    ) -> None:
+    async def test_extract_frame_timeout(self, client: FFmpegClient, tmp_path: Path) -> None:
         """Test extract_frame raises on timeout."""
         video_path = tmp_path / "video.mp4"
         video_path.write_bytes(b"fake video content")
         output_path = tmp_path / "thumb.jpg"
 
         # Mock timeout
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as _mock_exec:
             with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
                 with pytest.raises(FFmpegExecutionError) as exc_info:
                     await client.extract_frame(video_path, output_path)
@@ -195,11 +187,9 @@ class TestFFmpegClientExtractFrame:
         assert "timed out" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_extract_frame_too_large(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_extract_frame_too_large(self, tmp_path: Path) -> None:
         """Test extract_frame raises when output exceeds max size.
-        
+
         Note: max_file_size is now a class default (DEFAULT_MAX_FILE_SIZE = 5MB).
         We mock it to test the validation logic.
         """
@@ -241,7 +231,7 @@ class TestFFmpegClientContextManager:
     async def test_context_manager(self) -> None:
         """Test async context manager verifies binary."""
         config = ThumbnailConfig()
-        
+
         with patch("shutil.which", return_value="/usr/local/bin/ffmpeg"):
             async with FFmpegClient.from_config(config) as client:
                 assert client._verified is True

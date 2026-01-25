@@ -411,9 +411,7 @@ class TestCronExpressionFormats:
             "* 25 * * *",  # Invalid hour
         ],
     )
-    def test_invalid_cron_expressions(
-        self, test_app: TestClient, cron_expr: str
-    ) -> None:
+    def test_invalid_cron_expressions(self, test_app: TestClient, cron_expr: str) -> None:
         """Test that invalid cron expressions are rejected."""
         response = test_app.post(
             "/jobs/scheduled",

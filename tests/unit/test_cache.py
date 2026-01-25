@@ -1,9 +1,6 @@
 """Tests for HTTP response caching using Hishel."""
 
-import asyncio
-import tempfile
 from pathlib import Path
-from typing import Dict, Any
 
 import httpx
 import pytest
@@ -103,9 +100,7 @@ class TestCacheHitMiss:
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             response = await client.get("/data")
 
             assert response.status_code == 200
@@ -122,9 +117,7 @@ class TestCacheHitMiss:
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             # First request
             response1 = await client.get("/data")
             assert response1.status_code == 200
@@ -148,9 +141,7 @@ class TestCacheHitMiss:
             return_value=httpx.Response(200, json={"result": "created"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             # First POST request
             response1 = await client.post("/data", json={"test": "data"})
             assert response1.status_code == 200
@@ -173,9 +164,7 @@ class TestCacheHitMiss:
             return_value=httpx.Response(404, json={"error": "not found"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             # First request
             response1 = await client.get("/notfound")
             assert response1.status_code == 404
@@ -193,9 +182,7 @@ class TestCacheStorage:
     """Test SQLite cache storage functionality."""
 
     @respx.mock
-    async def test_sqlite_storage_created(
-        self, http_config: HTTPConfig, cache_config: CacheConfig
-    ):
+    async def test_sqlite_storage_created(self, http_config: HTTPConfig, cache_config: CacheConfig):
         """Test that SQLite database file is created."""
         storage_path = Path(cache_config.storage_path)
         assert not storage_path.exists()
@@ -204,27 +191,23 @@ class TestCacheStorage:
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             await client.get("/data")
             # Storage file should be created
             assert storage_path.exists()
             assert storage_path.is_file()
 
     @respx.mock
-    async def test_shared_sqlite_storage(
-        self, http_config: HTTPConfig, tmp_path: Path
-    ):
+    async def test_shared_sqlite_storage(self, http_config: HTTPConfig, tmp_path: Path):
         """Test that multiple clients can share the same SQLite database."""
         shared_cache_db = tmp_path / "shared_cache.db"
-        
+
         cache_config1 = CacheConfig(
             enabled=True,
             storage_path=str(shared_cache_db),
             ttl=3600,
         )
-        
+
         cache_config2 = CacheConfig(
             enabled=True,
             storage_path=str(shared_cache_db),
@@ -258,24 +241,20 @@ class TestCacheClearing:
     """Test cache clearing functionality."""
 
     @respx.mock
-    async def test_clear_cache(
-        self, http_config: HTTPConfig, cache_config: CacheConfig
-    ):
+    async def test_clear_cache(self, http_config: HTTPConfig, cache_config: CacheConfig):
         """Test that clear_cache removes all cached responses."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             # First request
             response1 = await client.get("/data")
             assert response1.status_code == 200
             assert mock_route.call_count == 1
 
             # Second request should be cached
-            response2 = await client.get("/data")
+            _response2 = await client.get("/data")
             assert mock_route.call_count == 1
 
             # Clear cache
@@ -288,9 +267,7 @@ class TestCacheClearing:
             assert mock_route.call_count == 2
 
     @respx.mock
-    async def test_clear_cache_on_api_client(
-        self, api_client_config: dict
-    ):
+    async def test_clear_cache_on_api_client(self, api_client_config: dict):
         """Test cache clearing on RateLimitedAPIClient."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
@@ -322,9 +299,7 @@ class TestCacheWithRateLimiting:
     """Test interaction between cache and rate limiting."""
 
     @respx.mock
-    async def test_cache_hit_bypasses_rate_limiter(
-        self, api_client_config: dict
-    ):
+    async def test_cache_hit_bypasses_rate_limiter(self, api_client_config: dict):
         """Test that cached responses don't consume rate limit quota."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
@@ -350,17 +325,17 @@ class TestCacheWithRateLimiting:
                 response2 = await client.get("/data")
                 assert response2.status_code == 200
                 assert mock_route.call_count == 1  # Still 1, from cache
-                
+
                 # Tokens should be approximately the same (cache hit doesn't consume rate limit)
                 # Allow for slight increase due to bucket refill over time
                 tokens_after_second = client.rate_limiter.get_available_tokens()
                 assert tokens_after_second >= tokens_after_first
-                assert tokens_after_second < tokens_after_first + 1.0  # Less than 1 second of refill
+                assert (
+                    tokens_after_second < tokens_after_first + 1.0
+                )  # Less than 1 second of refill
 
     @respx.mock
-    async def test_multiple_cache_hits_preserve_rate_limit(
-        self, api_client_config: dict
-    ):
+    async def test_multiple_cache_hits_preserve_rate_limit(self, api_client_config: dict):
         """Test that multiple cache hits don't consume any rate limit."""
         mock_route = respx.get("https://api.example.com/data").mock(
             return_value=httpx.Response(200, json={"result": "success"})
@@ -375,7 +350,7 @@ class TestCacheWithRateLimiting:
         ) as client:
             # First request
             await client.get("/data")
-            
+
             if client.rate_limiter:
                 tokens_after_first = client.rate_limiter.get_available_tokens()
 
@@ -385,12 +360,14 @@ class TestCacheWithRateLimiting:
 
                 # Only 1 actual request should have been made
                 assert mock_route.call_count == 1
-                
+
                 # Rate limit tokens should be approximately unchanged
                 # Allow for slight increase due to bucket refill over time
                 tokens_after_cached = client.rate_limiter.get_available_tokens()
                 assert tokens_after_cached >= tokens_after_first
-                assert tokens_after_cached < tokens_after_first + 1.0  # Less than 1 second of refill
+                assert (
+                    tokens_after_cached < tokens_after_first + 1.0
+                )  # Less than 1 second of refill
 
 
 class TestPerAPIConfiguration:
@@ -420,7 +397,7 @@ class TestPerAPIConfiguration:
         mock_route1 = respx.get("https://api1.example.com/data").mock(
             return_value=httpx.Response(200, json={"api": "1"})
         )
-        
+
         mock_route2 = respx.get("https://api2.example.com/data").mock(
             return_value=httpx.Response(200, json={"api": "2"})
         )
@@ -444,9 +421,7 @@ class TestPerAPIConfiguration:
             assert cache_config2.ttl == 3600
 
     @respx.mock
-    async def test_cache_disabled_for_specific_api(
-        self, http_config: HTTPConfig, tmp_path: Path
-    ):
+    async def test_cache_disabled_for_specific_api(self, http_config: HTTPConfig, tmp_path: Path):
         """Test that cache can be disabled for specific APIs."""
         # API 1: Cache enabled
         cache_config1 = CacheConfig(
@@ -463,7 +438,7 @@ class TestPerAPIConfiguration:
         mock_route1 = respx.get("https://api1.example.com/data").mock(
             return_value=httpx.Response(200, json={"cached": True})
         )
-        
+
         mock_route2 = respx.get("https://api2.example.com/data").mock(
             return_value=httpx.Response(200, json={"cached": False})
         )
@@ -504,11 +479,9 @@ class TestCacheWithRetries:
             ]
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             response = await client.get("/data")
-            
+
             # Should succeed after retry
             assert response.status_code == 200
             assert response.json() == {"result": "success"}
@@ -524,9 +497,7 @@ class TestCacheWithRetries:
             return_value=httpx.Response(200, json={"result": "success"})
         )
 
-        async with AsyncHTTPClient(
-            http_config, "https://api.example.com", cache_config
-        ) as client:
+        async with AsyncHTTPClient(http_config, "https://api.example.com", cache_config) as client:
             # First request
             response1 = await client.get("/data")
             assert response1.status_code == 200
@@ -544,20 +515,18 @@ class TestCacheWithAuthentication:
     """Test that cache keys include authentication headers."""
 
     @respx.mock
-    async def test_different_auth_different_cache(
-        self, http_config: HTTPConfig, tmp_path: Path
-    ):
+    async def test_different_auth_different_cache(self, http_config: HTTPConfig, tmp_path: Path):
         """Test that different auth credentials use separate cache databases."""
         # Use separate cache databases for different auth contexts
         cache_db1 = tmp_path / "auth1_cache.db"
         cache_db2 = tmp_path / "auth2_cache.db"
-        
+
         cache_config1 = CacheConfig(
             enabled=True,
             storage_path=str(cache_db1),
             ttl=3600,
         )
-        
+
         cache_config2 = CacheConfig(
             enabled=True,
             storage_path=str(cache_db2),
@@ -573,17 +542,13 @@ class TestCacheWithAuthentication:
                 return httpx.Response(200, json={"user": "user2"})
             return httpx.Response(401, json={"error": "unauthorized"})
 
-        mock_route = respx.get("https://api.example.com/user").mock(
-            side_effect=auth_response
-        )
+        mock_route = respx.get("https://api.example.com/user").mock(side_effect=auth_response)
 
         # Client 1 with token1 and its own cache
         async with AsyncHTTPClient(
             http_config, "https://api.example.com", cache_config1
         ) as client1:
-            response1 = await client1.get(
-                "/user", headers={"Authorization": "Bearer token1"}
-            )
+            response1 = await client1.get("/user", headers={"Authorization": "Bearer token1"})
             assert response1.json()["user"] == "user1"
             assert mock_route.call_count == 1
 
@@ -591,9 +556,7 @@ class TestCacheWithAuthentication:
         async with AsyncHTTPClient(
             http_config, "https://api.example.com", cache_config2
         ) as client2:
-            response2 = await client2.get(
-                "/user", headers={"Authorization": "Bearer token2"}
-            )
+            response2 = await client2.get("/user", headers={"Authorization": "Bearer token2"})
             assert response2.json()["user"] == "user2"
             # Should be 2 because different cache databases
             assert mock_route.call_count == 2
@@ -602,9 +565,7 @@ class TestCacheWithAuthentication:
         async with AsyncHTTPClient(
             http_config, "https://api.example.com", cache_config1
         ) as client3:
-            response3 = await client3.get(
-                "/user", headers={"Authorization": "Bearer token1"}
-            )
+            response3 = await client3.get("/user", headers={"Authorization": "Bearer token1"})
             assert response3.json()["user"] == "user1"
             # Should still be 2 because this matches client1's cached request
             assert mock_route.call_count == 2

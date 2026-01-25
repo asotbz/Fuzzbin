@@ -40,7 +40,7 @@ class TestConcurrencyLimiter:
 
         async with limiter:
             assert limiter.get_active_count() == 1
-            
+
             async with limiter:
                 assert limiter.get_active_count() == 2
 
@@ -55,7 +55,7 @@ class TestConcurrencyLimiter:
 
         async with limiter:
             assert limiter.get_available_slots() == 4
-            
+
             async with limiter:
                 assert limiter.get_available_slots() == 3
 
@@ -109,9 +109,9 @@ class TestConcurrencyLimiter:
     async def test_concurrent_tasks_blocking(self):
         """Test that excess tasks block until slots available."""
         limiter = ConcurrencyLimiter(max_concurrent=2)
-        
+
         results = []
-        
+
         async def task(task_id: int):
             async with limiter:
                 results.append(("start", task_id))

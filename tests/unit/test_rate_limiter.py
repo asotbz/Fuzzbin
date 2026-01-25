@@ -17,11 +17,11 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_second=10)
 
         start_time = time.monotonic()
-        
+
         # Make 3 requests - should be immediate due to burst
         for _ in range(3):
             await limiter.acquire()
-        
+
         elapsed = time.monotonic() - start_time
         # Should complete very quickly (< 0.1s)
         assert elapsed < 0.1
@@ -33,17 +33,17 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_second=2, burst_size=2)
 
         start_time = time.monotonic()
-        
+
         # Make 4 requests
         for _ in range(4):
             await limiter.acquire()
-        
+
         elapsed = time.monotonic() - start_time
-        
+
         # First 2 immediate (burst), next 2 should wait ~1 second total
         # Allow some margin for timing variations
         assert elapsed >= 0.9  # Should take at least 0.9 seconds
-        assert elapsed < 1.5   # But not too long
+        assert elapsed < 1.5  # But not too long
 
     @pytest.mark.asyncio
     async def test_burst_size(self):
@@ -52,11 +52,11 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_second=10, burst_size=3)
 
         start_time = time.monotonic()
-        
+
         # First 3 should be immediate
         for _ in range(3):
             await limiter.acquire()
-        
+
         elapsed = time.monotonic() - start_time
         assert elapsed < 0.1  # Very fast
 
@@ -64,7 +64,7 @@ class TestRateLimiter:
         start_wait = time.monotonic()
         await limiter.acquire()
         wait_time = time.monotonic() - start_wait
-        
+
         assert wait_time > 0.05  # Should have waited a bit
 
     @pytest.mark.asyncio
@@ -74,13 +74,13 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_minute=60, burst_size=2)
 
         start_time = time.monotonic()
-        
+
         # Make 3 requests
         for _ in range(3):
             await limiter.acquire()
-        
+
         elapsed = time.monotonic() - start_time
-        
+
         # First 2 immediate, 3rd waits ~1 second
         assert elapsed >= 0.9
         assert elapsed < 1.5
@@ -92,13 +92,13 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_hour=3600, burst_size=2)
 
         start_time = time.monotonic()
-        
+
         # Make 3 requests
         for _ in range(3):
             await limiter.acquire()
-        
+
         elapsed = time.monotonic() - start_time
-        
+
         # Similar to requests_per_minute test
         assert elapsed >= 0.9
         assert elapsed < 1.5
@@ -109,14 +109,14 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_second=10)
 
         start_time = time.monotonic()
-        
+
         async with limiter:
             # Request is rate limited
             pass
-        
+
         async with limiter:
             pass
-        
+
         elapsed = time.monotonic() - start_time
         assert elapsed < 0.2  # Should be fast due to burst
 
@@ -171,19 +171,19 @@ class TestRateLimiter:
         limiter = RateLimiter(requests_per_second=5, burst_size=2)
 
         start_time = time.monotonic()
-        
+
         async def make_request(request_id: int):
             await limiter.acquire()
             return request_id
 
         # Make 5 concurrent requests
         results = await asyncio.gather(*[make_request(i) for i in range(5)])
-        
+
         elapsed = time.monotonic() - start_time
-        
+
         # All requests completed
         assert len(results) == 5
-        
+
         # Should have taken time due to rate limiting
         # First 2 immediate (burst), then 3 more at 5/sec = ~0.6s more
         assert elapsed >= 0.5
@@ -195,7 +195,7 @@ class TestRateLimiter:
 
         # Acquire 3 tokens at once
         await limiter.acquire(tokens=3)
-        
+
         # Should have consumed 3 tokens
         available = limiter.get_available_tokens()
         assert 6 <= available <= 8  # Allow for small regeneration
@@ -214,14 +214,14 @@ class TestRateLimiter:
         # Consume all tokens
         for _ in range(5):
             await limiter.acquire()
-        
+
         # Should have ~0 tokens
         available = limiter.get_available_tokens()
         assert available < 1
 
         # Wait for regeneration
         await asyncio.sleep(0.5)
-        
+
         # Should have regenerated ~5 tokens (10/sec * 0.5sec)
         available = limiter.get_available_tokens()
         assert 4 <= available <= 5

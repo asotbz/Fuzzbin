@@ -1,7 +1,5 @@
 """Unit tests for genre bucket classification."""
 
-import pytest
-
 from fuzzbin.common.genre_buckets import (
     BUCKET_PATTERNS,
     PRIORITY,

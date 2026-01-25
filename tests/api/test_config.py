@@ -1,14 +1,6 @@
 """Tests for configuration management API endpoints."""
 
-from pathlib import Path
-from typing import Generator
-
-import pytest
 from fastapi.testclient import TestClient
-
-import fuzzbin
-from fuzzbin.common.config import Config, ConfigSafetyLevel
-from fuzzbin.common.config_manager import ConfigManager
 
 
 class TestGetConfig:
@@ -100,9 +92,7 @@ class TestUpdateConfig:
         # Restore original
         test_app.patch("/config", json={"updates": {"backup.retention_count": original_value}})
 
-    def test_update_requires_reload_without_force_returns_409(
-        self, test_app: TestClient
-    ) -> None:
+    def test_update_requires_reload_without_force_returns_409(self, test_app: TestClient) -> None:
         """PATCH /config with affects_state field returns 409 without force."""
         response = test_app.patch(
             "/config",
@@ -116,9 +106,7 @@ class TestUpdateConfig:
         assert data["affected_fields"][0]["safety_level"] == "affects_state"
         assert "required_actions" in data
 
-    def test_update_requires_reload_with_force_succeeds(
-        self, test_app: TestClient
-    ) -> None:
+    def test_update_requires_reload_with_force_succeeds(self, test_app: TestClient) -> None:
         """PATCH /config with affects_state field succeeds with force=true."""
         # Get original
         original_response = test_app.get("/config/field/trash.trash_dir")
@@ -197,7 +185,7 @@ class TestUpdateConfig:
 
         # Check history includes description
         history_response = test_app.get("/config/history")
-        history = history_response.json()
+        _history = history_response.json()
 
         # Restore first
         test_app.patch("/config", json={"updates": {"backup.retention_count": orig_interval}})

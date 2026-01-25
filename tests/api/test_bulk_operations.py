@@ -1,6 +1,5 @@
 """Tests for bulk operations API endpoints (Phase 7)."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -113,9 +112,7 @@ class TestBulkDelete:
         r1 = test_app.get(f"/videos/{video_id_1}")
         assert r1.status_code == 404  # Default excludes deleted
 
-    def test_bulk_hard_delete(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_bulk_hard_delete(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test bulk hard delete."""
         r = test_app.post("/videos", json=sample_video_data)
         video_id = r.json()["id"]
@@ -187,9 +184,7 @@ class TestBulkTags:
         data = response.json()
         assert len(data["success_ids"]) == 2
 
-    def test_bulk_replace_tags(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_bulk_replace_tags(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test bulk replacing tags on videos."""
         r = test_app.post("/videos", json=sample_video_data)
         video_id = r.json()["id"]

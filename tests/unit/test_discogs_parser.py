@@ -4,10 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from fuzzbin.parsers.discogs_models import (
-    DiscogsArtistRelease,
     DiscogsArtistReleasesResult,
     DiscogsMaster,
     DiscogsPagination,
@@ -71,9 +69,7 @@ class TestDiscogsPaginationModel:
 
     def test_pagination_with_urls(self, artist_releases_response):
         """Test pagination with navigation URLs."""
-        pagination = DiscogsPagination.model_validate(
-            artist_releases_response["pagination"]
-        )
+        pagination = DiscogsPagination.model_validate(artist_releases_response["pagination"])
 
         assert pagination.page == 1
         assert pagination.pages == 43
@@ -332,17 +328,13 @@ class TestMasterValidation:
 
     def test_master_with_valid_artist_only(self, master_response):
         """Test validation with matching artist only."""
-        master = DiscogsParser.parse_master_response(
-            master_response, artist="Nirvana"
-        )
+        master = DiscogsParser.parse_master_response(master_response, artist="Nirvana")
 
         assert master.is_exact_match is True
 
     def test_master_with_valid_track_only(self, master_response):
         """Test validation with matching track only."""
-        master = DiscogsParser.parse_master_response(
-            master_response, track_title="Lithium"
-        )
+        master = DiscogsParser.parse_master_response(master_response, track_title="Lithium")
 
         assert master.is_exact_match is True
 
@@ -389,9 +381,7 @@ class TestMasterValidation:
         assert master.is_exact_match is True
 
         # Test middle track (B3)
-        master = DiscogsParser.parse_master_response(
-            master_response, track_title="Drain You"
-        )
+        master = DiscogsParser.parse_master_response(master_response, track_title="Drain You")
         assert master.is_exact_match is True
 
         # Test last track (B7)

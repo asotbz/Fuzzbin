@@ -2,17 +2,14 @@
 
 import asyncio
 import json
-import shutil
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.clients.ffprobe_client import FFProbeClient
 from fuzzbin.common.config import FFProbeConfig
 from fuzzbin.core.exceptions import (
-    FFProbeError,
     FFProbeExecutionError,
     FFProbeNotFoundError,
     FFProbeParseError,
@@ -37,7 +34,7 @@ def ffprobe_sample_output(examples_dir):
 @pytest.fixture
 def ffprobe_config():
     """Create FFProbe configuration for testing.
-    
+
     Note: FFProbeConfig only exposes ffprobe_path and timeout now.
     Other settings (show_format, show_streams) use defaults.
     """
@@ -146,9 +143,7 @@ class TestFFProbeClient:
             await client.get_media_info(nonexistent_file)
 
     @pytest.mark.asyncio
-    async def test_execute_ffprobe_command_failure(
-        self, ffprobe_config, sample_video_file
-    ):
+    async def test_execute_ffprobe_command_failure(self, ffprobe_config, sample_video_file):
         """Test handling of ffprobe command failure."""
         client = FFProbeClient.from_config(ffprobe_config)
 
@@ -174,18 +169,14 @@ class TestFFProbeClient:
                 assert "Invalid file format" in exc_info.value.stderr
 
     @pytest.mark.asyncio
-    async def test_execute_ffprobe_timeout(
-        self, ffprobe_config, sample_video_file
-    ):
+    async def test_execute_ffprobe_timeout(self, ffprobe_config, sample_video_file):
         """Test handling of ffprobe command timeout."""
         config = FFProbeConfig(timeout=5)
         client = FFProbeClient.from_config(config)
 
         # Mock subprocess that times out
         mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(
-            side_effect=asyncio.TimeoutError()
-        )
+        mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with patch("shutil.which", return_value="/usr/local/bin/ffprobe"):
             with patch(
@@ -198,9 +189,7 @@ class TestFFProbeClient:
                 assert "timed out" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
-    async def test_parse_json_error(
-        self, ffprobe_config, sample_video_file
-    ):
+    async def test_parse_json_error(self, ffprobe_config, sample_video_file):
         """Test handling of JSON parsing errors."""
         client = FFProbeClient.from_config(ffprobe_config)
 

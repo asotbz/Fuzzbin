@@ -10,9 +10,8 @@ to verify end-to-end functionality.
 """
 
 import asyncio
-import shutil
 from pathlib import Path
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -26,10 +25,8 @@ from fuzzbin.services import (
     SearchService,
     NotFoundError,
     ValidationError,
-    ConflictError,
 )
 from fuzzbin.services.video_service import (
-    OrganizeResult,
     DeleteResult,
     RestoreResult,
     DuplicatesResult,
@@ -63,7 +60,7 @@ def test_workspace(tmp_path: Path) -> Path:
 @pytest.fixture
 def database_config() -> DatabaseConfig:
     """Create database config.
-    
+
     Note: DatabaseConfig no longer has user-configurable fields.
     Tests should use direct VideoRepository instantiation with db_path.
     """
@@ -73,7 +70,7 @@ def database_config() -> DatabaseConfig:
 @pytest.fixture
 def trash_config(test_workspace: Path) -> TrashConfig:
     """Create TrashConfig for test workspace.
-    
+
     Note: TrashConfig contains trash_dir and cleanup settings.
     """
     return TrashConfig(
@@ -84,7 +81,7 @@ def trash_config(test_workspace: Path) -> TrashConfig:
 @pytest.fixture
 def thumbnail_config(test_workspace: Path) -> ThumbnailConfig:
     """Create thumbnail config for tests.
-    
+
     Note: ThumbnailConfig only has cache_dir now.
     """
     return ThumbnailConfig(
@@ -95,25 +92,25 @@ def thumbnail_config(test_workspace: Path) -> ThumbnailConfig:
 @pytest_asyncio.fixture
 async def repository(test_workspace: Path) -> AsyncGenerator[VideoRepository, None]:
     """Create a real VideoRepository with migrations applied.
-    
+
     Uses direct VideoRepository instantiation with temp database path.
     """
     from fuzzbin.core.db.migrator import Migrator
-    
+
     db_path = test_workspace / "test.db"
     migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
-    
+
     repo = VideoRepository(
         db_path=db_path,
         enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
         timeout=30,
     )
     await repo.connect()
-    
+
     # Run migrations
     migrator = Migrator(db_path, migrations_dir, enable_wal=False)
     await migrator.run_migrations(connection=repo._connection)
-    
+
     yield repo
     await repo.close()
 
@@ -382,9 +379,7 @@ class TestVideoServiceExistenceIntegration:
     """Integration tests for video existence checking."""
 
     @pytest.mark.asyncio
-    async def test_check_video_exists_by_title_artist(
-        self, video_service: VideoService
-    ):
+    async def test_check_video_exists_by_title_artist(self, video_service: VideoService):
         """Test checking if video exists by title/artist combination."""
         # Create video
         await video_service.create(title="Lithium", artist="Nirvana")
@@ -404,9 +399,7 @@ class TestVideoServiceExistenceIntegration:
         assert exists is False
 
     @pytest.mark.asyncio
-    async def test_find_by_external_id_youtube(
-        self, video_service: VideoService
-    ):
+    async def test_find_by_external_id_youtube(self, video_service: VideoService):
         """Test finding video by YouTube ID."""
         # Create video with YouTube ID
         await video_service.create(
@@ -425,9 +418,7 @@ class TestVideoServiceExistenceIntegration:
         assert video is None
 
     @pytest.mark.asyncio
-    async def test_find_by_external_id_imvdb(
-        self, video_service: VideoService
-    ):
+    async def test_find_by_external_id_imvdb(self, video_service: VideoService):
         """Test finding video by IMVDb ID."""
         await video_service.create(
             title="Test",
@@ -899,14 +890,10 @@ class TestImportServiceNFOIntegration:
         assert result.skipped_count >= 1
 
     @pytest.mark.asyncio
-    async def test_import_nfo_invalid_directory_raises(
-        self, import_service: ImportService
-    ):
+    async def test_import_nfo_invalid_directory_raises(self, import_service: ImportService):
         """Test that invalid directory raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            await import_service.import_nfo_directory(
-                directory=Path("/nonexistent/path")
-            )
+            await import_service.import_nfo_directory(directory=Path("/nonexistent/path"))
 
         assert exc_info.value.field == "directory"
 

@@ -1,7 +1,6 @@
 """Unit tests for NFO parsers."""
 
 import pytest
-from pathlib import Path
 from pydantic import ValidationError
 
 from fuzzbin.parsers import (
@@ -513,7 +512,7 @@ class TestMusicVideoNFOParserFeaturedArtists:
         nfo = MusicVideoNFO(
             title="Test Song",
             artist="Main Artist",
-            year=2020
+            year=2020,
             # No featured_artists specified (defaults to empty list)
         )
 
@@ -536,7 +535,7 @@ class TestMusicVideoNFOParserFeaturedArtists:
         )
 
         # Generate XML
-        xml = parser.to_xml_string(nfo)
+        _xml = parser.to_xml_string(nfo)
 
         # Original model should be unchanged
         assert nfo.artist == "Robin Thicke"
@@ -601,9 +600,7 @@ class TestMusicVideoNFOParserFeaturedArtists:
 
         xml = parser.to_xml_string(nfo)
 
-        assert (
-            "<title>Big Collaboration ft. Artist A, Artist B, Artist C</title>" in xml
-        )
+        assert "<title>Big Collaboration ft. Artist A, Artist B, Artist C</title>" in xml
 
     def test_disabled_config_no_appending(self):
         """Test that explicitly disabled config doesn't append."""

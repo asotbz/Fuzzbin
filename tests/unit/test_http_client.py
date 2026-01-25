@@ -5,7 +5,7 @@ import httpx
 import respx
 
 from fuzzbin.common.http_client import AsyncHTTPClient
-from fuzzbin.common.config import HTTPConfig, RetryConfig
+from fuzzbin.common.config import HTTPConfig
 
 
 class TestAsyncHTTPClient:
@@ -22,9 +22,7 @@ class TestAsyncHTTPClient:
                 )
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.get("/users/1")
 
             assert response.status_code == 200
@@ -43,9 +41,7 @@ class TestAsyncHTTPClient:
                 )
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.post(
                     "/users",
                     json={"name": "Jane Doe", "email": "jane@example.com"},
@@ -70,9 +66,7 @@ class TestAsyncHTTPClient:
                 ]
             )
 
-            async with AsyncHTTPClient(
-                config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(config, base_url="https://api.example.com") as client:
                 response = await client.get("/data")
 
             assert response.status_code == 200
@@ -90,9 +84,7 @@ class TestAsyncHTTPClient:
                 side_effect=httpx.TimeoutException("Timeout")
             )
 
-            async with AsyncHTTPClient(
-                config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(config, base_url="https://api.example.com") as client:
                 with pytest.raises(httpx.TimeoutException):
                     await client.get("/fail")
 
@@ -113,9 +105,7 @@ class TestAsyncHTTPClient:
                 ]
             )
 
-            async with AsyncHTTPClient(
-                config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(config, base_url="https://api.example.com") as client:
                 response = await client.get("/unstable")
 
             assert response.status_code == 200
@@ -136,9 +126,7 @@ class TestAsyncHTTPClient:
                 ]
             )
 
-            async with AsyncHTTPClient(
-                config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(config, base_url="https://api.example.com") as client:
                 response = await client.get("/service")
 
             assert response.status_code == 200
@@ -152,9 +140,7 @@ class TestAsyncHTTPClient:
                 return_value=httpx.Response(404, json={"error": "Not Found"})
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.get("/notfound")
 
             # Should not raise, just return 404
@@ -170,9 +156,7 @@ class TestAsyncHTTPClient:
                 return_value=httpx.Response(400, json={"error": "Bad Request"})
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.post("/data", json={"invalid": "data"})
 
             assert response.status_code == 400
@@ -192,9 +176,7 @@ class TestAsyncHTTPClient:
                 ]
             )
 
-            async with AsyncHTTPClient(
-                config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(config, base_url="https://api.example.com") as client:
                 response = await client.get("/rate-limited")
 
             assert response.status_code == 200
@@ -208,9 +190,7 @@ class TestAsyncHTTPClient:
                 return_value=httpx.Response(200, json={"id": 1, "updated": True})
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.put("/users/1", json={"name": "Updated"})
 
             assert response.status_code == 200
@@ -224,9 +204,7 @@ class TestAsyncHTTPClient:
                 return_value=httpx.Response(204)
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.delete("/users/1")
 
             assert response.status_code == 204
@@ -240,9 +218,7 @@ class TestAsyncHTTPClient:
                 return_value=httpx.Response(200)
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response = await client.request("HEAD", "/status")
 
             assert response.status_code == 200
@@ -268,9 +244,7 @@ class TestAsyncHTTPClient:
                 return_value=httpx.Response(200, json={"id": 2})
             )
 
-            async with AsyncHTTPClient(
-                http_config, base_url="https://api.example.com"
-            ) as client:
+            async with AsyncHTTPClient(http_config, base_url="https://api.example.com") as client:
                 response1 = await client.get("/endpoint1")
                 response2 = await client.get("/endpoint2")
 

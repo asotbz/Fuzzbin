@@ -2,8 +2,6 @@
 
 import pytest
 
-from fuzzbin.tasks.models import Job, JobStatus, JobType
-
 
 @pytest.mark.asyncio
 class TestDecadeTagRepositoryMethods:
@@ -54,9 +52,7 @@ class TestDecadeTagRepositoryMethods:
         await test_db.add_video_tag(video_id, tag2_id, source="manual")
 
         # Remove only tags matching custom format
-        removed = await test_db.remove_auto_decade_tags(
-            video_id, old_format="decade-{decade}"
-        )
+        removed = await test_db.remove_auto_decade_tags(video_id, old_format="decade-{decade}")
 
         # Should remove only "decade-80"
         assert removed == 1
@@ -164,9 +160,7 @@ class TestDecadeTagRepositoryMethods:
         await test_db.auto_add_decade_tag(video_id, 1985, tag_format=custom_format)
 
         # Update to different decade
-        updated = await test_db.update_decade_tag(
-            video_id, 1985, 1995, tag_format=custom_format
-        )
+        updated = await test_db.update_decade_tag(video_id, 1985, 1995, tag_format=custom_format)
 
         # Should update
         assert updated is True
@@ -184,14 +178,11 @@ class TestDecadeTagSyncHandler:
     async def test_decade_tag_operations_prepare_for_sync(self, test_db):
         """Test that decade tag operations work correctly for sync scenarios."""
         # Create videos with years
-        video1_id = await test_db.create_video(
-            title="Video 1", artist="Artist 1", year=1991
-        )
-        video2_id = await test_db.create_video(
-            title="Video 2", artist="Artist 2", year=2006
-        )
+        video1_id = await test_db.create_video(title="Video 1", artist="Artist 1", year=1991)
+        video2_id = await test_db.create_video(title="Video 2", artist="Artist 2", year=2006)
         video3_id = await test_db.create_video(
-            title="Video 3", artist="Artist 3"  # No year
+            title="Video 3",
+            artist="Artist 3",  # No year
         )
 
         # Apply decade tags like sync job would
@@ -212,9 +203,7 @@ class TestDecadeTagSyncHandler:
     async def test_decade_tag_removal_for_sync(self, test_db):
         """Test removing decade tags like sync job would."""
         # Create video with auto decade tag
-        video_id = await test_db.create_video(
-            title="Video", artist="Artist", year=1991
-        )
+        video_id = await test_db.create_video(title="Video", artist="Artist", year=1991)
         await test_db.auto_add_decade_tag(video_id, 1991)
 
         # Verify tag exists
@@ -232,9 +221,7 @@ class TestDecadeTagSyncHandler:
     async def test_decade_tag_migration_for_sync(self, test_db):
         """Test migrating decade tag format like sync job would."""
         # Create video with old format tag
-        video_id = await test_db.create_video(
-            title="Video", artist="Artist", year=1985
-        )
+        video_id = await test_db.create_video(title="Video", artist="Artist", year=1985)
         old_format = "{decade}s"
         await test_db.auto_add_decade_tag(video_id, 1985, tag_format=old_format)
 

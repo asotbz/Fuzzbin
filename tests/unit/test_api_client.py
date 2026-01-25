@@ -2,7 +2,6 @@
 
 import asyncio
 import time
-from typing import Optional
 
 import httpx
 import pytest
@@ -44,9 +43,7 @@ class TestRateLimitedAPIClient:
         """Test creating client from configuration."""
         # Note: from_config now creates minimal client; for full features,
         # use API-specific subclasses or instantiate directly
-        async with RateLimitedAPIClient.from_config(
-            config=api_config
-        ) as client:
+        async with RateLimitedAPIClient.from_config(config=api_config) as client:
             # Base from_config doesn't set base_url (that's done by subclasses)
             assert client.auth_headers == {"X-API-Key": "test-key"}
 
@@ -57,9 +54,7 @@ class TestRateLimitedAPIClient:
             auth={"Authorization": "Bearer test-token-123"},
         )
 
-        async with RateLimitedAPIClient.from_config(
-            config=api_config
-        ) as client:
+        async with RateLimitedAPIClient.from_config(config=api_config) as client:
             assert client.auth_headers["Authorization"] == "Bearer test-token-123"
 
     @pytest.mark.asyncio
@@ -67,7 +62,7 @@ class TestRateLimitedAPIClient:
         """Test creating client directly with rate and concurrency limiters."""
         rate_limiter = RateLimiter(requests_per_second=2.0)
         concurrency_limiter = ConcurrencyLimiter(max_concurrent=2)
-        
+
         async with RateLimitedAPIClient(
             http_config=http_config,
             base_url="https://api.example.com",
@@ -92,7 +87,7 @@ class TestRateLimitedAPIClient:
         # Create client with small burst to ensure rate limiting kicks in quickly
         rate_limiter = RateLimiter(
             requests_per_second=2,
-            burst_size=1  # Only allow 1 request in burst
+            burst_size=1,  # Only allow 1 request in burst
         )
 
         async with RateLimitedAPIClient(
@@ -117,6 +112,7 @@ class TestRateLimitedAPIClient:
     @respx.mock
     async def test_concurrency_limiting_enforcement(self, http_config):
         """Test that concurrency limiting is enforced."""
+
         # Mock endpoint with delay
         async def slow_response(request):
             await asyncio.sleep(0.2)
@@ -198,6 +194,7 @@ class TestRateLimitedAPIClient:
     @respx.mock
     async def test_requests_without_concurrency_limit(self, http_config):
         """Test client works without concurrency limiting."""
+
         # Mock endpoint with delay
         async def slow_response(request):
             await asyncio.sleep(0.1)
@@ -302,7 +299,7 @@ class TestRateLimitedAPIClient:
     @respx.mock
     async def test_post_with_json_body(self, http_config, api_config):
         """Test POST request with JSON body."""
-        route = respx.post("https://api.example.com/data").mock(
+        _route = respx.post("https://api.example.com/data").mock(
             return_value=httpx.Response(201, json={"id": 123, "created": True})
         )
 
@@ -323,15 +320,18 @@ class TestRateLimitedAPIClient:
         rate_limiter_1 = RateLimiter(requests_per_second=10.0)
         rate_limiter_2 = RateLimiter(requests_per_second=5.0)
 
-        async with RateLimitedAPIClient(
-            http_config=http_config,
-            base_url="https://api1.example.com",
-            rate_limiter=rate_limiter_1,
-        ) as client1, RateLimitedAPIClient(
-            http_config=http_config,
-            base_url="https://api2.example.com",
-            rate_limiter=rate_limiter_2,
-        ) as client2:
+        async with (
+            RateLimitedAPIClient(
+                http_config=http_config,
+                base_url="https://api1.example.com",
+                rate_limiter=rate_limiter_1,
+            ) as client1,
+            RateLimitedAPIClient(
+                http_config=http_config,
+                base_url="https://api2.example.com",
+                rate_limiter=rate_limiter_2,
+            ) as client2,
+        ):
             # Verify they have independent limiters
             assert client1.rate_limiter is not client2.rate_limiter
             assert client1.rate_limiter.rate == 10.0  # rate is tokens per second

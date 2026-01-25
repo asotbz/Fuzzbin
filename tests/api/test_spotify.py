@@ -55,6 +55,7 @@ class TestSpotifyGetPlaylist:
 
     def test_get_playlist_success(self, test_app: TestClient, mock_spotify_client):
         """Test successful playlist retrieval."""
+
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
 
@@ -124,7 +125,11 @@ class TestSpotifyGetPlaylistTracks:
                             release_date_precision="day",
                             uri="spotify:album:2guirTSEqLizK7j9i1MTTZ",
                             images=[
-                                {"url": "https://i.scdn.co/image/cover.jpg", "width": 640, "height": 640}
+                                {
+                                    "url": "https://i.scdn.co/image/cover.jpg",
+                                    "width": 640,
+                                    "height": 640,
+                                }
                             ],
                         ),
                         duration_ms=301920,
@@ -182,6 +187,7 @@ class TestSpotifyGetPlaylistTracks:
 
     def test_get_playlist_tracks_success(self, test_app: TestClient, mock_spotify_client):
         """Test successful playlist tracks retrieval."""
+
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
 
@@ -206,10 +212,9 @@ class TestSpotifyGetPlaylistTracks:
         finally:
             test_app.app.dependency_overrides.pop(get_spotify_client, None)
 
-    def test_get_playlist_tracks_with_pagination(
-        self, test_app: TestClient, mock_spotify_client
-    ):
+    def test_get_playlist_tracks_with_pagination(self, test_app: TestClient, mock_spotify_client):
         """Test playlist tracks with custom pagination parameters."""
+
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
 
@@ -232,6 +237,7 @@ class TestSpotifyGetPlaylistTracks:
 
     def test_get_playlist_tracks_limit_max(self, test_app: TestClient, mock_spotify_client):
         """Test playlist tracks validates limit max value."""
+
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
 
@@ -246,9 +252,7 @@ class TestSpotifyGetPlaylistTracks:
         finally:
             test_app.app.dependency_overrides.pop(get_spotify_client, None)
 
-    def test_get_playlist_tracks_not_found(
-        self, test_app: TestClient, mock_spotify_client
-    ):
+    def test_get_playlist_tracks_not_found(self, test_app: TestClient, mock_spotify_client):
         """Test playlist tracks not found error."""
         mock_spotify_client.get_playlist_tracks = AsyncMock(
             side_effect=Exception("404 - Not found")
@@ -359,10 +363,9 @@ class TestSpotifyGetAllPlaylistTracks:
         mock_client.get_track = AsyncMock()
         return mock_client
 
-    def test_get_all_playlist_tracks_success(
-        self, test_app: TestClient, mock_spotify_client
-    ):
+    def test_get_all_playlist_tracks_success(self, test_app: TestClient, mock_spotify_client):
         """Test successful retrieval of all playlist tracks."""
+
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
 
@@ -382,9 +385,7 @@ class TestSpotifyGetAllPlaylistTracks:
         finally:
             test_app.app.dependency_overrides.pop(get_spotify_client, None)
 
-    def test_get_all_playlist_tracks_empty(
-        self, test_app: TestClient, mock_spotify_client
-    ):
+    def test_get_all_playlist_tracks_empty(self, test_app: TestClient, mock_spotify_client):
         """Test retrieval of empty playlist."""
         mock_spotify_client.get_all_playlist_tracks = AsyncMock(return_value=[])
 
@@ -403,9 +404,7 @@ class TestSpotifyGetAllPlaylistTracks:
         finally:
             test_app.app.dependency_overrides.pop(get_spotify_client, None)
 
-    def test_get_all_playlist_tracks_not_found(
-        self, test_app: TestClient, mock_spotify_client
-    ):
+    def test_get_all_playlist_tracks_not_found(self, test_app: TestClient, mock_spotify_client):
         """Test all playlist tracks not found error."""
         mock_spotify_client.get_all_playlist_tracks = AsyncMock(
             side_effect=Exception("404 - Playlist not found")
@@ -471,6 +470,7 @@ class TestSpotifyGetTrack:
 
     def test_get_track_success(self, test_app: TestClient, mock_spotify_client):
         """Test successful track retrieval."""
+
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
 
@@ -496,9 +496,7 @@ class TestSpotifyGetTrack:
 
     def test_get_track_not_found(self, test_app: TestClient, mock_spotify_client):
         """Test track not found error."""
-        mock_spotify_client.get_track = AsyncMock(
-            side_effect=Exception("404 - Track not found")
-        )
+        mock_spotify_client.get_track = AsyncMock(side_effect=Exception("404 - Track not found"))
 
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_spotify_client
@@ -538,9 +536,7 @@ class TestSpotifyServiceUnavailable:
     def test_api_error(self, test_app: TestClient):
         """Test generic API error handling."""
         mock_client = MagicMock(spec=SpotifyClient)
-        mock_client.get_playlist = AsyncMock(
-            side_effect=Exception("API rate limit exceeded")
-        )
+        mock_client.get_playlist = AsyncMock(side_effect=Exception("API rate limit exceeded"))
 
         async def override_get_spotify_client() -> AsyncGenerator[SpotifyClient, None]:
             yield mock_client

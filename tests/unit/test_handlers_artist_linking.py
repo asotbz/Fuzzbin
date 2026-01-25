@@ -9,9 +9,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
-from fuzzbin.tasks.models import Job, JobStatus, JobType
+from fuzzbin.tasks.models import Job, JobType
 from fuzzbin.tasks.handlers import handle_add_single_import, handle_metadata_enrich
 
 

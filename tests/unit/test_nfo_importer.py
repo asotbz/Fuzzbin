@@ -1,13 +1,11 @@
 """Unit tests for NFO importer workflow."""
 
 import xml.etree.ElementTree as ET
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from fuzzbin.parsers.models import MusicVideoNFO
-from fuzzbin.parsers.musicvideo_parser import MusicVideoNFOParser
 from fuzzbin.workflows.nfo_importer import NFOImporter, BATCH_SIZE, VIDEO_EXTENSIONS
 from fuzzbin.workflows.spotify_importer import ImportResult
 
@@ -270,7 +268,9 @@ def test_map_nfo_to_video_data_with_file_path(nfo_importer, tmp_path):
     video_path = tmp_path / "test.mp4"
     video_path.write_bytes(b"test")
 
-    video_data = nfo_importer._map_nfo_to_video_data(nfo, nfo_file_path=nfo_path, video_file_path=video_path)
+    video_data = nfo_importer._map_nfo_to_video_data(
+        nfo, nfo_file_path=nfo_path, video_file_path=video_path
+    )
 
     assert "nfo_file_path" in video_data
     assert video_data["nfo_file_path"] == str(nfo_path.resolve())
@@ -594,7 +594,9 @@ async def test_import_single_nfo_with_featured_artists(nfo_importer, mock_reposi
 
 
 @pytest.mark.asyncio
-async def test_import_from_directory_full_workflow(nfo_importer, mock_repository, sample_nfo_directory):
+async def test_import_from_directory_full_workflow(
+    nfo_importer, mock_repository, sample_nfo_directory
+):
     """Test full workflow: import from directory."""
     result, imported_videos = await nfo_importer.import_from_directory(
         root_path=sample_nfo_directory,
@@ -616,7 +618,9 @@ async def test_import_from_directory_full_workflow(nfo_importer, mock_repository
 
 
 @pytest.mark.asyncio
-async def test_import_from_directory_with_video_files(nfo_importer, mock_repository, nfo_with_video_file):
+async def test_import_from_directory_with_video_files(
+    nfo_importer, mock_repository, nfo_with_video_file
+):
     """Test import from directory discovers companion video files."""
     tmp_path, nfo_path, video_path = nfo_with_video_file
 
@@ -679,9 +683,7 @@ async def test_import_with_missing_critical_fields(nfo_importer, mock_repository
 async def test_import_continues_on_error(nfo_importer, mock_repository, sample_nfo_directory):
     """Test that import continues when individual NFO fails."""
     # Make create_video fail for first call, succeed for rest
-    mock_repository.create_video = AsyncMock(
-        side_effect=[Exception("DB error"), 1, 2]
-    )
+    mock_repository.create_video = AsyncMock(side_effect=[Exception("DB error"), 1, 2])
 
     result, imported_videos = await nfo_importer.import_from_directory(
         root_path=sample_nfo_directory,

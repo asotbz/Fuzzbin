@@ -1,8 +1,7 @@
 """Shared pytest fixtures for API tests."""
 
-import os
 from pathlib import Path
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -23,7 +22,7 @@ TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
 @pytest.fixture(autouse=True)
 def set_jwt_secret_env(monkeypatch):
     """Set JWT secret environment variable for all API tests.
-    
+
     This is required because APISettings now always requires jwt_secret,
     and create_app() calls get_settings() before dependency overrides are set.
     """
@@ -55,7 +54,7 @@ def api_settings() -> APISettings:
 @pytest.fixture
 def test_database_config() -> DatabaseConfig:
     """Provide a test database configuration.
-    
+
     Note: DatabaseConfig no longer has user-configurable fields.
     Tests should use direct VideoRepository instantiation with db_path.
     """
@@ -70,7 +69,7 @@ def test_config(test_database_config: DatabaseConfig, tmp_path: Path) -> Config:
     config_dir = tmp_path / "config"
     library_dir.mkdir(exist_ok=True)
     config_dir.mkdir(exist_ok=True)
-    
+
     return Config(
         config_dir=config_dir,
         library_dir=library_dir,
@@ -98,31 +97,33 @@ def test_config_dir(test_config: Config) -> Path:
 @pytest_asyncio.fixture
 async def test_repository(tmp_path: Path) -> AsyncGenerator[VideoRepository, None]:
     """Provide a test database repository with migrations applied.
-    
+
     Uses direct VideoRepository instantiation with temp database path.
     """
     from fuzzbin.core.db.migrator import Migrator
-    
+
     db_path = tmp_path / "test_api.db"
     migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
-    
+
     repo = VideoRepository(
         db_path=db_path,
         enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
         timeout=30,
     )
     await repo.connect()
-    
+
     # Run migrations
     migrator = Migrator(db_path, migrations_dir, enable_wal=False)
     await migrator.run_migrations(connection=repo._connection)
-    
+
     yield repo
     await repo.close()
 
 
 @pytest_asyncio.fixture
-async def test_app(test_repository: VideoRepository, api_settings: APISettings, test_config: Config) -> AsyncGenerator[TestClient, None]:
+async def test_app(
+    test_repository: VideoRepository, api_settings: APISettings, test_config: Config
+) -> AsyncGenerator[TestClient, None]:
     """
     Provide a FastAPI TestClient with test database and job queue.
 
@@ -244,7 +245,7 @@ async def video_with_file(
 
     response = test_app.post("/videos", json=video_data)
     assert response.status_code == 201
-    
+
     result = response.json()
     return result
 

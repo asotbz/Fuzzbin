@@ -3,7 +3,6 @@
 import asyncio
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.tasks import Job, JobQueue, JobStatus, JobType
 

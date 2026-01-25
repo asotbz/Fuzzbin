@@ -1,7 +1,5 @@
 """Integration tests for YTDLPClient (requires yt-dlp installed)."""
 
-from pathlib import Path
-
 import pytest
 
 from fuzzbin.clients.ytdlp_client import YTDLPClient

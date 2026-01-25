@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fuzzbin.parsers.ytdlp_models import YTDLPSearchResult
-from fuzzbin.tasks import JobStatus, JobType
+from fuzzbin.tasks import JobType
 
 
 class TestYTDLPEndpoints:
@@ -38,9 +38,7 @@ class TestYTDLPEndpoints:
 
     def test_search_youtube_success(self, test_app: TestClient, mock_search_results):
         """Test successful YouTube search."""
-        with patch(
-            "fuzzbin.web.routes.ytdlp.YTDLPClient"
-        ) as MockClient:
+        with patch("fuzzbin.web.routes.ytdlp.YTDLPClient") as MockClient:
             # Setup mock client
             mock_client_instance = MagicMock()
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
@@ -101,9 +99,7 @@ class TestYTDLPEndpoints:
             duration=212,
         )
 
-        with patch(
-            "fuzzbin.web.routes.ytdlp.YTDLPClient"
-        ) as MockClient:
+        with patch("fuzzbin.web.routes.ytdlp.YTDLPClient") as MockClient:
             mock_client_instance = MagicMock()
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
             mock_client_instance.__aexit__ = AsyncMock(return_value=None)

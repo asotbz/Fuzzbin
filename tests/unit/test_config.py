@@ -6,10 +6,8 @@ from pydantic import ValidationError
 
 from fuzzbin.common.config import (
     Config,
-    HTTPConfig,
     RetryConfig,
     LoggingConfig,
-    FileLoggingConfig,
     BackupConfig,
 )
 
@@ -150,7 +148,7 @@ class TestNFOConfig:
     def test_default_values(self):
         """Test NFOConfig default values."""
         from fuzzbin.common.config import NFOConfig
-        
+
         config = NFOConfig()
         assert config.featured_artists is not None
         assert config.featured_artists.enabled is False
@@ -160,13 +158,10 @@ class TestNFOConfig:
         """Test NFOConfig with custom featured artist settings."""
         from fuzzbin.common.config import NFOConfig
         from fuzzbin.parsers.models import FeaturedArtistConfig
-        
-        featured_config = FeaturedArtistConfig(
-            enabled=True,
-            append_to_field="title"
-        )
+
+        featured_config = FeaturedArtistConfig(enabled=True, append_to_field="title")
         config = NFOConfig(featured_artists=featured_config)
-        
+
         assert config.featured_artists.enabled is True
         assert config.featured_artists.append_to_field == "title"
 
@@ -179,7 +174,7 @@ class TestNFOConfig:
             append_to_field: title
         """
         full_config = Config.from_yaml_string(yaml_str)
-        
+
         assert full_config.nfo.featured_artists.enabled is True
         assert full_config.nfo.featured_artists.append_to_field == "title"
 
@@ -190,7 +185,7 @@ class TestOrganizerConfig:
     def test_default_values(self):
         """Test OrganizerConfig default values."""
         from fuzzbin.common.config import OrganizerConfig
-        
+
         config = OrganizerConfig()
         assert config.path_pattern == "{artist}/{title}"
         assert config.normalize_filenames is False
@@ -198,10 +193,9 @@ class TestOrganizerConfig:
     def test_custom_values(self):
         """Test OrganizerConfig with custom values."""
         from fuzzbin.common.config import OrganizerConfig
-        
+
         config = OrganizerConfig(
-            path_pattern="{genre}/{artist}/{year}/{title}",
-            normalize_filenames=True
+            path_pattern="{genre}/{artist}/{year}/{title}", normalize_filenames=True
         )
         assert config.path_pattern == "{genre}/{artist}/{year}/{title}"
         assert config.normalize_filenames is True
@@ -209,7 +203,7 @@ class TestOrganizerConfig:
     def test_validate_pattern_valid(self):
         """Test validate_pattern with valid pattern."""
         from fuzzbin.common.config import OrganizerConfig
-        
+
         config = OrganizerConfig(path_pattern="{artist}/{album}/{title}")
         # Should not raise
         config.validate_pattern()
@@ -217,12 +211,12 @@ class TestOrganizerConfig:
     def test_validate_pattern_invalid(self):
         """Test validate_pattern with invalid field."""
         from fuzzbin.common.config import OrganizerConfig
-        
+
         config = OrganizerConfig(path_pattern="{artist}/{invalid_field}")
-        
+
         with pytest.raises(ValueError) as exc_info:
             config.validate_pattern()
-        
+
         error_msg = str(exc_info.value)
         assert "invalid_field" in error_msg
         assert "Valid fields:" in error_msg
@@ -230,12 +224,12 @@ class TestOrganizerConfig:
     def test_validate_pattern_multiple_invalid(self):
         """Test validate_pattern with multiple invalid fields."""
         from fuzzbin.common.config import OrganizerConfig
-        
+
         config = OrganizerConfig(path_pattern="{invalid1}/{invalid2}/{title}")
-        
+
         with pytest.raises(ValueError) as exc_info:
             config.validate_pattern()
-        
+
         error_msg = str(exc_info.value)
         assert "invalid1" in error_msg or "invalid2" in error_msg
 
@@ -247,6 +241,6 @@ class TestOrganizerConfig:
           normalize_filenames: true
         """
         full_config = Config.from_yaml_string(yaml_str)
-        
+
         assert full_config.organizer.path_pattern == "{genre}/{artist}/{title}"
         assert full_config.organizer.normalize_filenames is True

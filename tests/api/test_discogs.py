@@ -82,6 +82,7 @@ class TestDiscogsSearch:
 
     def test_search_success(self, test_app: TestClient, mock_discogs_client):
         """Test successful release search."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -112,6 +113,7 @@ class TestDiscogsSearch:
 
     def test_search_with_query(self, test_app: TestClient, mock_discogs_client):
         """Test search with general query parameter."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -130,6 +132,7 @@ class TestDiscogsSearch:
 
     def test_search_pagination_params(self, test_app: TestClient, mock_discogs_client):
         """Test search with custom pagination parameters."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -157,6 +160,7 @@ class TestDiscogsSearch:
 
     def test_search_per_page_max(self, test_app: TestClient, mock_discogs_client):
         """Test search validates per_page max value."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -257,6 +261,7 @@ class TestDiscogsGetMaster:
 
     def test_get_master_success(self, test_app: TestClient, mock_discogs_client):
         """Test successful master release retrieval."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -285,6 +290,7 @@ class TestDiscogsGetMaster:
 
     def test_get_master_invalid_id(self, test_app: TestClient, mock_discogs_client):
         """Test get master with invalid ID type."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -417,6 +423,7 @@ class TestDiscogsGetRelease:
 
     def test_get_release_success(self, test_app: TestClient, mock_discogs_client):
         """Test successful release retrieval."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -447,6 +454,7 @@ class TestDiscogsGetRelease:
 
     def test_get_release_invalid_id(self, test_app: TestClient, mock_discogs_client):
         """Test get release with invalid ID type."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -534,10 +542,9 @@ class TestDiscogsGetArtistReleases:
         mock_client.get_release = AsyncMock()
         return mock_client
 
-    def test_get_artist_releases_success(
-        self, test_app: TestClient, mock_discogs_client
-    ):
+    def test_get_artist_releases_success(self, test_app: TestClient, mock_discogs_client):
         """Test successful artist releases retrieval."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -560,10 +567,9 @@ class TestDiscogsGetArtistReleases:
         finally:
             test_app.app.dependency_overrides.pop(get_discogs_client, None)
 
-    def test_get_artist_releases_pagination(
-        self, test_app: TestClient, mock_discogs_client
-    ):
+    def test_get_artist_releases_pagination(self, test_app: TestClient, mock_discogs_client):
         """Test artist releases with pagination parameters."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -589,10 +595,9 @@ class TestDiscogsGetArtistReleases:
         finally:
             test_app.app.dependency_overrides.pop(get_discogs_client, None)
 
-    def test_get_artist_releases_invalid_id(
-        self, test_app: TestClient, mock_discogs_client
-    ):
+    def test_get_artist_releases_invalid_id(self, test_app: TestClient, mock_discogs_client):
         """Test get artist releases with invalid ID type."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 
@@ -604,10 +609,9 @@ class TestDiscogsGetArtistReleases:
         finally:
             test_app.app.dependency_overrides.pop(get_discogs_client, None)
 
-    def test_get_artist_releases_per_page_max(
-        self, test_app: TestClient, mock_discogs_client
-    ):
+    def test_get_artist_releases_per_page_max(self, test_app: TestClient, mock_discogs_client):
         """Test artist releases validates per_page max value."""
+
         async def override_get_discogs_client() -> AsyncGenerator[DiscogsClient, None]:
             yield mock_discogs_client
 

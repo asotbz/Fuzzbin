@@ -2,8 +2,6 @@
 
 import asyncio
 import json
-import os
-import time
 from pathlib import Path
 
 import httpx
@@ -76,7 +74,10 @@ class TestDiscogsClient:
             assert client.rate_limiter is not None
             assert client.concurrency_limiter is not None
             assert "Authorization" in client.auth_headers
-            assert client.auth_headers["Authorization"] == "Discogs key=test-key-123, secret=test-secret-456"
+            assert (
+                client.auth_headers["Authorization"]
+                == "Discogs key=test-key-123, secret=test-secret-456"
+            )
             assert "User-Agent" in client.auth_headers
             assert "fuzzbin" in client.auth_headers["User-Agent"]
 
@@ -87,7 +88,10 @@ class TestDiscogsClient:
         monkeypatch.setenv("DISCOGS_API_SECRET", "env-secret-abc")
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
-            assert client.auth_headers["Authorization"] == "Discogs key=env-key-789, secret=env-secret-abc"
+            assert (
+                client.auth_headers["Authorization"]
+                == "Discogs key=env-key-789, secret=env-secret-abc"
+            )
 
     @pytest.mark.asyncio
     async def test_user_agent_format(self, discogs_config):
@@ -120,10 +124,10 @@ class TestDiscogsClient:
             assert "pagination" in result
             assert result["pagination"]["page"] == 1
             assert result["pagination"]["items"] == 10
-            
+
             assert "results" in result
             assert len(result["results"]) > 0
-            
+
             # Verify first result (Nevermind master)
             nevermind = next((r for r in result["results"] if r["id"] == 13814), None)
             assert nevermind is not None
@@ -132,9 +136,12 @@ class TestDiscogsClient:
             assert nevermind["year"] == "1992"
 
             # Verify request parameters
-            assert route.calls.last.request.headers["Authorization"] == "Discogs key=test-key-123, secret=test-secret-456"
+            assert (
+                route.calls.last.request.headers["Authorization"]
+                == "Discogs key=test-key-123, secret=test-secret-456"
+            )
             assert "User-Agent" in route.calls.last.request.headers
-            
+
             request_url = str(route.calls.last.request.url)
             assert "type=master" in request_url
             assert "format=album" in request_url
@@ -160,7 +167,7 @@ class TestDiscogsClient:
         )
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
-            result = await client.search("nirvana", "lithium", page=2, per_page=25)
+            _result = await client.search("nirvana", "lithium", page=2, per_page=25)
 
             # Verify pagination parameters
             request_url = str(route.calls.last.request.url)
@@ -191,10 +198,10 @@ class TestDiscogsClient:
             assert result["pagination"]["page"] == 1
             assert result["pagination"]["pages"] == 43
             assert result["pagination"]["items"] == 2138
-            
+
             assert "releases" in result
             assert len(result["releases"]) > 0
-            
+
             # Verify first release
             first_release = result["releases"][0]
             assert "id" in first_release
@@ -203,7 +210,10 @@ class TestDiscogsClient:
             assert "type" in first_release
 
             # Verify request
-            assert route.calls.last.request.headers["Authorization"] == "Discogs key=test-key-123, secret=test-secret-456"
+            assert (
+                route.calls.last.request.headers["Authorization"]
+                == "Discogs key=test-key-123, secret=test-secret-456"
+            )
             request_url = str(route.calls.last.request.url)
             assert "page=1" in request_url
             assert "per_page=50" in request_url
@@ -212,7 +222,9 @@ class TestDiscogsClient:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_get_artist_releases_with_custom_params(self, discogs_config, artist_releases_response):
+    async def test_get_artist_releases_with_custom_params(
+        self, discogs_config, artist_releases_response
+    ):
         """Test artist releases with custom sorting and pagination."""
         route = respx.get("https://api.discogs.com/artists/125246/releases").mock(
             return_value=httpx.Response(
@@ -227,7 +239,7 @@ class TestDiscogsClient:
         )
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
-            result = await client.get_artist_releases(
+            _result = await client.get_artist_releases(
                 125246, page=5, per_page=100, sort="title", sort_order="desc"
             )
 
@@ -262,26 +274,26 @@ class TestDiscogsClient:
             assert result["title"] == "Nevermind"
             assert result["year"] == 1992
             assert result["main_release"] == 25823602
-            
+
             # Verify artists
             assert "artists" in result
             assert len(result["artists"]) > 0
             assert result["artists"][0]["name"] == "Nirvana"
             assert result["artists"][0]["id"] == 125246
-            
+
             # Verify tracklist
             assert "tracklist" in result
             assert len(result["tracklist"]) > 0
             first_track = result["tracklist"][0]
             assert first_track["title"] == "Smells Like Teen Spirit"
             assert first_track["position"] == "A1"
-            
+
             # Verify genres and styles
             assert "genres" in result
             assert "Rock" in result["genres"]
             assert "styles" in result
             assert "Grunge" in result["styles"]
-            
+
             # Verify images and videos
             assert "images" in result
             assert len(result["images"]) > 0
@@ -289,7 +301,10 @@ class TestDiscogsClient:
             assert len(result["videos"]) > 0
 
             # Verify request
-            assert route.calls.last.request.headers["Authorization"] == "Discogs key=test-key-123, secret=test-secret-456"
+            assert (
+                route.calls.last.request.headers["Authorization"]
+                == "Discogs key=test-key-123, secret=test-secret-456"
+            )
 
     @pytest.mark.asyncio
     @respx.mock
@@ -316,35 +331,38 @@ class TestDiscogsClient:
             assert result["year"] == 1992
             assert result["country"] == "Colombia"
             assert result["master_id"] == 13814
-            
+
             # Verify artists
             assert "artists" in result
             assert len(result["artists"]) > 0
             assert result["artists"][0]["name"] == "Nirvana"
-            
+
             # Verify labels and formats
             assert "labels" in result
             assert len(result["labels"]) > 0
             assert "formats" in result
             assert len(result["formats"]) > 0
             assert result["formats"][0]["name"] == "Vinyl"
-            
+
             # Verify tracklist
             assert "tracklist" in result
             assert len(result["tracklist"]) > 0
-            
+
             # Verify identifiers
             assert "identifiers" in result
             assert len(result["identifiers"]) > 0
 
             # Verify request
-            assert route.calls.last.request.headers["Authorization"] == "Discogs key=test-key-123, secret=test-secret-456"
+            assert (
+                route.calls.last.request.headers["Authorization"]
+                == "Discogs key=test-key-123, secret=test-secret-456"
+            )
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_rate_limit_headers_tracked(self, discogs_config, search_response):
         """Test that rate limit headers are tracked and logged."""
-        route = respx.get("https://api.discogs.com/database/search").mock(
+        _route = respx.get("https://api.discogs.com/database/search").mock(
             return_value=httpx.Response(
                 200,
                 json=search_response,
@@ -358,10 +376,10 @@ class TestDiscogsClient:
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
             result = await client.search("test", "test")
-            
+
             # Verify the response was successful
             assert "results" in result
-            
+
             # Headers should have been tracked by _make_request
 
     @pytest.mark.asyncio
@@ -369,7 +387,7 @@ class TestDiscogsClient:
     async def test_rate_limit_adjustment(self, discogs_config, search_response):
         """Test that rate limiter is adjusted based on API headers."""
         # Use a significantly different limit to trigger adjustment
-        route = respx.get("https://api.discogs.com/database/search").mock(
+        _route = respx.get("https://api.discogs.com/database/search").mock(
             return_value=httpx.Response(
                 200,
                 json=search_response,
@@ -385,10 +403,10 @@ class TestDiscogsClient:
             # Initial limit should be 60 req/min = 1.0 req/sec
             initial_rate = client.rate_limiter.rate
             assert abs(initial_rate - 1.0) < 0.01
-            
+
             # Make request
             await client.search("test", "test")
-            
+
             # Rate limiter should have been adjusted to 120 req/min = 2.0 req/sec
             # because 120 - 60 = 60 which is > 10% of 60 (6)
             assert abs(client.rate_limiter.rate - 2.0) < 0.01
@@ -415,7 +433,7 @@ class TestDiscogsClient:
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
             result = await client.search("test", "test")
-            
+
             # Should succeed after retries
             assert "results" in result
             # Should have made 3 attempts
@@ -432,7 +450,7 @@ class TestDiscogsClient:
         async with DiscogsClient.from_config(config=discogs_config) as client:
             with pytest.raises(httpx.HTTPStatusError):
                 await client.get_master(999999)
-            
+
             # Should only make 1 attempt (no retries)
             assert len(route.calls) == 1
 
@@ -447,7 +465,7 @@ class TestDiscogsClient:
         async with DiscogsClient.from_config(config=discogs_config) as client:
             with pytest.raises(httpx.HTTPStatusError):
                 await client.search("test", "test")
-            
+
             # Should only make 1 attempt (no retries)
             assert len(route.calls) == 1
 
@@ -462,7 +480,7 @@ class TestDiscogsClient:
         async with DiscogsClient.from_config(config=discogs_config) as client:
             with pytest.raises(httpx.HTTPStatusError):
                 await client.search("test", "test")
-            
+
             # Should only make 1 attempt (no retries)
             assert len(route.calls) == 1
 
@@ -488,17 +506,18 @@ class TestDiscogsClient:
             # Verify rate is approximately correct (DEFAULT_REQUESTS_PER_MINUTE / 60 seconds)
             expected_rate = DiscogsClient.DEFAULT_REQUESTS_PER_MINUTE / 60.0
             assert abs(client.rate_limiter.rate - expected_rate) < 0.01
-            
+
             # Make multiple requests - they should succeed
             for _ in range(3):
                 await client.search("test", "test")
-            
+
             assert len(route.calls) == 3
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_concurrency_limiting(self, discogs_config, search_response):
         """Test that concurrency limiting is applied with default settings."""
+
         # Create a slow response to test concurrency
         async def slow_response(request):
             await asyncio.sleep(0.1)
@@ -511,20 +530,18 @@ class TestDiscogsClient:
                     "X-Discogs-Ratelimit-Remaining": "59",
                 },
             )
-        
-        route = respx.get("https://api.discogs.com/database/search").mock(
-            side_effect=slow_response
-        )
+
+        route = respx.get("https://api.discogs.com/database/search").mock(side_effect=slow_response)
 
         async with DiscogsClient.from_config(config=discogs_config) as client:
             # Verify concurrency limiter is configured with defaults
             assert client.concurrency_limiter is not None
             assert client.concurrency_limiter.max_concurrent == DiscogsClient.DEFAULT_MAX_CONCURRENT
-            
+
             # Make concurrent requests - they should all succeed
             tasks = [client.search("test", f"test{i}") for i in range(5)]
             results = await asyncio.gather(*tasks)
-            
+
             # All should succeed
             assert len(results) == 5
             assert len(route.calls) == 5
@@ -533,7 +550,7 @@ class TestDiscogsClient:
     async def test_client_without_credentials(self):
         """Test that client can be created without credentials."""
         config = APIClientConfig()
-        
+
         async with DiscogsClient.from_config(config=config) as client:
             # Should not have Authorization header
             assert "Authorization" not in client.auth_headers

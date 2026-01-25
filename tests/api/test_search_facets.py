@@ -78,9 +78,7 @@ class TestSearchFacets:
         assert "Samuel Bayer" in directors
         assert "Tarsem Singh" in directors
 
-    def test_facets_include_tags(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_facets_include_tags(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test that tag facets include video counts."""
         # Create video
         r = test_app.post("/videos", json=sample_video_data)

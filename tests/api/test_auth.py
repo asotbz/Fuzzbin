@@ -1,9 +1,7 @@
 """Tests for authentication routes and security."""
 
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import AsyncGenerator, Generator
-from unittest.mock import patch
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -34,13 +32,10 @@ TEST_PASSWORD = "changeme"
 TEST_NEW_PASSWORD = "newpassword123"
 
 
-import os
-
-
 @pytest.fixture(autouse=True)
 def set_jwt_secret_env(monkeypatch):
     """Set JWT secret environment variable for all tests in this module.
-    
+
     This is required because APISettings now always requires jwt_secret,
     and create_app() calls get_settings() before dependency overrides are set.
     """
@@ -112,13 +107,13 @@ class TestJWTTokens:
             secret_key=TEST_JWT_SECRET,
             expires_minutes=30,
         )
-        
+
         payload = decode_token(
             token=token,
             secret_key=TEST_JWT_SECRET,
             expected_type="access",
         )
-        
+
         assert payload is not None
         assert payload["sub"] == "testuser"
         assert payload["user_id"] == 1
@@ -132,12 +127,12 @@ class TestJWTTokens:
             secret_key=TEST_JWT_SECRET,
             expires_minutes=30,
         )
-        
+
         payload = decode_token(
             token=token,
             secret_key="wrong-secret",
         )
-        
+
         assert payload is None
 
     def test_decode_token_with_wrong_type(self):
@@ -148,13 +143,13 @@ class TestJWTTokens:
             secret_key=TEST_JWT_SECRET,
             expires_minutes=30,
         )
-        
+
         payload = decode_token(
             token=token,
             secret_key=TEST_JWT_SECRET,
             expected_type="refresh",  # Wrong type
         )
-        
+
         assert payload is None
 
     def test_create_refresh_token(self):
@@ -165,13 +160,13 @@ class TestJWTTokens:
             secret_key=TEST_JWT_SECRET,
             expires_minutes=10080,
         )
-        
+
         payload = decode_token(
             token=token,
             secret_key=TEST_JWT_SECRET,
             expected_type="refresh",
         )
-        
+
         assert payload is not None
         assert payload["type"] == "refresh"
 
@@ -184,12 +179,12 @@ class TestJWTTokens:
             secret_key=TEST_JWT_SECRET,
             expires_minutes=-1,  # Expired
         )
-        
+
         payload = decode_token(
             token=token,
             secret_key=TEST_JWT_SECRET,
         )
-        
+
         assert payload is None
 
 
@@ -204,49 +199,49 @@ class TestLoginThrottle:
     def test_blocked_after_max_attempts(self):
         """Test that IP is blocked after max failed attempts."""
         throttle = LoginThrottle(max_attempts=3, window_seconds=60)
-        
+
         for _ in range(3):
             throttle.record_failure("192.168.1.1")
-        
+
         assert throttle.is_blocked("192.168.1.1") is True
 
     def test_not_blocked_below_max_attempts(self):
         """Test that IP is not blocked below max attempts."""
         throttle = LoginThrottle(max_attempts=5, window_seconds=60)
-        
+
         for _ in range(4):
             throttle.record_failure("192.168.1.1")
-        
+
         assert throttle.is_blocked("192.168.1.1") is False
 
     def test_clear_resets_attempts(self):
         """Test that clear() resets failed attempts for an IP."""
         throttle = LoginThrottle(max_attempts=3, window_seconds=60)
-        
+
         for _ in range(3):
             throttle.record_failure("192.168.1.1")
-        
+
         assert throttle.is_blocked("192.168.1.1") is True
-        
+
         throttle.clear("192.168.1.1")
         assert throttle.is_blocked("192.168.1.1") is False
 
     def test_remaining_attempts(self):
         """Test get_remaining_attempts returns correct value."""
         throttle = LoginThrottle(max_attempts=5, window_seconds=60)
-        
+
         assert throttle.get_remaining_attempts("192.168.1.1") == 5
-        
+
         throttle.record_failure("192.168.1.1")
         assert throttle.get_remaining_attempts("192.168.1.1") == 4
 
     def test_separate_ips(self):
         """Test that different IPs are tracked separately."""
         throttle = LoginThrottle(max_attempts=2, window_seconds=60)
-        
+
         for _ in range(2):
             throttle.record_failure("192.168.1.1")
-        
+
         assert throttle.is_blocked("192.168.1.1") is True
         assert throttle.is_blocked("192.168.1.2") is False
 
@@ -293,38 +288,38 @@ def fresh_throttle() -> LoginThrottle:
 @pytest_asyncio.fixture
 async def auth_test_repository(tmp_path) -> AsyncGenerator[VideoRepository, None]:
     """Provide a test database repository with admin user seeded.
-    
+
     Uses direct VideoRepository instantiation with temp database path.
     """
     from fuzzbin.core.db.migrator import Migrator
-    
+
     db_path = tmp_path / "test_auth.db"
     migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
-    
+
     repo = VideoRepository(
         db_path=db_path,
         enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
         timeout=30,
     )
     await repo.connect()
-    
+
     # Run migrations
     migrator = Migrator(db_path, migrations_dir, enable_wal=False)
     await migrator.run_migrations(connection=repo._connection)
-    
+
     # Verify admin user was created by migration
     cursor = await repo._connection.execute(
         "SELECT id, username FROM users WHERE username = 'admin'"
     )
     row = await cursor.fetchone()
     assert row is not None, "Admin user should be created by migration"
-    
+
     # Clear password_must_change flag for most tests (separate tests cover rotation flow)
     await repo._connection.execute(
         "UPDATE users SET password_must_change = 0 WHERE username = 'admin'"
     )
     await repo._connection.commit()
-    
+
     yield repo
     await repo.close()
 
@@ -337,7 +332,7 @@ async def auth_test_app(
 ) -> AsyncGenerator[TestClient, None]:
     """Provide a FastAPI TestClient with auth enabled."""
     from fuzzbin.auth import get_login_throttle
-    
+
     test_config = Config(
         database=DatabaseConfig(),
         logging=LoggingConfig(
@@ -346,13 +341,13 @@ async def auth_test_app(
             handlers=["console"],
         ),
     )
-    
+
     fuzzbin._config = test_config
     fuzzbin._repository = auth_test_repository
 
     # Clear cached settings and override
     get_settings.cache_clear()
-    
+
     app = create_app()
 
     async def override_get_repository() -> AsyncGenerator[VideoRepository, None]:
@@ -384,7 +379,7 @@ async def auth_disabled_test_app(
 ) -> AsyncGenerator[TestClient, None]:
     """Provide a FastAPI TestClient with auth disabled."""
     from fuzzbin.auth import get_login_throttle
-    
+
     test_config = Config(
         database=DatabaseConfig(
             database_path=":memory:",
@@ -395,12 +390,12 @@ async def auth_disabled_test_app(
             handlers=["console"],
         ),
     )
-    
+
     fuzzbin._config = test_config
     fuzzbin._repository = auth_test_repository
 
     get_settings.cache_clear()
-    
+
     app = create_app()
 
     async def override_get_repository() -> AsyncGenerator[VideoRepository, None]:
@@ -438,7 +433,7 @@ class TestLoginEndpoint:
             "/auth/login",
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
@@ -456,7 +451,7 @@ class TestLoginEndpoint:
             "/auth/login",
             json={"username": TEST_USERNAME, "password": "wrongpassword"},
         )
-        
+
         assert response.status_code == 401
         assert "Invalid username or password" in response.json()["detail"]
 
@@ -466,7 +461,7 @@ class TestLoginEndpoint:
             "/auth/login",
             json={"username": "nonexistent", "password": TEST_PASSWORD},
         )
-        
+
         assert response.status_code == 401
         assert "Invalid username or password" in response.json()["detail"]
 
@@ -476,7 +471,7 @@ class TestLoginEndpoint:
             "/auth/login",
             json={"username": "", "password": ""},
         )
-        
+
         assert response.status_code == 422  # Validation error
 
     def test_login_throttling(self, auth_test_app: TestClient):
@@ -487,13 +482,13 @@ class TestLoginEndpoint:
                 "/auth/login",
                 json={"username": TEST_USERNAME, "password": "wrongpassword"},
             )
-        
+
         # 6th attempt should be throttled
         response = auth_test_app.post(
             "/auth/login",
             json={"username": TEST_USERNAME, "password": "wrongpassword"},
         )
-        
+
         assert response.status_code == 429
         assert "Too many failed login attempts" in response.json()["detail"]
         assert "Retry-After" in response.headers
@@ -510,10 +505,10 @@ class TestRefreshEndpoint:
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         assert login_response.status_code == 200
-        
+
         # Now refresh - the cookie is automatically sent by TestClient
         response = auth_test_app.post("/auth/refresh")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
@@ -526,7 +521,7 @@ class TestRefreshEndpoint:
         """Test refresh failure with invalid/missing cookie."""
         # Don't login first, so no cookie exists
         response = auth_test_app.post("/auth/refresh")
-        
+
         assert response.status_code == 401
         assert "No refresh token provided" in response.json()["detail"]
 
@@ -538,46 +533,46 @@ class TestRefreshEndpoint:
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         access_token = login_response.json()["access_token"]
-        
+
         # Manually set the access token as the refresh_token cookie
         auth_test_app.cookies.clear()
         auth_test_app.cookies.set("refresh_token", access_token, path="/auth")
-        
+
         # Try to refresh with access token in cookie (should fail - wrong token type)
         response = auth_test_app.post("/auth/refresh")
-        
+
         assert response.status_code == 401
 
 
 @pytest_asyncio.fixture
 async def password_rotation_repository(tmp_path) -> AsyncGenerator[VideoRepository, None]:
     """Repository with password_must_change=true for testing password rotation.
-    
+
     Uses direct VideoRepository instantiation with temp database path.
     """
     from fuzzbin.core.db.migrator import Migrator
-    
+
     db_path = tmp_path / "test_rotation.db"
     migrations_dir = Path(__file__).parent.parent.parent / "fuzzbin" / "core" / "db" / "migrations"
-    
+
     repo = VideoRepository(
         db_path=db_path,
         enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
         timeout=30,
     )
     await repo.connect()
-    
+
     # Run migrations
     migrator = Migrator(db_path, migrations_dir, enable_wal=False)
     await migrator.run_migrations(connection=repo._connection)
-    
+
     # Keep password_must_change=true (set by migration 008)
     cursor = await repo._connection.execute(
         "SELECT password_must_change FROM users WHERE username = 'admin'"
     )
     row = await cursor.fetchone()
     assert row[0] == 1, "password_must_change should be true from migration"
-    
+
     yield repo
     await repo.close()
 
@@ -590,7 +585,7 @@ async def password_rotation_app(
 ) -> AsyncGenerator[TestClient, None]:
     """Provide a FastAPI TestClient with password rotation required."""
     from fuzzbin.auth import get_login_throttle
-    
+
     test_config = Config(
         database=DatabaseConfig(
             database_path=":memory:",
@@ -601,7 +596,7 @@ async def password_rotation_app(
             handlers=["console"],
         ),
     )
-    
+
     fuzzbin._config = test_config
     fuzzbin._repository = password_rotation_repository
 
@@ -638,7 +633,7 @@ class TestPasswordRotation:
             "/auth/login",
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
-        
+
         assert response.status_code == 403
         data = response.json()
         assert "Password change required" in data["detail"]
@@ -656,7 +651,7 @@ class TestPasswordRotation:
                 "new_password": TEST_NEW_PASSWORD,
             },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
@@ -677,13 +672,13 @@ class TestPasswordRotation:
                 "new_password": TEST_NEW_PASSWORD,
             },
         )
-        
+
         # Now login should work
         response = password_rotation_app.post(
             "/auth/login",
             json={"username": TEST_USERNAME, "password": TEST_NEW_PASSWORD},
         )
-        
+
         assert response.status_code == 200
 
     def test_set_initial_password_wrong_current(self, password_rotation_app: TestClient):
@@ -696,7 +691,7 @@ class TestPasswordRotation:
                 "new_password": TEST_NEW_PASSWORD,
             },
         )
-        
+
         assert response.status_code == 401
 
     def test_set_initial_password_wrong_username(self, password_rotation_app: TestClient):
@@ -709,7 +704,7 @@ class TestPasswordRotation:
                 "new_password": TEST_NEW_PASSWORD,
             },
         )
-        
+
         assert response.status_code == 401
 
 
@@ -724,7 +719,7 @@ class TestPasswordChangeEndpoint:
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         access_token = login_response.json()["access_token"]
-        
+
         # Change password
         response = auth_test_app.post(
             "/auth/password",
@@ -734,9 +729,9 @@ class TestPasswordChangeEndpoint:
             },
             headers=get_auth_header(access_token),
         )
-        
+
         assert response.status_code == 204
-        
+
         # Verify new password works
         login_response = auth_test_app.post(
             "/auth/login",
@@ -752,7 +747,7 @@ class TestPasswordChangeEndpoint:
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         access_token = login_response.json()["access_token"]
-        
+
         # Try to change with wrong current password
         response = auth_test_app.post(
             "/auth/password",
@@ -762,7 +757,7 @@ class TestPasswordChangeEndpoint:
             },
             headers=get_auth_header(access_token),
         )
-        
+
         assert response.status_code == 400
         assert "Current password is incorrect" in response.json()["detail"]
 
@@ -775,7 +770,7 @@ class TestPasswordChangeEndpoint:
                 "new_password": TEST_NEW_PASSWORD,
             },
         )
-        
+
         assert response.status_code == 401
 
     def test_change_password_short_new_password(self, auth_test_app: TestClient):
@@ -786,7 +781,7 @@ class TestPasswordChangeEndpoint:
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         access_token = login_response.json()["access_token"]
-        
+
         # Try short password
         response = auth_test_app.post(
             "/auth/password",
@@ -796,7 +791,7 @@ class TestPasswordChangeEndpoint:
             },
             headers=get_auth_header(access_token),
         )
-        
+
         assert response.status_code == 422  # Validation error
 
 
@@ -816,13 +811,13 @@ class TestProtectedRoutes:
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         access_token = login_response.json()["access_token"]
-        
+
         # Access protected route
         response = auth_test_app.get(
             "/videos",
             headers=get_auth_header(access_token),
         )
-        
+
         assert response.status_code == 200
 
     def test_protected_route_with_invalid_token(self, auth_test_app: TestClient):
@@ -831,10 +826,12 @@ class TestProtectedRoutes:
             "/videos",
             headers=get_auth_header("invalid.token.here"),
         )
-        
+
         assert response.status_code == 401
 
-    def test_protected_route_with_expired_token(self, auth_test_app: TestClient, auth_api_settings: APISettings):
+    def test_protected_route_with_expired_token(
+        self, auth_test_app: TestClient, auth_api_settings: APISettings
+    ):
         """Test that protected routes return 401 with expired token."""
         # Create an expired token directly
         expired_token = create_access_token(
@@ -842,12 +839,12 @@ class TestProtectedRoutes:
             secret_key=auth_api_settings.jwt_secret,
             expires_minutes=-1,  # Expired
         )
-        
+
         response = auth_test_app.get(
             "/videos",
             headers=get_auth_header(expired_token),
         )
-        
+
         assert response.status_code == 401
 
     def test_health_endpoint_public(self, auth_test_app: TestClient):

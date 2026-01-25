@@ -1,11 +1,9 @@
 """Unit tests for the service layer base classes."""
 
-import asyncio
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.services.base import (
     AsyncLRUCache,

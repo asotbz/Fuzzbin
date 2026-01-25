@@ -95,6 +95,7 @@ class TestIMVDbVideoSearch:
         self, test_app: TestClient, mock_imvdb_client, mock_video_search_result
     ):
         """Test successful video search."""
+
         # Override the dependency
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
@@ -125,6 +126,7 @@ class TestIMVDbVideoSearch:
 
     def test_search_videos_missing_artist(self, test_app: TestClient, mock_imvdb_client):
         """Test search endpoint requires artist parameter."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -141,6 +143,7 @@ class TestIMVDbVideoSearch:
 
     def test_search_videos_missing_track(self, test_app: TestClient, mock_imvdb_client):
         """Test search endpoint requires track parameter."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -159,6 +162,7 @@ class TestIMVDbVideoSearch:
         self, test_app: TestClient, mock_imvdb_client, mock_video_search_result
     ):
         """Test search endpoint accepts pagination parameters."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -188,6 +192,7 @@ class TestIMVDbVideoSearch:
 
     def test_search_videos_per_page_max(self, test_app: TestClient, mock_imvdb_client):
         """Test search endpoint validates per_page max value."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -258,10 +263,9 @@ class TestIMVDbEntitySearch:
         mock_client.get_entity = AsyncMock()
         return mock_client
 
-    def test_search_entities_success(
-        self, test_app: TestClient, mock_imvdb_client
-    ):
+    def test_search_entities_success(self, test_app: TestClient, mock_imvdb_client):
         """Test successful entity search."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -286,6 +290,7 @@ class TestIMVDbEntitySearch:
 
     def test_search_entities_missing_query(self, test_app: TestClient, mock_imvdb_client):
         """Test search endpoint requires query parameter."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -393,6 +398,7 @@ class TestIMVDbGetVideo:
 
     def test_get_video_success(self, test_app: TestClient, mock_imvdb_client, mock_video_detail):
         """Test successful video retrieval."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -421,6 +427,7 @@ class TestIMVDbGetVideo:
 
     def test_get_video_invalid_id(self, test_app: TestClient, mock_imvdb_client):
         """Test get video with invalid ID type."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -499,6 +506,7 @@ class TestIMVDbGetEntity:
 
     def test_get_entity_success(self, test_app: TestClient, mock_imvdb_client, mock_entity_detail):
         """Test successful entity retrieval."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 
@@ -522,6 +530,7 @@ class TestIMVDbGetEntity:
 
     def test_get_entity_invalid_id(self, test_app: TestClient, mock_imvdb_client):
         """Test get entity with invalid ID type."""
+
         async def override_get_imvdb_client() -> AsyncGenerator[IMVDbClient, None]:
             yield mock_imvdb_client
 

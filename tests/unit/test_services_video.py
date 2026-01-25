@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.services.video_service import (
     DeleteResult,
@@ -15,9 +14,7 @@ from fuzzbin.services.video_service import (
     VideoWithRelationships,
 )
 from fuzzbin.services.base import (
-    ConflictError,
     NotFoundError,
-    ServiceError,
     ValidationError,
 )
 
@@ -28,16 +25,18 @@ def mock_repository():
     repository = AsyncMock()
 
     # Video CRUD
-    repository.get_video_by_id = AsyncMock(return_value={
-        "id": 1,
-        "title": "Test Video",
-        "artist": "Test Artist",
-        "album": "Test Album",
-        "year": 2023,
-        "video_file_path": "/media/test.mp4",
-        "nfo_file_path": "/media/test.nfo",
-        "status": "discovered",
-    })
+    repository.get_video_by_id = AsyncMock(
+        return_value={
+            "id": 1,
+            "title": "Test Video",
+            "artist": "Test Artist",
+            "album": "Test Album",
+            "year": 2023,
+            "video_file_path": "/media/test.mp4",
+            "nfo_file_path": "/media/test.nfo",
+            "status": "discovered",
+        }
+    )
     repository.create_video = AsyncMock(return_value=1)
     repository.update_video = AsyncMock()
     repository.delete_video = AsyncMock()
@@ -46,13 +45,9 @@ def mock_repository():
     repository.update_status = AsyncMock()
 
     # Relationships
-    repository.get_video_artists = AsyncMock(return_value=[
-        {"id": 1, "name": "Test Artist"}
-    ])
+    repository.get_video_artists = AsyncMock(return_value=[{"id": 1, "name": "Test Artist"}])
     repository.get_video_collections = AsyncMock(return_value=[])
-    repository.get_video_tags = AsyncMock(return_value=[
-        {"id": 1, "name": "rock"}
-    ])
+    repository.get_video_tags = AsyncMock(return_value=[{"id": 1, "name": "rock"}])
 
     # Artist operations
     repository.upsert_artist = AsyncMock(return_value=1)
@@ -246,7 +241,9 @@ class TestVideoServiceExistence:
     @pytest.mark.asyncio
     async def test_find_by_external_id_imvdb(self, video_service, mock_repository):
         """Test finding by IMVDb ID."""
-        mock_repository.query().execute = AsyncMock(return_value=[{"id": 1, "imvdb_video_id": "abc"}])
+        mock_repository.query().execute = AsyncMock(
+            return_value=[{"id": 1, "imvdb_video_id": "abc"}]
+        )
 
         result = await video_service.find_by_external_id(imvdb_video_id="abc")
         assert result["id"] == 1

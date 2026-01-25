@@ -1,11 +1,10 @@
 """Tests for the async event bus with debounced progress updates."""
 
 import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.core.event_bus import (
     PROGRESS_DEBOUNCE_INTERVAL,
@@ -15,7 +14,7 @@ from fuzzbin.core.event_bus import (
     init_event_bus,
     reset_event_bus,
 )
-from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
+from fuzzbin.tasks.models import Job, JobPriority, JobType
 
 
 @pytest.fixture

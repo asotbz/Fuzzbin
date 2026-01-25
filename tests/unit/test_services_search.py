@@ -3,13 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
 
 from fuzzbin.services.search_service import (
-    Facet,
     FacetedSearchResults,
-    FacetValue,
-    SearchResult,
     SearchResults,
     SearchService,
     SearchSuggestions,
@@ -35,10 +31,12 @@ def mock_repository():
     query.limit = MagicMock(return_value=query)
     query.offset = MagicMock(return_value=query)
     query.include_deleted = MagicMock(return_value=query)
-    query.execute = AsyncMock(return_value=[
-        {"id": 1, "title": "Test Video", "artist": "Test Artist"},
-        {"id": 2, "title": "Another Video", "artist": "Another Artist"},
-    ])
+    query.execute = AsyncMock(
+        return_value=[
+            {"id": 1, "title": "Test Video", "artist": "Test Artist"},
+            {"id": 2, "title": "Another Video", "artist": "Another Artist"},
+        ]
+    )
     query.count = AsyncMock(return_value=100)
     repository.query = MagicMock(return_value=query)
 
@@ -55,29 +53,39 @@ def mock_repository():
     repository.get_tag_count = AsyncMock(return_value=25)
 
     # List methods for cross-entity search
-    repository.list_artists = AsyncMock(return_value=[
-        {"id": 1, "name": "Test Artist", "video_count": 20},
-        {"id": 2, "name": "Another Artist", "video_count": 15},
-    ])
-    repository.list_collections = AsyncMock(return_value=[
-        {"id": 1, "name": "Favorites", "video_count": 10},
-    ])
-    repository.list_tags = AsyncMock(return_value=[
-        {"id": 1, "name": "rock", "video_count": 30},
-        {"id": 2, "name": "pop", "video_count": 25},
-    ])
+    repository.list_artists = AsyncMock(
+        return_value=[
+            {"id": 1, "name": "Test Artist", "video_count": 20},
+            {"id": 2, "name": "Another Artist", "video_count": 15},
+        ]
+    )
+    repository.list_collections = AsyncMock(
+        return_value=[
+            {"id": 1, "name": "Favorites", "video_count": 10},
+        ]
+    )
+    repository.list_tags = AsyncMock(
+        return_value=[
+            {"id": 1, "name": "rock", "video_count": 30},
+            {"id": 2, "name": "pop", "video_count": 25},
+        ]
+    )
 
     # Status counts for facets
-    repository.get_status_counts = AsyncMock(return_value={
-        "discovered": 50,
-        "downloaded": 30,
-        "organized": 20,
-    })
-    repository.get_year_counts = AsyncMock(return_value={
-        2023: 40,
-        2022: 35,
-        2021: 25,
-    })
+    repository.get_status_counts = AsyncMock(
+        return_value={
+            "discovered": 50,
+            "downloaded": 30,
+            "organized": 20,
+        }
+    )
+    repository.get_year_counts = AsyncMock(
+        return_value={
+            2023: 40,
+            2022: 35,
+            2021: 25,
+        }
+    )
 
     # Suggestions
     repository.get_unique_titles = AsyncMock(return_value=["Test Title", "Test Video"])

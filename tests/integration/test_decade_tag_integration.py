@@ -13,9 +13,10 @@ from fuzzbin.tasks.handlers import handle_sync_decade_tags
 @pytest.fixture(autouse=True)
 async def mock_repository(test_db, monkeypatch):
     """Mock fuzzbin.get_repository() to return test database."""
+
     async def get_test_repo():
         return test_db
-    
+
     monkeypatch.setattr(fuzzbin, "get_repository", get_test_repo)
     yield
 
@@ -29,21 +30,19 @@ class TestDecadeTagIntegration:
         # Create a library of videos spanning multiple decades
         videos = []
         years = [1975, 1984, 1991, 1999, 2005, 2012, 2020]
-        
+
         for year in years:
             video_id = await test_db.create_video(
                 title=f"Video from {year}",
                 artist="Test Artist",
                 year=year,
-                file_path=f"/test/video_{year}.mp4"
+                file_path=f"/test/video_{year}.mp4",
             )
             videos.append((video_id, year))
 
         # Also create a video without a year
         no_year_id = await test_db.create_video(
-            title="Video No Year",
-            artist="Test Artist",
-            file_path="/test/video_no_year.mp4"
+            title="Video No Year", artist="Test Artist", file_path="/test/video_no_year.mp4"
         )
 
         # Verify no decade tags exist initially
@@ -56,10 +55,7 @@ class TestDecadeTagIntegration:
             id="apply-job",
             type=JobType.SYNC_DECADE_TAGS,
             status=JobStatus.RUNNING,
-            metadata={
-                "mode": "apply",
-                "new_format": "{decade}s"
-            }
+            metadata={"mode": "apply", "new_format": "{decade}s"},
         )
 
         await handle_sync_decade_tags(job)
@@ -71,10 +67,15 @@ class TestDecadeTagIntegration:
 
         # Verify correct decade tags applied
         expected_decades = {
-            1975: "70s", 1984: "80s", 1991: "90s", 1999: "90s",
-            2005: "00s", 2012: "10s", 2020: "20s"
+            1975: "70s",
+            1984: "80s",
+            1991: "90s",
+            1999: "90s",
+            2005: "00s",
+            2012: "10s",
+            2020: "20s",
         }
-        
+
         for video_id, year in videos:
             tags = await test_db.get_video_tags(video_id)
             assert len(tags) == 1
@@ -90,23 +91,20 @@ class TestDecadeTagIntegration:
         # Create videos with decade tags
         videos = []
         years = [1985, 1995, 2005]
-        
+
         for year in years:
             video_id = await test_db.create_video(
                 title=f"Video from {year}",
                 artist="Test Artist",
                 year=year,
-                file_path=f"/test/video_{year}.mp4"
+                file_path=f"/test/video_{year}.mp4",
             )
             await test_db.auto_add_decade_tag(video_id, year)
             videos.append(video_id)
 
         # Add a manual decade tag by directly inserting (simulating manual user addition)
         manual_video_id = await test_db.create_video(
-            title="Manual Tag Video",
-            artist="Test Artist",
-            year=1985,
-            file_path="/test/manual.mp4"
+            title="Manual Tag Video", artist="Test Artist", year=1985, file_path="/test/manual.mp4"
         )
         # Add tag with source='manual'
         eighties_tag_id = await test_db.upsert_tag("80s")
@@ -125,10 +123,7 @@ class TestDecadeTagIntegration:
             id="remove-job",
             type=JobType.SYNC_DECADE_TAGS,
             status=JobStatus.RUNNING,
-            metadata={
-                "mode": "remove",
-                "old_format": "{decade}s"
-            }
+            metadata={"mode": "remove", "old_format": "{decade}s"},
         )
 
         await handle_sync_decade_tags(job)
@@ -154,13 +149,13 @@ class TestDecadeTagIntegration:
         years = [1985, 1995, 2005]
         old_format = "{decade}s"
         new_format = "decade-{decade}"
-        
+
         for year in years:
             video_id = await test_db.create_video(
                 title=f"Video from {year}",
                 artist="Test Artist",
                 year=year,
-                file_path=f"/test/video_{year}.mp4"
+                file_path=f"/test/video_{year}.mp4",
             )
             await test_db.auto_add_decade_tag(video_id, year, tag_format=old_format)
             videos.append((video_id, year))
@@ -177,11 +172,7 @@ class TestDecadeTagIntegration:
             id="migrate-job",
             type=JobType.SYNC_DECADE_TAGS,
             status=JobStatus.RUNNING,
-            metadata={
-                "mode": "migrate",
-                "old_format": old_format,
-                "new_format": new_format
-            }
+            metadata={"mode": "migrate", "old_format": old_format, "new_format": new_format},
         )
 
         await handle_sync_decade_tags(job)
@@ -193,10 +184,8 @@ class TestDecadeTagIntegration:
         assert job.result["tags_added"] == len(videos)
 
         # Verify new format tags exist
-        expected_new_tags = {
-            1985: "decade-80", 1995: "decade-90", 2005: "decade-00"
-        }
-        
+        expected_new_tags = {1985: "decade-80", 1995: "decade-90", 2005: "decade-00"}
+
         for video_id, year in videos:
             tags = await test_db.get_video_tags(video_id)
             assert len(tags) == 1
@@ -207,10 +196,7 @@ class TestDecadeTagIntegration:
         """Test that updating a video's year properly updates its decade tag."""
         # Create video with year and decade tag
         video_id = await test_db.create_video(
-            title="Test Video",
-            artist="Test Artist",
-            year=1985,
-            file_path="/test/video.mp4"
+            title="Test Video", artist="Test Artist", year=1985, file_path="/test/video.mp4"
         )
         await test_db.auto_add_decade_tag(video_id, 1985)
 
@@ -221,10 +207,7 @@ class TestDecadeTagIntegration:
 
         # Update year to different decade (simulating what VideoService does)
         updated = await test_db.update_decade_tag(
-            video_id,
-            old_year=1985,
-            new_year=1995,
-            tag_format="{decade}s"
+            video_id, old_year=1985, new_year=1995, tag_format="{decade}s"
         )
         assert updated is True
 
@@ -238,10 +221,7 @@ class TestDecadeTagIntegration:
         """Test that removing a video's year removes its decade tag."""
         # Create video with year and decade tag
         video_id = await test_db.create_video(
-            title="Test Video",
-            artist="Test Artist",
-            year=1985,
-            file_path="/test/video.mp4"
+            title="Test Video", artist="Test Artist", year=1985, file_path="/test/video.mp4"
         )
         await test_db.auto_add_decade_tag(video_id, 1985)
 
@@ -261,15 +241,12 @@ class TestDecadeTagIntegration:
         """Test that manual tags are preserved during auto tag operations."""
         # Create video with both auto and manual decade tags
         video_id = await test_db.create_video(
-            title="Test Video",
-            artist="Test Artist",
-            year=1985,
-            file_path="/test/video.mp4"
+            title="Test Video", artist="Test Artist", year=1985, file_path="/test/video.mp4"
         )
-        
+
         # Add auto decade tag
         await test_db.auto_add_decade_tag(video_id, 1985)
-        
+
         # Add manual tags
         classics_tag_id = await test_db.upsert_tag("classics")
         retro_tag_id = await test_db.upsert_tag("retro")
@@ -291,7 +268,7 @@ class TestDecadeTagIntegration:
         assert len(tags) == 2
         tag_names = {t["name"] for t in tags}
         assert tag_names == {"classics", "retro"}
-        
+
         # Verify all remaining tags are manual
         for tag in tags:
             assert tag["source"] == "manual"
@@ -312,12 +289,12 @@ class TestDecadeTagIntegration:
                 title=f"Video {fmt}",
                 artist="Test Artist",
                 year=year,
-                file_path=f"/test/video_{fmt}.mp4"
+                file_path=f"/test/video_{fmt}.mp4",
             )
-            
+
             # Apply decade tag with custom format
             await test_db.auto_add_decade_tag(video_id, year, tag_format=fmt)
-            
+
             # Verify correct tag created
             tags = await test_db.get_video_tags(video_id)
             assert len(tags) == 1
@@ -332,7 +309,7 @@ class TestDecadeTagIntegration:
                 title=f"Video {i}",
                 artist="Test Artist",
                 year=1985,
-                file_path=f"/test/video_{i}.mp4"
+                file_path=f"/test/video_{i}.mp4",
             )
 
         # Create job that's already cancelled
@@ -340,10 +317,7 @@ class TestDecadeTagIntegration:
             id="cancelled-job",
             type=JobType.SYNC_DECADE_TAGS,
             status=JobStatus.CANCELLED,
-            metadata={
-                "mode": "apply",
-                "new_format": "{decade}s"
-            }
+            metadata={"mode": "apply", "new_format": "{decade}s"},
         )
 
         # Run handler - should exit immediately
@@ -363,7 +337,7 @@ class TestDecadeTagIntegration:
                 title=f"Video {i}",
                 artist="Test Artist",
                 year=year,
-                file_path=f"/test/video_{i}.mp4"
+                file_path=f"/test/video_{i}.mp4",
             )
 
         # Run apply sync
@@ -371,10 +345,7 @@ class TestDecadeTagIntegration:
             id="large-library-job",
             type=JobType.SYNC_DECADE_TAGS,
             status=JobStatus.RUNNING,
-            metadata={
-                "mode": "apply",
-                "new_format": "{decade}s"
-            }
+            metadata={"mode": "apply", "new_format": "{decade}s"},
         )
 
         await handle_sync_decade_tags(job)

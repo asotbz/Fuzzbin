@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import time
 from pathlib import Path
 
 import httpx
@@ -103,13 +102,13 @@ class TestIMVDbClient:
 
             # Verify result is correct type
             assert isinstance(result, IMVDbVideoSearchResult)
-            
+
             # Verify pagination
             assert result.pagination.total_results == 196
             assert result.pagination.current_page == 1
             assert result.pagination.per_page == 25
             assert len(result.results) > 0
-            
+
             # Verify first result
             first_video = result.results[0]
             assert first_video.song_title == "Blurred Lines"
@@ -118,7 +117,10 @@ class TestIMVDbClient:
             # Verify request
             assert route.calls.last.request.headers["IMVDB-APP-KEY"] == "test-api-key-123"
             request_url = str(route.calls.last.request.url)
-            assert "q=Robin+Thicke+Blurred+Lines" in request_url or "q=Robin%20Thicke%20Blurred%20Lines" in request_url
+            assert (
+                "q=Robin+Thicke+Blurred+Lines" in request_url
+                or "q=Robin%20Thicke%20Blurred%20Lines" in request_url
+            )
             assert "page=1" in request_url
             assert "per_page=25" in request_url
 
@@ -131,7 +133,7 @@ class TestIMVDbClient:
         )
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
-            result = await client.search_videos(
+            _result = await client.search_videos(
                 "Robin Thicke", "Blurred Lines", page=2, per_page=10
             )
 
@@ -155,11 +157,9 @@ class TestIMVDbClient:
             assert result.pagination.total_results == 386
             assert result.pagination.current_page == 1
             assert len(result.results) > 0
-            
+
             # Find Robin Thicke in results and verify discogs_id is included
-            robin_thicke = next(
-                (e for e in result.results if e.slug == "robin-thicke"), None
-            )
+            robin_thicke = next((e for e in result.results if e.slug == "robin-thicke"), None)
             assert robin_thicke is not None
             assert robin_thicke.id == 838673
             assert robin_thicke.discogs_id == 292681
@@ -178,7 +178,7 @@ class TestIMVDbClient:
         )
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
-            result = await client.search_entities("Robin", page=3, per_page=50)
+            _result = await client.search_entities("Robin", page=3, per_page=50)
 
             # Verify pagination parameters
             request_url = str(route.calls.last.request.url)
@@ -198,20 +198,20 @@ class TestIMVDbClient:
 
             # Verify result is correct type
             assert isinstance(result, IMVDbVideo)
-            
+
             # Verify response structure
             assert result.id == 121779770452
             assert result.song_title == "Blurred Lines"
             assert result.year == 2013
-            
+
             # Verify includes are present
             assert len(result.directors) > 0
             assert result.directors[0].entity_name == "Diane Martel"
-            
+
             assert len(result.sources) > 0
-            
+
             assert len(result.featured_artists) > 0
-            
+
             assert result.credits is not None
 
             # Verify request includes parameter
@@ -233,16 +233,16 @@ class TestIMVDbClient:
 
             # Verify result is correct type
             assert isinstance(result, IMVDbEntity)
-            
+
             # Verify response structure
             assert result.id == 838673
             assert result.slug == "robin-thicke"
             assert result.artist_video_count == 4
-            
+
             # Verify includes are present
             assert result.artist_videos_total == 19
             assert len(result.artist_videos) > 0
-            
+
             assert result.featured_videos_total == 2
 
             # Verify request includes parameter
@@ -263,7 +263,7 @@ class TestIMVDbClient:
             assert client.rate_limiter is not None
             expected_rate = IMVDbClient.DEFAULT_REQUESTS_PER_MINUTE / 60.0
             assert abs(client.rate_limiter.rate - expected_rate) < 0.01
-            
+
             # Make a few requests - they should succeed
             for _ in range(3):
                 await client.search_videos("Artist", "Track")
@@ -272,24 +272,21 @@ class TestIMVDbClient:
     @respx.mock
     async def test_concurrency_limiting(self, imvdb_config, search_videos_response):
         """Test that concurrency limiting is configured with defaults."""
+
         # Mock with delay
         async def slow_response(request):
             await asyncio.sleep(0.05)
             return httpx.Response(200, json=search_videos_response)
 
-        respx.get("https://imvdb.com/api/v1/search/videos").mock(
-            side_effect=slow_response
-        )
+        respx.get("https://imvdb.com/api/v1/search/videos").mock(side_effect=slow_response)
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             # Verify concurrency limiter is configured with defaults
             assert client.concurrency_limiter is not None
             assert client.concurrency_limiter.max_concurrent == IMVDbClient.DEFAULT_MAX_CONCURRENT
-            
+
             # Make concurrent requests - they should all succeed
-            tasks = [
-                client.search_videos("Artist", "Track") for _ in range(5)
-            ]
+            tasks = [client.search_videos("Artist", "Track") for _ in range(5)]
             responses = await asyncio.gather(*tasks)
             assert len(responses) == 5
 
@@ -304,9 +301,7 @@ class TestIMVDbClient:
             call_count += 1
             return httpx.Response(403, json={"error": "Forbidden"})
 
-        respx.get("https://imvdb.com/api/v1/search/videos").mock(
-            side_effect=count_calls
-        )
+        respx.get("https://imvdb.com/api/v1/search/videos").mock(side_effect=count_calls)
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
@@ -327,9 +322,7 @@ class TestIMVDbClient:
             call_count += 1
             return httpx.Response(404, json={"error": "Not Found"})
 
-        respx.get("https://imvdb.com/api/v1/video/999999").mock(
-            side_effect=count_calls
-        )
+        respx.get("https://imvdb.com/api/v1/video/999999").mock(side_effect=count_calls)
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
@@ -378,9 +371,7 @@ class TestIMVDbClient:
                 return httpx.Response(502, json={"error": "Bad Gateway"})
             return httpx.Response(200, json={"id": 123})
 
-        respx.get("https://imvdb.com/api/v1/video/123").mock(
-            side_effect=count_calls_then_success
-        )
+        respx.get("https://imvdb.com/api/v1/video/123").mock(side_effect=count_calls_then_success)
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             result = await client.get_video(123)
@@ -402,11 +393,18 @@ class TestIMVDbClient:
             call_count += 1
             if call_count < 2:
                 return httpx.Response(503, json={"error": "Service Unavailable"})
-            return httpx.Response(200, json={"id": 456, "slug": "test", "url": "test", "artist_video_count": 0, "featured_video_count": 0})
+            return httpx.Response(
+                200,
+                json={
+                    "id": 456,
+                    "slug": "test",
+                    "url": "test",
+                    "artist_video_count": 0,
+                    "featured_video_count": 0,
+                },
+            )
 
-        respx.get("https://imvdb.com/api/v1/entity/456").mock(
-            side_effect=count_calls_then_success
-        )
+        respx.get("https://imvdb.com/api/v1/entity/456").mock(side_effect=count_calls_then_success)
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             result = await client.get_entity(456)
@@ -461,13 +459,18 @@ class TestIMVDbClient:
 
         async with IMVDbClient.from_config(config=config) as client:
             # Should work but not have the auth header
-            assert "IMVDB-APP-KEY" not in client.auth_headers or client.auth_headers.get("IMVDB-APP-KEY") is None
+            assert (
+                "IMVDB-APP-KEY" not in client.auth_headers
+                or client.auth_headers.get("IMVDB-APP-KEY") is None
+            )
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_search_video_by_artist_title_exact_match(self, imvdb_config, search_videos_response):
+    async def test_search_video_by_artist_title_exact_match(
+        self, imvdb_config, search_videos_response
+    ):
         """Test search_video_by_artist_title with exact match."""
-        route = respx.get("https://imvdb.com/api/v1/search/videos").mock(
+        _route = respx.get("https://imvdb.com/api/v1/search/videos").mock(
             return_value=httpx.Response(200, json=search_videos_response)
         )
 
@@ -482,7 +485,9 @@ class TestIMVDbClient:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_search_video_by_artist_title_with_featured_artists(self, imvdb_config, search_videos_response):
+    async def test_search_video_by_artist_title_with_featured_artists(
+        self, imvdb_config, search_videos_response
+    ):
         """Test search_video_by_artist_title strips featured artists from query."""
         route = respx.get("https://imvdb.com/api/v1/search/videos").mock(
             return_value=httpx.Response(200, json=search_videos_response)
@@ -490,7 +495,9 @@ class TestIMVDbClient:
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             # Query with featured artist notation
-            video = await client.search_video_by_artist_title("Robin Thicke ft. T.I.", "Blurred Lines")
+            video = await client.search_video_by_artist_title(
+                "Robin Thicke ft. T.I.", "Blurred Lines"
+            )
 
             # Verify that featured artist was stripped from query (URL is lowercase)
             request_url = str(route.calls.last.request.url).lower()
@@ -515,12 +522,18 @@ class TestIMVDbClient:
             with pytest.raises(EmptySearchResultsError) as exc_info:
                 await client.search_video_by_artist_title("Nonexistent Artist", "Nonexistent Song")
 
-            assert "Nonexistent Artist" in str(exc_info.value).lower() or "nonexistent artist" in str(exc_info.value)
-            assert "Nonexistent Song" in str(exc_info.value).lower() or "nonexistent song" in str(exc_info.value)
+            assert "Nonexistent Artist" in str(
+                exc_info.value
+            ).lower() or "nonexistent artist" in str(exc_info.value)
+            assert "Nonexistent Song" in str(exc_info.value).lower() or "nonexistent song" in str(
+                exc_info.value
+            )
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_search_video_by_artist_title_no_match(self, imvdb_config, search_videos_response):
+    async def test_search_video_by_artist_title_no_match(
+        self, imvdb_config, search_videos_response
+    ):
         """Test search_video_by_artist_title raises VideoNotFoundError when no match."""
         from fuzzbin.parsers.imvdb_models import VideoNotFoundError
 
@@ -530,4 +543,6 @@ class TestIMVDbClient:
 
         async with IMVDbClient.from_config(config=imvdb_config) as client:
             with pytest.raises(VideoNotFoundError):
-                await client.search_video_by_artist_title("Completely Different Artist", "Totally Different Song")
+                await client.search_video_by_artist_title(
+                    "Completely Different Artist", "Totally Different Song"
+                )

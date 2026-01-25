@@ -1,6 +1,5 @@
 """Tests for job management API endpoints."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 from fuzzbin.tasks import JobStatus, JobType

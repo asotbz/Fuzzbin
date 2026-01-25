@@ -1,6 +1,5 @@
 """Tests for video CRUD endpoints."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -20,9 +19,7 @@ class TestVideoList:
         assert data["page_size"] == 20
         assert data["total_pages"] == 1
 
-    def test_list_videos_with_data(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_list_videos_with_data(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test listing videos with existing data."""
         # Create a video first
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -153,9 +150,7 @@ class TestVideoList:
         test_app.post("/videos", json=sample_video_data_2)
 
         # Sort ascending
-        response = test_app.get(
-            "/videos", params={"sort_by": "title", "sort_order": "asc"}
-        )
+        response = test_app.get("/videos", params={"sort_by": "title", "sort_order": "asc"})
 
         assert response.status_code == 200
         data = response.json()
@@ -199,9 +194,7 @@ class TestVideoList:
 class TestVideoCreate:
     """Tests for POST /videos endpoint."""
 
-    def test_create_video_success(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_create_video_success(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test successful video creation."""
         response = test_app.post("/videos", json=sample_video_data)
 
@@ -255,9 +248,7 @@ class TestVideoCreate:
 class TestVideoGet:
     """Tests for GET /videos/{video_id} endpoint."""
 
-    def test_get_video_success(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_get_video_success(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test getting a video by ID."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -314,9 +305,7 @@ class TestVideoGet:
 class TestVideoUpdate:
     """Tests for PATCH /videos/{video_id} endpoint."""
 
-    def test_update_video_success(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_update_video_success(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test successful video update."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -335,9 +324,7 @@ class TestVideoUpdate:
         # Other fields should be preserved
         assert data["artist"] == sample_video_data["artist"]
 
-    def test_update_video_partial(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_update_video_partial(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test partial update (only specified fields change)."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -362,9 +349,7 @@ class TestVideoUpdate:
 class TestVideoDelete:
     """Tests for DELETE /videos/{video_id} endpoint."""
 
-    def test_soft_delete_video(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_soft_delete_video(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test soft deleting a video."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -376,9 +361,7 @@ class TestVideoDelete:
         assert response.status_code == 204
 
         # Verify it's soft deleted
-        get_response = test_app.get(
-            f"/videos/{video_id}", params={"include_deleted": True}
-        )
+        get_response = test_app.get(f"/videos/{video_id}", params={"include_deleted": True})
         assert get_response.status_code == 200
         assert get_response.json()["is_deleted"] is True
 
@@ -392,9 +375,7 @@ class TestVideoDelete:
 class TestVideoRestore:
     """Tests for POST /videos/{video_id}/restore endpoint."""
 
-    def test_restore_video(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_restore_video(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test restoring a soft-deleted video."""
         # Create and delete
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -416,9 +397,7 @@ class TestVideoRestore:
 class TestVideoHardDelete:
     """Tests for DELETE /videos/{video_id}/permanent endpoint."""
 
-    def test_hard_delete_video(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_hard_delete_video(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test permanently deleting a video."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -430,18 +409,14 @@ class TestVideoHardDelete:
         assert response.status_code == 204
 
         # Verify it's gone even with include_deleted
-        get_response = test_app.get(
-            f"/videos/{video_id}", params={"include_deleted": True}
-        )
+        get_response = test_app.get(f"/videos/{video_id}", params={"include_deleted": True})
         assert get_response.status_code == 404
 
 
 class TestVideoStatusUpdate:
     """Tests for PATCH /videos/{video_id}/status endpoint."""
 
-    def test_update_status(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_update_status(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test updating video status."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -461,9 +436,7 @@ class TestVideoStatusUpdate:
         data = response.json()
         assert data["status"] == "downloaded"
 
-    def test_status_history(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_status_history(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test getting video status history."""
         # Create video
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -486,9 +459,7 @@ class TestVideoStatusUpdate:
 class TestVideoStream:
     """Tests for GET /videos/{video_id}/stream endpoint."""
 
-    def test_stream_video_full(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_stream_video_full(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test streaming full video file without Range header."""
         video_id = video_with_file["id"]
 
@@ -499,9 +470,7 @@ class TestVideoStream:
         assert "Content-Length" in response.headers
         assert response.content == b"test video content for testing"
 
-    def test_stream_video_with_range(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_stream_video_with_range(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test streaming video with Range header (206 Partial Content)."""
         video_id = video_with_file["id"]
 
@@ -516,9 +485,7 @@ class TestVideoStream:
         assert "Content-Range" in response.headers
         assert response.headers.get("Content-Range").startswith("bytes 0-9/")
 
-    def test_stream_video_suffix_range(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_stream_video_suffix_range(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test streaming video with suffix Range (last N bytes)."""
         video_id = video_with_file["id"]
 
@@ -546,18 +513,14 @@ class TestVideoStream:
         assert response.status_code == 206
         assert response.content == b"video content for testing"
 
-    def test_stream_video_not_found(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_stream_video_not_found(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test streaming returns 404 for non-existent video."""
         response = test_app.get("/videos/99999/stream")
 
         # The repository raises VideoNotFoundError
         assert response.status_code == 404
 
-    def test_stream_video_no_file(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_stream_video_no_file(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test streaming returns 404 when video has no file path."""
         # Create video without file path
         create_response = test_app.post("/videos", json=sample_video_data)
@@ -579,9 +542,7 @@ class TestVideoStream:
         assert response.status_code == 404
         assert "not found on disk" in response.json()["detail"]
 
-    def test_stream_invalid_range(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_stream_invalid_range(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test streaming returns 416 for invalid range."""
         video_id = video_with_file["id"]
 
@@ -597,9 +558,7 @@ class TestVideoStream:
 class TestVideoThumbnail:
     """Tests for GET /videos/{video_id}/thumbnail endpoint."""
 
-    def test_thumbnail_video_not_found(
-        self, test_app: TestClient
-    ) -> None:
+    def test_thumbnail_video_not_found(self, test_app: TestClient) -> None:
         """Test thumbnail returns 404 for non-existent video."""
         response = test_app.get("/videos/99999/thumbnail")
 

@@ -13,7 +13,6 @@ from fuzzbin.core.exceptions import (
     InvalidPathError,
     YTDLPExecutionError,
     YTDLPNotFoundError,
-    YTDLPParseError,
 )
 from fuzzbin.parsers.ytdlp_models import DownloadProgress, YTDLPDownloadResult, YTDLPSearchResult
 
@@ -21,7 +20,7 @@ from fuzzbin.parsers.ytdlp_models import DownloadProgress, YTDLPDownloadResult, 
 @pytest.fixture
 def ytdlp_config():
     """Create yt-dlp configuration for testing.
-    
+
     Note: YTDLPConfig now only exposes ytdlp_path, format_spec, and geo_bypass.
     Other settings (search_max_results, quiet, timeout) use class defaults.
     """
@@ -162,12 +161,13 @@ class TestYTDLPClient:
     @pytest.mark.asyncio
     async def test_search_timeout(self, ytdlp_config):
         """Test search timeout handling.
-        
+
         Note: timeout is now a class default (DEFAULT_TIMEOUT = 300).
         We override it on the instance to test timeout handling.
         """
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_process = AsyncMock()
+
             # Make communicate hang forever using an async function that never completes
             async def never_completes():
                 await asyncio.sleep(999)  # Sleep for a very long time
@@ -360,7 +360,7 @@ class TestYTDLPClient:
     @pytest.mark.asyncio
     async def test_download_quiet_mode(self, tmp_path):
         """Test download with quiet mode enabled.
-        
+
         Note: quiet is now a class default (DEFAULT_QUIET = False).
         We override it on the instance to test quiet mode behavior.
         """
@@ -833,9 +833,7 @@ class TestCancellation:
                         cancellation_token=token,
                     )
 
-    async def test_backward_compat_progress_callback_with_hooks(
-        self, ytdlp_config, tmp_path
-    ):
+    async def test_backward_compat_progress_callback_with_hooks(self, ytdlp_config, tmp_path):
         """Test progress_callback is merged with hooks correctly."""
         output_file = tmp_path / "video.mp4"
         from fuzzbin.parsers.ytdlp_models import DownloadHooks

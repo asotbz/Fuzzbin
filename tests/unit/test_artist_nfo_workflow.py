@@ -1,6 +1,5 @@
 """Tests for artist.nfo auto-creation during video organization."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -128,9 +127,6 @@ class TestArtistNfoWorkflow:
     async def test_create_new_artist_nfo(self, mock_repository, mock_config, tmp_path):
         """Test creating new artist.nfo when it doesn't exist."""
         from fuzzbin.tasks.handlers import handle_import_organize
-        from fuzzbin.tasks.queue import get_job_queue
-        from fuzzbin.core.organizer import build_media_paths
-        from fuzzbin.parsers.models import MusicVideoNFO
 
         # Create temp video file
         temp_dir = tmp_path / "temp"
@@ -186,7 +182,7 @@ class TestArtistNfoWorkflow:
         parser.write_file(ArtistNFO(name="Nirvana"), artist_nfo_path)
 
         # Record original modification time
-        original_mtime = artist_nfo_path.stat().st_mtime
+        _original_mtime = artist_nfo_path.stat().st_mtime
 
         # Create job
         job = Job(
@@ -257,9 +253,7 @@ class TestArtistNfoWorkflow:
         artist_nfo = parser.parse_file(artist_nfo_path)
         assert artist_nfo.name == "Nirvana"
 
-    async def test_skip_artist_nfo_when_no_artist_in_pattern(
-        self, mock_repository, tmp_path
-    ):
+    async def test_skip_artist_nfo_when_no_artist_in_pattern(self, mock_repository, tmp_path):
         """Test skipping artist.nfo creation when pattern has no {artist}."""
         from fuzzbin.tasks.handlers import handle_import_organize
 
@@ -346,6 +340,7 @@ class TestArtistNfoWorkflow:
 
             # Should raise MissingFieldError because artist is required by pattern
             from fuzzbin.core.exceptions import MissingFieldError
+
             with pytest.raises(MissingFieldError, match="artist.*required by pattern"):
                 await handle_import_organize(job)
 
@@ -365,9 +360,7 @@ class TestArtistNfoWorkflow:
         temp_file.write_text("test video")
 
         # Make get_artist_by_id raise an error
-        mock_repository.get_artist_by_id = AsyncMock(
-            side_effect=Exception("Database error")
-        )
+        mock_repository.get_artist_by_id = AsyncMock(side_effect=Exception("Database error"))
 
         # Create job
         job = Job(
@@ -428,7 +421,7 @@ class TestArtistNfoWorkflow:
         # Verify artist.nfo was created
         artist_nfo_path = mock_config.library_dir / "Nirvana" / "artist.nfo"
         assert artist_nfo_path.exists()
-        original_mtime = artist_nfo_path.stat().st_mtime
+        _original_mtime = artist_nfo_path.stat().st_mtime
 
         # Organize second video for same artist
         temp_file2 = tmp_path / "temp2" / "video2.mp4"

@@ -1,6 +1,5 @@
 """Tests for file management endpoints."""
 
-import pytest
 from pathlib import Path
 from fastapi.testclient import TestClient
 
@@ -13,9 +12,7 @@ class TestOrganizeVideo:
         response = test_app.post("/files/videos/99999/organize")
         assert response.status_code == 404
 
-    def test_organize_dry_run(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_organize_dry_run(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test organize dry run returns target paths without moving."""
         video_id = video_with_file["id"]
         original_path = video_with_file["video_file_path"]
@@ -32,7 +29,7 @@ class TestOrganizeVideo:
         assert data["dry_run"] is True
         assert data["status"] == "dry_run"
         assert data["target_video_path"] is not None
-        
+
         # File should still be at original location
         assert Path(original_path).exists()
 
@@ -45,13 +42,11 @@ class TestDeleteVideoFiles:
         response = test_app.delete("/files/videos/99999")
         assert response.status_code == 404
 
-    def test_soft_delete_success(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_soft_delete_success(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test soft delete moves file to trash."""
         video_id = video_with_file["id"]
         original_path = Path(video_with_file["video_file_path"])
-        
+
         response = test_app.delete(f"/files/videos/{video_id}")
 
         assert response.status_code == 200
@@ -61,16 +56,14 @@ class TestDeleteVideoFiles:
         assert data["deleted"] is True
         assert data["hard_delete"] is False
         assert data["trash_path"] is not None
-        
+
         # Original file should be gone
         assert not original_path.exists()
-        
+
         # Trash file should exist
         assert Path(data["trash_path"]).exists()
 
-    def test_hard_delete_success(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_hard_delete_success(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test hard delete permanently removes file."""
         video_id = video_with_file["id"]
         original_path = Path(video_with_file["video_file_path"])
@@ -87,7 +80,7 @@ class TestDeleteVideoFiles:
         assert data["deleted"] is True
         assert data["hard_delete"] is True
         assert data["trash_path"] is None
-        
+
         # File should be completely gone
         assert not original_path.exists()
 
@@ -95,9 +88,7 @@ class TestDeleteVideoFiles:
 class TestRestoreVideo:
     """Tests for POST /files/videos/{video_id}/restore endpoint."""
 
-    def test_restore_not_deleted(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_restore_not_deleted(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test restoring a video that's not deleted."""
         video_id = video_with_file["id"]
 
@@ -107,12 +98,10 @@ class TestRestoreVideo:
         assert response.status_code == 400
         assert "not deleted" in response.json()["detail"]
 
-    def test_restore_success(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_restore_success(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test successful restore from trash."""
         video_id = video_with_file["id"]
-        original_path = Path(video_with_file["video_file_path"])
+        _original_path = Path(video_with_file["video_file_path"])
 
         # First soft delete
         delete_response = test_app.delete(f"/files/videos/{video_id}")
@@ -128,10 +117,10 @@ class TestRestoreVideo:
         assert data["video_id"] == video_id
         assert data["restored"] is True
         assert data["restored_path"] is not None
-        
+
         # Trash file should be gone
         assert not trash_path.exists()
-        
+
         # Restored file should exist
         assert Path(data["restored_path"]).exists()
 
@@ -144,9 +133,7 @@ class TestFindDuplicates:
         response = test_app.get("/files/videos/99999/duplicates")
         assert response.status_code == 404
 
-    def test_duplicates_none_found(
-        self, test_app: TestClient, video_with_file: dict
-    ) -> None:
+    def test_duplicates_none_found(self, test_app: TestClient, video_with_file: dict) -> None:
         """Test no duplicates found."""
         video_id = video_with_file["id"]
 
@@ -159,9 +146,7 @@ class TestFindDuplicates:
         assert data["duplicates"] == []
         assert data["total"] == 0
 
-    def test_duplicates_by_metadata(
-        self, test_app: TestClient, sample_video_data: dict
-    ) -> None:
+    def test_duplicates_by_metadata(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test finding duplicates by metadata."""
         # Create two videos with same title/artist
         video1 = test_app.post("/videos", json=sample_video_data)
@@ -183,7 +168,7 @@ class TestFindDuplicates:
 
         assert data["video_id"] == video1_id
         assert data["total"] >= 1
-        
+
         # Should find video2 as duplicate
         dupe_ids = [d["video_id"] for d in data["duplicates"]]
         assert video2_id in dupe_ids
@@ -261,14 +246,12 @@ class TestVerifyLibrary:
         data = response.json()
 
         assert data["missing_files"] >= 1
-        
+
         # Should have an issue for the missing file
         missing_issues = [i for i in data["issues"] if i["issue_type"] == "missing_file"]
         assert len(missing_issues) >= 1
 
-    def test_verify_finds_orphans(
-        self, test_app: TestClient, orphan_file: Path
-    ) -> None:
+    def test_verify_finds_orphans(self, test_app: TestClient, orphan_file: Path) -> None:
         """Test verification finds orphaned files."""
         response = test_app.get(
             "/files/library/verify",
