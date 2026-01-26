@@ -73,12 +73,14 @@ export default defineConfig({
   ],
 
   // Run local dev server before starting the tests
-  webServer: [
+  // In CI: workflow starts servers, so Playwright reuses them
+  // Locally: Playwright starts servers (or reuses if already running)
+  webServer: process.env.CI ? [] : [
     // Backend API server - uses isolated test directories to ensure clean state
     {
       command: 'rm -rf /tmp/fuzzbin-e2e && mkdir -p /tmp/fuzzbin-e2e/config /tmp/fuzzbin-e2e/library && cd .. && fuzzbin-api',
       url: 'http://localhost:8000/health',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 30 * 1000,
       env: {
         FUZZBIN_CONFIG_DIR: '/tmp/fuzzbin-e2e/config',
@@ -91,7 +93,7 @@ export default defineConfig({
     {
       command: 'npm run dev',
       url: 'http://localhost:5173',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 30 * 1000,
     },
   ],
