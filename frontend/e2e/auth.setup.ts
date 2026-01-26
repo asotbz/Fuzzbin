@@ -1,6 +1,8 @@
 import { test as setup, expect } from '@playwright/test'
 import path from 'path'
+import { fileURLToPath } from 'url'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const authFile = path.join(__dirname, '.auth/user.json')
 
 /**
@@ -36,25 +38,44 @@ setup('authenticate', async ({ page }) => {
   await page.getByPlaceholder('Username').fill(TEST_USER.username)
   await page.getByPlaceholder('Password').fill(TEST_USER.password)
   
+  // Listen for API responses to debug login issues
+  const loginResponses: { status: number; body?: string }[] = []
+  page.on('response', async response => {
+    if (response.url().includes('/auth/login')) {
+      const body = await response.text().catch(() => 'could not read body')
+      loginResponses.push({ status: response.status(), body })
+      console.log(`[E2E] Login API response: ${response.status()} - ${body}`)
+    }
+  })
+  
   // Submit the form
-  await page.getByRole('button', { name: /sign in|log in/i }).click()
+  await page.getByRole('button', { name: 'Login' }).click()
+  
+  // Wait for API response
+  await page.waitForTimeout(3000)
+  
+  // Check for error displayed on page
+  const errorVisible = await page.locator('.errorText').isVisible().catch(() => false)
+  if (errorVisible) {
+    const errorText = await page.locator('.errorText').textContent()
+    console.log(`[E2E] Login error displayed on page: ${errorText}`)
+    console.log(`[E2E] API responses captured: ${JSON.stringify(loginResponses)}`)
+    throw new Error(`Login failed with error: ${errorText}. API responses: ${JSON.stringify(loginResponses)}`)
+  }
   
   // Wait for redirect - could be library or password change page
   await expect(page).toHaveURL(/\/library|\/set-initial-password/, { timeout: 10000 })
   
   // Handle password change flow if required
   if (page.url().includes('set-initial-password')) {
-    // Fill in password change form
-    const currentPasswordInput = page.getByLabel(/current password/i)
-    const newPasswordInput = page.getByLabel(/^new password$/i)
-    const confirmPasswordInput = page.getByLabel(/confirm.*password/i)
+    // When coming from login, current password is pre-filled via router state
+    // Only "New password" field is shown - use placeholder selector
+    const newPasswordInput = page.getByPlaceholder('New password')
     
-    await currentPasswordInput.fill(TEST_USER.password)
     await newPasswordInput.fill(NEW_PASSWORD)
-    await confirmPasswordInput.fill(NEW_PASSWORD)
     
     // Submit password change
-    await page.getByRole('button', { name: /change password|submit|save/i }).click()
+    await page.getByRole('button', { name: /set password/i }).click()
     
     // Wait for redirect to library after password change
     await expect(page).toHaveURL(/\/library/, { timeout: 10000 })

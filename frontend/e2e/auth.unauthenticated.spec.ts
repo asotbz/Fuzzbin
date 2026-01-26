@@ -11,7 +11,7 @@ test.describe('Login Page', () => {
 
     await expect(page.getByPlaceholder('Username')).toBeVisible()
     await expect(page.getByPlaceholder('Password')).toBeVisible()
-    await expect(page.getByRole('button', { name: /sign in|log in/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Login' })).toBeVisible()
   })
 
   test('shows error for invalid credentials', async ({ page }) => {
@@ -19,7 +19,7 @@ test.describe('Login Page', () => {
 
     await page.getByPlaceholder('Username').fill('wronguser')
     await page.getByPlaceholder('Password').fill('wrongpassword')
-    await page.getByRole('button', { name: /sign in|log in/i }).click()
+    await page.getByRole('button', { name: 'Login' }).click()
 
     // Should show error message
     await expect(page.getByText(/invalid|incorrect|failed/i)).toBeVisible({ timeout: 5000 })
@@ -34,7 +34,25 @@ test.describe('Login Page', () => {
     // Use test credentials (default admin/changeme from DB seed)
     await page.getByPlaceholder('Username').fill('admin')
     await page.getByPlaceholder('Password').fill('changeme')
-    await page.getByRole('button', { name: /sign in|log in/i }).click()
+    
+    // Listen for API responses to debug login issues
+    page.on('response', response => {
+      if (response.url().includes('/auth/login')) {
+        console.log(`Login response: ${response.status()} ${response.statusText()}`)
+      }
+    })
+    
+    await page.getByRole('button', { name: 'Login' }).click()
+
+    // Wait a moment for API call to complete
+    await page.waitForTimeout(2000)
+    
+    // Check if there's an error shown on the page
+    const errorElement = page.locator('.errorText, [class*="error"]')
+    if (await errorElement.isVisible()) {
+      const errorText = await errorElement.textContent()
+      console.log(`Login error displayed: ${errorText}`)
+    }
 
     // Should redirect to library (or password change if required)
     await expect(page).toHaveURL(/\/library|\/set-initial-password/, { timeout: 10000 })

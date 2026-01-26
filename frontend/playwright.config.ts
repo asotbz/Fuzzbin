@@ -51,7 +51,7 @@ export default defineConfig({
       testMatch: /.*\.setup\.ts/,
     },
 
-    // Main test project - depends on setup
+    // Main test project - depends on setup (authenticated tests)
     {
       name: 'chromium',
       use: { 
@@ -60,9 +60,11 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
+      // Exclude unauthenticated and setup tests
+      testIgnore: /.*\.(unauthenticated|setup)\.spec\.ts/,
     },
 
-    // Unauthenticated tests (login page, etc.)
+    // Unauthenticated tests (login page, etc.) - runs without auth state
     {
       name: 'chromium-unauthenticated',
       use: { ...devices['Desktop Chrome'] },
@@ -72,13 +74,26 @@ export default defineConfig({
 
   // Run local dev server before starting the tests
   webServer: [
-    // Uncomment to auto-start frontend dev server
-    // {
-    //   command: 'npm run dev',
-    //   url: 'http://localhost:5173',
-    //   reuseExistingServer: !process.env.CI,
-    //   timeout: 120 * 1000,
-    // },
+    // Backend API server - uses isolated test directories to ensure clean state
+    {
+      command: 'rm -rf /tmp/fuzzbin-e2e && mkdir -p /tmp/fuzzbin-e2e/config /tmp/fuzzbin-e2e/library && cd .. && fuzzbin-api',
+      url: 'http://localhost:8000/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30 * 1000,
+      env: {
+        FUZZBIN_CONFIG_DIR: '/tmp/fuzzbin-e2e/config',
+        FUZZBIN_LIBRARY_DIR: '/tmp/fuzzbin-e2e/library',
+        FUZZBIN_API_JWT_SECRET: 'e2e-test-secret-key-do-not-use-in-production',
+        FUZZBIN_API_AUTH_ENABLED: 'true',
+      },
+    },
+    // Frontend dev server
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:5173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30 * 1000,
+    },
   ],
 
   // Timeout settings
