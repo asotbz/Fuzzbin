@@ -1,5 +1,9 @@
-# Stage 1: Build frontend
+# Dependency versions (global scope for multi-stage build)
 ARG NODE_VERSION=24
+ARG DENO_VERSION=2.6.7
+ARG PYTHON_VERSION=3.14
+
+# Stage 1: Build frontend
 FROM node:${NODE_VERSION} AS frontend-build
 
 ARG VERSION=0.0.0
@@ -21,8 +25,11 @@ ENV VITE_APP_VERSION=${VERSION}
 RUN npm run build
 
 
-# Stage 2: Final image with Python backend
-ARG PYTHON_VERSION=3.14
+# Stage 2: Deno binary (yt-dlp dependency)
+FROM denoland/deno:bin-${DENO_VERSION} AS deno
+
+
+# Stage 3: Final image with Python backend
 FROM python:${PYTHON_VERSION}
 
 ARG VERSION=0.0.0
@@ -45,8 +52,7 @@ ENV FUZZBIN_VERSION=${VERSION}
 # Install Python dependencies (production only)
 RUN pip install --no-cache-dir ".[prod]"
 # deno (yt-dlp dependency)
-ARG DENO_VERSION=2.6.7
-COPY --from=denoland/deno:bin-${DENO_VERSION} /deno /usr/local/bin/deno
+COPY --from=deno /deno /usr/local/bin/deno
 
 # Copy frontend build from stage 1 (includes dist and public assets)
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
