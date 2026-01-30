@@ -1,5 +1,6 @@
 # Stage 1: Build frontend
-FROM node:24 AS frontend-build
+ARG NODE_VERSION=24
+FROM node:${NODE_VERSION} AS frontend-build
 
 ARG VERSION=0.0.0
 
@@ -21,7 +22,8 @@ RUN npm run build
 
 
 # Stage 2: Final image with Python backend
-FROM python:3.14
+ARG PYTHON_VERSION=3.14
+FROM python:${PYTHON_VERSION}
 
 ARG VERSION=0.0.0
 
@@ -40,8 +42,11 @@ COPY fuzzbin/ ./fuzzbin/
 # Set version environment variable
 ENV FUZZBIN_VERSION=${VERSION}
 
-# Install Python dependencies (production only) and yt-dlp
-RUN pip install --no-cache-dir yt-dlp ".[prod]"
+# Install Python dependencies (production only)
+RUN pip install --no-cache-dir ".[prod]"
+# deno (yt-dlp dependency)
+ARG DENO_VERSION=2.6.7
+COPY --from=denoland/deno:bin-${DENO_VERSION} /deno /usr/local/bin/deno
 
 # Copy frontend build from stage 1 (includes dist and public assets)
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
