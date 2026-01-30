@@ -1,8 +1,6 @@
 import { clearTokens, getTokens, setTokens } from '../auth/tokenStore'
 import { decodeJwt } from '../lib/jwt'
 
-const DEFAULT_BASE_URL = 'http://localhost:8000'
-
 // Proactive refresh timer
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -11,7 +9,9 @@ const REFRESH_BUFFER_MS = 60 * 1000
 
 function getBaseUrl() {
   const envUrl = import.meta.env.VITE_API_BASE_URL
-  return (typeof envUrl === 'string' && envUrl.length > 0 ? envUrl : DEFAULT_BASE_URL).replace(/\/$/, '')
+  // If VITE_API_BASE_URL is set, use it; otherwise use current origin (works behind reverse proxy)
+  const baseUrl = typeof envUrl === 'string' && envUrl.length > 0 ? envUrl : window.location.origin
+  return baseUrl.replace(/\/$/, '')
 }
 
 export function getApiBaseUrl() {

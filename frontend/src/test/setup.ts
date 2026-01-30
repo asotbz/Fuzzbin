@@ -27,6 +27,21 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 })
 
+// Set window.location.origin to match MSW mock handlers
+// This is needed because the API client uses window.location.origin when VITE_API_BASE_URL is not set
+Object.defineProperty(window, 'location', {
+  value: {
+    ...window.location,
+    origin: 'http://localhost:8000',
+    href: 'http://localhost:8000/',
+    protocol: 'http:',
+    host: 'localhost:8000',
+    hostname: 'localhost',
+    port: '8000',
+  },
+  writable: true,
+})
+
 // Start MSW server before all tests
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
