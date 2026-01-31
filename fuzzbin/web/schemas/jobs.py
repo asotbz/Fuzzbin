@@ -45,15 +45,78 @@ class JobResponse(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     metadata: dict[str, Any]
+    video_id: int | None = None
+    video_title: str | None = None
+    video_artist: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class JobListResponse(BaseModel):
-    """List of jobs response."""
+    """List of jobs response with pagination info."""
 
     jobs: list[JobResponse]
     total: int
+    limit: int | None = None
+    offset: int | None = None
+
+
+class JobHistoryResponse(BaseModel):
+    """Paginated job history response."""
+
+    jobs: list[JobResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class JobGroupResponse(BaseModel):
+    """Job group aggregated by video_id.
+
+    Represents all jobs related to a single video as a grouped entity
+    for display in the frontend.
+    """
+
+    video_id: int
+    video_title: str | None
+    video_artist: str | None
+    job_count: int = Field(description="Total number of jobs in this group")
+    completed_count: int = Field(description="Number of completed jobs")
+    running_count: int = Field(description="Number of currently running jobs")
+    pending_count: int = Field(description="Number of pending/waiting jobs")
+    failed_count: int = Field(description="Number of failed jobs")
+    overall_progress: float = Field(description="Average progress across all jobs (0.0-1.0)")
+    group_status: str = Field(description="Overall status: running, pending, completed, or failed")
+    job_types: list[str] = Field(description="List of job types in this group")
+    first_created_at: datetime = Field(description="When the first job was created")
+    current_started_at: datetime | None = Field(description="When the current running job started")
+    jobs: list[JobResponse] = Field(
+        default_factory=list, description="Individual jobs in this group"
+    )
+
+
+class JobGroupListResponse(BaseModel):
+    """List of job groups response."""
+
+    groups: list[JobGroupResponse]
+    total: int
+
+
+class MaintenanceJobsResponse(BaseModel):
+    """Maintenance jobs (backup, cleanup, etc.) response."""
+
+    active_jobs: list[JobResponse]
+    scheduled_jobs: list[dict[str, Any]]  # Scheduled task info
+
+
+class JobRetryResponse(BaseModel):
+    """Response when retrying a failed job."""
+
+    original_job_id: str
+    new_job_id: str
+    job_type: JobType
+    status: str = "pending"
 
 
 class JobProgressUpdate(BaseModel):

@@ -230,7 +230,7 @@ Background job submission, status tracking, and cancellation
 - `POST` `/jobs` — Submit a background job
   - Submit a new background job for async processing. Returns 202 Accepted with job details.
 - `GET` `/jobs` — List jobs
-  - List all jobs with optional status filter.
+  - List jobs from database with optional status/type filtering and pagination.
 - `GET` `/jobs/metrics` — Get job queue metrics
   - Get monitoring metrics for the job queue including success rate, average duration, queue depth, and per-type breakdowns.
 - `POST` `/jobs/scheduled` — Create scheduled task
@@ -249,6 +249,16 @@ Background job submission, status tracking, and cancellation
   - Get the current status and progress of a job.
 - `DELETE` `/jobs/{job_id}` — Cancel a job
   - Cancel a pending or running job. Has no effect on completed jobs.
+- `GET` `/jobs/groups` — List job groups by video
+  - Get active jobs grouped by video_id. Each group shows all jobs related to a single video (download, process, organize, etc.).
+- `DELETE` `/jobs/groups/{video_id}` — Cancel all jobs for a video
+  - Cancel all pending/waiting jobs associated with a video.
+- `GET` `/jobs/history` — Get job history
+  - Get paginated history of completed, failed, cancelled, and timed out jobs.
+- `POST` `/jobs/{job_id}/retry` — Retry a failed job
+  - Create a new job with the same parameters as a failed job.
+- `GET` `/jobs/maintenance` — Get maintenance jobs
+  - Get active maintenance jobs (backup, trash cleanup, job history cleanup, etc.) and scheduled task information.
 
 ## WebSocket
 Real-time progress updates via WebSocket

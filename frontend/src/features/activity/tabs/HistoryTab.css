@@ -1,0 +1,130 @@
+.historyTab {
+  padding: var(--space-4);
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+}
+
+.selectAllLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.selectAllLabel input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.batchActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.batchActionBtn {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.batchActionBtn:hover:not(:disabled) {
+  background: var(--btn-secondary-hover);
+  color: var(--text-primary);
+}
+
+.batchActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batchActionBtnDanger {
+  background: var(--status-failed-bg);
+  color: var(--status-failed);
+}
+
+.batchActionBtnDanger:hover:not(:disabled) {
+  background: var(--status-failed);
+  color: white;
+}
+
+.compactJobList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.emptyState {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.emptyIcon {
+  font-size: 2rem;
+  margin-bottom: var(--space-2);
+}
+
+.emptyMessage {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-1);
+}
+
+.emptySubtext {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* Pagination */
+.paginationControls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--card-border);
+}
+
+.paginationBtn {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.paginationBtn:hover:not(:disabled) {
+  background: var(--btn-secondary-hover);
+  color: var(--text-primary);
+}
+
+.paginationBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paginationInfo {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}

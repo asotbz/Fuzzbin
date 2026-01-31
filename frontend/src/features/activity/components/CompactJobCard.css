@@ -1,0 +1,162 @@
+.compactJobCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.compactJobCard:hover {
+  background: var(--card-hover);
+}
+
+.compactJobCardFailed {
+  border-left: 3px solid var(--status-failed);
+}
+
+.compactJobCardCompleted {
+  border-left: 3px solid var(--status-completed);
+}
+
+.compactJobCheckbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.compactJobType {
+  flex-shrink: 0;
+  min-width: 100px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.compactJobInfo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.compactJobTitle,
+.compactJobStep {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.compactJobStep {
+  color: var(--text-tertiary);
+}
+
+.compactJobMeta {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.compactJobDuration {
+  color: var(--text-secondary);
+}
+
+.compactJobTime {
+  color: var(--text-tertiary);
+}
+
+.compactJobActions {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-1);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.compactJobCard:hover .compactJobActions {
+  opacity: 1;
+}
+
+.compactActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.compactActionBtn:hover {
+  background: var(--btn-secondary-hover);
+  color: var(--text-primary);
+}
+
+.compactActionBtnClear:hover {
+  background: var(--status-failed-bg);
+  color: var(--status-failed);
+}
+
+/* Batch selection header */
+.compactJobListHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+}
+
+.compactJobListHeader label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.batchActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.batchActionBtn {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.batchActionBtn:hover {
+  background: var(--btn-secondary-hover);
+  color: var(--text-primary);
+}
+
+.batchActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Compact list container */
+.compactJobList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}

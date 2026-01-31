@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from fuzzbin.tasks.metrics import FailedJobAlert, JobMetrics, MetricsCollector
-from fuzzbin.tasks.models import Job, JobStatus, JobType
+from fuzzbin.tasks.models import Job, JobPriority, JobStatus, JobType
 
 if TYPE_CHECKING:
+    from fuzzbin.core.db.repository import VideoRepository
     from fuzzbin.core.event_bus import EventBus
 
 logger = structlog.get_logger(__name__)
@@ -150,7 +151,7 @@ class PriorityJobQueue:
 
 
 class JobQueue:
-    """In-memory async job queue with worker pool.
+    """Database-backed async job queue with worker pool.
 
     Provides background task execution with:
     - Configurable worker pool size
@@ -161,6 +162,7 @@ class JobQueue:
     - Job submission, cancellation, and listing
     - Handler registration per job type
     - Graceful startup and shutdown
+    - **Database persistence** for job recovery across restarts
 
     Example:
         >>> queue = JobQueue(max_workers=2)
@@ -194,10 +196,27 @@ class JobQueue:
         """
         self.max_workers = max_workers
         self.queue = PriorityJobQueue()
-        self.jobs: dict[str, Job] = {}  # Job registry
+        self.jobs: dict[str, Job] = {}  # Job registry (in-memory cache)
         self.handlers: dict[JobType, Callable[[Job], Coroutine[Any, Any, None]]] = {}
         self.workers: list[asyncio.Task[None]] = []
         self.scheduler_task: asyncio.Task[None] | None = None
+        self.running = False
+        self._lock = asyncio.Lock()
+        self._metrics = MetricsCollector()
+        self._event_bus: "EventBus | None" = None
+        self._repository: "VideoRepository | None" = None
+
+    def set_repository(self, repository: "VideoRepository") -> None:
+        """Set the repository for database persistence.
+
+        When set, jobs will be persisted to the database and recovered
+        on startup. Without a repository, jobs exist only in memory.
+
+        Args:
+            repository: VideoRepository instance for job persistence
+        """
+        self._repository = repository
+        logger.info("job_queue_repository_configured")
         self.running = False
         self._lock = asyncio.Lock()
         self._metrics = MetricsCollector()
@@ -242,6 +261,9 @@ class JobQueue:
                 asyncio.create_task(
                     self._event_bus.emit_job_progress(job, download_speed, eta_seconds)
                 )
+            # Also persist progress to database (throttled - only every 10% change or 5 seconds)
+            if self._repository:
+                asyncio.create_task(self._update_job_progress_db(job))
 
         return progress_callback
 
@@ -292,11 +314,12 @@ class JobQueue:
         self.handlers[job_type] = handler
         logger.info("job_handler_registered", job_type=job_type.value)
 
-    async def submit(self, job: Job) -> str:
+    async def submit(self, job: Job, video_id: int | None = None) -> str:
         """Submit a job to the queue.
 
         Args:
             job: Job to submit
+            video_id: Optional video ID for grouping related jobs
 
         Returns:
             Job ID
@@ -316,6 +339,8 @@ class JobQueue:
                 if next_run:
                     job.next_run_at = next_run
                     job.status = JobStatus.WAITING
+                    # Persist to database
+                    await self._persist_job(job, video_id)
                     logger.info(
                         "scheduled_job_submitted",
                         job_id=job.id,
@@ -336,6 +361,8 @@ class JobQueue:
                 ]
                 if unmet:
                     job.status = JobStatus.WAITING
+                    # Persist to database
+                    await self._persist_job(job, video_id)
                     logger.info(
                         "job_waiting_for_dependencies",
                         job_id=job.id,
@@ -344,6 +371,9 @@ class JobQueue:
                     )
                     return job.id
 
+            # Persist to database before queuing
+            await self._persist_job(job, video_id)
+
             # Queue immediately
             await self.queue.put(job)
             logger.info(
@@ -351,8 +381,82 @@ class JobQueue:
                 job_id=job.id,
                 job_type=job.type.value,
                 priority=job.priority.value,
+                video_id=video_id,
             )
             return job.id
+
+    async def _persist_job(self, job: Job, video_id: int | None = None) -> None:
+        """Persist a job to the database.
+
+        Args:
+            job: Job to persist
+            video_id: Optional video ID for grouping
+        """
+        if not self._repository:
+            return
+
+        try:
+            await self._repository.create_job(
+                job_id=job.id,
+                job_type=job.type.value,
+                status=job.status.value,
+                priority=job.priority.value,
+                metadata=job.metadata,
+                video_id=video_id,
+                parent_job_id=job.parent_job_id,
+                depends_on=job.depends_on if job.depends_on else None,
+                timeout_seconds=job.timeout_seconds,
+                schedule=job.schedule,
+                next_run_at=job.next_run_at.isoformat() if job.next_run_at else None,
+            )
+        except Exception as e:
+            logger.error("job_persist_failed", job_id=job.id, error=str(e))
+
+    async def _update_job_status_db(
+        self,
+        job: Job,
+        error: str | None = None,
+        result: dict[str, Any] | None = None,
+    ) -> None:
+        """Update job status in the database.
+
+        Args:
+            job: Job with updated status
+            error: Optional error message
+            result: Optional result data
+        """
+        if not self._repository:
+            return
+
+        try:
+            await self._repository.update_job_status(
+                job_id=job.id,
+                status=job.status.value,
+                error=error,
+                result=result,
+            )
+        except Exception as e:
+            logger.error("job_status_persist_failed", job_id=job.id, error=str(e))
+
+    async def _update_job_progress_db(self, job: Job) -> None:
+        """Update job progress in the database.
+
+        Args:
+            job: Job with updated progress
+        """
+        if not self._repository:
+            return
+
+        try:
+            await self._repository.update_job_progress(
+                job_id=job.id,
+                progress=job.progress,
+                current_step=job.current_step,
+                processed_items=job.processed_items,
+                total_items=job.total_items,
+            )
+        except Exception as e:
+            logger.error("job_progress_persist_failed", job_id=job.id, error=str(e))
 
     async def get_job(self, job_id: str) -> Job | None:
         """Get job by ID.
@@ -413,8 +517,70 @@ class JobQueue:
             return False
 
         job.mark_cancelled()
+        # Persist cancellation to database
+        await self._update_job_status_db(job)
         logger.info("job_cancelled", job_id=job_id)
         return True
+
+    async def retry_job(self, job_id: str) -> str | None:
+        """Retry a failed job by creating a new job with the same parameters.
+
+        Args:
+            job_id: ID of the failed job to retry
+
+        Returns:
+            New job ID if retry succeeded, None if job not found or not retriable
+        """
+        # First check in-memory
+        original_job = self.jobs.get(job_id)
+
+        # If not in memory, try to load from database
+        if not original_job and self._repository:
+            job_row = await self._repository.get_job(job_id)
+            if job_row:
+                original_job = self._job_from_db_row(job_row)
+
+        if not original_job:
+            logger.warning("retry_job_not_found", job_id=job_id)
+            return None
+
+        # Only failed jobs can be retried
+        if original_job.status not in (JobStatus.FAILED, JobStatus.TIMEOUT, JobStatus.CANCELLED):
+            logger.warning(
+                "retry_job_not_retriable",
+                job_id=job_id,
+                status=original_job.status.value,
+            )
+            return None
+
+        # Create a new job with same parameters
+        new_job = Job(
+            type=original_job.type,
+            priority=original_job.priority,
+            metadata=original_job.metadata.copy(),
+            timeout_seconds=original_job.timeout_seconds,
+            depends_on=original_job.depends_on.copy() if original_job.depends_on else [],
+            parent_job_id=original_job.parent_job_id,
+        )
+
+        # Get video_id from database if available
+        video_id = None
+        if self._repository:
+            job_row = await self._repository.get_job(job_id)
+            if job_row:
+                video_id = job_row.get("video_id")
+
+        # Submit the new job
+        await self.submit(new_job, video_id=video_id)
+
+        logger.info(
+            "job_retried",
+            original_job_id=job_id,
+            new_job_id=new_job.id,
+            job_type=new_job.type.value,
+        )
+
+        return new_job.id
 
     async def _worker(self, worker_id: int) -> None:
         """Background worker coroutine.
@@ -438,6 +604,8 @@ class JobQueue:
                 continue
 
             job.mark_running()
+            # Persist running status
+            await self._update_job_status_db(job)
 
             # Set up progress callback for event bus integration
             if self._event_bus:
@@ -461,6 +629,8 @@ class JobQueue:
                         await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
                     except asyncio.TimeoutError:
                         job.mark_timeout()
+                        # Persist timeout status
+                        await self._update_job_status_db(job, error=job.error)
                         # Record timeout as failure for metrics
                         await self._metrics.record_failure(job)
                         # Emit timeout event
@@ -480,6 +650,9 @@ class JobQueue:
                 if job.status == JobStatus.RUNNING:
                     job.mark_completed({"status": "success"})
 
+                # Persist completion status
+                await self._update_job_status_db(job, result=job.result)
+
                 # Record completion metrics
                 await self._metrics.record_completion(job)
 
@@ -494,6 +667,8 @@ class JobQueue:
 
             except asyncio.CancelledError:
                 job.mark_cancelled()
+                # Persist cancellation
+                await self._update_job_status_db(job)
                 # Emit cancelled event
                 if self._event_bus:
                     await self._event_bus.emit_job_cancelled(job)
@@ -502,6 +677,8 @@ class JobQueue:
 
             except Exception as e:
                 job.mark_failed(str(e))
+                # Persist failure status
+                await self._update_job_status_db(job, error=str(e))
                 # Record failure and trigger alerts
                 await self._metrics.record_failure(job)
                 # Emit failed event
@@ -598,11 +775,106 @@ class JobQueue:
 
         logger.info("scheduler_stopped")
 
+    async def _recover_jobs_from_database(self) -> None:
+        """Recover jobs from database on startup.
+
+        - Mark any RUNNING jobs as FAILED (server restarted)
+        - Load PENDING/WAITING jobs back into memory and queue
+        """
+        if not self._repository:
+            logger.debug("job_recovery_skipped_no_repository")
+            return
+
+        try:
+            # Mark running jobs as failed (server was restarted)
+            running_jobs = await self._repository.get_running_jobs()
+            for job_row in running_jobs:
+                await self._repository.update_job_status(
+                    job_id=job_row["id"],
+                    status="failed",
+                    error="Server restarted — retry manually",
+                )
+                logger.warning(
+                    "job_marked_failed_on_restart",
+                    job_id=job_row["id"],
+                    job_type=job_row["type"],
+                )
+
+            # Load pending/waiting jobs
+            pending_jobs = await self._repository.get_pending_jobs()
+            for job_row in pending_jobs:
+                job = self._job_from_db_row(job_row)
+                self.jobs[job.id] = job
+
+                # Only queue pending jobs (waiting jobs need dependencies/schedule)
+                if job.status == JobStatus.PENDING:
+                    await self.queue.put(job)
+
+            logger.info(
+                "jobs_recovered_from_database",
+                failed_running=len(running_jobs),
+                pending_loaded=len(pending_jobs),
+            )
+
+        except Exception as e:
+            logger.error("job_recovery_failed", error=str(e), exc_info=True)
+
+    def _job_from_db_row(self, row: dict) -> Job:
+        """Reconstruct a Job object from a database row.
+
+        Args:
+            row: Database row dict with deserialized JSON fields
+
+        Returns:
+            Job instance
+        """
+        # Parse datetime strings
+        created_at = (
+            datetime.fromisoformat(row["created_at"])
+            if row.get("created_at")
+            else datetime.now(timezone.utc)
+        )
+        started_at = datetime.fromisoformat(row["started_at"]) if row.get("started_at") else None
+        completed_at = (
+            datetime.fromisoformat(row["completed_at"]) if row.get("completed_at") else None
+        )
+        next_run_at = datetime.fromisoformat(row["next_run_at"]) if row.get("next_run_at") else None
+
+        return Job(
+            id=row["id"],
+            type=JobType(row["type"]),
+            status=JobStatus(row["status"]),
+            priority=JobPriority(row["priority"]),
+            progress=row.get("progress", 0.0),
+            current_step=row.get("current_step", "Initializing..."),
+            total_items=row.get("total_items", 0),
+            processed_items=row.get("processed_items", 0),
+            result=row.get("result"),
+            error=row.get("error"),
+            created_at=created_at,
+            started_at=started_at,
+            completed_at=completed_at,
+            metadata=row.get("metadata", {}),
+            timeout_seconds=row.get("timeout_seconds"),
+            depends_on=row.get("depends_on", []),
+            parent_job_id=row.get("parent_job_id"),
+            schedule=row.get("schedule"),
+            next_run_at=next_run_at,
+        )
+
     async def start(self) -> None:
-        """Start the job queue workers and scheduler."""
+        """Start the job queue workers and scheduler.
+
+        On startup, recovers jobs from the database:
+        - RUNNING jobs are marked as FAILED (server restarted)
+        - PENDING/WAITING jobs are reloaded into memory and queue
+        """
         if self.running:
             logger.warning("job_queue_already_running")
             return
+
+        # Recover jobs from database before starting workers
+        await self._recover_jobs_from_database()
 
         self.running = True
         self.workers = [asyncio.create_task(self._worker(i)) for i in range(self.max_workers)]

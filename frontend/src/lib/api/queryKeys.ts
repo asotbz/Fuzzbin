@@ -19,6 +19,9 @@ export const addKeys = {
 
 export const jobsKeys = {
   all: ['jobs'] as const,
+  lists: () => [...jobsKeys.all, 'list'] as const,
+  list: (params: { status?: string; type?: string; limit?: number; offset?: number }) =>
+    [...jobsKeys.lists(), params] as const,
   byId: (jobId: string) => [...jobsKeys.all, jobId] as const,
 }
 

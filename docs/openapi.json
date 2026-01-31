@@ -3,7 +3,7 @@
   "info": {
     "title": "Fuzzbin API",
     "description": "Music video library management API.\nProvides CRUD operations for videos, artists, collections, and tags,\nwith full-text search and filtering capabilities.\n\n## Authentication\n\nWhen authentication is enabled (`FUZZBIN_API_AUTH_ENABLED=true`), protected endpoints require\na Bearer token in the `Authorization` header:\n\n```\nAuthorization: Bearer <your-jwt-token>\n```\n\nObtain a token via `POST /auth/login` with username/password credentials.\n\n## WebSocket API\n\n### Real-time Job Progress: `/ws/jobs/{job_id}`\n\nConnect to receive live progress updates for background jobs.\n\n**Connection:**\n```\nws://localhost:8000/ws/jobs/{job_id}\n```\n\n**Message Format (JSON):**\n```json\n{\n  \"job_id\": \"uuid-string\",\n  \"status\": \"running\",\n  \"progress\": 0.45,\n  \"message\": \"Processing file 45 of 100\",\n  \"result\": null\n}\n```\n\n**Fields:**\n- `job_id`: Job identifier\n- `status`: One of `pending`, `running`, `completed`, `failed`, `cancelled`\n- `progress`: Float 0.0-1.0 indicating completion percentage\n- `message`: Human-readable status message\n- `result`: Job result data (populated on completion)\n\n**Close Codes:**\n- `1008` (Policy Violation): Invalid or unknown job ID\n- `1011` (Internal Error): Server error during progress streaming\n",
-    "version": "0.1.0"
+    "version": "0.2.1"
   },
   "paths": {
     "/health": {
@@ -5468,7 +5468,7 @@
           "Jobs"
         ],
         "summary": "List jobs",
-        "description": "List all jobs with optional status filter.",
+        "description": "List jobs from database with optional status/type filtering and pagination.",
         "operationId": "list_jobs_jobs_get",
         "security": [
           {
@@ -5483,16 +5483,16 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/JobStatus"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Filter by job status",
+              "description": "Comma-separated status filter (e.g., 'pending,running' or 'completed,failed')",
               "title": "Status"
             },
-            "description": "Filter by job status"
+            "description": "Comma-separated status filter (e.g., 'pending,running' or 'completed,failed')"
           },
           {
             "name": "type",
@@ -5501,16 +5501,16 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/JobType"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Filter by job type",
+              "description": "Comma-separated job type filter",
               "title": "Type"
             },
-            "description": "Filter by job type"
+            "description": "Comma-separated job type filter"
           },
           {
             "name": "limit",
@@ -5525,6 +5525,19 @@
               "title": "Limit"
             },
             "description": "Maximum jobs to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
           }
         ],
         "responses": {
@@ -6080,6 +6093,281 @@
             }
           }
         }
+      }
+    },
+    "/jobs/groups": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List job groups by video",
+        "description": "Get active jobs grouped by video_id. Each group shows all jobs related to a single video (download, process, organize, etc.).",
+        "operationId": "list_job_groups_jobs_groups_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_jobs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include individual jobs in each group",
+              "default": true,
+              "title": "Include Jobs"
+            },
+            "description": "Include individual jobs in each group"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobGroupListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/groups/{video_id}": {
+      "delete": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Cancel all jobs for a video",
+        "description": "Cancel all pending/waiting jobs associated with a video.",
+        "operationId": "cancel_video_jobs_jobs_groups__video_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/history": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get job history",
+        "description": "Get paginated history of completed, failed, cancelled, and timed out jobs.",
+        "operationId": "get_job_history_jobs_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status (completed, failed, cancelled, timeout)",
+              "title": "Status"
+            },
+            "description": "Filter by status (completed, failed, cancelled, timeout)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by job type",
+              "title": "Type"
+            },
+            "description": "Filter by job type"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobHistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/retry": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Retry a failed job",
+        "description": "Create a new job with the same parameters as a failed job.",
+        "operationId": "retry_job_jobs__job_id__retry_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRetryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/maintenance": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get maintenance jobs",
+        "description": "Get active maintenance jobs (backup, trash cleanup, job history cleanup, etc.) and scheduled task information.",
+        "operationId": "get_maintenance_jobs_jobs_maintenance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceJobsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/add/preview-batch": {
@@ -15472,6 +15760,183 @@
         "title": "ImportMode",
         "description": "Import mode for scanned videos.\n\nDetermines how much data is imported and what status videos receive."
       },
+      "JobGroupListResponse": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/JobGroupResponse"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "groups",
+          "total"
+        ],
+        "title": "JobGroupListResponse",
+        "description": "List of job groups response."
+      },
+      "JobGroupResponse": {
+        "properties": {
+          "video_id": {
+            "type": "integer",
+            "title": "Video Id"
+          },
+          "video_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Title"
+          },
+          "video_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Artist"
+          },
+          "job_count": {
+            "type": "integer",
+            "title": "Job Count",
+            "description": "Total number of jobs in this group"
+          },
+          "completed_count": {
+            "type": "integer",
+            "title": "Completed Count",
+            "description": "Number of completed jobs"
+          },
+          "running_count": {
+            "type": "integer",
+            "title": "Running Count",
+            "description": "Number of currently running jobs"
+          },
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count",
+            "description": "Number of pending/waiting jobs"
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "description": "Number of failed jobs"
+          },
+          "overall_progress": {
+            "type": "number",
+            "title": "Overall Progress",
+            "description": "Average progress across all jobs (0.0-1.0)"
+          },
+          "group_status": {
+            "type": "string",
+            "title": "Group Status",
+            "description": "Overall status: running, pending, completed, or failed"
+          },
+          "job_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Job Types",
+            "description": "List of job types in this group"
+          },
+          "first_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Created At",
+            "description": "When the first job was created"
+          },
+          "current_started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Started At",
+            "description": "When the current running job started"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobResponse"
+            },
+            "type": "array",
+            "title": "Jobs",
+            "description": "Individual jobs in this group"
+          }
+        },
+        "type": "object",
+        "required": [
+          "video_id",
+          "video_title",
+          "video_artist",
+          "job_count",
+          "completed_count",
+          "running_count",
+          "pending_count",
+          "failed_count",
+          "overall_progress",
+          "group_status",
+          "job_types",
+          "first_created_at",
+          "current_started_at"
+        ],
+        "title": "JobGroupResponse",
+        "description": "Job group aggregated by video_id.\n\nRepresents all jobs related to a single video as a grouped entity\nfor display in the frontend."
+      },
+      "JobHistoryResponse": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobResponse"
+            },
+            "type": "array",
+            "title": "Jobs"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "JobHistoryResponse",
+        "description": "Paginated job history response."
+      },
       "JobListResponse": {
         "properties": {
           "jobs": {
@@ -15484,6 +15949,28 @@
           "total": {
             "type": "integer",
             "title": "Total"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset"
           }
         },
         "type": "object",
@@ -15492,7 +15979,7 @@
           "total"
         ],
         "title": "JobListResponse",
-        "description": "List of jobs response."
+        "description": "List of jobs response with pagination info."
       },
       "JobMetricsResponse": {
         "properties": {
@@ -15703,6 +16190,39 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Metadata"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          },
+          "video_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Title"
+          },
+          "video_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Artist"
           }
         },
         "type": "object",
@@ -15723,6 +16243,34 @@
         ],
         "title": "JobResponse",
         "description": "Job status response.\n\nContains all job information including progress and results."
+      },
+      "JobRetryResponse": {
+        "properties": {
+          "original_job_id": {
+            "type": "string",
+            "title": "Original Job Id"
+          },
+          "new_job_id": {
+            "type": "string",
+            "title": "New Job Id"
+          },
+          "job_type": {
+            "$ref": "#/components/schemas/JobType"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "original_job_id",
+          "new_job_id",
+          "job_type"
+        ],
+        "title": "JobRetryResponse",
+        "description": "Response when retrying a failed job."
       },
       "JobStatus": {
         "type": "string",
@@ -15777,6 +16325,7 @@
           "import",
           "backup",
           "trash_cleanup",
+          "cleanup_job_history",
           "sync_decade_tags",
           "export_nfo"
         ],
@@ -15918,6 +16467,32 @@
         ],
         "title": "LoginRequest",
         "description": "Request schema for user login."
+      },
+      "MaintenanceJobsResponse": {
+        "properties": {
+          "active_jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobResponse"
+            },
+            "type": "array",
+            "title": "Active Jobs"
+          },
+          "scheduled_jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Scheduled Jobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active_jobs",
+          "scheduled_jobs"
+        ],
+        "title": "MaintenanceJobsResponse",
+        "description": "Maintenance jobs (backup, cleanup, etc.) response."
       },
       "MusicBrainzEnrichRequest": {
         "properties": {

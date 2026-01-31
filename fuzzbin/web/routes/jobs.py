@@ -20,11 +20,16 @@ from fuzzbin.tasks.queue import parse_cron
 from fuzzbin.web.dependencies import get_current_user, get_repository, require_auth
 from fuzzbin.web.schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES
 from fuzzbin.web.schemas.jobs import (
+    JobGroupListResponse,
+    JobGroupResponse,
+    JobHistoryResponse,
     JobListResponse,
     JobMetricsResponse,
     JobResponse,
+    JobRetryResponse,
     JobSubmitRequest,
     JobTypeMetricsResponse,
+    MaintenanceJobsResponse,
 )
 
 logger = structlog.get_logger(__name__)
@@ -74,23 +79,71 @@ async def submit_job(
     "",
     response_model=JobListResponse,
     summary="List jobs",
-    description="List all jobs with optional status filter.",
+    description="List jobs from database with optional status/type filtering and pagination.",
 )
 async def list_jobs(
     current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
-    job_status: Optional[JobStatus] = Query(
-        None, alias="status", description="Filter by job status"
+    repository: Annotated[VideoRepository, Depends(get_repository)],
+    status: Optional[str] = Query(
+        None,
+        description="Comma-separated status filter (e.g., 'pending,running' or 'completed,failed')",
     ),
-    job_type: Optional[JobType] = Query(None, alias="type", description="Filter by job type"),
+    job_type: Optional[str] = Query(
+        None,
+        alias="type",
+        description="Comma-separated job type filter",
+    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum jobs to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
 ) -> JobListResponse:
-    """List all jobs with optional filtering."""
-    queue = get_job_queue()
-    jobs = await queue.list_jobs(status=job_status, job_type=job_type, limit=limit)
+    """List jobs from database with filtering and pagination.
+
+    This endpoint fetches jobs from the persistent database, not just in-memory.
+    Use status filter to get specific job states:
+    - Active jobs: status=pending,waiting,running
+    - Completed: status=completed
+    - Failed: status=failed,cancelled,timeout
+    """
+    # Parse comma-separated filters
+    statuses = [s.strip() for s in status.split(",")] if status else None
+    job_types = [t.strip() for t in job_type.split(",")] if job_type else None
+
+    jobs, total = await repository.get_jobs(
+        statuses=statuses,
+        job_types=job_types,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Convert DB rows to JobResponse
+    job_responses = []
+    for job_row in jobs:
+        job_responses.append(
+            JobResponse(
+                id=job_row["id"],
+                type=JobType(job_row["type"]),
+                status=JobStatus(job_row["status"]),
+                progress=job_row["progress"],
+                current_step=job_row.get("current_step", ""),
+                total_items=job_row.get("total_items", 0),
+                processed_items=job_row.get("processed_items", 0),
+                result=job_row.get("result"),
+                error=job_row.get("error"),
+                created_at=job_row["created_at"],
+                started_at=job_row.get("started_at"),
+                completed_at=job_row.get("completed_at"),
+                metadata=job_row.get("metadata", {}),
+                video_id=job_row.get("video_id"),
+                video_title=job_row.get("video_title"),
+                video_artist=job_row.get("video_artist"),
+            )
+        )
 
     return JobListResponse(
-        jobs=[JobResponse.model_validate(j) for j in jobs],
-        total=len(jobs),
+        jobs=job_responses,
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -517,4 +570,270 @@ async def cancel_job(
         "job_cancelled_via_api",
         job_id=job_id,
         user=current_user.username if current_user else "anonymous",
+    )
+
+
+# ==================== Job Groups Endpoints ====================
+
+
+@router.get(
+    "/groups",
+    response_model=JobGroupListResponse,
+    summary="List job groups by video",
+    description="Get active jobs grouped by video_id. Each group shows all jobs "
+    "related to a single video (download, process, organize, etc.).",
+)
+async def list_job_groups(
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+    repo: VideoRepository = Depends(get_repository),
+    include_jobs: bool = Query(True, description="Include individual jobs in each group"),
+) -> JobGroupListResponse:
+    """List active job groups aggregated by video_id."""
+    # Get active groups from database
+    groups_data = await repo.get_active_job_groups()
+
+    groups = []
+    for group in groups_data:
+        # Parse job_types from comma-separated string
+        job_types = group.get("job_types", "").split(",") if group.get("job_types") else []
+
+        # Get individual jobs if requested
+        jobs = []
+        if include_jobs and group.get("video_id"):
+            job_rows = await repo.get_jobs_by_video_id(group["video_id"])
+            # Only include non-terminal jobs for active groups
+            for job_row in job_rows:
+                if job_row.get("status") in ("pending", "waiting", "running"):
+                    jobs.append(
+                        JobResponse(
+                            id=job_row["id"],
+                            type=JobType(job_row["type"]),
+                            status=JobStatus(job_row["status"]),
+                            progress=job_row.get("progress", 0.0),
+                            current_step=job_row.get("current_step", ""),
+                            total_items=job_row.get("total_items", 0),
+                            processed_items=job_row.get("processed_items", 0),
+                            result=job_row.get("result"),
+                            error=job_row.get("error"),
+                            created_at=datetime.fromisoformat(job_row["created_at"]),
+                            started_at=datetime.fromisoformat(job_row["started_at"])
+                            if job_row.get("started_at")
+                            else None,
+                            completed_at=datetime.fromisoformat(job_row["completed_at"])
+                            if job_row.get("completed_at")
+                            else None,
+                            metadata=job_row.get("metadata", {}),
+                            video_id=job_row.get("video_id"),
+                        )
+                    )
+
+        groups.append(
+            JobGroupResponse(
+                video_id=group["video_id"],
+                video_title=group.get("video_title"),
+                video_artist=group.get("video_artist"),
+                job_count=group.get("job_count", 0),
+                completed_count=group.get("completed_count", 0),
+                running_count=group.get("running_count", 0),
+                pending_count=group.get("pending_count", 0),
+                failed_count=group.get("failed_count", 0),
+                overall_progress=group.get("overall_progress", 0.0),
+                group_status=group.get("group_status", "pending"),
+                job_types=job_types,
+                first_created_at=datetime.fromisoformat(group["first_created_at"])
+                if group.get("first_created_at")
+                else datetime.now(),
+                current_started_at=datetime.fromisoformat(group["current_started_at"])
+                if group.get("current_started_at")
+                else None,
+                jobs=jobs,
+            )
+        )
+
+    return JobGroupListResponse(groups=groups, total=len(groups))
+
+
+@router.delete(
+    "/groups/{video_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cancel all jobs for a video",
+    description="Cancel all pending/waiting jobs associated with a video.",
+)
+async def cancel_video_jobs(
+    video_id: int,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+    repo: VideoRepository = Depends(get_repository),
+) -> None:
+    """Cancel all pending/waiting jobs for a video."""
+    cancelled_count = await repo.cancel_jobs_by_video_id(video_id)
+
+    logger.info(
+        "video_jobs_cancelled_via_api",
+        video_id=video_id,
+        cancelled_count=cancelled_count,
+        user=current_user.username if current_user else "anonymous",
+    )
+
+
+# ==================== Job History Endpoints ====================
+
+
+@router.get(
+    "/history",
+    response_model=JobHistoryResponse,
+    summary="Get job history",
+    description="Get paginated history of completed, failed, cancelled, and timed out jobs.",
+)
+async def get_job_history(
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+    repo: VideoRepository = Depends(get_repository),
+    status_filter: Optional[List[str]] = Query(
+        None,
+        alias="status",
+        description="Filter by status (completed, failed, cancelled, timeout)",
+    ),
+    type_filter: Optional[List[str]] = Query(
+        None,
+        alias="type",
+        description="Filter by job type",
+    ),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page"),
+) -> JobHistoryResponse:
+    """Get paginated job history."""
+    offset = (page - 1) * page_size
+
+    job_rows, total = await repo.get_job_history(
+        status_filter=status_filter,
+        job_type_filter=type_filter,
+        limit=page_size,
+        offset=offset,
+    )
+
+    jobs = []
+    for job_row in job_rows:
+        jobs.append(
+            JobResponse(
+                id=job_row["id"],
+                type=JobType(job_row["type"]),
+                status=JobStatus(job_row["status"]),
+                progress=job_row.get("progress", 0.0),
+                current_step=job_row.get("current_step", ""),
+                total_items=job_row.get("total_items", 0),
+                processed_items=job_row.get("processed_items", 0),
+                result=job_row.get("result"),
+                error=job_row.get("error"),
+                created_at=datetime.fromisoformat(job_row["created_at"]),
+                started_at=datetime.fromisoformat(job_row["started_at"])
+                if job_row.get("started_at")
+                else None,
+                completed_at=datetime.fromisoformat(job_row["completed_at"])
+                if job_row.get("completed_at")
+                else None,
+                metadata=job_row.get("metadata", {}),
+                video_id=job_row.get("video_id"),
+                video_title=job_row.get("video_title"),
+                video_artist=job_row.get("video_artist"),
+            )
+        )
+
+    total_pages = (total + page_size - 1) // page_size
+
+    return JobHistoryResponse(
+        jobs=jobs,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.post(
+    "/{job_id}/retry",
+    response_model=JobRetryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Retry a failed job",
+    description="Create a new job with the same parameters as a failed job.",
+)
+async def retry_job(
+    job_id: str,
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+) -> JobRetryResponse:
+    """Retry a failed job by creating a new job with the same parameters."""
+    queue = get_job_queue()
+
+    new_job_id = await queue.retry_job(job_id)
+
+    if not new_job_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Job not found or not in a retriable state (must be failed, timeout, or cancelled)",
+        )
+
+    # Get the original job to return job type
+    original_job = await queue.get_job(job_id)
+    job_type = original_job.type if original_job else JobType.IMPORT_NFO
+
+    logger.info(
+        "job_retried_via_api",
+        original_job_id=job_id,
+        new_job_id=new_job_id,
+        user=current_user.username if current_user else "anonymous",
+    )
+
+    return JobRetryResponse(
+        original_job_id=job_id,
+        new_job_id=new_job_id,
+        job_type=job_type,
+    )
+
+
+# ==================== Maintenance Jobs Endpoint ====================
+
+
+@router.get(
+    "/maintenance",
+    response_model=MaintenanceJobsResponse,
+    summary="Get maintenance jobs",
+    description="Get active maintenance jobs (backup, trash cleanup, job history cleanup, etc.) "
+    "and scheduled task information.",
+)
+async def get_maintenance_jobs(
+    current_user: Annotated[Optional[UserInfo], Depends(get_current_user)],
+    repo: VideoRepository = Depends(get_repository),
+) -> MaintenanceJobsResponse:
+    """Get maintenance jobs and scheduled tasks."""
+    # Get active maintenance jobs from database
+    job_rows = await repo.get_maintenance_jobs(include_completed=False)
+
+    active_jobs = []
+    for job_row in job_rows:
+        active_jobs.append(
+            JobResponse(
+                id=job_row["id"],
+                type=JobType(job_row["type"]),
+                status=JobStatus(job_row["status"]),
+                progress=job_row.get("progress", 0.0),
+                current_step=job_row.get("current_step", ""),
+                total_items=job_row.get("total_items", 0),
+                processed_items=job_row.get("processed_items", 0),
+                result=job_row.get("result"),
+                error=job_row.get("error"),
+                created_at=datetime.fromisoformat(job_row["created_at"]),
+                started_at=datetime.fromisoformat(job_row["started_at"])
+                if job_row.get("started_at")
+                else None,
+                completed_at=datetime.fromisoformat(job_row["completed_at"])
+                if job_row.get("completed_at")
+                else None,
+                metadata=job_row.get("metadata", {}),
+            )
+        )
+
+    # Get scheduled tasks
+    scheduled_tasks = await repo.get_scheduled_tasks(enabled_only=True)
+
+    return MaintenanceJobsResponse(
+        active_jobs=active_jobs,
+        scheduled_jobs=scheduled_tasks,
     )

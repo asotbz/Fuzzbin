@@ -502,6 +502,29 @@ class TrashConfig(BaseModel):
     )
 
 
+class JobHistoryConfig(BaseModel):
+    """Configuration for job history cleanup.
+
+    Completed, failed, and cancelled jobs are retained for a configurable
+    period before automatic deletion during the maintenance cycle.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic job history cleanup",
+    )
+    schedule: str = Field(
+        default="0 3 * * *",
+        description="Cron expression for cleanup schedule (default: daily at 3 AM)",
+    )
+    retention_days: int = Field(
+        default=30,
+        ge=1,
+        le=365,
+        description="Delete completed/failed jobs older than this many days",
+    )
+
+
 class NFOExportConfig(BaseModel):
     """Configuration for automatic NFO file export.
 
@@ -650,6 +673,10 @@ class Config(BaseModel):
     trash: TrashConfig = Field(
         default_factory=TrashConfig,
         description="Trash directory and automatic cleanup configuration",
+    )
+    job_history: JobHistoryConfig = Field(
+        default_factory=JobHistoryConfig,
+        description="Job history retention and cleanup configuration",
     )
     nfo_export: NFOExportConfig = Field(
         default_factory=NFOExportConfig,

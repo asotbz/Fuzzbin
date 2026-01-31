@@ -1277,7 +1277,7 @@ export interface paths {
         };
         /**
          * List jobs
-         * @description List all jobs with optional status filter.
+         * @description List jobs from database with optional status/type filtering and pagination.
          */
         get: operations["list_jobs_jobs_get"];
         put?: never;
@@ -1403,6 +1403,106 @@ export interface paths {
          * @description Cancel a pending or running job. Has no effect on completed jobs.
          */
         delete: operations["cancel_job_jobs__job_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List job groups by video
+         * @description Get active jobs grouped by video_id. Each group shows all jobs related to a single video (download, process, organize, etc.).
+         */
+        get: operations["list_job_groups_jobs_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/groups/{video_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel all jobs for a video
+         * @description Cancel all pending/waiting jobs associated with a video.
+         */
+        delete: operations["cancel_video_jobs_jobs_groups__video_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get job history
+         * @description Get paginated history of completed, failed, cancelled, and timed out jobs.
+         */
+        get: operations["get_job_history_jobs_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a failed job
+         * @description Create a new job with the same parameters as a failed job.
+         */
+        post: operations["retry_job_jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get maintenance jobs
+         * @description Get active maintenance jobs (backup, trash cleanup, job history cleanup, etc.) and scheduled task information.
+         */
+        get: operations["get_maintenance_jobs_jobs_maintenance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5839,14 +5939,115 @@ export interface components {
          */
         ImportMode: "full" | "discovery";
         /**
+         * JobGroupListResponse
+         * @description List of job groups response.
+         */
+        JobGroupListResponse: {
+            /** Groups */
+            groups: components["schemas"]["JobGroupResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * JobGroupResponse
+         * @description Job group aggregated by video_id.
+         *
+         *     Represents all jobs related to a single video as a grouped entity
+         *     for display in the frontend.
+         */
+        JobGroupResponse: {
+            /** Video Id */
+            video_id: number;
+            /** Video Title */
+            video_title: string | null;
+            /** Video Artist */
+            video_artist: string | null;
+            /**
+             * Job Count
+             * @description Total number of jobs in this group
+             */
+            job_count: number;
+            /**
+             * Completed Count
+             * @description Number of completed jobs
+             */
+            completed_count: number;
+            /**
+             * Running Count
+             * @description Number of currently running jobs
+             */
+            running_count: number;
+            /**
+             * Pending Count
+             * @description Number of pending/waiting jobs
+             */
+            pending_count: number;
+            /**
+             * Failed Count
+             * @description Number of failed jobs
+             */
+            failed_count: number;
+            /**
+             * Overall Progress
+             * @description Average progress across all jobs (0.0-1.0)
+             */
+            overall_progress: number;
+            /**
+             * Group Status
+             * @description Overall status: running, pending, completed, or failed
+             */
+            group_status: string;
+            /**
+             * Job Types
+             * @description List of job types in this group
+             */
+            job_types: string[];
+            /**
+             * First Created At
+             * Format: date-time
+             * @description When the first job was created
+             */
+            first_created_at: string;
+            /**
+             * Current Started At
+             * @description When the current running job started
+             */
+            current_started_at: string | null;
+            /**
+             * Jobs
+             * @description Individual jobs in this group
+             */
+            jobs?: components["schemas"]["JobResponse"][];
+        };
+        /**
+         * JobHistoryResponse
+         * @description Paginated job history response.
+         */
+        JobHistoryResponse: {
+            /** Jobs */
+            jobs: components["schemas"]["JobResponse"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total Pages */
+            total_pages: number;
+        };
+        /**
          * JobListResponse
-         * @description List of jobs response.
+         * @description List of jobs response with pagination info.
          */
         JobListResponse: {
             /** Jobs */
             jobs: components["schemas"]["JobResponse"][];
             /** Total */
             total: number;
+            /** Limit */
+            limit?: number | null;
+            /** Offset */
+            offset?: number | null;
         };
         /**
          * JobMetricsResponse
@@ -5975,6 +6176,28 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+            /** Video Id */
+            video_id?: number | null;
+            /** Video Title */
+            video_title?: string | null;
+            /** Video Artist */
+            video_artist?: string | null;
+        };
+        /**
+         * JobRetryResponse
+         * @description Response when retrying a failed job.
+         */
+        JobRetryResponse: {
+            /** Original Job Id */
+            original_job_id: string;
+            /** New Job Id */
+            new_job_id: string;
+            job_type: components["schemas"]["JobType"];
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
         };
         /**
          * JobStatus
@@ -6008,7 +6231,7 @@ export interface components {
          * @description Job type enumeration.
          * @enum {string}
          */
-        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "sync_decade_tags" | "export_nfo";
+        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "cleanup_job_history" | "sync_decade_tags" | "export_nfo";
         /**
          * JobTypeMetricsResponse
          * @description Metrics for a specific job type.
@@ -6065,6 +6288,18 @@ export interface components {
              * @example changeme
              */
             password: string;
+        };
+        /**
+         * MaintenanceJobsResponse
+         * @description Maintenance jobs (backup, cleanup, etc.) response.
+         */
+        MaintenanceJobsResponse: {
+            /** Active Jobs */
+            active_jobs: components["schemas"]["JobResponse"][];
+            /** Scheduled Jobs */
+            scheduled_jobs: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * MusicBrainzEnrichRequest
@@ -11857,12 +12092,14 @@ export interface operations {
     list_jobs_jobs_get: {
         parameters: {
             query?: {
-                /** @description Filter by job status */
-                status?: components["schemas"]["JobStatus"] | null;
-                /** @description Filter by job type */
-                type?: components["schemas"]["JobType"] | null;
+                /** @description Comma-separated status filter (e.g., 'pending,running' or 'completed,failed') */
+                status?: string | null;
+                /** @description Comma-separated job type filter */
+                type?: string | null;
                 /** @description Maximum jobs to return */
                 limit?: number;
+                /** @description Offset for pagination */
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -12334,6 +12571,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_groups_jobs_groups_get: {
+        parameters: {
+            query?: {
+                /** @description Include individual jobs in each group */
+                include_jobs?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobGroupListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_video_jobs_jobs_groups__video_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_history_jobs_history_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by status (completed, failed, cancelled, timeout) */
+                status?: string[] | null;
+                /** @description Filter by job type */
+                type?: string[] | null;
+                /** @description Page number */
+                page?: number;
+                /** @description Items per page */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_job_jobs__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRetryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_maintenance_jobs_jobs_maintenance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceJobsResponse"];
                 };
             };
         };

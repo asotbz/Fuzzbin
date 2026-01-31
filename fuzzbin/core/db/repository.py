@@ -3016,3 +3016,592 @@ class VideoRepository:
                 raise
             logger.error("scheduled_task_deletion_failed", task_id=task_id, error=str(e))
             raise QueryError(f"Failed to delete scheduled task: {e}") from e
+
+    # =========================================================================
+    # JOB PERSISTENCE METHODS
+    # =========================================================================
+
+    async def create_job(
+        self,
+        job_id: str,
+        job_type: str,
+        status: str = "pending",
+        priority: int = 5,
+        metadata: Optional[Dict[str, Any]] = None,
+        video_id: Optional[int] = None,
+        parent_job_id: Optional[str] = None,
+        depends_on: Optional[List[str]] = None,
+        timeout_seconds: Optional[int] = None,
+        schedule: Optional[str] = None,
+        next_run_at: Optional[str] = None,
+    ) -> str:
+        """
+        Persist a new job to the database.
+
+        Args:
+            job_id: UUID for the job
+            job_type: JobType enum value
+            status: Initial status (default: pending)
+            priority: Priority level (0=LOW, 5=NORMAL, 10=HIGH, 20=CRITICAL)
+            metadata: Job-specific parameters
+            video_id: Associated video ID for grouping (None for maintenance jobs)
+            parent_job_id: Parent job ID for workflow hierarchies
+            depends_on: List of job IDs that must complete first
+            timeout_seconds: Maximum execution time
+            schedule: Cron expression for scheduled jobs
+            next_run_at: Next scheduled run time (ISO format)
+
+        Returns:
+            The job ID
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        try:
+            await self._connection.execute(
+                """
+                INSERT INTO jobs (
+                    id, type, status, priority, progress, current_step,
+                    total_items, processed_items, metadata_json, video_id,
+                    parent_job_id, depends_on_json, timeout_seconds,
+                    schedule, next_run_at, created_at
+                ) VALUES (?, ?, ?, ?, 0.0, 'Initializing...', 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    job_type,
+                    status,
+                    priority,
+                    json.dumps(metadata) if metadata else None,
+                    video_id,
+                    parent_job_id,
+                    json.dumps(depends_on) if depends_on else None,
+                    timeout_seconds,
+                    schedule,
+                    next_run_at,
+                    now,
+                ),
+            )
+            await self._connection.commit()
+
+            logger.info(
+                "job_created",
+                job_id=job_id,
+                job_type=job_type,
+                video_id=video_id,
+            )
+            return job_id
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("job_creation_failed", job_id=job_id, error=str(e))
+            raise QueryError(f"Failed to create job: {e}") from e
+
+    async def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a job by ID.
+
+        Args:
+            job_id: Job UUID
+
+        Returns:
+            Job record dict or None if not found
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            "SELECT * FROM jobs WHERE id = ?",
+            (job_id,),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return self._deserialize_job_row(dict(row))
+        return None
+
+    async def update_job_status(
+        self,
+        job_id: str,
+        status: str,
+        error: Optional[str] = None,
+        result: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Update job status and optionally set error/result.
+
+        Args:
+            job_id: Job UUID
+            status: New status value
+            error: Error message (for failed status)
+            result: Result data (for completed status)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Build update fields based on status
+        updates = {"status": status}
+
+        if status == "running":
+            updates["started_at"] = now
+        elif status in ("completed", "failed", "cancelled", "timeout"):
+            updates["completed_at"] = now
+            if status == "completed":
+                updates["progress"] = 1.0
+
+        if error is not None:
+            updates["error"] = error
+        if result is not None:
+            updates["result_json"] = json.dumps(result)
+
+        set_clause = ", ".join(f"{key} = ?" for key in updates.keys())
+        values = list(updates.values())
+        values.append(job_id)
+
+        try:
+            await self._connection.execute(
+                f"UPDATE jobs SET {set_clause} WHERE id = ?",
+                values,
+            )
+            await self._connection.commit()
+
+            logger.debug("job_status_updated", job_id=job_id, status=status)
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("job_status_update_failed", job_id=job_id, error=str(e))
+            raise QueryError(f"Failed to update job status: {e}") from e
+
+    async def update_job_progress(
+        self,
+        job_id: str,
+        progress: float,
+        current_step: str,
+        processed_items: int,
+        total_items: int,
+    ) -> None:
+        """
+        Update job progress fields.
+
+        Args:
+            job_id: Job UUID
+            progress: Progress percentage (0.0 to 1.0)
+            current_step: Human-readable current step
+            processed_items: Number of items processed
+            total_items: Total items to process
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        try:
+            await self._connection.execute(
+                """
+                UPDATE jobs SET
+                    progress = ?,
+                    current_step = ?,
+                    processed_items = ?,
+                    total_items = ?
+                WHERE id = ?
+                """,
+                (progress, current_step, processed_items, total_items, job_id),
+            )
+            await self._connection.commit()
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("job_progress_update_failed", job_id=job_id, error=str(e))
+            raise QueryError(f"Failed to update job progress: {e}") from e
+
+    async def get_pending_jobs(self) -> List[Dict[str, Any]]:
+        """
+        Get all pending and waiting jobs for queue recovery on startup.
+
+        Returns:
+            List of job records ordered by priority (desc) and created_at (asc)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            """
+            SELECT * FROM jobs
+            WHERE status IN ('pending', 'waiting')
+            ORDER BY priority DESC, created_at ASC
+            """
+        )
+        rows = await cursor.fetchall()
+        return [self._deserialize_job_row(dict(row)) for row in rows]
+
+    async def get_running_jobs(self) -> List[Dict[str, Any]]:
+        """
+        Get all jobs marked as running (for startup recovery).
+
+        Returns:
+            List of running job records
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute("SELECT * FROM jobs WHERE status = 'running'")
+        rows = await cursor.fetchall()
+        return [self._deserialize_job_row(dict(row)) for row in rows]
+
+    async def get_jobs(
+        self,
+        statuses: Optional[List[str]] = None,
+        job_types: Optional[List[str]] = None,
+        video_id: Optional[int] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get jobs with flexible filtering and pagination.
+
+        Args:
+            statuses: Filter by status list (e.g., ['pending', 'running'])
+            job_types: Filter by job type list
+            video_id: Filter by video ID
+            limit: Maximum records to return
+            offset: Offset for pagination
+
+        Returns:
+            Tuple of (job records with video info, total count)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Build WHERE clause
+        conditions = []
+        params: List[Any] = []
+
+        if statuses:
+            status_placeholders = ", ".join("?" * len(statuses))
+            conditions.append(f"j.status IN ({status_placeholders})")
+            params.extend(statuses)
+
+        if job_types:
+            type_placeholders = ", ".join("?" * len(job_types))
+            conditions.append(f"j.type IN ({type_placeholders})")
+            params.extend(job_types)
+
+        if video_id is not None:
+            conditions.append("j.video_id = ?")
+            params.append(video_id)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        # Get total count
+        count_cursor = await self._connection.execute(
+            f"SELECT COUNT(*) FROM jobs j WHERE {where_clause}",
+            params,
+        )
+        total = (await count_cursor.fetchone())[0]
+
+        # Get paginated results with video info
+        query = f"""
+            SELECT j.*, v.title as video_title, v.artist as video_artist
+            FROM jobs j
+            LEFT JOIN videos v ON v.id = j.video_id
+            WHERE {where_clause}
+            ORDER BY j.created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+
+        cursor = await self._connection.execute(query, params)
+        rows = await cursor.fetchall()
+        jobs = [self._deserialize_job_row(dict(row)) for row in rows]
+
+        return jobs, total
+
+    async def get_jobs_by_video_id(self, video_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all jobs for a specific video.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            List of job records for the video, ordered by created_at
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        cursor = await self._connection.execute(
+            """
+            SELECT * FROM jobs
+            WHERE video_id = ?
+            ORDER BY created_at ASC
+            """,
+            (video_id,),
+        )
+        rows = await cursor.fetchall()
+        return [self._deserialize_job_row(dict(row)) for row in rows]
+
+    async def get_job_groups(
+        self,
+        status_filter: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get job groups aggregated by video_id.
+
+        Args:
+            status_filter: Optional list of statuses to include
+
+        Returns:
+            List of group records with video info and aggregated job stats
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Build query with optional status filter
+        query = """
+            SELECT 
+                jg.video_id,
+                jg.job_count,
+                jg.completed_count,
+                jg.running_count,
+                jg.pending_count,
+                jg.failed_count,
+                jg.first_created_at,
+                jg.current_started_at,
+                jg.overall_progress,
+                jg.group_status,
+                jg.job_types,
+                v.title as video_title,
+                v.artist as video_artist
+            FROM job_groups jg
+            LEFT JOIN videos v ON v.id = jg.video_id
+        """
+
+        if status_filter:
+            placeholders = ", ".join("?" * len(status_filter))
+            query += f" WHERE jg.group_status IN ({placeholders})"
+            cursor = await self._connection.execute(query, status_filter)
+        else:
+            cursor = await self._connection.execute(query)
+
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_active_job_groups(self) -> List[Dict[str, Any]]:
+        """
+        Get job groups with active (pending/waiting/running) jobs.
+
+        Returns:
+            List of active group records with video info
+        """
+        return await self.get_job_groups(status_filter=["pending", "running"])
+
+    async def get_maintenance_jobs(
+        self,
+        include_completed: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get maintenance jobs (jobs without video_id).
+
+        Args:
+            include_completed: Include completed/failed jobs
+
+        Returns:
+            List of maintenance job records
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        query = "SELECT * FROM jobs WHERE video_id IS NULL"
+        if not include_completed:
+            query += " AND status IN ('pending', 'waiting', 'running')"
+        query += " ORDER BY created_at DESC"
+
+        cursor = await self._connection.execute(query)
+        rows = await cursor.fetchall()
+        return [self._deserialize_job_row(dict(row)) for row in rows]
+
+    async def get_job_history(
+        self,
+        status_filter: Optional[List[str]] = None,
+        job_type_filter: Optional[List[str]] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get paginated job history for completed/failed jobs.
+
+        Args:
+            status_filter: Filter by status (default: completed, failed)
+            job_type_filter: Filter by job type
+            limit: Maximum records to return
+            offset: Offset for pagination
+
+        Returns:
+            Tuple of (job records, total count)
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Default to terminal statuses
+        if status_filter is None:
+            status_filter = ["completed", "failed", "cancelled", "timeout"]
+
+        # Build WHERE clause
+        conditions = []
+        params: List[Any] = []
+
+        status_placeholders = ", ".join("?" * len(status_filter))
+        conditions.append(f"status IN ({status_placeholders})")
+        params.extend(status_filter)
+
+        if job_type_filter:
+            type_placeholders = ", ".join("?" * len(job_type_filter))
+            conditions.append(f"type IN ({type_placeholders})")
+            params.extend(job_type_filter)
+
+        where_clause = " AND ".join(conditions)
+
+        # Get total count
+        count_cursor = await self._connection.execute(
+            f"SELECT COUNT(*) FROM jobs WHERE {where_clause}",
+            params,
+        )
+        total = (await count_cursor.fetchone())[0]
+
+        # Get paginated results
+        query = f"""
+            SELECT j.*, v.title as video_title, v.artist as video_artist
+            FROM jobs j
+            LEFT JOIN videos v ON v.id = j.video_id
+            WHERE {where_clause}
+            ORDER BY completed_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+
+        cursor = await self._connection.execute(query, params)
+        rows = await cursor.fetchall()
+        jobs = [self._deserialize_job_row(dict(row)) for row in rows]
+
+        return jobs, total
+
+    async def delete_old_jobs(self, retention_days: int = 30) -> int:
+        """
+        Delete jobs older than retention period.
+
+        Args:
+            retention_days: Days to retain completed/failed jobs
+
+        Returns:
+            Number of jobs deleted
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        # Calculate cutoff date
+        cutoff = datetime.now(timezone.utc)
+        from datetime import timedelta
+
+        cutoff = cutoff - timedelta(days=retention_days)
+        cutoff_str = cutoff.isoformat()
+
+        try:
+            cursor = await self._connection.execute(
+                """
+                DELETE FROM jobs
+                WHERE status IN ('completed', 'failed', 'cancelled', 'timeout')
+                  AND completed_at IS NOT NULL
+                  AND completed_at < ?
+                """,
+                (cutoff_str,),
+            )
+            await self._connection.commit()
+
+            deleted_count = cursor.rowcount
+            logger.info(
+                "old_jobs_deleted",
+                deleted_count=deleted_count,
+                retention_days=retention_days,
+                cutoff=cutoff_str,
+            )
+            return deleted_count
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("job_cleanup_failed", error=str(e))
+            raise QueryError(f"Failed to delete old jobs: {e}") from e
+
+    async def cancel_jobs_by_video_id(self, video_id: int) -> int:
+        """
+        Cancel all pending/waiting jobs for a video.
+
+        Args:
+            video_id: Video ID
+
+        Returns:
+            Number of jobs cancelled
+        """
+        if self._connection is None:
+            raise QueryError("No active connection")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        try:
+            cursor = await self._connection.execute(
+                """
+                UPDATE jobs SET
+                    status = 'cancelled',
+                    completed_at = ?
+                WHERE video_id = ?
+                  AND status IN ('pending', 'waiting')
+                """,
+                (now, video_id),
+            )
+            await self._connection.commit()
+
+            cancelled_count = cursor.rowcount
+            logger.info(
+                "video_jobs_cancelled",
+                video_id=video_id,
+                cancelled_count=cancelled_count,
+            )
+            return cancelled_count
+
+        except Exception as e:
+            await self._connection.rollback()
+            logger.error("video_jobs_cancel_failed", video_id=video_id, error=str(e))
+            raise QueryError(f"Failed to cancel video jobs: {e}") from e
+
+    def _deserialize_job_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Deserialize JSON fields in a job row.
+
+        Args:
+            row: Raw database row dict
+
+        Returns:
+            Row with JSON fields deserialized
+        """
+        if row.get("metadata_json"):
+            row["metadata"] = json.loads(row["metadata_json"])
+        else:
+            row["metadata"] = {}
+        if "metadata_json" in row:
+            del row["metadata_json"]
+
+        if row.get("result_json"):
+            row["result"] = json.loads(row["result_json"])
+        else:
+            row["result"] = None
+        if "result_json" in row:
+            del row["result_json"]
+
+        if row.get("depends_on_json"):
+            row["depends_on"] = json.loads(row["depends_on_json"])
+        else:
+            row["depends_on"] = []
+        if "depends_on_json" in row:
+            del row["depends_on_json"]
+
+        return row

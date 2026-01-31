@@ -15,9 +15,15 @@ test.describe('Library Page', () => {
   test('displays video grid or empty state', async ({ page }) => {
     await page.goto('/library')
 
+    // Wait for loading to complete (loading text should disappear)
+    await page.waitForFunction(() => {
+      const loadingText = document.body.innerText
+      return !loadingText.includes('Loading videos')
+    }, { timeout: 10000 })
+
     // Should show either videos or an empty state message
     const hasVideos = await page.locator('[class*="videoCard"], [class*="video-card"]').count() > 0
-    const hasEmptyState = await page.getByText(/no videos|empty|get started/i).isVisible().catch(() => false)
+    const hasEmptyState = await page.getByText(/no videos found/i).isVisible().catch(() => false)
 
     expect(hasVideos || hasEmptyState).toBeTruthy()
   })

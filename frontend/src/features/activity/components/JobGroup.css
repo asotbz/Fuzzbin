@@ -1,0 +1,249 @@
+.jobGroup {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.jobGroupRunning {
+  border-left: 3px solid var(--status-running);
+}
+
+.jobGroupPending {
+  border-left: 3px solid var(--status-pending);
+}
+
+.jobGroupCompleted {
+  border-left: 3px solid var(--status-completed);
+}
+
+.jobGroupFailed {
+  border-left: 3px solid var(--status-failed);
+}
+
+.jobGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.jobGroupHeader:hover {
+  background: var(--card-hover);
+}
+
+.jobGroupInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.jobGroupTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.jobGroupArtist {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.jobGroupArtist::after {
+  content: '—';
+  margin-left: var(--space-2);
+  color: var(--text-tertiary);
+}
+
+.jobGroupVideoTitle {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jobGroupStep {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+/* Pipeline visualization */
+.jobGroupPipeline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pipelineStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  position: relative;
+}
+
+.pipelineStep::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 100%;
+  width: var(--space-1);
+  height: 2px;
+  background: var(--border-subtle);
+}
+
+.pipelineStep:last-child::after {
+  display: none;
+}
+
+.pipelineStepDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border-default);
+  border: 2px solid var(--card-bg);
+}
+
+.pipelineStepPending .pipelineStepDot {
+  background: var(--text-tertiary);
+}
+
+.pipelineStepRunning .pipelineStepDot {
+  background: var(--status-running);
+  animation: pulse 1.5s infinite;
+}
+
+.pipelineStepCompleted .pipelineStepDot {
+  background: var(--status-completed);
+}
+
+.pipelineStepFailed .pipelineStepDot {
+  background: var(--status-failed);
+}
+
+.pipelineStepLabel {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.pipelineStepRunning .pipelineStepLabel {
+  color: var(--status-running);
+  font-weight: 500;
+}
+
+.pipelineStepCompleted .pipelineStepLabel {
+  color: var(--status-completed);
+}
+
+.pipelineStepFailed .pipelineStepLabel {
+  color: var(--status-failed);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Progress */
+.jobGroupProgress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 120px;
+}
+
+.jobGroupProgressBar {
+  flex: 1;
+  height: 6px;
+  background: var(--progress-bg);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.jobGroupProgressFill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.jobGroupProgressText {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Actions */
+.jobGroupActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupCancelBtn {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--status-failed-bg);
+  color: var(--status-failed);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.groupCancelBtn:hover {
+  background: var(--status-failed);
+  color: white;
+}
+
+.expandArrow {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease;
+}
+
+.expandArrowExpanded {
+  transform: rotate(180deg);
+}
+
+/* Expanded jobs list */
+.jobGroupJobs {
+  border-top: 1px solid var(--card-border);
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+}
+
+.jobGroupJobItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.jobGroupJobItem:hover {
+  background: var(--card-bg);
+}
+
+.jobGroupJobType {
+  flex-shrink: 0;
+  min-width: 80px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.jobGroupJobStep {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

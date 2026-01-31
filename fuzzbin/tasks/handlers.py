@@ -3478,6 +3478,62 @@ async def handle_trash_cleanup(job: Job) -> None:
     )
 
 
+async def handle_cleanup_job_history(job: Job) -> None:
+    """Handle job history cleanup.
+
+    Deletes completed and failed jobs older than the configured retention period.
+
+    Job metadata parameters:
+        retention_days (int, optional): Delete jobs older than this many days (default: 30)
+
+    Job result on completion:
+        deleted_count: Number of jobs permanently deleted
+        retention_days: Retention period used
+
+    Args:
+        job: Job instance with metadata containing cleanup parameters
+    """
+    import fuzzbin
+
+    logger.info("cleanup_job_history_starting", job_id=job.id)
+    job.update_progress(0, 2, "Initializing job history cleanup...")
+
+    # Check for cancellation
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    # Get repository
+    repository = fuzzbin.get_repository()
+
+    # Extract parameters (default 30 days)
+    retention_days = job.metadata.get("retention_days", 30)
+
+    job.update_progress(1, 2, f"Deleting jobs older than {retention_days} days...")
+
+    # Delete old jobs
+    deleted_count = await repository.delete_old_jobs(retention_days=retention_days)
+
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    job.update_progress(2, 2, "Job history cleanup complete")
+
+    # Mark completed with result
+    job.mark_completed(
+        {
+            "deleted_count": deleted_count,
+            "retention_days": retention_days,
+        }
+    )
+
+    logger.info(
+        "cleanup_job_history_completed",
+        job_id=job.id,
+        deleted_count=deleted_count,
+        retention_days=retention_days,
+    )
+
+
 async def handle_sync_decade_tags(job: Job) -> None:
     """
     Synchronize auto-decade tags across the library.
@@ -4142,6 +4198,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.IMPORT_NFO_GENERATE, handle_import_nfo_generate)
     queue.register_handler(JobType.BACKUP, handle_backup)
     queue.register_handler(JobType.TRASH_CLEANUP, handle_trash_cleanup)
+    queue.register_handler(JobType.CLEANUP_JOB_HISTORY, handle_cleanup_job_history)
     queue.register_handler(JobType.SYNC_DECADE_TAGS, handle_sync_decade_tags)
     queue.register_handler(JobType.EXPORT_NFO, handle_export_nfo)
 
@@ -4166,6 +4223,7 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.IMPORT_NFO_GENERATE.value,
             JobType.BACKUP.value,
             JobType.TRASH_CLEANUP.value,
+            JobType.CLEANUP_JOB_HISTORY.value,
             JobType.SYNC_DECADE_TAGS.value,
             JobType.EXPORT_NFO.value,
         ],

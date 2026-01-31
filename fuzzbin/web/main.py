@@ -60,6 +60,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     queue = init_job_queue(max_workers=2)
     register_all_handlers(queue)
 
+    # Wire repository to job queue for persistence
+    repository = await fuzzbin.get_repository()
+    queue.set_repository(repository)
+    logger.info("job_queue_repository_set")
+
     # Initialize event bus and wire up to job queue
     event_bus = init_event_bus()
     from fuzzbin.web.routes.websocket import get_connection_manager
@@ -99,6 +104,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "scheduled_trash_cleanup_enabled",
             schedule=config.trash.schedule,
             retention_days=config.trash.retention_days,
+        )
+
+    # Schedule automatic job history cleanup if enabled
+    if config.job_history.enabled:
+        job_history_cleanup_job = Job(
+            type=JobType.CLEANUP_JOB_HISTORY,
+            schedule=config.job_history.schedule,
+            metadata={"retention_days": config.job_history.retention_days},
+        )
+        await queue.submit(job_history_cleanup_job)
+        logger.info(
+            "scheduled_job_history_cleanup_enabled",
+            schedule=config.job_history.schedule,
+            retention_days=config.job_history.retention_days,
         )
 
     # Schedule automatic NFO export if enabled

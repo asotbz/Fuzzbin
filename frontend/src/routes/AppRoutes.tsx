@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthTokens } from '../auth/useAuthTokens'
 import LibraryPage from '../features/library/pages/LibraryPage'
 import ActivityMonitorPage from '../features/activity/pages/ActivityMonitorPage'
+import ActivityOutletWrapper from '../features/activity/components/ActivityOutletWrapper'
 import SettingsPage from '../features/settings/pages/SettingsPage'
 import SearchWizard from '../pages/add/SearchWizard'
 import SpotifyImport from '../pages/add/SpotifyImport'
@@ -84,7 +85,12 @@ export default function AppRoutes() {
             <ActivityMonitorPage />
           </RequireAuth>
         }
-      />
+      >
+        <Route index element={<ActivityOutletWrapper tab="active" />} />
+        <Route path="active" element={<ActivityOutletWrapper tab="active" />} />
+        <Route path="completed" element={<ActivityOutletWrapper tab="completed" />} />
+        <Route path="failed" element={<ActivityOutletWrapper tab="failed" />} />
+      </Route>
 
       <Route
         path="/settings"
