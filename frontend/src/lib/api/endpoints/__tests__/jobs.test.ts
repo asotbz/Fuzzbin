@@ -3,7 +3,7 @@ import { server } from '../../../../mocks/server'
 import { http, HttpResponse } from 'msw'
 import { setTokens, clearTokens } from '../../../../auth/tokenStore'
 import { TEST_TOKENS, mockJobs } from '../../../../mocks/handlers'
-import { getJob, cancelJob } from '../jobs'
+import { getJob, cancelJob, listJobs, retryJob } from '../jobs'
 
 const BASE_URL = 'http://localhost:8000'
 
@@ -14,6 +14,86 @@ describe('jobs endpoints', () => {
 
   afterEach(() => {
     clearTokens()
+  })
+
+  describe('listJobs', () => {
+    it('fetches jobs list without filters', async () => {
+      server.use(
+        http.get(`${BASE_URL}/jobs`, () => {
+          return HttpResponse.json({
+            jobs: mockJobs,
+            total: mockJobs.length,
+            limit: 100,
+            offset: 0,
+          })
+        })
+      )
+
+      const result = await listJobs()
+
+      expect(result.jobs).toBeDefined()
+      expect(result.total).toBeGreaterThan(0)
+    })
+
+    it('fetches jobs with status filter', async () => {
+      server.use(
+        http.get(`${BASE_URL}/jobs`, ({ request }) => {
+          const url = new URL(request.url)
+          const status = url.searchParams.get('status')
+          expect(status).toBe('completed')
+          return HttpResponse.json({
+            jobs: mockJobs.filter(j => j.status === 'completed'),
+            total: 1,
+            limit: 100,
+            offset: 0,
+          })
+        })
+      )
+
+      const result = await listJobs({ status: 'completed' })
+
+      expect(result.jobs.every(j => j.status === 'completed')).toBe(true)
+    })
+
+    it('fetches jobs with pagination', async () => {
+      server.use(
+        http.get(`${BASE_URL}/jobs`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('limit')).toBe('10')
+          expect(url.searchParams.get('offset')).toBe('20')
+          return HttpResponse.json({
+            jobs: [],
+            total: 100,
+            limit: 10,
+            offset: 20,
+          })
+        })
+      )
+
+      const result = await listJobs({ limit: 10, offset: 20 })
+
+      expect(result.limit).toBe(10)
+      expect(result.offset).toBe(20)
+    })
+
+    it('fetches jobs with type filter', async () => {
+      server.use(
+        http.get(`${BASE_URL}/jobs`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('type')).toBe('import')
+          return HttpResponse.json({
+            jobs: mockJobs.filter(j => j.type === 'import'),
+            total: 1,
+            limit: 100,
+            offset: 0,
+          })
+        })
+      )
+
+      const result = await listJobs({ type: 'import' })
+
+      expect(result.jobs.every(j => j.type === 'import')).toBe(true)
+    })
   })
 
   describe('getJob', () => {
@@ -145,6 +225,47 @@ describe('jobs endpoints', () => {
       )
 
       await expect(cancelJob('job-1')).rejects.toThrow()
+    })
+  })
+
+  describe('retryJob', () => {
+    it('retries a failed job', async () => {
+      server.use(
+        http.post(`${BASE_URL}/jobs/:id/retry`, ({ params }) => {
+          return HttpResponse.json({
+            original_job_id: params.id,
+            new_job_id: 'new-job-123',
+          })
+        })
+      )
+
+      const result = await retryJob('failed-job-1')
+
+      expect(result.original_job_id).toBe('failed-job-1')
+      expect(result.new_job_id).toBe('new-job-123')
+    })
+
+    it('throws error for nonexistent job', async () => {
+      server.use(
+        http.post(`${BASE_URL}/jobs/:id/retry`, () => {
+          return HttpResponse.json({ detail: 'Job not found' }, { status: 404 })
+        })
+      )
+
+      await expect(retryJob('nonexistent-job')).rejects.toThrow()
+    })
+
+    it('throws error when retrying a non-failed job', async () => {
+      server.use(
+        http.post(`${BASE_URL}/jobs/:id/retry`, () => {
+          return HttpResponse.json(
+            { detail: 'Can only retry failed or cancelled jobs' },
+            { status: 400 }
+          )
+        })
+      )
+
+      await expect(retryJob('running-job')).rejects.toThrow()
     })
   })
 })
