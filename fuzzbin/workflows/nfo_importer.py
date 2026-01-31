@@ -3,7 +3,7 @@
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
 
 import structlog
 
@@ -163,6 +163,76 @@ class NFOImporter:
         )
 
         return result, imported_videos
+
+    async def import_from_directory_streaming(
+        self,
+        root_path: Path,
+        recursive: bool = True,
+        update_file_paths: bool = True,
+        api_config: Optional[Dict[str, Any]] = None,
+    ) -> AsyncIterator[Tuple[ImportResult, List[Tuple[int, Optional[Path]]]]]:
+        """
+        Import all music video NFO files from a directory, yielding results per batch.
+
+        Memory-efficient streaming version that yields (result, batch_videos) tuples
+        after each batch of BATCH_SIZE (25) files is processed. This allows the caller
+        to queue post-processing jobs inline without accumulating all results in memory.
+
+        Args:
+            root_path: Root directory to scan for NFO files
+            recursive: Scan subdirectories recursively (default: True)
+            update_file_paths: Update nfo_file_path in database (default: True)
+            api_config: Optional API configuration dict with 'imvdb' and 'discogs' keys
+                        for enrichment during import
+
+        Yields:
+            Tuple of (ImportResult with cumulative statistics, List of (video_id, video_file_path)
+            tuples for the current batch only). The result object is updated cumulatively,
+            while the list contains only the current batch's imported videos.
+
+        Raises:
+            ValueError: If root_path doesn't exist or isn't a directory
+
+        Example:
+            >>> async for result, batch_videos in importer.import_from_directory_streaming(
+            ...     root_path=Path("/media/music_videos"),
+            ...     recursive=True,
+            ... ):
+            ...     for video_id, video_path in batch_videos:
+            ...         if video_path:
+            ...             await queue.submit(Job(type=JobType.VIDEO_POST_PROCESS, ...))
+            ...     print(f"Progress: {result.imported_count}/{result.total_tracks}")
+        """
+        start_time = time.time()
+
+        self.logger.info(
+            "nfo_import_streaming_start",
+            root_path=str(root_path),
+            recursive=recursive,
+            skip_existing=self.skip_existing,
+            has_api_config=bool(api_config),
+        )
+
+        # Discover all .nfo files
+        nfo_files = self._discover_nfo_files(root_path, recursive)
+
+        # Filter to only musicvideo.nfo files
+        musicvideo_nfos = await self._filter_musicvideo_nfos(nfo_files)
+
+        # Import NFO files with batching and enrichment, yielding per batch
+        async for result, batch_videos in self._import_nfo_files_streaming(
+            musicvideo_nfos,
+            update_file_paths,
+            api_config=api_config,
+        ):
+            yield result, batch_videos
+
+        # Final log after all batches
+        self.logger.info(
+            "nfo_import_streaming_complete",
+            root_path=str(root_path),
+            duration_seconds=time.time() - start_time,
+        )
 
     def _discover_nfo_files(self, root_path: Path, recursive: bool) -> List[Path]:
         """
@@ -790,3 +860,133 @@ class NFOImporter:
             )
 
         return result, imported_videos
+
+    async def _import_nfo_files_streaming(
+        self,
+        nfo_files: List[Path],
+        update_file_paths: bool,
+        api_config: Optional[Dict[str, Any]] = None,
+    ) -> AsyncIterator[Tuple[ImportResult, List[Tuple[int, Optional[Path]]]]]:
+        """
+        Import list of NFO files into database in batches, yielding after each batch.
+
+        Memory-efficient streaming version that yields (result, batch_videos) after
+        each batch completes. The result object contains cumulative statistics,
+        while batch_videos contains only the current batch's imported videos.
+
+        Args:
+            nfo_files: List of musicvideo.nfo file paths
+            update_file_paths: Whether to store NFO file paths in database
+            api_config: Optional API configuration for enrichment
+
+        Yields:
+            Tuple of (ImportResult with cumulative statistics, List of (video_id, video_file_path)
+            tuples for the current batch only)
+        """
+        result = ImportResult(
+            playlist_id="nfo_import",
+            playlist_name=f"NFO Import ({len(nfo_files)} files)",
+            total_tracks=len(nfo_files),
+        )
+
+        total_files = len(nfo_files)
+
+        # Process in batches
+        for batch_start in range(0, total_files, BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, total_files)
+            batch = nfo_files[batch_start:batch_end]
+
+            # Batch-local list - cleared after each yield
+            batch_videos: List[Tuple[int, Optional[Path]]] = []
+
+            self.logger.info(
+                "processing_batch_streaming",
+                batch_start=batch_start + 1,
+                batch_end=batch_end,
+                total=total_files,
+                batch_size=len(batch),
+            )
+
+            # Each batch gets its own transaction for partial progress recovery
+            async with self.repository.transaction():
+                for batch_idx, nfo_path in enumerate(batch):
+                    global_idx = batch_start + batch_idx + 1
+
+                    # Report progress via callback if provided
+                    if self.progress_callback:
+                        self.progress_callback(global_idx, total_files, nfo_path.name)
+
+                    try:
+                        # Parse NFO file
+                        nfo = self.parser.parse_file(nfo_path)
+
+                        # Validate critical fields
+                        if not self._validate_critical_fields(nfo, nfo_path):
+                            result.failed_count += 1
+                            result.failed_tracks.append(
+                                {
+                                    "track_id": str(nfo_path),
+                                    "name": nfo.title or "Unknown",
+                                    "error": "Missing critical fields (title or artist)",
+                                }
+                            )
+                            continue
+
+                        # Check if exists
+                        if self.skip_existing and await self._check_video_exists(nfo):
+                            self.logger.debug(
+                                "video_skipped_exists",
+                                nfo_path=str(nfo_path),
+                                title=nfo.title,
+                                artist=nfo.artist,
+                            )
+                            result.skipped_count += 1
+                            continue
+
+                        # Discover companion video file
+                        video_file_path = self._discover_video_file(nfo_path)
+
+                        # Import video with enrichment
+                        video_id, discovered_path = await self._import_single_nfo(
+                            nfo=nfo,
+                            nfo_path=nfo_path if update_file_paths else None,
+                            video_file_path=video_file_path,
+                            api_config=api_config,
+                        )
+
+                        if video_id is not None:
+                            result.imported_count += 1
+                            batch_videos.append((video_id, discovered_path))
+                        else:
+                            result.failed_count += 1
+
+                    except Exception as e:
+                        self.logger.error(
+                            "nfo_import_failed",
+                            nfo_path=str(nfo_path),
+                            error=str(e),
+                        )
+                        result.failed_count += 1
+                        result.failed_tracks.append(
+                            {
+                                "track_id": str(nfo_path),
+                                "name": (
+                                    nfo.title
+                                    if "nfo" in dir() and hasattr(nfo, "title")
+                                    else "Unknown"
+                                ),
+                                "error": str(e),
+                            }
+                        )
+
+            # Log batch completion
+            self.logger.info(
+                "batch_completed_streaming",
+                batch_start=batch_start + 1,
+                batch_end=batch_end,
+                imported_in_batch=len(batch_videos),
+                cumulative_imported=result.imported_count,
+            )
+
+            # Yield after batch completes - allows caller to process inline
+            yield result, batch_videos

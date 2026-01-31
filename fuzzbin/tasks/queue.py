@@ -196,7 +196,10 @@ class JobQueue:
         """
         self.max_workers = max_workers
         self.queue = PriorityJobQueue()
-        self.jobs: dict[str, Job] = {}  # Job registry (in-memory cache)
+        self.jobs: dict[str, Job] = {}  # Active jobs only (pending/waiting/running)
+        self.scheduled_templates: dict[
+            str, Job
+        ] = {}  # Cron job templates (separate from executions)
         self.handlers: dict[JobType, Callable[[Job], Coroutine[Any, Any, None]]] = {}
         self.workers: list[asyncio.Task[None]] = []
         self.scheduler_task: asyncio.Task[None] | None = None
@@ -290,13 +293,12 @@ class JobQueue:
         """Get current job queue metrics.
 
         Returns:
-            JobMetrics with success rate, avg duration, queue depth, etc.
+            JobMetrics with success rate, queue depth, etc.
 
         Example:
             >>> metrics = queue.get_metrics()
             >>> print(f"Success rate: {metrics.success_rate * 100:.1f}%")
             >>> print(f"Queue depth: {metrics.queue_depth}")
-            >>> print(f"Avg duration: {metrics.avg_duration_seconds:.1f}s")
         """
         return self._metrics.calculate_metrics(self.jobs, self.queue.qsize())
 
@@ -331,14 +333,14 @@ class JobQueue:
             raise ValueError(f"No handler registered for job type: {job.type.value}")
 
         async with self._lock:
-            self.jobs[job.id] = job
-
-            # Handle scheduled jobs
+            # Handle scheduled jobs - store in separate template dict
             if job.schedule:
                 next_run = parse_cron(job.schedule, datetime.now(timezone.utc))
                 if next_run:
                     job.next_run_at = next_run
                     job.status = JobStatus.WAITING
+                    # Store in templates dict, NOT jobs dict
+                    self.scheduled_templates[job.id] = job
                     # Persist to database
                     await self._persist_job(job, video_id)
                     logger.info(
@@ -350,6 +352,9 @@ class JobQueue:
                     return job.id
                 else:
                     raise ValueError(f"Invalid cron expression: {job.schedule}")
+
+            # Regular jobs go in jobs dict
+            self.jobs[job.id] = job
 
             # Handle jobs with dependencies
             if job.depends_on:
@@ -461,13 +466,27 @@ class JobQueue:
     async def get_job(self, job_id: str) -> Job | None:
         """Get job by ID.
 
+        Checks in-memory registry first (for active jobs), then falls
+        back to database for completed/historical jobs.
+
         Args:
             job_id: Job ID
 
         Returns:
             Job or None if not found
         """
-        return self.jobs.get(job_id)
+        # Check in-memory first (for active jobs)
+        job = self.jobs.get(job_id)
+        if job:
+            return job
+
+        # Fall back to database for completed/historical jobs
+        if self._repository:
+            job_row = await self._repository.get_job(job_id)
+            if job_row:
+                return self._job_from_db_row(job_row)
+
+        return None
 
     async def list_jobs(
         self,
@@ -693,6 +712,10 @@ class JobQueue:
 
             finally:
                 self.queue.task_done()
+                # Remove terminal jobs from memory immediately - DB has full record
+                if job.is_terminal:
+                    async with self._lock:
+                        self.jobs.pop(job.id, None)
 
         logger.info("worker_stopped", worker_id=worker_id)
 
@@ -724,7 +747,11 @@ class JobQueue:
                         )
 
     async def _scheduler(self) -> None:
-        """Background scheduler for cron-like job execution."""
+        """Background scheduler for cron-like job execution.
+
+        Iterates over scheduled_templates dict (not jobs dict) to find
+        cron jobs that are due. Creates execution instances in jobs dict.
+        """
         logger.info("scheduler_started")
 
         while self.running:
@@ -732,7 +759,8 @@ class JobQueue:
                 now = datetime.now(timezone.utc)
 
                 async with self._lock:
-                    for job in list(self.jobs.values()):
+                    # Iterate over scheduled templates, not jobs
+                    for job in list(self.scheduled_templates.values()):
                         if job.status != JobStatus.WAITING:
                             continue
 

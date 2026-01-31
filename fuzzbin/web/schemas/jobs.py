@@ -145,8 +145,6 @@ class JobTypeMetricsResponse(BaseModel):
     cancelled: int
     timeout: int
     success_rate: float
-    avg_duration_seconds: float
-    total_duration_seconds: float
 
 
 class JobMetricsResponse(BaseModel):
@@ -154,7 +152,7 @@ class JobMetricsResponse(BaseModel):
 
     Provides monitoring data for the job queue including:
     - Job counts by status
-    - Success rate and average duration
+    - Success rate
     - Queue depth
     - Per-type breakdowns
     """
@@ -168,7 +166,6 @@ class JobMetricsResponse(BaseModel):
     cancelled_jobs: int = Field(description="Cancelled jobs")
     timeout_jobs: int = Field(description="Timed out jobs")
     success_rate: float = Field(description="Ratio of completed to terminal jobs (0.0-1.0)")
-    avg_duration_seconds: float = Field(description="Average duration of completed jobs in seconds")
     queue_depth: int = Field(description="Current queue depth (pending jobs)")
     by_type: dict[str, JobTypeMetricsResponse] = Field(
         description="Metrics broken down by job type"

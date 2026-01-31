@@ -576,7 +576,7 @@ async def enrich_video_musicbrainz(
     responses={**AUTH_ERROR_RESPONSES, 404: COMMON_ERROR_RESPONSES[404]},
     summary="Get jobs for video",
     description="Get active and pending jobs associated with a specific video. "
-    "Returns jobs where metadata.video_id matches the requested video.",
+    "Returns jobs where video_id matches the requested video.",
 )
 async def get_video_jobs(
     video_id: int,
@@ -587,35 +587,27 @@ async def get_video_jobs(
 ) -> List[JobResponse]:
     """Get jobs associated with a video.
 
-    Returns jobs where metadata.video_id matches the requested video ID.
+    Returns jobs from the database where video_id matches the requested video ID.
     By default, only returns active jobs (pending, waiting, running).
     Set include_completed=true to also include terminal jobs.
     """
-    from fuzzbin.tasks.queue import get_job_queue
-    from fuzzbin.tasks.models import JobStatus
 
     # Verify video exists
     await repository.get_video_by_id(video_id)
 
-    queue = get_job_queue()
-    all_jobs = await queue.list_jobs(limit=1000)
+    # Query jobs from database directly
+    job_rows = await repository.get_jobs_by_video_id(video_id)
 
-    # Filter to jobs for this video
+    # Filter by status if not including completed
+    active_statuses = {"pending", "waiting", "running"}
     matching_jobs = []
-    active_statuses = {JobStatus.PENDING, JobStatus.WAITING, JobStatus.RUNNING}
 
-    for job in all_jobs:
-        job_video_id = job.metadata.get("video_id")
-        if job_video_id != video_id:
+    for row in job_rows:
+        if not include_completed and row.get("status") not in active_statuses:
             continue
+        matching_jobs.append(row)
 
-        # Filter by status if not including completed
-        if not include_completed and job.status not in active_statuses:
-            continue
-
-        matching_jobs.append(job)
-
-    return [JobResponse.model_validate(job) for job in matching_jobs]
+    return [JobResponse.model_validate(row) for row in matching_jobs]
 
 
 @router.delete(

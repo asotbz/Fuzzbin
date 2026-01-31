@@ -172,53 +172,70 @@ async def handle_nfo_import(job: Job) -> None:
         progress_callback=progress_callback,
     )
 
-    # Run import with enrichment
+    # Run import with streaming - process post-process jobs per batch to reduce memory
     import asyncio
 
-    result, imported_videos = await importer.import_from_directory(
+    post_process_jobs_queued = 0
+    videos_with_files = 0
+    result = None  # Will be updated by final batch
+
+    queue = get_job_queue()
+    async for result, batch_videos in importer.import_from_directory_streaming(
         root_path=directory,
         recursive=recursive,
         update_file_paths=update_file_paths,
         api_config=api_config,
-    )
+    ):
+        # Check for cancellation between batches
+        if job.status == JobStatus.CANCELLED:
+            return
 
-    # Check for cancellation after import
-    if job.status == JobStatus.CANCELLED:
+        # Queue VIDEO_POST_PROCESS jobs for this batch immediately
+        for video_id, video_file_path in batch_videos:
+            if video_file_path is not None:
+                videos_with_files += 1
+                try:
+                    post_process_job = Job(
+                        type=JobType.VIDEO_POST_PROCESS,
+                        metadata={
+                            "video_id": video_id,
+                            "video_path": str(video_file_path),
+                        },
+                        parent_job_id=job.id,
+                    )
+                    await queue.submit(post_process_job)
+                    post_process_jobs_queued += 1
+
+                    logger.debug(
+                        "video_post_process_job_queued",
+                        video_id=video_id,
+                        video_path=str(video_file_path),
+                        post_process_job_id=post_process_job.id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "video_post_process_job_queue_failed",
+                        video_id=video_id,
+                        video_path=str(video_file_path),
+                        error=str(e),
+                    )
+
+    # Handle case where no files were found (result would be None)
+    if result is None:
+        job.mark_completed(
+            {
+                "imported": 0,
+                "skipped": 0,
+                "failed": 0,
+                "total_files": 0,
+                "duration_seconds": 0,
+                "failed_tracks": [],
+                "initial_status": initial_status,
+                "videos_with_files": 0,
+                "post_process_jobs_queued": 0,
+            }
+        )
         return
-
-    # Queue VIDEO_POST_PROCESS jobs for videos with discovered video files
-    post_process_jobs_queued = 0
-    videos_with_files = 0
-
-    queue = get_job_queue()
-    for video_id, video_file_path in imported_videos:
-        if video_file_path is not None:
-            videos_with_files += 1
-            try:
-                post_process_job = Job(
-                    type=JobType.VIDEO_POST_PROCESS,
-                    metadata={
-                        "video_id": video_id,
-                        "video_path": str(video_file_path),
-                    },
-                    parent_job_id=job.id,
-                )
-                await queue.submit(post_process_job)
-                post_process_jobs_queued += 1
-
-                logger.debug(
-                    "video_post_process_job_queued",
-                    video_id=video_id,
-                    video_path=str(video_file_path),
-                    post_process_job_id=post_process_job.id,
-                )
-            except Exception as e:
-                logger.warning(
-                    "video_post_process_job_queue_failed",
-                    video_id=video_id,
-                    video_path=str(video_file_path),
-                    error=str(e),
-                )
 
     # Mark completed with result
     job.mark_completed(
@@ -1831,53 +1848,58 @@ async def handle_library_scan(job: Job) -> None:
                 "discogs": config.apis.get("discogs"),
             }
 
-        # Use NFOImporter with enrichment
+        # Use NFOImporter with streaming to reduce memory
         importer = NFOImporter(
             video_repository=repository,
             skip_existing=True,
             progress_callback=progress_callback,
         )
 
-        result, imported_videos = await importer.import_from_directory(
+        queue = get_job_queue()
+        result = None
+        async for result, batch_videos in importer.import_from_directory_streaming(
             root_path=directory,
             recursive=recursive,
             api_config=api_config,
-        )
+        ):
+            # Check for cancellation between batches
+            if job.status == JobStatus.CANCELLED:
+                return
 
-        new_files_found = result.total_tracks
-        nfo_imported = result.imported_count
-        errors = result.failed_count
+            # Queue VIDEO_POST_PROCESS jobs for this batch immediately
+            for video_id, video_file_path in batch_videos:
+                if video_file_path is not None:
+                    videos_with_files += 1
+                    try:
+                        post_process_job = Job(
+                            type=JobType.VIDEO_POST_PROCESS,
+                            metadata={
+                                "video_id": video_id,
+                                "video_path": str(video_file_path),
+                            },
+                            parent_job_id=job.id,
+                        )
+                        await queue.submit(post_process_job)
+                        post_process_jobs_queued += 1
 
-        # Queue VIDEO_POST_PROCESS jobs for videos with discovered video files
-        queue = get_job_queue()
-        for video_id, video_file_path in imported_videos:
-            if video_file_path is not None:
-                videos_with_files += 1
-                try:
-                    post_process_job = Job(
-                        type=JobType.VIDEO_POST_PROCESS,
-                        metadata={
-                            "video_id": video_id,
-                            "video_path": str(video_file_path),
-                        },
-                        parent_job_id=job.id,
-                    )
-                    await queue.submit(post_process_job)
-                    post_process_jobs_queued += 1
+                        logger.debug(
+                            "library_scan_post_process_job_queued",
+                            video_id=video_id,
+                            video_path=str(video_file_path),
+                            post_process_job_id=post_process_job.id,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "library_scan_post_process_job_queue_failed",
+                            video_id=video_id,
+                            video_path=str(video_file_path),
+                            error=str(e),
+                        )
 
-                    logger.debug(
-                        "library_scan_post_process_job_queued",
-                        video_id=video_id,
-                        video_path=str(video_file_path),
-                        post_process_job_id=post_process_job.id,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "library_scan_post_process_job_queue_failed",
-                        video_id=video_id,
-                        video_path=str(video_file_path),
-                        error=str(e),
-                    )
+        if result:
+            new_files_found = result.total_tracks
+            nfo_imported = result.imported_count
+            errors = result.failed_count
     else:
         # Just count files
         new_files_found = len(nfo_files)

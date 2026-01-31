@@ -1,10 +1,9 @@
 """Job queue monitoring and metrics.
 
 This module provides monitoring capabilities for the background job queue:
-- Job metrics (success rate, average duration, counts by status/type)
+- Job metrics (success rate, counts by status/type)
 - Failed job alerts (callback/webhook system)
 - Queue depth monitoring
-- Historical statistics
 
 Example:
     >>> from fuzzbin.tasks.metrics import JobMetrics, FailedJobAlert
@@ -12,7 +11,7 @@ Example:
     >>> # Get metrics
     >>> metrics = job_queue.get_metrics()
     >>> print(f"Success rate: {metrics.success_rate * 100:.1f}%")
-    >>> print(f"Average duration: {metrics.avg_duration_seconds:.1f}s")
+    >>> print(f"Queue depth: {metrics.queue_depth}")
     >>>
     >>> # Register alert callback
     >>> async def on_failure(alert: FailedJobAlert):
@@ -65,8 +64,6 @@ class JobTypeMetrics:
         failed: Number of failed jobs
         cancelled: Number of cancelled jobs
         timeout: Number of timed out jobs
-        avg_duration_seconds: Average duration of completed jobs
-        total_duration_seconds: Sum of all job durations
     """
 
     job_type: JobType
@@ -75,8 +72,6 @@ class JobTypeMetrics:
     failed: int = 0
     cancelled: int = 0
     timeout: int = 0
-    avg_duration_seconds: float = 0.0
-    total_duration_seconds: float = 0.0
 
     @property
     def success_rate(self) -> float:
@@ -101,7 +96,6 @@ class JobMetrics:
         cancelled_jobs: Cancelled jobs
         timeout_jobs: Timed out jobs
         success_rate: Ratio of completed to terminal jobs
-        avg_duration_seconds: Average duration of completed jobs
         queue_depth: Current queue depth (pending + waiting)
         by_type: Per-job-type metrics
         oldest_pending_age_seconds: Age of oldest pending job
@@ -118,7 +112,6 @@ class JobMetrics:
     cancelled_jobs: int = 0
     timeout_jobs: int = 0
     success_rate: float = 0.0
-    avg_duration_seconds: float = 0.0
     queue_depth: int = 0
     by_type: dict[JobType, JobTypeMetrics] = field(default_factory=dict)
     oldest_pending_age_seconds: float | None = None
@@ -135,8 +128,6 @@ class MetricsCollector:
 
     def __init__(self) -> None:
         """Initialize metrics collector."""
-        self._completed_durations: list[float] = []
-        self._type_durations: dict[JobType, list[float]] = {}
         self._last_failure_at: datetime | None = None
         self._last_completion_at: datetime | None = None
         self._failure_callbacks: list[Callable[[FailedJobAlert], Coroutine[Any, Any, None]]] = []
@@ -160,14 +151,6 @@ class MetricsCollector:
         Args:
             job: The completed job
         """
-        if job.started_at and job.completed_at:
-            duration = (job.completed_at - job.started_at).total_seconds()
-            self._completed_durations.append(duration)
-
-            if job.type not in self._type_durations:
-                self._type_durations[job.type] = []
-            self._type_durations[job.type].append(duration)
-
         self._last_completion_at = datetime.now(timezone.utc)
 
     async def record_failure(self, job: Job) -> None:
@@ -268,17 +251,5 @@ class MetricsCollector:
         terminal = metrics.completed_jobs + metrics.failed_jobs + metrics.timeout_jobs
         if terminal > 0:
             metrics.success_rate = metrics.completed_jobs / terminal
-
-        # Calculate average duration
-        if self._completed_durations:
-            metrics.avg_duration_seconds = sum(self._completed_durations) / len(
-                self._completed_durations
-            )
-
-        # Calculate per-type durations
-        for job_type, durations in self._type_durations.items():
-            if job_type in metrics.by_type and durations:
-                metrics.by_type[job_type].total_duration_seconds = sum(durations)
-                metrics.by_type[job_type].avg_duration_seconds = sum(durations) / len(durations)
 
         return metrics
