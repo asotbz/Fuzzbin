@@ -203,7 +203,7 @@ async def handle_nfo_import(job: Job) -> None:
                         },
                         parent_job_id=job.id,
                     )
-                    await queue.submit(post_process_job)
+                    await queue.submit(post_process_job, video_id=video_id)
                     post_process_jobs_queued += 1
 
                     logger.debug(
@@ -418,7 +418,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
 
     # Import each track
     imported_count = 0
-    download_jobs = []
+    download_jobs: list[tuple[Job, int]] = []
 
     for idx, track_data in enumerate(tracks):
         if job.status == JobStatus.CANCELLED:
@@ -614,7 +614,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
                         "youtube_url": f"https://youtube.com/watch?v={youtube_id}",
                     },
                 )
-                download_jobs.append(download_job)
+                download_jobs.append((download_job, video_id))
 
         except Exception as e:
             logger.error(
@@ -629,8 +629,8 @@ async def handle_spotify_batch_import(job: Job) -> None:
     # Submit download jobs if any
     if download_jobs:
         queue = get_job_queue()
-        for dj in download_jobs:
-            await queue.submit(dj)
+        for dj, vid in download_jobs:
+            await queue.submit(dj, video_id=vid)
         logger.info(
             "spotify_batch_import_downloads_queued",
             job_id=job.id,
@@ -792,6 +792,9 @@ async def handle_youtube_download(job: Job) -> None:
 
     # Batch download mode (original behavior)
     if video_ids is not None:
+        if len(video_ids) > 1:
+            await _split_batch_youtube_download(job, video_ids)
+            return
         await _handle_batch_youtube_download(job, video_ids)
         return
 
@@ -922,6 +925,53 @@ async def _handle_direct_url_download(job: Job, url: str, output_path: str) -> N
                 error=str(e),
             )
             raise
+
+
+async def _split_batch_youtube_download(job: Job, video_ids: list) -> None:
+    """Split multi-video download job into per-video download jobs."""
+    if job.status == JobStatus.CANCELLED:
+        return
+
+    queue = get_job_queue()
+    queued_job_ids: list[str] = []
+    skipped: list[dict[str, Any]] = []
+
+    for video_id in video_ids:
+        if job.status == JobStatus.CANCELLED:
+            break
+
+        if not isinstance(video_id, int):
+            skipped.append({"video_id": video_id, "reason": "Invalid video_id"})
+            continue
+
+        child_metadata = {k: v for k, v in job.metadata.items() if k not in ("url", "output_path")}
+        child_metadata["video_ids"] = [video_id]
+
+        child_job = Job(
+            type=JobType.DOWNLOAD_YOUTUBE,
+            priority=job.priority,
+            metadata=child_metadata,
+            parent_job_id=job.id,
+        )
+        await queue.submit(child_job, video_id=video_id)
+        queued_job_ids.append(child_job.id)
+
+    job.mark_completed(
+        {
+            "split": True,
+            "queued_jobs": queued_job_ids,
+            "skipped": skipped if skipped else None,
+            "total_videos": len(video_ids),
+        }
+    )
+
+    logger.info(
+        "youtube_download_batch_split",
+        job_id=job.id,
+        queued=len(queued_job_ids),
+        skipped=len(skipped),
+        total=len(video_ids),
+    )
 
 
 async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
@@ -1089,7 +1139,7 @@ async def _handle_batch_youtube_download(job: Job, video_ids: list) -> None:
                         },
                         parent_job_id=job.id,
                     )
-                    await queue.submit(post_process_job)
+                    await queue.submit(post_process_job, video_id=video_id)
 
                     downloaded += 1
                     logger.info(
@@ -1879,7 +1929,7 @@ async def handle_library_scan(job: Job) -> None:
                             },
                             parent_job_id=job.id,
                         )
-                        await queue.submit(post_process_job)
+                        await queue.submit(post_process_job, video_id=video_id)
                         post_process_jobs_queued += 1
 
                         logger.debug(
@@ -2628,7 +2678,7 @@ async def handle_add_single_import(job: Job) -> None:
             },
             parent_job_id=job.id,
         )
-        await queue.submit(download_job)
+        await queue.submit(download_job, video_id=video_id)
         download_job_id = download_job.id
     elif created and not youtube_id:
         # No YouTube ID, mark as discovered for manual download later
@@ -2756,7 +2806,7 @@ async def handle_import_download(job: Job) -> None:
             },
             parent_job_id=job.id,
         )
-        await queue.submit(post_process_job)
+        await queue.submit(post_process_job, video_id=video_id)
 
         job.update_progress(3, 3, "Download complete")
         job.mark_completed(
@@ -2990,7 +3040,7 @@ async def handle_video_post_process(job: Job) -> None:
             },
             parent_job_id=job.id,
         )
-        await queue.submit(organize_job)
+        await queue.submit(organize_job, video_id=video_id)
 
         job.update_progress(4, 4, "Post-processing complete")
         job.mark_completed(
@@ -3245,7 +3295,7 @@ async def handle_import_organize(job: Job) -> None:
             },
             parent_job_id=job.id,
         )
-        await queue.submit(nfo_job)
+        await queue.submit(nfo_job, video_id=video_id)
 
         job.update_progress(4, 4, "Organization complete")
         job.mark_completed(
@@ -3769,7 +3819,7 @@ async def handle_imvdb_artist_import(job: Job) -> None:
 
     # Import each video
     imported_count = 0
-    download_jobs = []
+    download_jobs: list[tuple[Job, int]] = []
 
     for idx, video_data in enumerate(videos):
         if job.status == JobStatus.CANCELLED:
@@ -3947,7 +3997,7 @@ async def handle_imvdb_artist_import(job: Job) -> None:
                         "youtube_url": f"https://youtube.com/watch?v={youtube_id}",
                     },
                 )
-                download_jobs.append(download_job)
+                download_jobs.append((download_job, video_id))
 
         except Exception as e:
             logger.error(
@@ -3962,8 +4012,8 @@ async def handle_imvdb_artist_import(job: Job) -> None:
     # Submit download jobs if any
     if download_jobs:
         queue = get_job_queue()
-        for dj in download_jobs:
-            await queue.submit(dj)
+        for dj, vid in download_jobs:
+            await queue.submit(dj, video_id=vid)
         logger.info(
             "imvdb_artist_import_downloads_queued",
             job_id=job.id,

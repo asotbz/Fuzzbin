@@ -81,11 +81,13 @@
 
 .jobId {
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  letter-spacing: 0.06em;
-  font-weight: 600;
-  word-break: break-all;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .jobStatusBadge {

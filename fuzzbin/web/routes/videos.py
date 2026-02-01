@@ -302,7 +302,7 @@ async def update_video(
                 priority=JobPriority.NORMAL,
             )
             try:
-                await queue.submit(job)
+                await queue.submit(job, video_id=video_id)
                 logger.info(
                     "file_organize_queued_for_metadata_change",
                     video_id=video_id,
@@ -480,7 +480,7 @@ async def download_video(
         },
         priority=JobPriority.HIGH,
     )
-    await queue.submit(job)
+    await queue.submit(job, video_id=video_id)
 
     return JobResponse.model_validate(job)
 

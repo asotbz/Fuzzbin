@@ -59,6 +59,23 @@ function formatDuration(startedAt: string | null, completedAt?: string | null): 
   return `${diffMins}m ${secs}s`
 }
 
+function getMetadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key]
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function getMetadataNumber(metadata: Record<string, unknown>, key: string): number | null {
+  const value = metadata[key]
+  if (typeof value === 'number') return value
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
 export default function JobCard({ job, onCancel, onRetry, onClear }: JobCardProps) {
   const [showDetails, setShowDetails] = useState(false)
 
@@ -70,13 +87,23 @@ export default function JobCard({ job, onCancel, onRetry, onClear }: JobCardProp
 
   const startedTime = job.started_at ? formatTimestamp(job.started_at) : formatTimestamp(job.created_at)
   const duration = formatDuration(job.started_at, job.completed_at)
+  const videoTitle = getMetadataString(job.metadata, 'video_title') ?? getMetadataString(job.metadata, 'title')
+  const videoArtist = getMetadataString(job.metadata, 'video_artist') ?? getMetadataString(job.metadata, 'artist')
+  const videoId = getMetadataNumber(job.metadata, 'video_id')
+  const videoLabelParts = [videoArtist, videoTitle].filter(Boolean)
+  const videoLabel = videoLabelParts.length > 0 ? videoLabelParts.join(' - ') : null
+  const jobIdLabel = videoLabel
+    ? `${videoLabel}${videoId ? ` (${videoId})` : ''}`
+    : videoId
+      ? `Video ${videoId}`
+      : job.job_id
 
   return (
     <div className={cardClass}>
       <div className="jobCardHeader">
         <div className="jobInfo">
           <div className="jobType">{formatJobType(job.job_type)}</div>
-          <div className="jobId">{job.job_id}</div>
+          <div className="jobId">{jobIdLabel}</div>
         </div>
         <JobStatusBadge status={job.status} />
       </div>
@@ -87,7 +114,7 @@ export default function JobCard({ job, onCancel, onRetry, onClear }: JobCardProp
 
       <div className="jobMeta">
         <span className="jobTimestamp">
-          {job.processed_items}/{job.total_items} items
+          {job.processed_items}/{job.total_items} tasks
           {' • '}
           {isCompleted && duration ? `Completed ${startedTime} • Duration: ${duration}` :
            isFailed && duration ? `Failed ${startedTime} • Duration: ${duration}` :

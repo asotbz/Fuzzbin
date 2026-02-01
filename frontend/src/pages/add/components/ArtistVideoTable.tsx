@@ -46,28 +46,30 @@ export default function ArtistVideoTable({
   const [videoStates, setVideoStates] = useState<Map<number, VideoRowState>>(new Map())
   const [currentEnrichingIndex, setCurrentEnrichingIndex] = useState(0)
   const [selectedVideos, setSelectedVideos] = useState<Set<number>>(new Set())
-  const hasInitializedRef = useRef(false)
+  const initializedKeyRef = useRef<string | null>(null)
 
   // Initialize video states only once
   useEffect(() => {
-    if (!hasInitializedRef.current) {
-      hasInitializedRef.current = true
-      const initialStates = new Map<number, VideoRowState>()
-      videos.forEach((video) => {
-        initialStates.set(video.id, {
-          enrichmentStatus: 'pending',
-          selected: !video.already_exists, // Auto-select new videos
-        })
-      })
-      setVideoStates(initialStates)
+    const key = videos.map((video) => video.id).join(',')
+    if (initializedKeyRef.current === key) return
 
-      // Auto-select new videos
-      const newVideoIds = videos
-        .filter((v) => !v.already_exists)
-        .map((v) => v.id)
-      setSelectedVideos(new Set(newVideoIds))
-    }
-  }, [])
+    initializedKeyRef.current = key
+    const initialStates = new Map<number, VideoRowState>()
+    videos.forEach((video) => {
+      initialStates.set(video.id, {
+        enrichmentStatus: 'pending',
+        selected: !video.already_exists, // Auto-select new videos
+      })
+    })
+    setVideoStates(initialStates)
+
+    // Auto-select new videos
+    const newVideoIds = videos
+      .filter((v) => !v.already_exists)
+      .map((v) => v.id)
+    setSelectedVideos(new Set(newVideoIds))
+    setCurrentEnrichingIndex(0)
+  }, [videos])
 
   // Notify parent of selection changes
   useEffect(() => {

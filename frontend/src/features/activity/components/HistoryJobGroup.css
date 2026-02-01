@@ -1,0 +1,83 @@
+.historyJobGroup {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  overflow: hidden;
+}
+
+.historyJobGroupFailed {
+  border-left: 3px solid var(--status-failed);
+}
+
+.historyJobGroupCompleted {
+  border-left: 3px solid var(--status-completed);
+}
+
+.historyJobGroupHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.historyJobGroupHeader:hover {
+  background: var(--card-hover);
+}
+
+.historyJobGroupInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.historyJobGroupTitle {
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.historyJobGroupMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.historyJobGroupBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.historyJobGroupArrow {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease;
+}
+
+.historyJobGroupArrowExpanded {
+  transform: rotate(180deg);
+}
+
+.historyJobGroupJobs {
+  background: var(--bg-secondary);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

@@ -56,7 +56,7 @@ describe('JobProgressBar', () => {
       />
     )
 
-    expect(screen.getByText('10/20 items')).toBeInTheDocument()
+    expect(screen.getByText('10/20 tasks')).toBeInTheDocument()
   })
 
   it('displays download speed when available', () => {

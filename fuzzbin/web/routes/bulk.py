@@ -415,7 +415,7 @@ async def bulk_download_videos(
             },
             priority=JobPriority.NORMAL,
         )
-        await queue.submit(job)
+        await queue.submit(job, video_id=video_id)
         submitted.append(job.id)
 
     logger.info(

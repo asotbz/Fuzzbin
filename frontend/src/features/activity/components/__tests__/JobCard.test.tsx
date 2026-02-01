@@ -41,6 +41,22 @@ describe('JobCard', () => {
       expect(screen.getByText('test-job-456')).toBeInTheDocument()
     })
 
+    it('renders video label when metadata includes video details', () => {
+      render(
+        <JobCard
+          job={createMockJob({
+            metadata: {
+              video_id: 42,
+              video_title: 'Test Title',
+              video_artist: 'Test Artist',
+            },
+          })}
+        />
+      )
+
+      expect(screen.getByText('Test Artist - Test Title (42)')).toBeInTheDocument()
+    })
+
     it('renders current step', () => {
       render(<JobCard job={createMockJob({ current_step: 'Processing files...' })} />)
 
@@ -53,7 +69,7 @@ describe('JobCard', () => {
       )
 
       // Text appears in both progress bar and job meta sections
-      expect(screen.getAllByText(/7\/20 items/).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/7\/20 tasks/).length).toBeGreaterThan(0)
     })
 
     it('renders progress bar', () => {

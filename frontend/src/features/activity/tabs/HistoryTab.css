@@ -71,6 +71,12 @@
   gap: var(--space-1);
 }
 
+.historyGroupList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .emptyState {
   padding: var(--space-8);
   text-align: center;

@@ -20,59 +20,85 @@
 }
 
 .maintenanceSubtitle {
+  font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   margin: 0;
 }
 
+.maintenanceSection {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-surface-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
 .jobsContainer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: var(--space-6);
+  align-items: start;
 }
 
 .maintenanceGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
 }
 
 .maintenanceCard {
   padding: var(--space-4);
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--bg-base) 70%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--bg-surface-light) 70%, transparent);
   border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-xs);
 }
 
 .maintenanceCardHeader {
-  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .maintenanceTitle {
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-primary);
 }
 
 .maintenanceDescription {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin: 0 0 var(--space-3) 0;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .maintenanceButton {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  border: none;
+  border: 1px solid var(--bg-surface-light);
   border-radius: var(--radius-sm);
-  background: var(--btn-secondary-bg);
-  color: var(--text-primary);
-  font-weight: 500;
+  background: color-mix(in srgb, var(--bg-base) 80%, transparent);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .maintenanceButton:hover {
-  background: var(--btn-secondary-hover);
+  border-color: color-mix(in srgb, var(--header-accent, var(--channel-manage)) 45%, var(--bg-surface-light));
+  color: var(--text-primary);
 }
 
 .maintenanceButton:disabled {

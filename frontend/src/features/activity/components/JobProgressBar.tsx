@@ -42,7 +42,7 @@ export default function JobProgressBar({ job }: JobProgressBarProps) {
         {eta && <span className="progressEta">ETA: {eta}</span>}
         {!speed && !eta && (
           <span className="progressItems">
-            {job.processed_items}/{job.total_items} items
+            {job.processed_items}/{job.total_items} tasks
           </span>
         )}
       </div>

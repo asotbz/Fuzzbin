@@ -273,6 +273,32 @@ class TestJobQueue:
         assert "Simulated failure" in job.error
 
     @pytest.mark.asyncio
+    async def test_job_failure_captures_stderr(self, queue: JobQueue):
+        """Test that stderr/returncode details are captured on failure."""
+        from fuzzbin.core.exceptions import YTDLPExecutionError
+
+        async def stderr_handler(job: Job) -> None:
+            raise YTDLPExecutionError(
+                "yt-dlp failed",
+                returncode=1,
+                stderr="ERROR: unable to download video data: HTTP Error 403: Forbidden\n",
+            )
+
+        queue.register_handler(JobType.IMPORT_NFO, stderr_handler)
+
+        job = Job(type=JobType.IMPORT_NFO)
+        await queue.submit(job)
+
+        await queue.start()
+        await asyncio.sleep(0.2)
+        await queue.stop()
+
+        assert job.status == JobStatus.FAILED
+        assert job.result is not None
+        assert job.result.get("returncode") == 1
+        assert "HTTP Error 403" in str(job.result.get("stderr"))
+
+    @pytest.mark.asyncio
     async def test_queue_start_stop(self, queue: JobQueue):
         """Test starting and stopping the queue."""
         queue.register_handler(JobType.IMPORT_NFO, dummy_handler)

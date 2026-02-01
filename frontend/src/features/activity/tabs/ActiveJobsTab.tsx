@@ -7,9 +7,8 @@ import JobGroup from '../components/JobGroup'
 import { cancelJob, type JobItem } from '../../../lib/api/endpoints/jobs'
 import { useActiveJobs } from '../hooks/useJobsQuery'
 import { useJobEvents, type JobState } from '../../../lib/ws/useJobEvents'
+import { SCHEDULED_MAINTENANCE_JOB_TYPES } from '../constants'
 import './ActiveJobsTab.css'
-
-const SCHEDULED_JOB_TYPES = new Set(['backup', 'trash_cleanup', 'export_nfo', 'cleanup_job_history'])
 
 // Adapter: Convert REST JobItem to JobState format used by components
 function toJobState(job: JobItem): JobState {
@@ -44,6 +43,10 @@ interface JobGroupData {
   groupStatus: 'running' | 'pending' | 'completed' | 'failed'
 }
 
+type ActiveJobCard =
+  | { kind: 'group'; key: string; isRunning: boolean; order: number; group: JobGroupData }
+  | { kind: 'job'; key: string; isRunning: boolean; order: number; job: JobState }
+
 function groupJobsByVideo(jobs: JobState[]): { grouped: JobGroupData[]; ungrouped: JobState[] } {
   const videoJobs = new Map<number, JobState[]>()
   const ungrouped: JobState[] = []
@@ -51,7 +54,7 @@ function groupJobsByVideo(jobs: JobState[]): { grouped: JobGroupData[]; ungroupe
   // Only include active jobs (not scheduled maintenance)
   const activeJobs = jobs.filter(j => 
     ['pending', 'waiting', 'running'].includes(j.status) &&
-    !SCHEDULED_JOB_TYPES.has(j.job_type)
+    !SCHEDULED_MAINTENANCE_JOB_TYPES.has(j.job_type)
   )
 
   for (const job of activeJobs) {
@@ -118,9 +121,21 @@ export default function ActiveJobsTab() {
       }
     }
 
-    // Overlay WebSocket data (more recent)
+    // Overlay WebSocket data (more recent), preserving REST metadata
     for (const [jobId, wsJob] of wsJobs) {
-      jobMap.set(jobId, wsJob)
+      const existing = jobMap.get(jobId)
+      if (existing) {
+        jobMap.set(jobId, {
+          ...existing,
+          ...wsJob,
+          metadata: {
+            ...existing.metadata,
+            ...wsJob.metadata,
+          },
+        })
+      } else {
+        jobMap.set(jobId, wsJob)
+      }
     }
 
     return jobMap
@@ -157,6 +172,37 @@ export default function ActiveJobsTab() {
   }, [mergedJobs])
 
   const { grouped, ungrouped } = useMemo(() => groupJobsByVideo(activeJobs), [activeJobs])
+
+  const jobCards = useMemo<ActiveJobCard[]>(() => {
+    const combined: ActiveJobCard[] = []
+
+    grouped.forEach((group) => {
+      combined.push({
+        kind: 'group',
+        key: `group-${group.videoId}`,
+        isRunning: group.groupStatus === 'running',
+        order: combined.length,
+        group,
+      })
+    })
+
+    ungrouped.forEach((job) => {
+      combined.push({
+        kind: 'job',
+        key: `job-${job.job_id}`,
+        isRunning: job.status === 'running',
+        order: combined.length,
+        job,
+      })
+    })
+
+    return combined.sort((a, b) => {
+      if (a.isRunning === b.isRunning) {
+        return a.order - b.order
+      }
+      return a.isRunning ? -1 : 1
+    })
+  }, [grouped, ungrouped])
 
   const handleCancelJob = async (jobId: string) => {
     try {
@@ -231,28 +277,31 @@ export default function ActiveJobsTab() {
           </div>
         ) : (
           <div className="jobsContainer">
-            {/* Grouped jobs by video */}
-            {grouped.map(group => (
-              <JobGroup
-                key={group.videoId}
-                videoId={group.videoId}
-                videoTitle={group.videoTitle}
-                videoArtist={group.videoArtist}
-                jobs={group.jobs}
-                overallProgress={group.overallProgress}
-                groupStatus={group.groupStatus}
-                onCancelGroup={handleCancelGroup}
-              />
-            ))}
+            {jobCards.map(card => {
+              if (card.kind === 'group') {
+                const group = card.group
+                return (
+                  <JobGroup
+                    key={card.key}
+                    videoId={group.videoId}
+                    videoTitle={group.videoTitle}
+                    videoArtist={group.videoArtist}
+                    jobs={group.jobs}
+                    overallProgress={group.overallProgress}
+                    groupStatus={group.groupStatus}
+                    onCancelGroup={handleCancelGroup}
+                  />
+                )
+              }
 
-            {/* Ungrouped jobs */}
-            {ungrouped.map(job => (
-              <JobCard
-                key={job.job_id}
-                job={job}
-                onCancel={handleCancelJob}
-              />
-            ))}
+              return (
+                <JobCard
+                  key={card.key}
+                  job={card.job}
+                  onCancel={handleCancelJob}
+                />
+              )
+            })}
           </div>
         )}
       </section>

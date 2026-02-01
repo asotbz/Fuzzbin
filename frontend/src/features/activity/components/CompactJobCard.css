@@ -1,8 +1,9 @@
 .compactJobCard {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: 0;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-sm);
@@ -19,6 +20,13 @@
 
 .compactJobCardCompleted {
   border-left: 3px solid var(--status-completed);
+}
+
+.compactJobRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
 }
 
 .compactJobCheckbox {
@@ -106,6 +114,53 @@
 .compactActionBtnClear:hover {
   background: var(--status-failed-bg);
   color: var(--status-failed);
+}
+
+.compactJobDetails {
+  border-top: 1px solid var(--card-border);
+  background: var(--bg-secondary);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.compactJobDetailRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.compactJobDetailLabel {
+  flex-shrink: 0;
+  min-width: 70px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.compactJobDetailValue {
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.compactJobDetailCode {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
 }
 
 /* Batch selection header */

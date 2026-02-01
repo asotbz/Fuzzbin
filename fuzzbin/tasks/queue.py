@@ -247,6 +247,10 @@ class JobQueue:
     ) -> Callable[[Job, float | None, int | None], None]:
         """Create a progress callback that emits events via the event bus.
 
+        Progress updates are sent over WebSocket in real-time (with 250ms debouncing).
+        Database is NOT updated on every progress change - only on major status
+        changes (started, completed, failed) to reduce write load.
+
         Args:
             job: Job to create callback for
 
@@ -260,13 +264,13 @@ class JobQueue:
             eta_seconds: int | None,
         ) -> None:
             if self._event_bus:
-                # Schedule the async emit as a task
+                # Schedule the async emit as a task (debounced via event bus)
                 asyncio.create_task(
                     self._event_bus.emit_job_progress(job, download_speed, eta_seconds)
                 )
-            # Also persist progress to database (throttled - only every 10% change or 5 seconds)
-            if self._repository:
-                asyncio.create_task(self._update_job_progress_db(job))
+            # NOTE: We intentionally don't persist progress to DB on every update.
+            # Progress is ephemeral - only final status (completed/failed) matters
+            # for persistence. WebSocket handles real-time updates.
 
         return progress_callback
 
@@ -443,25 +447,24 @@ class JobQueue:
         except Exception as e:
             logger.error("job_status_persist_failed", job_id=job.id, error=str(e))
 
-    async def _update_job_progress_db(self, job: Job) -> None:
-        """Update job progress in the database.
+    @staticmethod
+    def _extract_error_details(error: BaseException) -> dict[str, Any]:
+        """Extract stderr/returncode details from exceptions when available."""
+        details: dict[str, Any] = {}
+        stderr = getattr(error, "stderr", None)
+        if stderr:
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            if isinstance(stderr, str):
+                cleaned = stderr.strip()
+                if cleaned:
+                    details["stderr"] = cleaned[:1000]
 
-        Args:
-            job: Job with updated progress
-        """
-        if not self._repository:
-            return
+        returncode = getattr(error, "returncode", None)
+        if isinstance(returncode, int):
+            details["returncode"] = returncode
 
-        try:
-            await self._repository.update_job_progress(
-                job_id=job.id,
-                progress=job.progress,
-                current_step=job.current_step,
-                processed_items=job.processed_items,
-                total_items=job.total_items,
-            )
-        except Exception as e:
-            logger.error("job_progress_persist_failed", job_id=job.id, error=str(e))
+        return details
 
     async def get_job(self, job_id: str) -> Job | None:
         """Get job by ID.
@@ -696,8 +699,19 @@ class JobQueue:
 
             except Exception as e:
                 job.mark_failed(str(e))
+                error_details = self._extract_error_details(e)
+                if error_details:
+                    if job.result is None:
+                        job.result = {}
+                    if isinstance(job.result, dict):
+                        for key, value in error_details.items():
+                            job.result.setdefault(key, value)
                 # Persist failure status
-                await self._update_job_status_db(job, error=str(e))
+                await self._update_job_status_db(
+                    job,
+                    error=str(e),
+                    result=job.result if job.result else None,
+                )
                 # Record failure and trigger alerts
                 await self._metrics.record_failure(job)
                 # Emit failed event

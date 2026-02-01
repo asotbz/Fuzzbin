@@ -88,8 +88,7 @@ export default function AppRoutes() {
       >
         <Route index element={<ActivityOutletWrapper tab="active" />} />
         <Route path="active" element={<ActivityOutletWrapper tab="active" />} />
-        <Route path="completed" element={<ActivityOutletWrapper tab="completed" />} />
-        <Route path="failed" element={<ActivityOutletWrapper tab="failed" />} />
+        <Route path="history" element={<ActivityOutletWrapper tab="history" />} />
       </Route>
 
       <Route

@@ -67,3 +67,19 @@ export function useFailedJobs(
     }
   )
 }
+
+/**
+ * Hook to fetch job history (completed + failed/cancelled/timeout) with pagination.
+ */
+export function useHistoryJobs(
+  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+  options?: UseJobsQueryOptions
+) {
+  return useJobsQuery(
+    { status: 'completed,failed,cancelled,timeout', limit, offset },
+    {
+      staleTime: 30000,
+      ...options,
+    }
+  )
+}
