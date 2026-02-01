@@ -220,10 +220,6 @@ class JobQueue:
         """
         self._repository = repository
         logger.info("job_queue_repository_configured")
-        self.running = False
-        self._lock = asyncio.Lock()
-        self._metrics = MetricsCollector()
-        self._event_bus: "EventBus | None" = None
 
     def set_event_bus(self, event_bus: "EventBus") -> None:
         """Set the event bus for real-time job updates.
