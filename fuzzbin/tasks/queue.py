@@ -723,9 +723,9 @@ class JobQueue:
             finally:
                 self.queue.task_done()
                 # Remove terminal jobs from memory immediately - DB has full record
+                # Note: dict.pop with default is thread-safe in CPython, no lock needed
                 if job.is_terminal:
-                    async with self._lock:
-                        self.jobs.pop(job.id, None)
+                    self.jobs.pop(job.id, None)
 
         logger.info("worker_stopped", worker_id=worker_id)
 
