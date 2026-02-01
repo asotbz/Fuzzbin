@@ -919,8 +919,12 @@ class JobQueue:
         self.scheduler_task = asyncio.create_task(self._scheduler())
         logger.info("job_queue_started", max_workers=self.max_workers)
 
-    async def stop(self) -> None:
-        """Stop the job queue workers and scheduler gracefully."""
+    async def stop(self, timeout: float = 5.0) -> None:
+        """Stop the job queue workers and scheduler gracefully.
+
+        Args:
+            timeout: Maximum seconds to wait for workers to finish (default: 5.0)
+        """
         if not self.running:
             return
 
@@ -931,16 +935,32 @@ class JobQueue:
         if self.scheduler_task:
             self.scheduler_task.cancel()
             try:
-                await self.scheduler_task
-            except asyncio.CancelledError:
+                await asyncio.wait_for(
+                    asyncio.shield(self.scheduler_task),
+                    timeout=timeout,
+                )
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             self.scheduler_task = None
 
-        # Wait for workers to finish current jobs
+        # Cancel workers
         for worker in self.workers:
             worker.cancel()
 
-        await asyncio.gather(*self.workers, return_exceptions=True)
+        # Wait for workers with timeout to prevent hanging
+        if self.workers:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self.workers, return_exceptions=True),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "job_queue_stop_timeout",
+                    message="Workers did not finish within timeout, forcing shutdown",
+                    timeout=timeout,
+                )
+
         self.workers.clear()
         logger.info("job_queue_stopped")
 
