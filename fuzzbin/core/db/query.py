@@ -275,6 +275,21 @@ class VideoQuery:
         self._where_clauses.append("v.year IS NULL")
         return self
 
+    def where_year_not_null(self) -> "VideoQuery":
+        """Filter videos that have a year value."""
+        self._where_clauses.append("v.year IS NOT NULL")
+        return self
+
+    def where_updated_before(self, cutoff_iso: str) -> "VideoQuery":
+        """Filter videos updated before a given ISO datetime string.
+
+        Args:
+            cutoff_iso: ISO format datetime string (e.g. '2024-01-15T00:00:00+00:00')
+        """
+        self._where_clauses.append("(v.updated_at IS NULL OR v.updated_at < ?)")
+        self._params.append(cutoff_iso)
+        return self
+
     def search(self, query: str) -> "VideoQuery":
         """
         Full-text search using FTS5.

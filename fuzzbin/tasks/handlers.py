@@ -1613,6 +1613,9 @@ async def handle_metadata_refresh(job: Job) -> None:
     Refreshes metadata for videos that may be stale or incomplete.
     Used by scheduled tasks to periodically update video information.
 
+    Memory-optimized: uses SQL filtering for updated_at to avoid loading
+    all videos into memory.
+
     Job metadata parameters:
         max_age_days (int, optional): Only refresh videos not updated in N days
             (default: 30)
@@ -1646,38 +1649,17 @@ async def handle_metadata_refresh(job: Job) -> None:
     config = fuzzbin.get_config()
     repository = await fuzzbin.get_repository()
 
-    # Find videos that need refresh (old or incomplete metadata)
+    # Calculate cutoff date for SQL filter
     from datetime import datetime, timedelta, timezone
 
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    cutoff_iso = cutoff_date.isoformat()
 
-    # Query for videos that need refresh
-    query = repository.query()
-    videos = await query.execute()
-
-    # Filter to videos that need refresh
-    videos_to_refresh = []
-    for v in videos:
-        updated_at = v.get("updated_at")
-        if updated_at:
-            if isinstance(updated_at, str):
-                # Parse ISO format
-                try:
-                    updated = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-                except Exception:
-                    videos_to_refresh.append(v)
-                    continue
-            else:
-                updated = updated_at
-
-            if updated < cutoff_date:
-                videos_to_refresh.append(v)
-        else:
-            # No updated_at, needs refresh
-            videos_to_refresh.append(v)
-
-    # Apply limit
-    videos_to_refresh = videos_to_refresh[:limit]
+    # Query for videos that need refresh using SQL filter (memory efficient)
+    # This filters at the database level instead of loading all videos
+    videos_to_refresh = await (
+        repository.query().where_updated_before(cutoff_iso).limit(limit).execute()
+    )
 
     if not videos_to_refresh:
         job.mark_completed(
@@ -1685,13 +1667,14 @@ async def handle_metadata_refresh(job: Job) -> None:
                 "refreshed": 0,
                 "skipped": 0,
                 "failed": 0,
-                "total_checked": len(videos),
+                "total_checked": 0,
                 "message": "No videos need refresh",
             }
         )
         return
 
-    job.update_progress(0, len(videos_to_refresh), "Refreshing metadata...")
+    total_to_check = len(videos_to_refresh)
+    job.update_progress(0, total_to_check, "Refreshing metadata...")
 
     # Track results
     refreshed = 0
@@ -1722,7 +1705,7 @@ async def handle_metadata_refresh(job: Job) -> None:
                 return
 
             video_id = video["id"]
-            job.update_progress(idx, len(videos_to_refresh), f"Refreshing video {video_id}...")
+            job.update_progress(idx, total_to_check, f"Refreshing video {video_id}...")
 
             try:
                 title = video.get("title")
@@ -1792,8 +1775,7 @@ async def handle_metadata_refresh(job: Job) -> None:
             "refreshed": refreshed,
             "skipped": skipped,
             "failed": failed,
-            "total_checked": len(videos),
-            "videos_needing_refresh": len(videos_to_refresh),
+            "total_checked": total_to_check,
         }
     )
 
@@ -3613,13 +3595,16 @@ async def handle_sync_decade_tags(job: Job) -> None:
     This handler processes all videos with a year field and applies, removes,
     or migrates decade tags based on the current configuration.
 
+    Memory-optimized: processes videos in batches to avoid loading entire
+    library into memory at once.
+
     Metadata Parameters:
         mode (str): Operation mode - "apply", "remove", or "migrate"
         old_format (str, optional): Previous format string for migration
         new_format (str, optional): New format string for migration
 
     Progress Updates:
-        Reports progress every 100 videos processed
+        Reports progress every batch processed
 
     Result:
         {
@@ -3630,6 +3615,9 @@ async def handle_sync_decade_tags(job: Job) -> None:
         }
     """
     from fuzzbin.core.db.exporter import NFOExporter
+
+    # Batch size for paginated processing
+    BATCH_SIZE = 100
 
     mode = job.metadata.get("mode", "apply")  # apply, remove, or migrate
     old_format = job.metadata.get("old_format")
@@ -3649,15 +3637,9 @@ async def handle_sync_decade_tags(job: Job) -> None:
     # Get NFO export configuration
     should_export_nfo = config.nfo.write_musicvideo_nfo
 
-    # Get all videos with a year field
-    videos = await repository.list_videos(
-        include_deleted=False,
-        limit=None,  # Get all videos
-    )
-
-    # Filter to videos with year
-    videos_with_year = [v for v in videos if v.get("year")]
-    total_videos = len(videos_with_year)
+    # Get count of videos with year using SQL filter (no data loaded)
+    base_query = repository.query().where_year_not_null()
+    total_videos = await base_query.count()
 
     if total_videos == 0:
         logger.info("sync_decade_tags_no_videos", job_id=job.id)
@@ -3676,78 +3658,101 @@ async def handle_sync_decade_tags(job: Job) -> None:
     tags_added = 0
     tags_removed = 0
     nfos_updated = 0
-    batch_size = 100
+    videos_processed = 0
 
     nfo_exporter = NFOExporter(repository)
 
-    for i, video in enumerate(videos_with_year):
-        # Check for cancellation
+    # Process in batches to reduce memory usage
+    offset = 0
+    while offset < total_videos:
+        # Check for cancellation between batches
         if job.status == JobStatus.CANCELLED:
-            logger.info("sync_decade_tags_cancelled", job_id=job.id, progress=i)
+            logger.info("sync_decade_tags_cancelled", job_id=job.id, progress=videos_processed)
             return
 
-        video_id = video["id"]
-        video_year = video["year"]
+        # Fetch next batch with SQL filter for year IS NOT NULL
+        batch = await (
+            repository.query().where_year_not_null().limit(BATCH_SIZE).offset(offset).execute()
+        )
 
-        try:
-            if mode == "remove":
-                # Remove auto-decade tags
-                removed = await repository.remove_auto_decade_tags(video_id, old_format=old_format)
-                tags_removed += removed
+        if not batch:
+            break  # No more videos
 
-            elif mode == "apply":
-                # Add decade tag with current format
-                tag_id = await repository.auto_add_decade_tag(
-                    video_id, video_year, tag_format=new_format
-                )
-                if tag_id:
-                    tags_added += 1
+        for video in batch:
+            # Check for cancellation periodically
+            if job.status == JobStatus.CANCELLED:
+                logger.info("sync_decade_tags_cancelled", job_id=job.id, progress=videos_processed)
+                return
 
-            elif mode == "migrate":
-                # Remove old format, add new format
-                removed = await repository.remove_auto_decade_tags(video_id, old_format=old_format)
-                tags_removed += removed
+            video_id = video["id"]
+            video_year = video["year"]
 
-                tag_id = await repository.auto_add_decade_tag(
-                    video_id, video_year, tag_format=new_format
-                )
-                if tag_id:
-                    tags_added += 1
-
-            # Update NFO file if tags were changed and auto-export is enabled
-            if should_export_nfo and (tags_added > 0 or tags_removed > 0):
-                try:
-                    _, written = await nfo_exporter.export_video_to_nfo(video_id)
-                    if written:
-                        nfos_updated += 1
-                except Exception as e:
-                    logger.warning(
-                        "sync_decade_tags_nfo_export_failed",
-                        job_id=job.id,
-                        video_id=video_id,
-                        error=str(e),
+            try:
+                if mode == "remove":
+                    # Remove auto-decade tags
+                    removed = await repository.remove_auto_decade_tags(
+                        video_id, old_format=old_format
                     )
+                    tags_removed += removed
 
-        except Exception as e:
-            logger.warning(
-                "sync_decade_tags_video_failed",
-                job_id=job.id,
-                video_id=video_id,
-                error=str(e),
-            )
+                elif mode == "apply":
+                    # Add decade tag with current format
+                    tag_id = await repository.auto_add_decade_tag(
+                        video_id, video_year, tag_format=new_format
+                    )
+                    if tag_id:
+                        tags_added += 1
 
-        # Report progress every batch_size videos
-        if (i + 1) % batch_size == 0 or (i + 1) == total_videos:
-            job.update_progress(
-                i + 1,
-                total_videos,
-                f"Processed {i + 1}/{total_videos} videos",
-            )
+                elif mode == "migrate":
+                    # Remove old format, add new format
+                    removed = await repository.remove_auto_decade_tags(
+                        video_id, old_format=old_format
+                    )
+                    tags_removed += removed
+
+                    tag_id = await repository.auto_add_decade_tag(
+                        video_id, video_year, tag_format=new_format
+                    )
+                    if tag_id:
+                        tags_added += 1
+
+                # Update NFO file if tags were changed and auto-export is enabled
+                if should_export_nfo and (tags_added > 0 or tags_removed > 0):
+                    try:
+                        _, written = await nfo_exporter.export_video_to_nfo(video_id)
+                        if written:
+                            nfos_updated += 1
+                    except Exception as e:
+                        logger.warning(
+                            "sync_decade_tags_nfo_export_failed",
+                            job_id=job.id,
+                            video_id=video_id,
+                            error=str(e),
+                        )
+
+            except Exception as e:
+                logger.warning(
+                    "sync_decade_tags_video_failed",
+                    job_id=job.id,
+                    video_id=video_id,
+                    error=str(e),
+                )
+
+            videos_processed += 1
+
+        # Report progress after each batch
+        job.update_progress(
+            videos_processed,
+            total_videos,
+            f"Processed {videos_processed}/{total_videos} videos",
+        )
+
+        offset += BATCH_SIZE
 
     logger.info(
         "sync_decade_tags_completed",
         job_id=job.id,
-        videos_processed=total_videos,
+        videos_processed=videos_processed,
         tags_added=tags_added,
         tags_removed=tags_removed,
         nfos_updated=nfos_updated,
@@ -3755,7 +3760,7 @@ async def handle_sync_decade_tags(job: Job) -> None:
 
     job.mark_completed(
         {
-            "videos_processed": total_videos,
+            "videos_processed": videos_processed,
             "tags_added": tags_added,
             "tags_removed": tags_removed,
             "nfos_updated": nfos_updated,
@@ -4046,6 +4051,9 @@ async def handle_export_nfo(job: Job) -> None:
     Uses content hash comparison to skip writing files that haven't changed
     when incremental mode is enabled.
 
+    Memory-optimized: processes videos in batches to avoid loading entire
+    library into memory at once.
+
     Job metadata parameters:
         incremental (bool, optional): Skip unchanged files (default: True)
         include_deleted (bool, optional): Include soft-deleted videos (default: False)
@@ -4065,6 +4073,9 @@ async def handle_export_nfo(job: Job) -> None:
     """
     import fuzzbin
     from fuzzbin.core.db.exporter import NFOExporter
+
+    # Batch size for paginated video processing
+    BATCH_SIZE = 100
 
     logger.info("export_nfo_job_starting", job_id=job.id)
     job.update_progress(0, 100, "Initializing NFO export...")
@@ -4086,16 +4097,16 @@ async def handle_export_nfo(job: Job) -> None:
     library_dir = config.library_dir
     path_pattern = config.organizer.path_pattern
 
-    # Get all videos
-    query = repository.query()
+    # Get total count first (lightweight query)
+    base_query = repository.query()
     if include_deleted:
-        query = query.include_deleted()
-    videos = await query.execute()
+        base_query = base_query.include_deleted()
+    total_videos = await base_query.count()
 
-    total_videos = len(videos)
     videos_exported = 0
     videos_skipped = 0
     videos_failed = 0
+    videos_processed = 0
 
     # Track unique artist directories for artist.nfo export
     # Key: artist_dir path string, Value: (artist_id, artist_name)
@@ -4103,69 +4114,90 @@ async def handle_export_nfo(job: Job) -> None:
 
     job.update_progress(0, total_videos + 1, f"Exporting {total_videos} video NFO files...")
 
-    # Phase 1: Export video NFO files
-    for i, video in enumerate(videos):
-        # Check for cancellation periodically
+    # Phase 1: Export video NFO files in batches
+    offset = 0
+    while offset < total_videos:
+        # Check for cancellation between batches
         if job.status == JobStatus.CANCELLED:
             return
 
-        video_id = video["id"]
-        video_path_str = video.get("video_file_path")
-        nfo_path_str = video.get("nfo_file_path")
+        # Fetch next batch
+        batch_query = repository.query()
+        if include_deleted:
+            batch_query = batch_query.include_deleted()
+        batch = await batch_query.limit(BATCH_SIZE).offset(offset).execute()
 
-        # Determine NFO path
-        if nfo_path_str:
-            nfo_path = Path(nfo_path_str)
-        elif video_path_str:
-            nfo_path = Path(video_path_str).with_suffix(".nfo")
-        else:
-            # No path available, skip
-            videos_skipped += 1
-            continue
+        if not batch:
+            break  # No more videos
 
-        try:
-            _, written = await exporter.export_video_to_nfo(
-                video_id, nfo_path, skip_unchanged=incremental
-            )
-            if written:
-                videos_exported += 1
+        for video in batch:
+            # Check for cancellation periodically
+            if job.status == JobStatus.CANCELLED:
+                return
+
+            video_id = video["id"]
+            video_path_str = video.get("video_file_path")
+            nfo_path_str = video.get("nfo_file_path")
+
+            # Determine NFO path
+            if nfo_path_str:
+                nfo_path = Path(nfo_path_str)
+            elif video_path_str:
+                nfo_path = Path(video_path_str).with_suffix(".nfo")
             else:
+                # No path available, skip
                 videos_skipped += 1
-        except Exception as e:
-            videos_failed += 1
-            logger.warning(
-                "export_nfo_video_failed",
-                job_id=job.id,
-                video_id=video_id,
-                error=str(e),
-            )
+                videos_processed += 1
+                continue
 
-        # Collect artist directory info if path pattern includes {artist}
-        if video_path_str and library_dir and "{artist}" in path_pattern:
-            video_path = Path(video_path_str)
-            artist_dir = _get_artist_directory_from_pattern(path_pattern, video_path, library_dir)
-            if artist_dir:
-                artist_dir_str = str(artist_dir)
-                if artist_dir_str not in artist_directories:
-                    # Get primary artist for this video
-                    try:
-                        artists = await repository.get_video_artists(video_id)
-                        primary_artists = [a for a in artists if a["role"] == "primary"]
-                        if primary_artists:
-                            artist_directories[artist_dir_str] = (
-                                primary_artists[0]["id"],
-                                primary_artists[0]["name"],
-                            )
-                    except Exception:
-                        pass  # Skip if artist lookup fails
+            try:
+                _, written = await exporter.export_video_to_nfo(
+                    video_id, nfo_path, skip_unchanged=incremental
+                )
+                if written:
+                    videos_exported += 1
+                else:
+                    videos_skipped += 1
+            except Exception as e:
+                videos_failed += 1
+                logger.warning(
+                    "export_nfo_video_failed",
+                    job_id=job.id,
+                    video_id=video_id,
+                    error=str(e),
+                )
 
-        # Report progress every 100 videos
-        if (i + 1) % 100 == 0 or (i + 1) == total_videos:
-            job.update_progress(
-                i + 1,
-                total_videos + len(artist_directories),
-                f"Exported {videos_exported} video NFOs, skipped {videos_skipped}...",
-            )
+            # Collect artist directory info if path pattern includes {artist}
+            if video_path_str and library_dir and "{artist}" in path_pattern:
+                video_path = Path(video_path_str)
+                artist_dir = _get_artist_directory_from_pattern(
+                    path_pattern, video_path, library_dir
+                )
+                if artist_dir:
+                    artist_dir_str = str(artist_dir)
+                    if artist_dir_str not in artist_directories:
+                        # Get primary artist for this video
+                        try:
+                            artists = await repository.get_video_artists(video_id)
+                            primary_artists = [a for a in artists if a["role"] == "primary"]
+                            if primary_artists:
+                                artist_directories[artist_dir_str] = (
+                                    primary_artists[0]["id"],
+                                    primary_artists[0]["name"],
+                                )
+                        except Exception:
+                            pass  # Skip if artist lookup fails
+
+            videos_processed += 1
+
+        # Report progress after each batch
+        job.update_progress(
+            videos_processed,
+            total_videos + len(artist_directories),
+            f"Exported {videos_exported} video NFOs, skipped {videos_skipped}...",
+        )
+
+        offset += BATCH_SIZE
 
     # Phase 2: Export artist NFO files
     artists_exported = 0
