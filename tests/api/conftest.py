@@ -1,7 +1,7 @@
 """Shared pytest fixtures for API tests."""
 
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
@@ -120,10 +120,10 @@ async def test_repository(tmp_path: Path) -> AsyncGenerator[VideoRepository, Non
     await repo.close()
 
 
-@pytest_asyncio.fixture
-async def test_app(
+@pytest.fixture
+def test_app(
     test_repository: VideoRepository, api_settings: APISettings, test_config: Config
-) -> AsyncGenerator[TestClient, None]:
+) -> Generator[TestClient, None, None]:
     """
     Provide a FastAPI TestClient with test database and job queue.
 
@@ -133,6 +133,10 @@ async def test_app(
     3. Initializes job queue via app lifespan (auto-starts workers)
     4. Returns a TestClient for making HTTP requests
     5. Cleans up job queue on teardown
+
+    NOTE: This is a sync fixture because TestClient is sync and manages its own
+    event loop for running the async lifespan. Making this async causes event
+    loop conflicts during teardown in pytest-asyncio.
     """
     from fuzzbin.tasks import reset_job_queue
 
