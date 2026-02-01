@@ -6,6 +6,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 import fuzzbin
@@ -28,6 +29,10 @@ def _wait_for_job_completion(client: TestClient, job_id: str, timeout_seconds: f
 
 
 class TestAddImportSingle:
+    @pytest.fixture(autouse=True)
+    def _enable_job_workers(self, monkeypatch):
+        monkeypatch.setenv("FUZZBIN_TEST_JOB_WORKERS", "1")
+
     def test_add_import_imvdb_creates_video(self, test_app: TestClient, monkeypatch):
         config = fuzzbin.get_config()
         config.apis = config.apis or {}
@@ -80,6 +85,7 @@ class TestAddImportSingle:
                 "id": "123",
                 "initial_status": "discovered",
                 "skip_existing": True,
+                "auto_download": False,
             },
         )
         assert resp.status_code == 202
@@ -135,6 +141,7 @@ class TestAddImportSingle:
                 "id": "dQw4w9WgXcQ",
                 "initial_status": "discovered",
                 "skip_existing": True,
+                "auto_download": False,
             },
         )
         assert resp.status_code == 202

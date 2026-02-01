@@ -94,12 +94,18 @@ def test_config_dir(test_config: Config) -> Path:
     return test_config.config_dir
 
 
-@pytest_asyncio.fixture
-async def test_repository(tmp_path: Path) -> AsyncGenerator[VideoRepository, None]:
+@pytest.fixture
+def test_repository(tmp_path: Path) -> Generator[VideoRepository, None, None]:
     """Provide a test database repository with migrations applied.
 
     Uses direct VideoRepository instantiation with temp database path.
+
+    NOTE: This is a sync fixture that uses asyncio.run() for async operations.
+    This avoids event loop conflicts with TestClient in Python 3.14+, where
+    asyncio.get_event_loop() no longer implicitly creates a loop, and aiosqlite's
+    background thread can fail when trying to callback to a closed loop.
     """
+    import asyncio
     from fuzzbin.core.db.migrator import Migrator
 
     db_path = tmp_path / "test_api.db"
@@ -110,19 +116,26 @@ async def test_repository(tmp_path: Path) -> AsyncGenerator[VideoRepository, Non
         enable_wal=False,  # Disable WAL mode in tests to avoid lock issues
         timeout=30,
     )
-    await repo.connect()
 
-    # Run migrations
-    migrator = Migrator(db_path, migrations_dir, enable_wal=False)
-    await migrator.run_migrations(connection=repo._connection)
+    async def setup():
+        await repo.connect()
+        migrator = Migrator(db_path, migrations_dir, enable_wal=False)
+        await migrator.run_migrations(connection=repo._connection)
+
+    asyncio.run(setup())
 
     yield repo
-    await repo.close()
+
+    # Close in a fresh event loop to ensure clean shutdown
+    asyncio.run(repo.close())
 
 
 @pytest.fixture
 def test_app(
-    test_repository: VideoRepository, api_settings: APISettings, test_config: Config
+    test_repository: VideoRepository,
+    api_settings: APISettings,
+    test_config: Config,
+    monkeypatch,
 ) -> Generator[TestClient, None, None]:
     """
     Provide a FastAPI TestClient with test database and job queue.
@@ -138,7 +151,24 @@ def test_app(
     event loop for running the async lifespan. Making this async causes event
     loop conflicts during teardown in pytest-asyncio.
     """
-    from fuzzbin.tasks import reset_job_queue
+    import os
+
+    from fuzzbin.tasks import init_job_queue as _init_job_queue, reset_job_queue
+
+    # Prevent background job execution in API tests to avoid hangs from long-running jobs
+    # (e.g., yt-dlp calls) and loop shutdown race conditions.
+    def _init_job_queue_for_tests(max_workers: int = 2):
+        workers_env = os.getenv("FUZZBIN_TEST_JOB_WORKERS")
+        if workers_env is None:
+            workers = 0
+        else:
+            try:
+                workers = max(0, int(workers_env))
+            except ValueError:
+                workers = 0
+        return _init_job_queue(max_workers=workers)
+
+    monkeypatch.setattr("fuzzbin.web.main.init_job_queue", _init_job_queue_for_tests)
 
     # Override the global config before creating the app
     fuzzbin._config = test_config
