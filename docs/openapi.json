@@ -3,7 +3,7 @@
   "info": {
     "title": "Fuzzbin API",
     "description": "Music video library management API.\nProvides CRUD operations for videos, artists, collections, and tags,\nwith full-text search and filtering capabilities.\n\n## Authentication\n\nWhen authentication is enabled (`FUZZBIN_API_AUTH_ENABLED=true`), protected endpoints require\na Bearer token in the `Authorization` header:\n\n```\nAuthorization: Bearer <your-jwt-token>\n```\n\nObtain a token via `POST /auth/login` with username/password credentials.\n\n## WebSocket API\n\n### Real-time Job Progress: `/ws/jobs/{job_id}`\n\nConnect to receive live progress updates for background jobs.\n\n**Connection:**\n```\nws://localhost:8000/ws/jobs/{job_id}\n```\n\n**Message Format (JSON):**\n```json\n{\n  \"job_id\": \"uuid-string\",\n  \"status\": \"running\",\n  \"progress\": 0.45,\n  \"message\": \"Processing file 45 of 100\",\n  \"result\": null\n}\n```\n\n**Fields:**\n- `job_id`: Job identifier\n- `status`: One of `pending`, `running`, `completed`, `failed`, `cancelled`\n- `progress`: Float 0.0-1.0 indicating completion percentage\n- `message`: Human-readable status message\n- `result`: Job result data (populated on completion)\n\n**Close Codes:**\n- `1008` (Policy Violation): Invalid or unknown job ID\n- `1011` (Internal Error): Server error during progress streaming\n",
-    "version": "0.2.1"
+    "version": "0.3.1"
   },
   "paths": {
     "/health": {
@@ -2148,7 +2148,7 @@
           "Videos"
         ],
         "summary": "Get jobs for video",
-        "description": "Get active and pending jobs associated with a specific video. Returns jobs where metadata.video_id matches the requested video.",
+        "description": "Get active and pending jobs associated with a specific video. Returns jobs where video_id matches the requested video.",
         "operationId": "get_video_jobs_videos__video_id__jobs_get",
         "security": [
           {
@@ -16028,11 +16028,6 @@
             "title": "Success Rate",
             "description": "Ratio of completed to terminal jobs (0.0-1.0)"
           },
-          "avg_duration_seconds": {
-            "type": "number",
-            "title": "Avg Duration Seconds",
-            "description": "Average duration of completed jobs in seconds"
-          },
           "queue_depth": {
             "type": "integer",
             "title": "Queue Depth",
@@ -16096,7 +16091,6 @@
           "cancelled_jobs",
           "timeout_jobs",
           "success_rate",
-          "avg_duration_seconds",
           "queue_depth",
           "by_type",
           "oldest_pending_age_seconds",
@@ -16104,7 +16098,7 @@
           "last_completion_at"
         ],
         "title": "JobMetricsResponse",
-        "description": "Overall job queue metrics response.\n\nProvides monitoring data for the job queue including:\n- Job counts by status\n- Success rate and average duration\n- Queue depth\n- Per-type breakdowns"
+        "description": "Overall job queue metrics response.\n\nProvides monitoring data for the job queue including:\n- Job counts by status\n- Success rate\n- Queue depth\n- Per-type breakdowns"
       },
       "JobResponse": {
         "properties": {
@@ -16312,6 +16306,7 @@
           "import_spotify_batch",
           "import_imvdb_artist",
           "import_add_single",
+          "import_pipeline",
           "import_download",
           "import_organize",
           "import_nfo_generate",
@@ -16360,14 +16355,6 @@
           "success_rate": {
             "type": "number",
             "title": "Success Rate"
-          },
-          "avg_duration_seconds": {
-            "type": "number",
-            "title": "Avg Duration Seconds"
-          },
-          "total_duration_seconds": {
-            "type": "number",
-            "title": "Total Duration Seconds"
           }
         },
         "type": "object",
@@ -16378,9 +16365,7 @@
           "failed",
           "cancelled",
           "timeout",
-          "success_rate",
-          "avg_duration_seconds",
-          "total_duration_seconds"
+          "success_rate"
         ],
         "title": "JobTypeMetricsResponse",
         "description": "Metrics for a specific job type."

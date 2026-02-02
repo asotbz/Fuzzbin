@@ -484,7 +484,7 @@ export interface paths {
         };
         /**
          * Get jobs for video
-         * @description Get active and pending jobs associated with a specific video. Returns jobs where metadata.video_id matches the requested video.
+         * @description Get active and pending jobs associated with a specific video. Returns jobs where video_id matches the requested video.
          */
         get: operations["get_video_jobs_videos__video_id__jobs_get"];
         put?: never;
@@ -6055,7 +6055,7 @@ export interface components {
          *
          *     Provides monitoring data for the job queue including:
          *     - Job counts by status
-         *     - Success rate and average duration
+         *     - Success rate
          *     - Queue depth
          *     - Per-type breakdowns
          */
@@ -6105,11 +6105,6 @@ export interface components {
              * @description Ratio of completed to terminal jobs (0.0-1.0)
              */
             success_rate: number;
-            /**
-             * Avg Duration Seconds
-             * @description Average duration of completed jobs in seconds
-             */
-            avg_duration_seconds: number;
             /**
              * Queue Depth
              * @description Current queue depth (pending jobs)
@@ -6231,7 +6226,7 @@ export interface components {
          * @description Job type enumeration.
          * @enum {string}
          */
-        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "cleanup_job_history" | "sync_decade_tags" | "export_nfo";
+        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_pipeline" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "cleanup_job_history" | "sync_decade_tags" | "export_nfo";
         /**
          * JobTypeMetricsResponse
          * @description Metrics for a specific job type.
@@ -6250,10 +6245,6 @@ export interface components {
             timeout: number;
             /** Success Rate */
             success_rate: number;
-            /** Avg Duration Seconds */
-            avg_duration_seconds: number;
-            /** Total Duration Seconds */
-            total_duration_seconds: number;
         };
         /**
          * LibraryIssueResponse
