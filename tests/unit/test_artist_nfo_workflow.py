@@ -385,11 +385,11 @@ class TestArtistNfoWorkflow:
         # Verify temp file was cleaned up
         assert not temp_file.exists()
 
-        # Verify video status was updated to download_failed
+        # Verify video status was updated to organize_failed
         mock_repository.update_video.assert_called()
         call_args = mock_repository.update_video.call_args
         assert call_args[0][0] == 1  # video_id
-        assert call_args[1]["status"] == "download_failed"
+        assert call_args[1]["status"] == "organize_failed"
 
     async def test_multiple_videos_same_artist(self, mock_repository, mock_config, tmp_path):
         """Test organizing multiple videos for the same artist."""
