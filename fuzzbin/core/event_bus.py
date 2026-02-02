@@ -19,6 +19,7 @@ Example:
 """
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Coroutine
@@ -32,6 +33,9 @@ logger = structlog.get_logger(__name__)
 
 # Debounce interval for progress updates (in seconds)
 PROGRESS_DEBOUNCE_INTERVAL = 0.25  # 250ms
+
+# Memory profiling flag - enabled by FUZZBIN_PROFILE_MEMORY=1 env var
+_PROFILE_MEMORY = os.environ.get("FUZZBIN_PROFILE_MEMORY", "").lower() in ("1", "true", "yes")
 
 
 @dataclass
@@ -69,6 +73,22 @@ class EventBus:
         self._lock = asyncio.Lock()
         self._broadcast_fn: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None
         self._started = False
+        # Memory profiling: track jobs processed for periodic logging
+        self._jobs_completed_count = 0
+
+    def _log_pending_progress_size(self, context: str) -> None:
+        """Log the size of pending progress dict when profiling is enabled.
+
+        Args:
+            context: Description of when this log is being made
+        """
+        if _PROFILE_MEMORY:
+            logger.info(
+                "memory_profile_pending_progress",
+                context=context,
+                pending_progress_count=len(self._pending_progress),
+                jobs_completed_count=self._jobs_completed_count,
+            )
 
     def set_broadcast_function(
         self,
@@ -249,6 +269,11 @@ class EventBus:
         await self._broadcast(event)
         logger.debug("event_bus_job_completed", job_id=job.id)
 
+        # Memory profiling: log pending progress size every 10 jobs
+        self._jobs_completed_count += 1
+        if _PROFILE_MEMORY and self._jobs_completed_count % 10 == 0:
+            self._log_pending_progress_size("periodic_after_10_jobs")
+
     async def emit_job_failed(
         self,
         job: "Job",
@@ -325,17 +350,28 @@ class EventBus:
         Args:
             job_id: Job ID to flush
         """
+        had_pending = False
         async with self._lock:
             pending = self._pending_progress.get(job_id)
-            if pending and pending.flush_task:
-                pending.flush_task.cancel()
-                try:
-                    await pending.flush_task
-                except asyncio.CancelledError:
-                    pass
+            if pending:
+                had_pending = True
+                if pending.flush_task:
+                    pending.flush_task.cancel()
+                    try:
+                        await pending.flush_task
+                    except asyncio.CancelledError:
+                        pass
 
         # Flush the progress (will pop from dict)
         await self._flush_progress(job_id)
+
+        # Memory profiling: log when cleanup happens
+        if _PROFILE_MEMORY and had_pending:
+            logger.debug(
+                "memory_profile_progress_cleanup",
+                job_id=job_id,
+                pending_progress_remaining=len(self._pending_progress),
+            )
 
     async def emit_video_updated(
         self,

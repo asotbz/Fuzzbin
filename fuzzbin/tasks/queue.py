@@ -2,6 +2,8 @@
 
 import asyncio
 import heapq
+import os
+import tracemalloc
 from collections.abc import Callable, Coroutine
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -16,6 +18,9 @@ if TYPE_CHECKING:
     from fuzzbin.core.event_bus import EventBus
 
 logger = structlog.get_logger(__name__)
+
+# Memory profiling flag - enabled by FUZZBIN_PROFILE_MEMORY=1 env var
+_PROFILE_MEMORY = os.environ.get("FUZZBIN_PROFILE_MEMORY", "").lower() in ("1", "true", "yes")
 
 
 def parse_cron(cron_expr: str, from_time: datetime) -> datetime | None:
@@ -148,6 +153,77 @@ class PriorityJobQueue:
     def qsize(self) -> int:
         """Return approximate queue size."""
         return len(self._heap)
+
+
+# =============================================================================
+# Memory Profiling Helpers (enabled by FUZZBIN_PROFILE_MEMORY=1)
+# =============================================================================
+
+
+def _get_memory_rss_mb() -> float:
+    """Get current process memory RSS in MB using psutil."""
+    try:
+        import psutil
+
+        process = psutil.Process()
+        return process.memory_info().rss / (1024 * 1024)
+    except ImportError:
+        return 0.0
+
+
+def _start_tracemalloc_if_enabled() -> None:
+    """Start tracemalloc if profiling is enabled and not already started."""
+    if _PROFILE_MEMORY and not tracemalloc.is_tracing():
+        tracemalloc.start(25)  # Keep 25 frames for detailed traces
+        logger.info("memory_profiling_enabled", tracemalloc_started=True)
+
+
+def _take_tracemalloc_snapshot() -> tracemalloc.Snapshot | None:
+    """Take a tracemalloc snapshot if profiling is enabled."""
+    if _PROFILE_MEMORY and tracemalloc.is_tracing():
+        return tracemalloc.take_snapshot()
+    return None
+
+
+def _log_memory_diff(
+    snapshot_before: tracemalloc.Snapshot | None,
+    snapshot_after: tracemalloc.Snapshot | None,
+    job_id: str,
+    job_type: str,
+    rss_before: float,
+    rss_after: float,
+) -> None:
+    """Log memory difference between two snapshots."""
+    if not _PROFILE_MEMORY:
+        return
+
+    rss_delta = rss_after - rss_before
+
+    log_data: dict[str, Any] = {
+        "job_id": job_id,
+        "job_type": job_type,
+        "rss_before_mb": round(rss_before, 2),
+        "rss_after_mb": round(rss_after, 2),
+        "rss_delta_mb": round(rss_delta, 2),
+    }
+
+    if snapshot_before and snapshot_after:
+        # Compare snapshots and get top allocations
+        top_stats = snapshot_after.compare_to(snapshot_before, "lineno")
+        top_allocations = []
+        for stat in top_stats[:5]:  # Top 5 allocation sites
+            if stat.size_diff > 0:  # Only show increases
+                top_allocations.append(
+                    {
+                        "file": str(stat.traceback),
+                        "size_diff_kb": round(stat.size_diff / 1024, 2),
+                        "count_diff": stat.count_diff,
+                    }
+                )
+        if top_allocations:
+            log_data["top_allocations"] = top_allocations
+
+    logger.info("memory_profile_job_completed", **log_data)
 
 
 class JobQueue:
@@ -608,6 +684,9 @@ class JobQueue:
         """
         logger.info("worker_started", worker_id=worker_id)
 
+        # Initialize tracemalloc if memory profiling is enabled
+        _start_tracemalloc_if_enabled()
+
         while self.running:
             job = await self.queue.get(timeout=1.0)
             if job is None:
@@ -620,6 +699,10 @@ class JobQueue:
                 if self._event_bus:
                     await self._event_bus.emit_job_cancelled(job)
                 continue
+
+            # Take memory snapshot before job execution (if profiling enabled)
+            rss_before = _get_memory_rss_mb() if _PROFILE_MEMORY else 0.0
+            snapshot_before = _take_tracemalloc_snapshot()
 
             job.mark_running()
             # Persist running status
@@ -726,6 +809,19 @@ class JobQueue:
                 # Note: dict.pop with default is thread-safe in CPython, no lock needed
                 if job.is_terminal:
                     self.jobs.pop(job.id, None)
+
+                # Log memory profile after job completion (if profiling enabled)
+                if _PROFILE_MEMORY:
+                    snapshot_after = _take_tracemalloc_snapshot()
+                    rss_after = _get_memory_rss_mb()
+                    _log_memory_diff(
+                        snapshot_before,
+                        snapshot_after,
+                        job.id,
+                        job.type.value,
+                        rss_before,
+                        rss_after,
+                    )
 
         logger.info("worker_stopped", worker_id=worker_id)
 

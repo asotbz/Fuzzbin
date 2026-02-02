@@ -63,7 +63,6 @@ async def _download_video_by_id(
     """
     from fuzzbin.clients.ytdlp_client import YTDLPClient
     from fuzzbin.common.config import YTDLPConfig
-    from fuzzbin.core.exceptions import YTDLPError
     from fuzzbin.parsers.ytdlp_models import CancellationToken, DownloadHooks, DownloadProgress
 
     logger.info(
@@ -222,6 +221,8 @@ async def _post_process_video(
     temp_path: Path,
     job: Job,
     repository: Any,
+    file_manager: Any | None = None,
+    video_service: Any | None = None,
 ) -> Path:
     """Run post-processing: FFProbe analysis and thumbnail generation.
 
@@ -230,6 +231,8 @@ async def _post_process_video(
         temp_path: Path to downloaded video file
         job: Job instance for progress updates
         repository: VideoRepository for database operations
+        file_manager: Optional shared FileManager instance (created if not provided)
+        video_service: Optional shared VideoService instance (created if not provided)
 
     Returns:
         The temp_path (unchanged, passed through for chaining)
@@ -260,18 +263,19 @@ async def _post_process_video(
     # Update video status
     await repository.update_video(video_id, status="processing")
 
-    # Create file manager
-    library_dir = config.library_dir
-    if library_dir is None:
-        from fuzzbin.common.config import _get_default_library_dir
+    # Use provided file_manager or create one
+    if file_manager is None:
+        library_dir = config.library_dir
+        if library_dir is None:
+            from fuzzbin.common.config import _get_default_library_dir
 
-        library_dir = _get_default_library_dir()
+            library_dir = _get_default_library_dir()
 
-    file_manager = FileManager.from_config(
-        config.trash,
-        library_dir=library_dir,
-        config_dir=config.config_dir or Path.cwd() / "config",
-    )
+        file_manager = FileManager.from_config(
+            config.trash,
+            library_dir=library_dir,
+            config_dir=config.config_dir or Path.cwd() / "config",
+        )
 
     media_info: dict[str, Any] = {}
     thumbnail_path: Path | None = None
@@ -314,7 +318,9 @@ async def _post_process_video(
 
     # Generate thumbnail
     try:
-        video_service = VideoService(repository=repository, file_manager=file_manager)
+        # Use provided video_service or create one
+        if video_service is None:
+            video_service = VideoService(repository=repository, file_manager=file_manager)
         duration = media_info.get("duration")
 
         thumbnail_path = await video_service.generate_prioritized_thumbnail(
@@ -369,6 +375,7 @@ async def _organize_video(
     temp_path: Path,
     job: Job,
     repository: Any,
+    nfo_exporter: Any | None = None,
 ) -> Path:
     """Move video from temp location to organized library path.
 
@@ -377,6 +384,7 @@ async def _organize_video(
         temp_path: Path to temp video file
         job: Job instance for progress updates
         repository: VideoRepository for database operations
+        nfo_exporter: Optional shared NFOExporter instance (created if not provided)
 
     Returns:
         Path to final organized video file
@@ -474,15 +482,16 @@ async def _organize_video(
             from fuzzbin.core.db.exporter import NFOExporter
             from fuzzbin.parsers.artist_parser import ArtistNFOParser
 
+            # Use provided nfo_exporter or create one
+            exporter = nfo_exporter if nfo_exporter is not None else NFOExporter(repository)
+
             if artist_nfo_path.exists():
                 artist_parser = ArtistNFOParser()
                 existing_nfo = artist_parser.parse_file(artist_nfo_path)
 
                 if existing_nfo.name != primary_artist_name:
-                    exporter = NFOExporter(repository)
                     await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
             else:
-                exporter = NFOExporter(repository)
                 await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
         except Exception as e:
             logger.error(
@@ -526,6 +535,7 @@ async def _generate_nfo(
     video_id: int,
     job: Job,
     repository: Any,
+    nfo_exporter: Any | None = None,
 ) -> Path | None:
     """Generate NFO file for video if enabled.
 
@@ -533,6 +543,7 @@ async def _generate_nfo(
         video_id: Video database ID
         job: Job instance for progress updates
         repository: VideoRepository for database operations
+        nfo_exporter: Optional shared NFOExporter instance (created if not provided)
 
     Returns:
         Path to generated NFO file, or None if NFO generation disabled
@@ -549,7 +560,8 @@ async def _generate_nfo(
     nfo_path = None
 
     if config.nfo.write_musicvideo_nfo:
-        exporter = NFOExporter(repository)
+        # Use provided nfo_exporter or create one
+        exporter = nfo_exporter if nfo_exporter is not None else NFOExporter(repository)
         nfo_path, _ = await exporter.export_video_to_nfo(video_id)
 
         logger.info(
@@ -962,12 +974,13 @@ async def handle_spotify_batch_import(job: Job) -> None:
 
     job.update_progress(0, len(tracks), "Starting import...")
 
-    # Get repository
+    # Get repository and job queue (for immediate pipeline job submission)
     repository = await fuzzbin.get_repository()
+    queue = get_job_queue() if auto_download else None
 
     # Import each track
     imported_count = 0
-    download_jobs: list[tuple[Job, int]] = []
+    download_jobs_submitted = 0
 
     for idx, track_data in enumerate(tracks):
         if job.status == JobStatus.CANCELLED:
@@ -1155,7 +1168,8 @@ async def handle_spotify_batch_import(job: Job) -> None:
 
             # Queue pipeline job if auto_download enabled and YouTube ID available
             # Pipeline runs: download → post-process → organize → NFO
-            if auto_download and youtube_id:
+            # Submit immediately to avoid accumulating job objects in memory
+            if auto_download and youtube_id and queue:
                 pipeline_job = Job(
                     type=JobType.IMPORT_PIPELINE,
                     priority=JobPriority.NORMAL,
@@ -1163,7 +1177,8 @@ async def handle_spotify_batch_import(job: Job) -> None:
                         "video_id": video_id,
                     },
                 )
-                download_jobs.append((pipeline_job, video_id))
+                await queue.submit(pipeline_job, video_id=video_id)
+                download_jobs_submitted += 1
 
         except Exception as e:
             logger.error(
@@ -1175,22 +1190,19 @@ async def handle_spotify_batch_import(job: Job) -> None:
             )
             # Continue with next track on error
 
-    # Submit download jobs if any
-    if download_jobs:
-        queue = get_job_queue()
-        for dj, vid in download_jobs:
-            await queue.submit(dj, video_id=vid)
+    # Log download jobs queued (already submitted incrementally)
+    if download_jobs_submitted > 0:
         logger.info(
             "spotify_batch_import_downloads_queued",
             job_id=job.id,
-            download_job_count=len(download_jobs),
+            download_job_count=download_jobs_submitted,
         )
 
     # Mark completed
     job.mark_completed(
         {
             "imported": imported_count,
-            "download_jobs": len(download_jobs),
+            "download_jobs": download_jobs_submitted,
             "total_tracks": len(tracks),
         }
     )
@@ -1200,7 +1212,7 @@ async def handle_spotify_batch_import(job: Job) -> None:
         job_id=job.id,
         playlist_id=playlist_id,
         imported=imported_count,
-        download_jobs=len(download_jobs),
+        download_jobs=download_jobs_submitted,
     )
 
 
@@ -3686,6 +3698,10 @@ async def handle_import_pipeline(job: Job) -> None:
     The download step uses _download_semaphore internally, so only
     downloads are throttled while other steps run freely.
 
+    Creates shared FileManager, VideoService, and NFOExporter instances
+    that are reused across all pipeline steps to reduce object allocation
+    overhead and improve memory efficiency during batch operations.
+
     Job metadata parameters:
         video_id (int, required): Video database ID
 
@@ -3706,6 +3722,10 @@ async def handle_import_pipeline(job: Job) -> None:
     Raises:
         ValueError: If required parameters missing or video not found
     """
+    from fuzzbin.core.db.exporter import NFOExporter
+    from fuzzbin.core.file_manager import FileManager
+    from fuzzbin.services.video_service import VideoService
+
     video_id = job.metadata.get("video_id")
 
     if not video_id:
@@ -3718,6 +3738,23 @@ async def handle_import_pipeline(job: Job) -> None:
     )
 
     repository = await fuzzbin.get_repository()
+    config = fuzzbin.get_config()
+
+    # Create shared service instances for the entire pipeline
+    # This reduces object allocation overhead during batch operations
+    library_dir = config.library_dir
+    if library_dir is None:
+        from fuzzbin.common.config import _get_default_library_dir
+
+        library_dir = _get_default_library_dir()
+
+    file_manager = FileManager.from_config(
+        config.trash,
+        library_dir=library_dir,
+        config_dir=config.config_dir or Path.cwd() / "config",
+    )
+    video_service = VideoService(repository=repository, file_manager=file_manager)
+    nfo_exporter = NFOExporter(repository)
 
     # Initialize progress
     job.update_progress(0, 100, "Initializing pipeline...")
@@ -3769,6 +3806,8 @@ async def handle_import_pipeline(job: Job) -> None:
             temp_path=temp_path,
             job=job,
             repository=repository,
+            file_manager=file_manager,
+            video_service=video_service,
         )
 
         # Step 3: Organize (50-75%)
@@ -3781,6 +3820,7 @@ async def handle_import_pipeline(job: Job) -> None:
             temp_path=temp_path,
             job=job,
             repository=repository,
+            nfo_exporter=nfo_exporter,
         )
 
         # Step 4: Generate NFO (75-100%)
@@ -3792,6 +3832,7 @@ async def handle_import_pipeline(job: Job) -> None:
             video_id=video_id,
             job=job,
             repository=repository,
+            nfo_exporter=nfo_exporter,
         )
 
         # Complete
@@ -4245,12 +4286,13 @@ async def handle_imvdb_artist_import(job: Job) -> None:
 
     job.update_progress(0, len(videos), f"Starting import for {entity_name}...")
 
-    # Get repository
+    # Get repository and job queue (for immediate pipeline job submission)
     repository = await fuzzbin.get_repository()
+    queue = get_job_queue() if auto_download else None
 
     # Import each video
     imported_count = 0
-    download_jobs: list[tuple[Job, int]] = []
+    download_jobs_submitted = 0
 
     for idx, video_data in enumerate(videos):
         if job.status == JobStatus.CANCELLED:
@@ -4420,7 +4462,8 @@ async def handle_imvdb_artist_import(job: Job) -> None:
 
             # Queue pipeline job if auto_download enabled and YouTube ID available
             # Pipeline runs: download → post-process → organize → NFO
-            if auto_download and youtube_id:
+            # Submit immediately to avoid accumulating job objects in memory
+            if auto_download and youtube_id and queue:
                 pipeline_job = Job(
                     type=JobType.IMPORT_PIPELINE,
                     priority=JobPriority.NORMAL,
@@ -4428,7 +4471,8 @@ async def handle_imvdb_artist_import(job: Job) -> None:
                         "video_id": video_id,
                     },
                 )
-                download_jobs.append((pipeline_job, video_id))
+                await queue.submit(pipeline_job, video_id=video_id)
+                download_jobs_submitted += 1
 
         except Exception as e:
             logger.error(
@@ -4440,22 +4484,19 @@ async def handle_imvdb_artist_import(job: Job) -> None:
             )
             # Continue with next video on error
 
-    # Submit download jobs if any
-    if download_jobs:
-        queue = get_job_queue()
-        for dj, vid in download_jobs:
-            await queue.submit(dj, video_id=vid)
+    # Log download jobs queued (already submitted incrementally)
+    if download_jobs_submitted > 0:
         logger.info(
             "imvdb_artist_import_downloads_queued",
             job_id=job.id,
-            download_job_count=len(download_jobs),
+            download_job_count=download_jobs_submitted,
         )
 
     # Mark completed
     job.mark_completed(
         {
             "imported": imported_count,
-            "download_jobs": len(download_jobs),
+            "download_jobs": download_jobs_submitted,
             "total_videos": len(videos),
         }
     )
@@ -4466,7 +4507,7 @@ async def handle_imvdb_artist_import(job: Job) -> None:
         entity_id=entity_id,
         entity_name=entity_name,
         imported=imported_count,
-        download_jobs=len(download_jobs),
+        download_jobs=download_jobs_submitted,
     )
 
 
