@@ -845,3 +845,23 @@ class TestFailedJobAlerts:
         # Queue should still work - verify via last_failure_at timestamp
         metrics = queue.get_metrics()
         assert metrics.last_failure_at is not None  # Failure was recorded
+
+
+class TestImportPipelineJobType:
+    """Tests for the IMPORT_PIPELINE job type."""
+
+    def test_import_pipeline_job_type_exists(self):
+        """Test that IMPORT_PIPELINE is a valid job type."""
+        assert JobType.IMPORT_PIPELINE == "import_pipeline"
+        assert hasattr(JobType, "IMPORT_PIPELINE")
+
+    def test_import_pipeline_job_creation(self):
+        """Test creating an IMPORT_PIPELINE job."""
+        job = Job(
+            type=JobType.IMPORT_PIPELINE,
+            metadata={"video_id": 42},
+        )
+
+        assert job.type == JobType.IMPORT_PIPELINE
+        assert job.metadata["video_id"] == 42
+        assert job.status == JobStatus.PENDING

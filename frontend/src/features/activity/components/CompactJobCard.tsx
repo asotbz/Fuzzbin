@@ -12,6 +12,7 @@ interface CompactJobCardProps {
 
 const JOB_TYPE_LABELS: Record<string, string> = {
   'download_youtube': 'Download',
+  'import_pipeline': 'Pipeline',
   'import_spotify_batch': 'Spotify Import',
   'import_nfo': 'NFO Import',
   'import_add_single': 'Single Import',

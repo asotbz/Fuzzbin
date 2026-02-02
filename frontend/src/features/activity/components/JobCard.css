@@ -139,6 +139,87 @@
   line-height: 1.4;
 }
 
+/* Pipeline steps for import_pipeline */
+.jobCardPipeline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+}
+
+.jobCardPipeline .pipelineStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  position: relative;
+}
+
+.jobCardPipeline .pipelineStep::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 100%;
+  width: var(--space-1);
+  height: 2px;
+  background: var(--bg-surface-light);
+}
+
+.jobCardPipeline .pipelineStep:last-child::after {
+  display: none;
+}
+
+.jobCardPipeline .pipelineStepDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-surface-light);
+  border: 2px solid var(--bg-surface);
+}
+
+.jobCardPipeline .pipelineStepPending .pipelineStepDot {
+  background: var(--text-tertiary);
+}
+
+.jobCardPipeline .pipelineStepRunning .pipelineStepDot {
+  background: var(--channel-manage);
+  animation: pulse 1.5s infinite;
+}
+
+.jobCardPipeline .pipelineStepCompleted .pipelineStepDot {
+  background: var(--channel-library);
+}
+
+.jobCardPipeline .pipelineStepFailed .pipelineStepDot {
+  background: var(--error);
+}
+
+.jobCardPipeline .pipelineStepLabel {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.jobCardPipeline .pipelineStepRunning .pipelineStepLabel {
+  color: var(--channel-manage);
+  font-weight: 600;
+}
+
+.jobCardPipeline .pipelineStepCompleted .pipelineStepLabel {
+  color: var(--channel-library);
+}
+
+.jobCardPipeline .pipelineStepFailed .pipelineStepLabel {
+  color: var(--error);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* Progress Bar */
 .jobProgress {
   margin-bottom: 1rem;

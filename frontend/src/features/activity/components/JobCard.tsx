@@ -11,8 +11,11 @@ interface JobCardProps {
   onClear?: (jobId: string) => void
 }
 
+type PipelineStepStatus = 'pending' | 'running' | 'completed' | 'failed'
+
 const JOB_TYPE_LABELS: Record<string, string> = {
   'download_youtube': 'YouTube Download',
+  'import_pipeline': 'Import Pipeline',
   'import_spotify_batch': 'Spotify Batch Import',
   'import_nfo': 'NFO Import',
   'import_add_single': 'Single Video Import',
@@ -26,6 +29,8 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'backup': 'System Backup',
   'video_post_process': 'Video Processing',
 }
+
+const PIPELINE_STEPS = ['Download', 'Process', 'Organize', 'Save NFO'] as const
 
 function formatJobType(jobType: string): string {
   return JOB_TYPE_LABELS[jobType] || jobType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -76,6 +81,25 @@ function getMetadataNumber(metadata: Record<string, unknown>, key: string): numb
   return null
 }
 
+function getPipelineStepStatuses(job: JobData): PipelineStepStatus[] {
+  if (job.status === 'completed') {
+    return PIPELINE_STEPS.map(() => 'completed')
+  }
+
+  const failed = ['failed', 'cancelled', 'timeout'].includes(job.status)
+  const percent = Math.max(0, Math.min(100, Math.round(job.progress * 100)))
+  const currentIndex = Math.min(PIPELINE_STEPS.length - 1, Math.floor(percent / 25))
+
+  return PIPELINE_STEPS.map((_, index) => {
+    if (index < currentIndex) return 'completed'
+    if (index === currentIndex) {
+      if (failed) return 'failed'
+      return job.status === 'running' ? 'running' : 'pending'
+    }
+    return 'pending'
+  })
+}
+
 export default function JobCard({ job, onCancel, onRetry, onClear }: JobCardProps) {
   const [showDetails, setShowDetails] = useState(false)
 
@@ -97,6 +121,7 @@ export default function JobCard({ job, onCancel, onRetry, onClear }: JobCardProp
     : videoId
       ? `Video ${videoId}`
       : job.job_id
+  const pipelineSteps = job.job_type === 'import_pipeline' ? getPipelineStepStatuses(job) : null
 
   return (
     <div className={cardClass}>
@@ -109,6 +134,24 @@ export default function JobCard({ job, onCancel, onRetry, onClear }: JobCardProp
       </div>
 
       <div className="jobCurrentStep">{job.current_step}</div>
+
+      {pipelineSteps && (
+        <div className="jobCardPipeline" aria-label="Import pipeline steps">
+          {PIPELINE_STEPS.map((label, index) => {
+            const status = pipelineSteps[index]
+            return (
+              <div
+                key={label}
+                className={`pipelineStep pipelineStep${status.charAt(0).toUpperCase() + status.slice(1)}`}
+                title={`${label}: ${status}`}
+              >
+                <div className="pipelineStepDot" />
+                <span className="pipelineStepLabel">{label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <JobProgressBar job={job} />
 

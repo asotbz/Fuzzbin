@@ -34,6 +34,17 @@ describe('JobFilterBar', () => {
       expect(screen.getByRole('button', { name: 'Spotify Import' })).toBeInTheDocument()
     })
 
+    it('renders import_pipeline filter button when available', () => {
+      render(
+        <JobFilterBar
+          {...defaultProps}
+          availableJobTypes={['import_pipeline', 'download_youtube']}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: 'Pipeline' })).toBeInTheDocument()
+    })
+
     it('renders search input', () => {
       render(<JobFilterBar {...defaultProps} />)
 

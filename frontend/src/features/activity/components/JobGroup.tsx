@@ -14,7 +14,10 @@ interface JobGroupProps {
   onCancelGroup?: (videoId: number) => void
 }
 
+type PipelineStepStatus = 'pending' | 'running' | 'completed' | 'failed'
+
 const JOB_TYPE_ORDER = [
+  'import_pipeline',
   'download_youtube',
   'import_download',
   'video_post_process',
@@ -36,6 +39,7 @@ function sortJobsByPipeline(jobs: JobData[]): JobData[] {
 }
 
 const JOB_TYPE_LABELS: Record<string, string> = {
+  'import_pipeline': 'Pipeline',
   'download_youtube': 'Download',
   'import_download': 'Download',
   'video_post_process': 'Process',
@@ -44,6 +48,8 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'import_nfo_generate': 'Save NFO',
   'metadata_enrich': 'Enrich',
 }
+
+const PIPELINE_STEPS = ['Download', 'Process', 'Organize', 'Save NFO'] as const
 
 function getStepLabel(jobType: string): string {
   return JOB_TYPE_LABELS[jobType] || jobType.replace(/_/g, ' ')
@@ -54,6 +60,25 @@ function getStepStatus(job: JobData): 'pending' | 'running' | 'completed' | 'fai
   if (job.status === 'completed') return 'completed'
   if (job.status === 'running') return 'running'
   return 'pending'
+}
+
+function getPipelineStepStatuses(job: JobData): PipelineStepStatus[] {
+  if (job.status === 'completed') {
+    return PIPELINE_STEPS.map(() => 'completed')
+  }
+
+  const failed = ['failed', 'cancelled', 'timeout'].includes(job.status)
+  const percent = Math.max(0, Math.min(100, Math.round(job.progress * 100)))
+  const currentIndex = Math.min(PIPELINE_STEPS.length - 1, Math.floor(percent / 25))
+
+  return PIPELINE_STEPS.map((_, index) => {
+    if (index < currentIndex) return 'completed'
+    if (index === currentIndex) {
+      if (failed) return 'failed'
+      return job.status === 'running' ? 'running' : 'pending'
+    }
+    return 'pending'
+  })
 }
 
 export default function JobGroup({
@@ -67,6 +92,8 @@ export default function JobGroup({
 }: JobGroupProps) {
   const [expanded, setExpanded] = useState(false)
   const sortedJobs = sortJobsByPipeline(jobs)
+  const pipelineJob = sortedJobs.find(job => job.job_type === 'import_pipeline')
+  const pipelineSteps = pipelineJob ? getPipelineStepStatuses(pipelineJob) : null
   const currentJob = sortedJobs.find(j => j.status === 'running')
   const displayTitle = videoTitle || `Video #${videoId}`
 
@@ -84,19 +111,35 @@ export default function JobGroup({
         </div>
 
         <div className="jobGroupPipeline">
-          {sortedJobs.map((job) => {
-            const status = getStepStatus(job)
-            return (
-              <div
-                key={job.job_id}
-                className={`pipelineStep pipelineStep${status.charAt(0).toUpperCase() + status.slice(1)}`}
-                title={`${getStepLabel(job.job_type)}: ${job.status}`}
-              >
-                <div className="pipelineStepDot" />
-                <span className="pipelineStepLabel">{getStepLabel(job.job_type)}</span>
-              </div>
-            )
-          })}
+          {pipelineSteps ? (
+            PIPELINE_STEPS.map((label, index) => {
+              const status = pipelineSteps[index]
+              return (
+                <div
+                  key={label}
+                  className={`pipelineStep pipelineStep${status.charAt(0).toUpperCase() + status.slice(1)}`}
+                  title={`${label}: ${status}`}
+                >
+                  <div className="pipelineStepDot" />
+                  <span className="pipelineStepLabel">{label}</span>
+                </div>
+              )
+            })
+          ) : (
+            sortedJobs.map((job) => {
+              const status = getStepStatus(job)
+              return (
+                <div
+                  key={job.job_id}
+                  className={`pipelineStep pipelineStep${status.charAt(0).toUpperCase() + status.slice(1)}`}
+                  title={`${getStepLabel(job.job_type)}: ${job.status}`}
+                >
+                  <div className="pipelineStepDot" />
+                  <span className="pipelineStepLabel">{getStepLabel(job.job_type)}</span>
+                </div>
+              )
+            })
+          )}
         </div>
 
         <div className="jobGroupProgress">
@@ -131,14 +174,45 @@ export default function JobGroup({
 
       {expanded && (
         <div className="jobGroupJobs">
-          {sortedJobs.map((job) => (
-            <div key={job.job_id} className="jobGroupJobItem">
-              <div className="jobGroupJobType">{getStepLabel(job.job_type)}</div>
-              <div className="jobGroupJobStep">{job.current_step}</div>
-              <JobProgressBar job={job} />
-              <JobStatusBadge status={job.status} />
-            </div>
-          ))}
+          {pipelineJob && pipelineSteps ? (
+            PIPELINE_STEPS.map((label, index) => {
+              const status = pipelineSteps[index]
+              const statusText =
+                status === 'running'
+                  ? pipelineJob.current_step
+                  : status === 'failed'
+                    ? pipelineJob.error ?? 'Failed'
+                    : status === 'completed'
+                      ? 'Completed'
+                      : 'Pending'
+              const badgeStatus =
+                status === 'completed'
+                  ? 'completed'
+                  : status === 'failed'
+                    ? 'failed'
+                    : status === 'running'
+                      ? 'running'
+                      : 'pending'
+
+              return (
+                <div key={label} className="jobGroupJobItem">
+                  <div className="jobGroupJobType">{label}</div>
+                  <div className="jobGroupJobStep">{statusText}</div>
+                  <JobProgressBar job={pipelineJob} />
+                  <JobStatusBadge status={badgeStatus} />
+                </div>
+              )
+            })
+          ) : (
+            sortedJobs.map((job) => (
+              <div key={job.job_id} className="jobGroupJobItem">
+                <div className="jobGroupJobType">{getStepLabel(job.job_type)}</div>
+                <div className="jobGroupJobStep">{job.current_step}</div>
+                <JobProgressBar job={job} />
+                <JobStatusBadge status={job.status} />
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

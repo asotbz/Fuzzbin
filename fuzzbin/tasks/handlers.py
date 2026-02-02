@@ -27,6 +27,555 @@ logger = structlog.get_logger(__name__)
 _download_semaphore = asyncio.Semaphore(1)
 
 
+# =============================================================================
+# Pipeline Helper Functions
+# =============================================================================
+# These helpers are used by both the aggregate IMPORT_PIPELINE handler and
+# individual step handlers (DOWNLOAD_YOUTUBE, VIDEO_POST_PROCESS, etc.)
+# =============================================================================
+
+
+async def _download_video_by_id(
+    video_id: int,
+    job: Job,
+    repository: Any,
+    step_offset: int = 0,
+    total_steps: int = 1,
+) -> Path | None:
+    """Download a video by database ID using yt-dlp.
+
+    Uses _download_semaphore internally to limit concurrent downloads.
+    Reports progress within the allocated step range.
+
+    Args:
+        video_id: Video database ID
+        job: Job instance for progress updates
+        repository: VideoRepository for database operations
+        step_offset: Starting step number (0-based) for progress calculation
+        total_steps: Total number of steps in the pipeline
+
+    Returns:
+        Path to downloaded temp file, or None if skipped/cancelled
+
+    Raises:
+        ValueError: If video not found or no YouTube URL
+        YTDLPError: If download fails
+    """
+    from fuzzbin.clients.ytdlp_client import YTDLPClient
+    from fuzzbin.common.config import YTDLPConfig
+    from fuzzbin.core.exceptions import YTDLPError
+    from fuzzbin.parsers.ytdlp_models import CancellationToken, DownloadHooks, DownloadProgress
+
+    logger.info(
+        "pipeline_download_starting",
+        job_id=job.id,
+        video_id=video_id,
+    )
+
+    # Get video record
+    video = await repository.get_video_by_id(video_id)
+    if not video:
+        raise ValueError(f"Video not found: {video_id}")
+
+    # Get YouTube URL
+    youtube_url = video.get("youtube_url") or video.get("download_url")
+    if not youtube_url:
+        youtube_id = video.get("youtube_id")
+        if youtube_id:
+            youtube_url = f"https://www.youtube.com/watch?v={youtube_id}"
+
+    if not youtube_url:
+        raise ValueError(f"Video {video_id} has no YouTube URL")
+
+    # Check if already downloaded
+    file_path = video.get("video_file_path")
+    if file_path and Path(file_path).exists():
+        logger.info(
+            "pipeline_download_skipped_already_exists",
+            video_id=video_id,
+            file_path=file_path,
+        )
+        return Path(file_path)
+
+    # Create temp directory for download
+    import tempfile
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="fuzzbin_download_"))
+    youtube_id = video.get("youtube_id") or "video"
+    temp_file = temp_dir / f"{youtube_id}.mp4"
+
+    config = fuzzbin.get_config()
+    ytdlp_config = config.ytdlp or YTDLPConfig()
+
+    # Update video status to downloading
+    await repository.update_video(video_id, status="downloading")
+
+    # Create cancellation token
+    cancellation_token = CancellationToken()
+
+    def on_progress(progress: DownloadProgress) -> None:
+        """Progress hook with sub-step granularity."""
+        if job.status == JobStatus.CANCELLED:
+            cancellation_token.cancel()
+            return
+
+        # Calculate download-specific values
+        download_speed: float | None = None
+        eta_seconds: int | None = None
+
+        speed_str = ""
+        if progress.speed_bytes_per_sec:
+            download_speed = progress.speed_bytes_per_sec / (1024 * 1024)
+            speed_str = f" at {download_speed:.1f} MB/s"
+
+        eta_str = ""
+        if progress.eta_seconds:
+            eta_seconds = progress.eta_seconds
+            eta_str = f" (ETA: {eta_seconds}s)"
+
+        # Calculate progress within step range
+        # Step 1 of 4 (step_offset=0, total_steps=4): progress 0-25%
+        step_progress = progress.percent / 100.0
+        overall_progress = (step_offset + step_progress) / total_steps
+        processed = int(overall_progress * 100)
+
+        job.update_progress(
+            processed=processed,
+            total=100,
+            step=f"Downloading: {progress.percent:.1f}%{speed_str}{eta_str}",
+            download_speed=download_speed,
+            eta_seconds=eta_seconds,
+        )
+
+    hooks = DownloadHooks(on_progress=on_progress)
+
+    logger.info(
+        "pipeline_download_waiting_semaphore",
+        job_id=job.id,
+        video_id=video_id,
+    )
+
+    # Use semaphore to limit concurrent downloads
+    async with _download_semaphore:
+        # Check cancellation after acquiring semaphore
+        if job.status == JobStatus.CANCELLED:
+            logger.info("pipeline_download_cancelled", job_id=job.id, video_id=video_id)
+            return None
+
+        logger.info(
+            "pipeline_download_acquired_semaphore",
+            job_id=job.id,
+            video_id=video_id,
+        )
+
+        try:
+            async with YTDLPClient.from_config(ytdlp_config) as client:
+                result = await client.download(
+                    url=youtube_url,
+                    output_path=temp_file,
+                    hooks=hooks,
+                    cancellation_token=cancellation_token,
+                )
+
+            # Check cancellation after download
+            if job.status == JobStatus.CANCELLED:
+                if temp_file.exists():
+                    temp_file.unlink()
+                if temp_dir.exists():
+                    temp_dir.rmdir()
+                return None
+
+            # Update video status
+            await repository.update_video(video_id, status="downloaded")
+
+            logger.info(
+                "pipeline_download_complete",
+                job_id=job.id,
+                video_id=video_id,
+                temp_path=str(temp_file),
+                file_size=result.file_size,
+            )
+
+            return temp_file
+
+        except Exception as e:
+            # Clean up temp file on error
+            if temp_file.exists():
+                temp_file.unlink()
+            if temp_dir.exists():
+                temp_dir.rmdir()
+
+            # Update video status to download_failed
+            await repository.update_video(video_id, status="download_failed")
+
+            logger.error(
+                "pipeline_download_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+            raise
+
+
+async def _post_process_video(
+    video_id: int,
+    temp_path: Path,
+    job: Job,
+    repository: Any,
+) -> Path:
+    """Run post-processing: FFProbe analysis and thumbnail generation.
+
+    Args:
+        video_id: Video database ID
+        temp_path: Path to downloaded video file
+        job: Job instance for progress updates
+        repository: VideoRepository for database operations
+
+    Returns:
+        The temp_path (unchanged, passed through for chaining)
+
+    Raises:
+        FileNotFoundError: If temp file doesn't exist
+    """
+    from fuzzbin.core.file_manager import FileManager
+    from fuzzbin.services.video_service import VideoService
+
+    if not temp_path.exists():
+        raise FileNotFoundError(f"Temp file not found: {temp_path}")
+
+    logger.info(
+        "pipeline_post_process_starting",
+        job_id=job.id,
+        video_id=video_id,
+        temp_path=str(temp_path),
+    )
+
+    config = fuzzbin.get_config()
+
+    # Get video record for IMVDb ID (thumbnail priority)
+    video_record = await repository.get_video_by_id(video_id)
+    imvdb_id = video_record.get("imvdb_id") if video_record else None
+    ytdlp_thumbnail_url = job.metadata.get("ytdlp_thumbnail_url")
+
+    # Update video status
+    await repository.update_video(video_id, status="processing")
+
+    # Create file manager
+    library_dir = config.library_dir
+    if library_dir is None:
+        from fuzzbin.common.config import _get_default_library_dir
+
+        library_dir = _get_default_library_dir()
+
+    file_manager = FileManager.from_config(
+        config.trash,
+        library_dir=library_dir,
+        config_dir=config.config_dir or Path.cwd() / "config",
+    )
+
+    media_info: dict[str, Any] = {}
+    thumbnail_path: Path | None = None
+
+    # Run FFProbe
+    try:
+        media_info = await file_manager.validate_video_format(temp_path)
+        logger.info(
+            "pipeline_post_process_ffprobe_complete",
+            job_id=job.id,
+            video_id=video_id,
+            duration=media_info.get("duration"),
+        )
+
+        # Get file size
+        file_size = temp_path.stat().st_size if temp_path.exists() else None
+
+        # Update database with media info
+        await repository.update_video(
+            video_id,
+            duration=media_info.get("duration"),
+            width=media_info.get("width"),
+            height=media_info.get("height"),
+            video_codec=media_info.get("video_codec"),
+            audio_codec=media_info.get("audio_codec"),
+            container_format=media_info.get("container_format"),
+            bitrate=media_info.get("bitrate"),
+            frame_rate=media_info.get("frame_rate"),
+            audio_channels=media_info.get("audio_channels"),
+            audio_sample_rate=media_info.get("audio_sample_rate"),
+            file_size=file_size,
+        )
+    except Exception as e:
+        logger.warning(
+            "pipeline_post_process_ffprobe_failed",
+            job_id=job.id,
+            video_id=video_id,
+            error=str(e),
+        )
+
+    # Generate thumbnail
+    try:
+        video_service = VideoService(repository=repository, file_manager=file_manager)
+        duration = media_info.get("duration")
+
+        thumbnail_path = await video_service.generate_prioritized_thumbnail(
+            video_id=video_id,
+            imvdb_id=imvdb_id,
+            ytdlp_thumbnail_url=ytdlp_thumbnail_url,
+            video_path=temp_path,
+            duration=duration,
+            force_ffmpeg=False,
+        )
+        logger.info(
+            "pipeline_post_process_thumbnail_complete",
+            job_id=job.id,
+            video_id=video_id,
+            thumbnail_path=str(thumbnail_path) if thumbnail_path else None,
+        )
+
+        # Emit WebSocket event for real-time UI updates
+        from fuzzbin.core.event_bus import get_event_bus
+        import time
+
+        try:
+            event_bus = get_event_bus()
+            await event_bus.emit_video_updated(
+                video_id=video_id,
+                fields_changed=["thumbnail", "file_properties"],
+                thumbnail_timestamp=int(time.time()),
+            )
+        except RuntimeError:
+            pass  # Event bus not initialized (tests)
+    except Exception as e:
+        logger.warning(
+            "pipeline_post_process_thumbnail_failed",
+            job_id=job.id,
+            video_id=video_id,
+            error=str(e),
+        )
+
+    logger.info(
+        "pipeline_post_process_complete",
+        job_id=job.id,
+        video_id=video_id,
+        has_media_info=bool(media_info),
+        has_thumbnail=thumbnail_path is not None,
+    )
+
+    return temp_path
+
+
+async def _organize_video(
+    video_id: int,
+    temp_path: Path,
+    job: Job,
+    repository: Any,
+) -> Path:
+    """Move video from temp location to organized library path.
+
+    Args:
+        video_id: Video database ID
+        temp_path: Path to temp video file
+        job: Job instance for progress updates
+        repository: VideoRepository for database operations
+
+    Returns:
+        Path to final organized video file
+
+    Raises:
+        FileNotFoundError: If temp file doesn't exist
+        ValueError: If video not found or missing required metadata
+    """
+    import shutil
+
+    from fuzzbin.core.organizer import build_media_paths
+    from fuzzbin.parsers.models import MusicVideoNFO
+
+    if not temp_path.exists():
+        raise FileNotFoundError(f"Temp file not found: {temp_path}")
+
+    logger.info(
+        "pipeline_organize_starting",
+        job_id=job.id,
+        video_id=video_id,
+        temp_path=str(temp_path),
+    )
+
+    config = fuzzbin.get_config()
+
+    # Get video record
+    video = await repository.get_video_by_id(video_id)
+    if not video:
+        raise ValueError(f"Video not found: {video_id}")
+
+    # Update status to organizing
+    await repository.update_video(video_id, status="organizing")
+
+    # Build NFO data from video metadata
+    nfo_data = MusicVideoNFO(
+        title=video["title"],
+        artist=video.get("artist"),
+        album=video.get("album"),
+        year=video.get("year"),
+        director=video.get("director"),
+        genre=video.get("genre"),
+        studio=video.get("studio"),
+    )
+
+    # Get library_dir
+    library_dir = config.library_dir
+    if library_dir is None:
+        from fuzzbin.common.config import _get_default_library_dir
+
+        library_dir = _get_default_library_dir()
+
+    # Build target paths
+    media_paths = build_media_paths(
+        root_path=library_dir,
+        nfo_data=nfo_data,
+        config=config.organizer,
+    )
+
+    # Create parent directory
+    media_paths.video_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Handle artist.nfo if configured
+    artist_dir = _get_artist_directory_from_pattern(
+        config.organizer.path_pattern,
+        media_paths.video_path,
+        library_dir,
+    )
+
+    if artist_dir is not None and config.nfo.write_artist_nfo:
+        # Get primary artist
+        artists = await repository.get_video_artists(video_id, role="primary")
+
+        if artists:
+            primary_artist = artists[0]
+            primary_artist_id = primary_artist["id"]
+            primary_artist_name = primary_artist["name"]
+        elif video.get("artist"):
+            primary_artist_name = video["artist"]
+            primary_artist_id = await repository.upsert_artist(name=primary_artist_name)
+            await repository.link_video_artist(
+                video_id=video_id,
+                artist_id=primary_artist_id,
+                role="primary",
+            )
+        else:
+            raise ValueError(
+                f"Video {video_id} has no primary artist but path pattern "
+                f"'{config.organizer.path_pattern}' requires {{artist}}"
+            )
+
+        # Handle artist.nfo
+        artist_nfo_path = artist_dir / "artist.nfo"
+
+        try:
+            from fuzzbin.core.db.exporter import NFOExporter
+            from fuzzbin.parsers.artist_parser import ArtistNFOParser
+
+            if artist_nfo_path.exists():
+                artist_parser = ArtistNFOParser()
+                existing_nfo = artist_parser.parse_file(artist_nfo_path)
+
+                if existing_nfo.name != primary_artist_name:
+                    exporter = NFOExporter(repository)
+                    await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
+            else:
+                exporter = NFOExporter(repository)
+                await exporter.export_artist_to_nfo(primary_artist_id, artist_nfo_path)
+        except Exception as e:
+            logger.error(
+                "pipeline_organize_artist_nfo_failed",
+                job_id=job.id,
+                video_id=video_id,
+                artist_nfo_path=str(artist_nfo_path),
+                error=str(e),
+            )
+            raise
+
+    # Move file to final location
+    shutil.move(str(temp_path), str(media_paths.video_path))
+
+    # Clean up temp directory if empty
+    if temp_path.parent.exists():
+        try:
+            temp_path.parent.rmdir()
+        except OSError:
+            pass  # Directory not empty or permanent
+
+    # Update video record with file paths
+    await repository.update_video(
+        video_id,
+        video_file_path=str(media_paths.video_path),
+        nfo_file_path=str(media_paths.nfo_path),
+        status="organized",
+    )
+
+    logger.info(
+        "pipeline_organize_complete",
+        job_id=job.id,
+        video_id=video_id,
+        video_path=str(media_paths.video_path),
+    )
+
+    return media_paths.video_path
+
+
+async def _generate_nfo(
+    video_id: int,
+    job: Job,
+    repository: Any,
+) -> Path | None:
+    """Generate NFO file for video if enabled.
+
+    Args:
+        video_id: Video database ID
+        job: Job instance for progress updates
+        repository: VideoRepository for database operations
+
+    Returns:
+        Path to generated NFO file, or None if NFO generation disabled
+    """
+    from fuzzbin.core.db.exporter import NFOExporter
+
+    logger.info(
+        "pipeline_nfo_generate_starting",
+        job_id=job.id,
+        video_id=video_id,
+    )
+
+    config = fuzzbin.get_config()
+    nfo_path = None
+
+    if config.nfo.write_musicvideo_nfo:
+        exporter = NFOExporter(repository)
+        nfo_path, _ = await exporter.export_video_to_nfo(video_id)
+
+        logger.info(
+            "pipeline_nfo_generate_complete",
+            job_id=job.id,
+            video_id=video_id,
+            nfo_path=str(nfo_path),
+        )
+    else:
+        logger.debug(
+            "pipeline_nfo_generate_skipped",
+            video_id=video_id,
+            reason="write_musicvideo_nfo is disabled",
+        )
+
+    # Update video status to complete
+    await repository.update_video(video_id, status="complete")
+
+    return nfo_path
+
+
+# =============================================================================
+# End Pipeline Helper Functions
+# =============================================================================
+
+
 def _get_artist_directory_from_pattern(
     pattern: str,
     video_path: Path,
@@ -604,17 +1153,17 @@ async def handle_spotify_batch_import(job: Job) -> None:
                     )
                     # Continue even if thumbnail download fails
 
-            # Queue download job if auto_download enabled and YouTube ID available
+            # Queue pipeline job if auto_download enabled and YouTube ID available
+            # Pipeline runs: download → post-process → organize → NFO
             if auto_download and youtube_id:
-                download_job = Job(
-                    type=JobType.DOWNLOAD_YOUTUBE,
+                pipeline_job = Job(
+                    type=JobType.IMPORT_PIPELINE,
                     priority=JobPriority.NORMAL,
                     metadata={
-                        "video_ids": [video_id],
-                        "youtube_url": f"https://youtube.com/watch?v={youtube_id}",
+                        "video_id": video_id,
                     },
                 )
-                download_jobs.append((download_job, video_id))
+                download_jobs.append((pipeline_job, video_id))
 
         except Exception as e:
             logger.error(
@@ -2881,136 +3430,28 @@ async def handle_video_post_process(job: Job) -> None:
     )
 
     import fuzzbin
-    from fuzzbin.core.file_manager import FileManager
-    from fuzzbin.services.video_service import VideoService
 
-    job.update_progress(0, 4, "Initializing post-processing...")
+    job.update_progress(0, 3, "Processing video...")
 
     repository = await fuzzbin.get_repository()
-    config = fuzzbin.get_config()
-
-    # Get video record to retrieve imvdb_id for thumbnail priority
-    video_record = await repository.get_video_by_id(video_id)
-    imvdb_id = video_record.get("imvdb_id") if video_record else None
-
-    # Get yt-dlp thumbnail URL from job metadata if provided
-    ytdlp_thumbnail_url = job.metadata.get("ytdlp_thumbnail_url")
 
     # Check for cancellation
     if job.status == JobStatus.CANCELLED:
         return
 
-    # Update video status
-    await repository.update_video(video_id, status="processing")
-
-    media_info: dict[str, Any] = {}
-    thumbnail_path: Path | None = None
-
     try:
-        job.update_progress(1, 4, "Analyzing video with FFProbe...")
-
-        # Create file manager for FFProbe and thumbnail generation
-        library_dir = config.library_dir
-        if library_dir is None:
-            from fuzzbin.common.config import _get_default_library_dir
-
-            library_dir = _get_default_library_dir()
-
-        file_manager = FileManager.from_config(
-            config.trash,
-            library_dir=library_dir,
-            config_dir=config.config_dir or Path.cwd() / "config",
+        # Delegate to helper (handles FFProbe, thumbnail, DB updates)
+        temp_path = await _post_process_video(
+            video_id=video_id,
+            temp_path=temp_path,
+            job=job,
+            repository=repository,
         )
 
-        # Run FFProbe to extract media info
-        try:
-            media_info = await file_manager.validate_video_format(temp_path)
-            logger.info(
-                "video_post_process_ffprobe_complete",
-                job_id=job.id,
-                video_id=video_id,
-                duration=media_info.get("duration"),
-                resolution=f"{media_info.get('width')}x{media_info.get('height')}",
-            )
-
-            # Get file size
-            file_size = temp_path.stat().st_size if temp_path.exists() else None
-
-            # Update database with media info
-            await repository.update_video(
-                video_id,
-                duration=media_info.get("duration"),
-                width=media_info.get("width"),
-                height=media_info.get("height"),
-                video_codec=media_info.get("video_codec"),
-                audio_codec=media_info.get("audio_codec"),
-                container_format=media_info.get("container_format"),
-                bitrate=media_info.get("bitrate"),
-                frame_rate=media_info.get("frame_rate"),
-                audio_channels=media_info.get("audio_channels"),
-                audio_sample_rate=media_info.get("audio_sample_rate"),
-                file_size=file_size,
-            )
-        except Exception as e:
-            # Log but don't fail - FFProbe is optional
-            logger.warning(
-                "video_post_process_ffprobe_failed",
-                job_id=job.id,
-                video_id=video_id,
-                error=str(e),
-            )
-
         if job.status == JobStatus.CANCELLED:
             return
 
-        job.update_progress(2, 4, "Generating thumbnail...")
-
-        # Generate thumbnail using priority: IMVDb > yt-dlp > ffmpeg
-        try:
-            video_service = VideoService(repository=repository, file_manager=file_manager)
-            duration = media_info.get("duration")
-
-            thumbnail_path = await video_service.generate_prioritized_thumbnail(
-                video_id=video_id,
-                imvdb_id=imvdb_id,
-                ytdlp_thumbnail_url=ytdlp_thumbnail_url,
-                video_path=temp_path,
-                duration=duration,
-                force_ffmpeg=False,  # Try external sources first
-            )
-            logger.info(
-                "video_post_process_thumbnail_complete",
-                job_id=job.id,
-                video_id=video_id,
-                thumbnail_path=str(thumbnail_path),
-            )
-
-            # Emit WebSocket event for real-time UI updates
-            from fuzzbin.core.event_bus import get_event_bus
-            import time
-
-            try:
-                event_bus = get_event_bus()
-                await event_bus.emit_video_updated(
-                    video_id=video_id,
-                    fields_changed=["thumbnail", "file_properties"],
-                    thumbnail_timestamp=int(time.time()),
-                )
-            except RuntimeError:
-                pass  # Event bus not initialized (tests)
-        except Exception as e:
-            # Log but don't fail - thumbnail generation is optional
-            logger.warning(
-                "video_post_process_thumbnail_failed",
-                job_id=job.id,
-                video_id=video_id,
-                error=str(e),
-            )
-
-        if job.status == JobStatus.CANCELLED:
-            return
-
-        job.update_progress(3, 4, "Queuing organize job...")
+        job.update_progress(2, 3, "Queuing organize job...")
 
         # Queue organize job with parent relationship
         queue = get_job_queue()
@@ -3024,13 +3465,11 @@ async def handle_video_post_process(job: Job) -> None:
         )
         await queue.submit(organize_job, video_id=video_id)
 
-        job.update_progress(4, 4, "Post-processing complete")
+        job.update_progress(3, 3, "Post-processing complete")
         job.mark_completed(
             {
                 "video_id": video_id,
                 "temp_path": str(temp_path),
-                "media_info": media_info,
-                "thumbnail_path": str(thumbnail_path) if thumbnail_path else None,
                 "organize_job_id": organize_job.id,
             }
         )
@@ -3039,8 +3478,6 @@ async def handle_video_post_process(job: Job) -> None:
             "video_post_process_job_completed",
             job_id=job.id,
             video_id=video_id,
-            has_media_info=bool(media_info),
-            has_thumbnail=thumbnail_path is not None,
         )
 
     except Exception as e:
@@ -3069,7 +3506,7 @@ async def handle_import_organize(job: Job) -> None:
     Job result on completion:
         video_id: Database video ID
         video_path: Final organized video file path
-        nfo_path: Path where NFO file will be created
+        nfo_job_id: ID of queued NFO generation job
 
     Args:
         job: Job instance with metadata containing organize parameters
@@ -3096,177 +3533,36 @@ async def handle_import_organize(job: Job) -> None:
     )
 
     import fuzzbin
-    from fuzzbin.core.organizer import build_media_paths
-    from fuzzbin.parsers.models import MusicVideoNFO
-    import shutil
 
-    job.update_progress(0, 4, "Initializing organization...")
+    job.update_progress(0, 3, "Organizing video...")
 
     repository = await fuzzbin.get_repository()
-    config = fuzzbin.get_config()
 
     # Check for cancellation
     if job.status == JobStatus.CANCELLED:
         # Clean up temp file
         if temp_path.exists():
             temp_path.unlink()
-            temp_path.parent.rmdir()
+            if temp_path.parent.exists():
+                try:
+                    temp_path.parent.rmdir()
+                except OSError:
+                    pass
         return
 
-    # Get video record
-    video = await repository.get_video_by_id(video_id)
-
-    # Update status to organizing
-    await repository.update_video(video_id, status="organizing")
-
     try:
-        job.update_progress(1, 4, "Building target paths...")
-
-        # Build NFO data from video metadata
-        nfo_data = MusicVideoNFO(
-            title=video["title"],
-            artist=video.get("artist"),
-            album=video.get("album"),
-            year=video.get("year"),
-            director=video.get("director"),
-            genre=video.get("genre"),
-            studio=video.get("studio"),
-        )
-
-        # Build target paths using organizer config
-        # Get library_dir from config (falls back to default if not set)
-        library_dir = config.library_dir
-        if library_dir is None:
-            from fuzzbin.common.config import _get_default_library_dir
-
-            library_dir = _get_default_library_dir()
-
-        media_paths = build_media_paths(
-            root_path=library_dir,
-            nfo_data=nfo_data,
-            config=config.organizer,
-        )
-
-        job.update_progress(2, 4, "Moving file to organized location...")
-
-        # Create parent directory if needed
-        media_paths.video_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Create or validate artist.nfo if pattern includes {artist} and write_artist_nfo is enabled
-        artist_dir = _get_artist_directory_from_pattern(
-            config.organizer.path_pattern,
-            media_paths.video_path,
-            library_dir,
-        )
-
-        if artist_dir is not None and config.nfo.write_artist_nfo:
-            # Get primary artist for this video
-            # First try linked artists, then fall back to video.artist field
-            artists = await repository.get_video_artists(video_id, role="primary")
-
-            if artists:
-                primary_artist = artists[0]
-                primary_artist_id = primary_artist["id"]
-                primary_artist_name = primary_artist["name"]
-            elif video.get("artist"):
-                # Fall back to video.artist field - upsert to get artist ID
-                primary_artist_name = video["artist"]
-                primary_artist_id = await repository.upsert_artist(name=primary_artist_name)
-                # Also link the artist to the video for future lookups
-                await repository.link_video_artist(
-                    video_id=video_id,
-                    artist_id=primary_artist_id,
-                    role="primary",
-                )
-            else:
-                raise ValueError(
-                    f"Video {video_id} has no primary artist but path pattern "
-                    f"'{config.organizer.path_pattern}' requires {{artist}}"
-                )
-
-            # Check if artist.nfo exists
-            artist_nfo_path = artist_dir / "artist.nfo"
-
-            try:
-                from fuzzbin.core.db.exporter import NFOExporter
-                from fuzzbin.parsers.artist_parser import ArtistNFOParser
-
-                if artist_nfo_path.exists():
-                    # Validate existing artist.nfo
-                    artist_parser = ArtistNFOParser()
-                    existing_nfo = artist_parser.parse_file(artist_nfo_path)
-
-                    if existing_nfo.name != primary_artist_name:
-                        # Update artist.nfo if name differs
-                        logger.debug(
-                            "artist_nfo_updating",
-                            artist_nfo_path=str(artist_nfo_path),
-                            old_name=existing_nfo.name,
-                            new_name=primary_artist_name,
-                        )
-                        exporter = NFOExporter(repository)
-                        await exporter.export_artist_to_nfo(
-                            primary_artist_id, artist_nfo_path
-                        )  # Ignore written flag
-                    else:
-                        # Existing artist.nfo is correct
-                        logger.debug(
-                            "artist_nfo_validated",
-                            artist_nfo_path=str(artist_nfo_path),
-                            artist_name=primary_artist_name,
-                        )
-                else:
-                    # Create new artist.nfo
-                    logger.debug(
-                        "artist_nfo_creating",
-                        artist_nfo_path=str(artist_nfo_path),
-                        artist_name=primary_artist_name,
-                    )
-                    exporter = NFOExporter(repository)
-                    await exporter.export_artist_to_nfo(
-                        primary_artist_id, artist_nfo_path
-                    )  # Ignore written flag
-
-            except Exception as e:
-                # Fail the operation if artist.nfo creation/validation fails
-                logger.error(
-                    "artist_nfo_failed",
-                    artist_nfo_path=str(artist_nfo_path),
-                    artist_name=primary_artist_name,
-                    error=str(e),
-                )
-                raise
-        elif artist_dir is not None and not config.nfo.write_artist_nfo:
-            logger.debug(
-                "artist_nfo_skipped",
-                artist_dir=str(artist_dir),
-                reason="write_artist_nfo is disabled",
-            )
-
-        # Move file from temp to final location
-        shutil.move(str(temp_path), str(media_paths.video_path))
-
-        # Clean up temp directory only if it's empty (e.g., per-job temp dirs)
-        # Don't try to remove shared directories like downloads/
-        if temp_path.parent.exists():
-            try:
-                temp_path.parent.rmdir()
-            except OSError:
-                # Directory not empty or is a permanent directory - this is fine
-                pass
-
-        # Update video record with file paths
-        await repository.update_video(
-            video_id,
-            video_file_path=str(media_paths.video_path),
-            nfo_file_path=str(media_paths.nfo_path),
-            status="organized",
+        # Delegate to helper (handles path building, artist.nfo, file move)
+        video_path = await _organize_video(
+            video_id=video_id,
+            temp_path=temp_path,
+            job=job,
+            repository=repository,
         )
 
         if job.status == JobStatus.CANCELLED:
             return
 
-        job.update_progress(3, 4, "Queuing NFO generation job...")
+        job.update_progress(2, 3, "Queuing NFO generation job...")
 
         # Queue NFO generation job with parent relationship
         queue = get_job_queue()
@@ -3279,12 +3575,11 @@ async def handle_import_organize(job: Job) -> None:
         )
         await queue.submit(nfo_job, video_id=video_id)
 
-        job.update_progress(4, 4, "Organization complete")
+        job.update_progress(3, 3, "Organization complete")
         job.mark_completed(
             {
                 "video_id": video_id,
-                "video_path": str(media_paths.video_path),
-                "nfo_path": str(media_paths.nfo_path),
+                "video_path": str(video_path),
                 "nfo_job_id": nfo_job.id,
             }
         )
@@ -3293,7 +3588,7 @@ async def handle_import_organize(job: Job) -> None:
             "import_organize_job_completed",
             job_id=job.id,
             video_id=video_id,
-            video_path=str(media_paths.video_path),
+            video_path=str(video_path),
         )
 
     except Exception as e:
@@ -3304,11 +3599,10 @@ async def handle_import_organize(job: Job) -> None:
                 try:
                     temp_path.parent.rmdir()
                 except OSError:
-                    # Directory not empty or is permanent - this is fine
                     pass
 
-        # Update video status to download_failed (allow retry)
-        await repository.update_video(video_id, status="download_failed")
+        # Update video status to organize_failed (allow retry)
+        await repository.update_video(video_id, status="organize_failed")
 
         logger.error(
             "import_organize_job_failed",
@@ -3350,36 +3644,21 @@ async def handle_import_nfo_generate(job: Job) -> None:
     )
 
     import fuzzbin
-    from fuzzbin.core.db.exporter import NFOExporter
 
-    job.update_progress(0, 2, "Initializing NFO generation...")
+    job.update_progress(0, 2, "Generating NFO...")
 
     repository = await fuzzbin.get_repository()
-    config = fuzzbin.get_config()
 
     # Check for cancellation
     if job.status == JobStatus.CANCELLED:
         return
 
-    nfo_path = None
-
-    # Only generate NFO if enabled in config
-    if config.nfo.write_musicvideo_nfo:
-        job.update_progress(1, 2, "Generating NFO file...")
-
-        # Create NFO exporter and export
-        exporter = NFOExporter(repository)
-        nfo_path, _ = await exporter.export_video_to_nfo(video_id)
-    else:
-        job.update_progress(1, 2, "NFO generation disabled, skipping...")
-        logger.debug(
-            "nfo_generation_skipped",
-            video_id=video_id,
-            reason="write_musicvideo_nfo is disabled",
-        )
-
-    # Update video status to complete
-    await repository.update_video(video_id, status="complete")
+    # Delegate to helper (handles NFO export and status update)
+    nfo_path = await _generate_nfo(
+        video_id=video_id,
+        job=job,
+        repository=repository,
+    )
 
     job.update_progress(2, 2, "NFO generation complete")
     job.mark_completed(
@@ -3395,6 +3674,153 @@ async def handle_import_nfo_generate(job: Job) -> None:
         video_id=video_id,
         nfo_path=str(nfo_path) if nfo_path else None,
     )
+
+
+async def handle_import_pipeline(job: Job) -> None:
+    """Handle aggregate import pipeline job.
+
+    Runs the complete download → post-process → organize → NFO chain
+    sequentially for a single video. Used by batch imports to reduce
+    job queue overhead and provide unified progress tracking.
+
+    The download step uses _download_semaphore internally, so only
+    downloads are throttled while other steps run freely.
+
+    Job metadata parameters:
+        video_id (int, required): Video database ID
+
+    Job result on completion:
+        video_id: Database video ID
+        video_path: Final organized video file path
+        nfo_path: Path to generated NFO file (or None if disabled)
+
+    Progress steps:
+        1/4: Downloading (with sub-step granularity showing %)
+        2/4: Processing media
+        3/4: Organizing to library
+        4/4: Generating NFO
+
+    Args:
+        job: Job instance with metadata containing pipeline parameters
+
+    Raises:
+        ValueError: If required parameters missing or video not found
+    """
+    video_id = job.metadata.get("video_id")
+
+    if not video_id:
+        raise ValueError("Missing required parameter: video_id")
+
+    logger.info(
+        "import_pipeline_job_starting",
+        job_id=job.id,
+        video_id=video_id,
+    )
+
+    repository = await fuzzbin.get_repository()
+
+    # Initialize progress
+    job.update_progress(0, 100, "Initializing pipeline...")
+
+    video_path: Path | None = None
+    nfo_path: Path | None = None
+
+    try:
+        # Step 1: Download (0-25% with sub-step granularity)
+        # _download_video_by_id handles progress updates internally
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        temp_path = await _download_video_by_id(
+            video_id=video_id,
+            job=job,
+            repository=repository,
+            step_offset=0,
+            total_steps=4,
+        )
+
+        if temp_path is None:
+            # Download was skipped or cancelled
+            if job.status == JobStatus.CANCELLED:
+                return
+            # If skipped (already downloaded), try to continue with existing path
+            video = await repository.get_video_by_id(video_id)
+            existing_path = video.get("video_file_path") if video else None
+            if existing_path and Path(existing_path).exists():
+                # Already organized, skip remaining steps
+                job.mark_completed(
+                    {
+                        "video_id": video_id,
+                        "video_path": existing_path,
+                        "nfo_path": None,
+                        "skipped": True,
+                    }
+                )
+                return
+            raise ValueError(f"Download returned None but video {video_id} has no existing file")
+
+        # Step 2: Post-process (25-50%)
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        job.update_progress(25, 100, "Processing media...")
+        temp_path = await _post_process_video(
+            video_id=video_id,
+            temp_path=temp_path,
+            job=job,
+            repository=repository,
+        )
+
+        # Step 3: Organize (50-75%)
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        job.update_progress(50, 100, "Organizing to library...")
+        video_path = await _organize_video(
+            video_id=video_id,
+            temp_path=temp_path,
+            job=job,
+            repository=repository,
+        )
+
+        # Step 4: Generate NFO (75-100%)
+        if job.status == JobStatus.CANCELLED:
+            return
+
+        job.update_progress(75, 100, "Generating NFO...")
+        nfo_path = await _generate_nfo(
+            video_id=video_id,
+            job=job,
+            repository=repository,
+        )
+
+        # Complete
+        job.update_progress(100, 100, "Pipeline complete")
+        job.mark_completed(
+            {
+                "video_id": video_id,
+                "video_path": str(video_path) if video_path else None,
+                "nfo_path": str(nfo_path) if nfo_path else None,
+            }
+        )
+
+        logger.info(
+            "import_pipeline_job_completed",
+            job_id=job.id,
+            video_id=video_id,
+            video_path=str(video_path) if video_path else None,
+            nfo_path=str(nfo_path) if nfo_path else None,
+        )
+
+    except Exception as e:
+        # Log failure with step information
+        logger.error(
+            "import_pipeline_job_failed",
+            job_id=job.id,
+            video_id=video_id,
+            error=str(e),
+        )
+        raise
 
 
 async def handle_backup(job: Job) -> None:
@@ -3992,17 +4418,17 @@ async def handle_imvdb_artist_import(job: Job) -> None:
                         error=str(e),
                     )
 
-            # Queue download job if auto_download enabled and YouTube ID available
+            # Queue pipeline job if auto_download enabled and YouTube ID available
+            # Pipeline runs: download → post-process → organize → NFO
             if auto_download and youtube_id:
-                download_job = Job(
-                    type=JobType.DOWNLOAD_YOUTUBE,
+                pipeline_job = Job(
+                    type=JobType.IMPORT_PIPELINE,
                     priority=JobPriority.NORMAL,
                     metadata={
-                        "video_ids": [video_id],
-                        "youtube_url": f"https://youtube.com/watch?v={youtube_id}",
+                        "video_id": video_id,
                     },
                 )
-                download_jobs.append((download_job, video_id))
+                download_jobs.append((pipeline_job, video_id))
 
         except Exception as e:
             logger.error(
@@ -4296,6 +4722,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.IMPORT, handle_import)
     queue.register_handler(JobType.IMPORT_ADD_SINGLE, handle_add_single_import)
     # Import workflow handlers
+    queue.register_handler(JobType.IMPORT_PIPELINE, handle_import_pipeline)
     queue.register_handler(JobType.IMPORT_DOWNLOAD, handle_import_download)
     queue.register_handler(JobType.VIDEO_POST_PROCESS, handle_video_post_process)
     queue.register_handler(JobType.IMPORT_ORGANIZE, handle_import_organize)
@@ -4314,6 +4741,7 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.IMPORT_SPOTIFY_BATCH.value,
             JobType.IMPORT_IMVDB_ARTIST.value,
             JobType.IMPORT_ADD_SINGLE.value,
+            JobType.IMPORT_PIPELINE.value,
             JobType.DOWNLOAD_YOUTUBE.value,
             JobType.FILE_ORGANIZE.value,
             JobType.FILE_DUPLICATE_RESOLVE.value,

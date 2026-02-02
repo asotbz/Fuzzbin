@@ -77,11 +77,31 @@ describe('JobCard', () => {
 
       expect(container.querySelector('.progressBarFill')).toBeInTheDocument()
     })
+
+    it('renders pipeline steps for import_pipeline jobs', () => {
+      const { container } = render(
+        <JobCard
+          job={createMockJob({
+            job_type: 'import_pipeline',
+            status: 'running',
+            progress: 0.35,
+          })}
+        />
+      )
+
+      const steps = container.querySelectorAll('.jobCardPipeline .pipelineStep')
+      expect(steps).toHaveLength(4)
+      expect(screen.getByText('Download')).toBeInTheDocument()
+      expect(screen.getByText('Process')).toBeInTheDocument()
+      expect(screen.getByText('Organize')).toBeInTheDocument()
+      expect(screen.getByText('Save NFO')).toBeInTheDocument()
+    })
   })
 
   describe('job type labels', () => {
     const jobTypeCases = [
       ['download_youtube', 'YouTube Download'],
+      ['import_pipeline', 'Import Pipeline'],
       ['import_spotify_batch', 'Spotify Batch Import'],
       ['import_nfo', 'NFO Import'],
       ['import_add_single', 'Single Video Import'],
