@@ -5,7 +5,7 @@ import { enrichSpotifyTrack } from '../../../lib/api/endpoints/spotify'
 import TrackRow, { type TrackRowState } from './TrackRow'
 import IMVDbRetryModal from './IMVDbRetryModal'
 import type { BatchPreviewItem, SpotifyTrackEnrichResponse } from '../../../lib/api/types'
-import './SpotifyTrackTable.css'
+import './ImportTrackTable.css'
 
 interface TrackMetadata {
   title: string
@@ -20,7 +20,7 @@ interface TrackMetadata {
   genre: string | null
 }
 
-interface SpotifyTrackTableProps {
+interface ImportTrackTableProps {
   tracks: BatchPreviewItem[]
   metadataOverrides: Map<string, TrackMetadata>
   onEnrichmentComplete?: (
@@ -32,14 +32,14 @@ interface SpotifyTrackTableProps {
   onSelectionChange?: (selectedIds: Set<string>) => void
 }
 
-export default function SpotifyTrackTable({
+export default function ImportTrackTable({
   tracks,
   metadataOverrides,
   onEnrichmentComplete,
   onEditTrack,
   onSearchYouTube,
   onSelectionChange,
-}: SpotifyTrackTableProps) {
+}: ImportTrackTableProps) {
   // Track states map
   const [trackStates, setTrackStates] = useState<Map<string, TrackRowState>>(new Map())
   const [currentEnrichingIndex, setCurrentEnrichingIndex] = useState(0)
@@ -282,17 +282,17 @@ export default function SpotifyTrackTable({
   const allSelected = tracks.filter((t) => !t.already_exists).length === selectedTracks.size && selectedTracks.size > 0
 
   return (
-    <div className="spotifyTrackTable">
+    <div className="importTrackTable">
       {/* Progress */}
       {enrichedCount < tracks.length && (
-        <div className="spotifyTrackTableProgress">
+        <div className="importTrackTableProgress">
           Enriching tracks: {enrichedCount}/{tracks.length}
         </div>
       )}
 
       {/* Header */}
-      <div className="spotifyTrackTableHeader">
-        <div className="spotifyTrackTableHeaderCheckbox">
+      <div className="importTrackTableHeader">
+        <div className="importTrackTableHeaderCheckbox">
           <input
             type="checkbox"
             checked={allSelected}
@@ -300,14 +300,14 @@ export default function SpotifyTrackTable({
             title="Select all new tracks"
           />
         </div>
-        <div className="spotifyTrackTableHeaderLabel">Track</div>
-        <div className="spotifyTrackTableHeaderLabel">Enrichment</div>
-        <div className="spotifyTrackTableHeaderLabel">YouTube</div>
-        <div className="spotifyTrackTableHeaderLabel">Actions</div>
+        <div className="importTrackTableHeaderLabel">Track</div>
+        <div className="importTrackTableHeaderLabel">Enrichment</div>
+        <div className="importTrackTableHeaderLabel">YouTube</div>
+        <div className="importTrackTableHeaderLabel">Actions</div>
       </div>
 
       {/* Rows */}
-      <div className="spotifyTrackTableBody">
+      <div className="importTrackTableBody">
         {tracks.map((track) => {
           const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
           const state = trackStates.get(trackId) || {
@@ -340,8 +340,8 @@ export default function SpotifyTrackTable({
       </div>
 
       {/* Selection summary */}
-      <div className="spotifyTrackTableFooter">
-        <span className="spotifyTrackTableSelection">
+      <div className="importTrackTableFooter">
+        <span className="importTrackTableSelection">
           {selectedTracks.size} track{selectedTracks.size !== 1 ? 's' : ''} selected
         </span>
       </div>

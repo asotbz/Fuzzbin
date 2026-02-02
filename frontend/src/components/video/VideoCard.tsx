@@ -4,7 +4,7 @@ import './video.css'
 import type { Video } from '../../lib/api/types'
 import { videosKeys } from '../../lib/api/queryKeys'
 import type { JobStatus } from '../../lib/ws/useJobEvents'
-import { getApiBaseUrl } from '../../api/client'
+import { apiJson } from '../../api/client'
 import { useVideoThumbnail } from '../../api/useVideoThumbnail'
 
 function formatDuration(seconds: unknown): string {
@@ -15,25 +15,12 @@ function formatDuration(seconds: unknown): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-async function submitDownloadJob(videoId: number, youtubeId: string): Promise<{ job_id: string }> {
-  // Submit download job directly via backend API
-  const response = await fetch(`${getApiBaseUrl()}/jobs`, {
+async function submitDownloadJob(videoId: number, youtubeId: string): Promise<{ id: string }> {
+  if (!youtubeId) throw new Error('No YouTube ID')
+  return apiJson<{ id: string }>({
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: 'import_download',
-      metadata: {
-        video_id: videoId,
-        youtube_id: youtubeId,
-      },
-    }),
+    path: `/videos/${videoId}/download`,
   })
-  
-  if (!response.ok) {
-    throw new Error(`Failed to submit download job: ${response.statusText}`)
-  }
-  
-  return response.json()
 }
 
 // Inline SVG icons to avoid external dependency

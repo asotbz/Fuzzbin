@@ -10,7 +10,7 @@ import { jobsKeys, searchKeys, videosKeys } from '../../lib/api/queryKeys'
 import { useAuthTokens } from '../../auth/useAuthTokens'
 import { useJobEvents } from '../../lib/ws/useJobEvents'
 import PageHeader from '../../components/layout/PageHeader'
-import SpotifyTrackTable, { type TrackRowState } from './components/SpotifyTrackTable'
+import ImportTrackTable, { type TrackRowState } from './components/ImportTrackTable'
 import MetadataEditor, { type EditedMetadata, extractYouTubeId } from './components/MetadataEditor'
 import YouTubeSearchModal from './components/YouTubeSearchModal'
 import type {
@@ -441,7 +441,7 @@ export default function SpotifyImport() {
           <>
             <div className="spotifyImportCard">
               <h2 className="spotifyImportCardTitle">Playlist Tracks</h2>
-              <SpotifyTrackTable
+              <ImportTrackTable
                 tracks={preview.items ?? []}
                 metadataOverrides={metadataOverrides}
                 onEditTrack={(track, state) => setEditingTrack({ track, state })}

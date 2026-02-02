@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import {
   searchArtists,
   previewArtistVideos,
-  enrichImvdbVideo,
   importArtistVideos,
 } from '../../lib/api/endpoints/add'
 import { getJob } from '../../lib/api/endpoints/jobs'
@@ -20,6 +19,7 @@ import ArtistVideoTable from './components/ArtistVideoTable'
 import type {
   ArtistSearchResultItem,
   ArtistVideoPreviewItem,
+  ArtistVideoEnrichResponse,
   ArtistVideosPreviewResponse,
   ArtistBatchImportResponse,
   GetJobResponse,
@@ -74,11 +74,11 @@ export default function ArtistImport() {
   // Video selection state
   const [videoPages, setVideoPages] = useState<ArtistVideosPreviewResponse[]>([])
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<number>>(new Set())
+  const [enrichVideoIds, setEnrichVideoIds] = useState<Set<number>>(new Set())
   const [loadingMoreVideos, setLoadingMoreVideos] = useState(false)
 
   // Enrichment state
   const [enrichmentData, setEnrichmentData] = useState<Map<number, EnrichedVideoData>>(new Map())
-  const [enrichmentStatus, setEnrichmentStatus] = useState<Map<number, 'pending' | 'loading' | 'done'>>(new Map())
   const [metadataOverrides, setMetadataOverrides] = useState<Map<number, VideoMetadataOverride>>(new Map())
 
   // Configuration
@@ -213,6 +213,11 @@ export default function ArtistImport() {
     return videoPages.flatMap((page) => page.videos)
   }, [videoPages])
 
+  const artistDisplayName = useMemo(
+    () => selectedArtist?.name || selectedArtist?.slug || 'Unknown',
+    [selectedArtist]
+  )
+
   // Check if there are more videos to load
   const hasMoreVideos = useMemo(() => {
     if (videoPages.length === 0) return false
@@ -297,82 +302,102 @@ export default function ArtistImport() {
       return
     }
 
-    // Initialize enrichment status for selected videos
-    const newStatus = new Map<number, 'pending' | 'loading' | 'done'>()
-    selectedVideoIds.forEach((id) => {
-      newStatus.set(id, 'pending')
-    })
-    setEnrichmentStatus(newStatus)
+    setEnrichVideoIds(new Set(selectedVideoIds))
     setStep('enrich')
   }, [selectedVideoIds])
 
-  // Sequential enrichment effect
-  useEffect(() => {
-    if (step !== 'enrich') return
-
-    const runEnrichment = async () => {
-      const pendingIds = Array.from(enrichmentStatus.entries())
-        .filter(([, status]) => status === 'pending')
-        .map(([id]) => id)
-
-      if (pendingIds.length === 0) return
-
-      // Process one at a time (sequential)
-      const videoId = pendingIds[0]
-      const video = allVideos.find((v) => v.id === videoId)
-      if (!video) return
-
-      // Mark as loading
-      setEnrichmentStatus((prev) => new Map(prev).set(videoId, 'loading'))
-
-      try {
-        const result = await enrichImvdbVideo({
-          imvdb_id: video.id,
-          artist: selectedArtist?.name || selectedArtist?.slug || 'Unknown',
-          track_title: video.song_title || 'Unknown',
-          year: video.year,
-          thumbnail_url: video.thumbnail_url,
-        })
-
-        setEnrichmentData((prev) => {
-          const newMap = new Map(prev)
-          newMap.set(videoId, {
-            title: result.title,
-            artist: result.artist,
-            year: result.year,
-            album: result.album,
-            label: result.label,
-            directors: result.directors,
-            featuredArtists: result.featured_artists,
-            youtube_ids: result.youtube_ids,  // Use snake_case to match backend and MetadataEditor
-            imvdbUrl: result.imvdb_url,
-            genre: result.genre,
-            thumbnailUrl: result.thumbnail_url,
-            enrichmentStatus: result.enrichment_status,
-          })
-          return newMap
-        })
-      } catch (error) {
-        console.error('Enrichment failed for video', videoId, error)
-        // Set minimal enrichment data from IMVDb
-        setEnrichmentData((prev) => {
-          const newMap = new Map(prev)
-          newMap.set(videoId, {
-            title: video.song_title || 'Unknown',
-            artist: selectedArtist?.name || selectedArtist?.slug || 'Unknown',
-            year: video.year,
-            thumbnailUrl: video.thumbnail_url,
-            enrichmentStatus: 'not_found',
-          })
-          return newMap
-        })
-      }
-
-      setEnrichmentStatus((prev) => new Map(prev).set(videoId, 'done'))
+  const mapEnrichment = useCallback((result: ArtistVideoEnrichResponse): EnrichedVideoData => {
+    return {
+      title: result.title,
+      artist: result.artist,
+      year: result.year,
+      album: result.album,
+      label: result.label,
+      directors: result.directors,
+      featuredArtists: result.featured_artists,
+      youtube_ids: result.youtube_ids,
+      imvdbUrl: result.imvdb_url,
+      genre: result.genre,
+      thumbnailUrl: result.thumbnail_url,
+      enrichmentStatus: result.enrichment_status,
     }
+  }, [])
 
-    runEnrichment()
-  }, [step, enrichmentStatus, allVideos, selectedArtist])
+  const buildBaseMetadata = useCallback(
+    (video: ArtistVideoPreviewItem, enrichment?: EnrichedVideoData) => {
+      return {
+        title: enrichment?.title ?? video.song_title ?? '',
+        artist: enrichment?.artist ?? artistDisplayName,
+        year: enrichment?.year ?? video.year ?? null,
+        album: enrichment?.album ?? null,
+        label: enrichment?.label ?? null,
+        directors: enrichment?.directors ?? null,
+        featuredArtists: enrichment?.featuredArtists ?? null,
+        genre: enrichment?.genre ?? null,
+      }
+    },
+    [artistDisplayName]
+  )
+
+  const buildOverrideBaseline = useCallback(
+    (video: ArtistVideoPreviewItem, enrichment?: EnrichedVideoData): VideoMetadataOverride => {
+      return {
+        ...buildBaseMetadata(video, enrichment),
+        isrc: null, // Artist import doesn't have ISRCs
+        youtubeId: null,
+      }
+    },
+    [buildBaseMetadata]
+  )
+
+  const resolveMetadata = useCallback(
+    (video: ArtistVideoPreviewItem) => {
+      const enrichment = enrichmentData.get(video.id)
+      const override = metadataOverrides.get(video.id)
+      const base = buildBaseMetadata(video, enrichment)
+
+      return {
+        title: override?.title ?? base.title,
+        artist: override?.artist ?? base.artist,
+        year: override?.year ?? base.year,
+        album: override?.album ?? base.album,
+        label: override?.label ?? base.label,
+        directors: override?.directors ?? base.directors,
+        featuredArtists: override?.featuredArtists ?? base.featuredArtists,
+        genre: override?.genre ?? base.genre,
+      }
+    },
+    [enrichmentData, metadataOverrides, buildBaseMetadata]
+  )
+
+  const resolveYouTubeId = useCallback(
+    (video: ArtistVideoPreviewItem) => {
+      const enrichment = enrichmentData.get(video.id)
+      const override = metadataOverrides.get(video.id)
+      if (override?.youtubeId) return override.youtubeId
+      if (enrichment?.youtube_ids && enrichment.youtube_ids.length > 0) return enrichment.youtube_ids[0]
+      return null
+    },
+    [enrichmentData, metadataOverrides]
+  )
+
+  const buildEditorEnrichment = useCallback(
+    (video: ArtistVideoPreviewItem, enrichment?: EnrichedVideoData) => {
+      return {
+        title: enrichment?.title || video.song_title || '',
+        artist: enrichment?.artist || artistDisplayName,
+        year: enrichment?.year ?? video.year,
+        album: enrichment?.album,
+        label: enrichment?.label,
+        directors: enrichment?.directors,
+        featured_artists: enrichment?.featuredArtists,
+        youtube_ids: enrichment?.youtube_ids || [],
+        genre: enrichment?.genre,
+        thumbnail_url: enrichment?.thumbnailUrl || video.thumbnail_url,
+      }
+    },
+    [artistDisplayName]
+  )
 
   // Handle metadata save from editor
   const handleSaveMetadata = (video: ArtistVideoPreviewItem, metadata: EditedMetadata) => {
@@ -405,18 +430,7 @@ export default function ArtistImport() {
 
     setMetadataOverrides((prev) => {
       const newMap = new Map(prev)
-      const existing = newMap.get(video.id) || {
-        title: enrichment?.title ?? video.song_title ?? '',
-        artist: enrichment?.artist ?? selectedArtist?.name ?? '',
-        isrc: null, // Artist import doesn't have ISRCs
-        year: enrichment?.year ?? video.year ?? null,
-        album: enrichment?.album ?? null,
-        label: enrichment?.label ?? null,
-        directors: enrichment?.directors ?? null,
-        featuredArtists: enrichment?.featuredArtists ?? null,
-        youtubeId: null,
-        genre: enrichment?.genre ?? null,
-      }
+      const existing = newMap.get(video.id) || buildOverrideBaseline(video, enrichment)
       newMap.set(video.id, { ...existing, youtubeId })
       return newMap
     })
@@ -431,32 +445,20 @@ export default function ArtistImport() {
 
     const videosToImport = selectedVideos.map((video) => {
       const enrichment = enrichmentData.get(video.id)
-      const override = metadataOverrides.get(video.id)
-
-      const title = override?.title || enrichment?.title || video.song_title || 'Unknown'
-      const artist = override?.artist || enrichment?.artist || selectedArtist?.name || 'Unknown'
-      const year = override?.year ?? enrichment?.year ?? video.year
-      const album = override?.album ?? enrichment?.album
-      const label = override?.label ?? enrichment?.label
-      const directors = override?.directors ?? enrichment?.directors
-      const featuredArtists = override?.featuredArtists ?? enrichment?.featuredArtists
-      const genre = override?.genre ?? enrichment?.genre
-
-      const youtubeId =
-        override?.youtubeId ||
-        (enrichment?.youtube_ids && enrichment.youtube_ids.length > 0 ? enrichment.youtube_ids[0] : null)
+      const metadata = resolveMetadata(video)
+      const youtubeId = resolveYouTubeId(video)
 
       return {
         imvdb_id: video.id,
         metadata: {
-          title,
-          artist,
-          year,
-          album,
-          label,
-          directors,
-          featured_artists: featuredArtists,
-          genre,
+          title: metadata.title || 'Unknown',
+          artist: metadata.artist || artistDisplayName,
+          year: metadata.year ?? video.year,
+          album: metadata.album,
+          label: metadata.label,
+          directors: metadata.directors,
+          featured_artists: metadata.featuredArtists,
+          genre: metadata.genre,
         },
         imvdb_url: enrichment?.imvdbUrl,
         youtube_id: youtubeId,
@@ -467,7 +469,7 @@ export default function ArtistImport() {
 
     importMutation.mutate({
       entity_id: selectedArtist?.id,
-      entity_name: selectedArtist?.name || selectedArtist?.slug,
+      entity_name: artistDisplayName,
       videos: videosToImport,
       initial_status: 'discovered',
       auto_download: autoDownload,
@@ -492,8 +494,8 @@ export default function ArtistImport() {
     setSelectedArtist(null)
     setVideoPages([])
     setSelectedVideoIds(new Set())
+    setEnrichVideoIds(new Set())
     setEnrichmentData(new Map())
-    setEnrichmentStatus(new Map())
     setMetadataOverrides(new Map())
     setJobId(null)
   }
@@ -716,23 +718,19 @@ export default function ArtistImport() {
               </div>
 
               <ArtistVideoTable
-                videos={allVideos.filter((v) => selectedVideoIds.has(v.id))}
+                videos={allVideos.filter((v) => enrichVideoIds.has(v.id))}
                 artistName={selectedArtist.name || selectedArtist.slug || ''}
                 metadataOverrides={metadataOverrides}
-                onEnrichmentComplete={(video: any, enrichment: any) => {
+                onEnrichmentComplete={(video: any, enrichment: ArtistVideoEnrichResponse) => {
                   setEnrichmentData((prev) => {
                     const newMap = new Map(prev)
-                    newMap.set(video.id, enrichment)
-                    return newMap
-                  })
-                  setEnrichmentStatus((prev) => {
-                    const newMap = new Map(prev)
-                    newMap.set(video.id, 'done')
+                    newMap.set(video.id, mapEnrichment(enrichment))
                     return newMap
                   })
                 }}
                 onEditVideo={(video: any, state: any) => {
-                  setEditingVideo({ video, enrichment: state.enrichmentData })
+                  const mapped = state.enrichmentData ? mapEnrichment(state.enrichmentData) : enrichmentData.get(video.id)
+                  setEditingVideo({ video, enrichment: mapped })
                 }}
                 onSearchYouTube={(video: any, artist: string, trackTitle: string) => {
                   setSearchingVideo({ video, artist, trackTitle })
@@ -755,7 +753,7 @@ export default function ArtistImport() {
                   type="button"
                   className="spotifyImportButtonPrimary"
                   onClick={handleImport}
-                  disabled={importMutation.isPending || Array.from(enrichmentStatus.values()).some((s) => s !== 'done')}
+                  disabled={importMutation.isPending || selectedVideoIds.size === 0}
                 >
                   {importMutation.isPending
                     ? 'Importing...'
@@ -799,7 +797,7 @@ export default function ArtistImport() {
         <MetadataEditor
           track={{
             title: editingVideo.video.song_title || '',
-            artist: selectedArtist?.name || selectedArtist?.slug || '',
+            artist: artistDisplayName,
             album: editingVideo.enrichment?.album || null,
             year: editingVideo.enrichment?.year ?? editingVideo.video.year ?? null,
             label: editingVideo.enrichment?.label || null,
@@ -809,18 +807,7 @@ export default function ArtistImport() {
           }}
           state={{
             enrichmentStatus: 'success',
-            enrichmentData: {
-              title: editingVideo.enrichment?.title || editingVideo.video.song_title || '',
-              artist: editingVideo.enrichment?.artist || selectedArtist?.name || '',
-              year: editingVideo.enrichment?.year ?? editingVideo.video.year,
-              album: editingVideo.enrichment?.album,
-              label: editingVideo.enrichment?.label,
-              directors: editingVideo.enrichment?.directors,
-              featured_artists: editingVideo.enrichment?.featuredArtists,
-              youtube_ids: editingVideo.enrichment?.youtube_ids || [],
-              genre: editingVideo.enrichment?.genre,
-              thumbnail_url: editingVideo.enrichment?.thumbnailUrl || editingVideo.video.thumbnail_url,
-            } as any,
+            enrichmentData: buildEditorEnrichment(editingVideo.video, editingVideo.enrichment) as any,
             selected: true,
           }}
           currentOverride={metadataOverrides.get(editingVideo.video.id)}

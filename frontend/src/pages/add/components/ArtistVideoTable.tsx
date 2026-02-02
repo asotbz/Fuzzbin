@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { enrichImvdbVideo } from '../../../lib/api/endpoints/add'
 import ArtistVideoRow, { type VideoRowState } from './ArtistVideoRow'
 import type { ArtistVideoPreviewItem, ArtistVideoEnrichResponse } from '../../../lib/api/types'
-import '../components/SpotifyTrackTable.css'
+import './ImportTrackTable.css'
 
 interface VideoMetadata {
   title: string
@@ -48,6 +48,16 @@ export default function ArtistVideoTable({
   const [selectedVideos, setSelectedVideos] = useState<Set<number>>(new Set())
   const initializedKeyRef = useRef<string | null>(null)
 
+  const syncSelectedVideos = useCallback(
+    (nextSelected: Set<number>) => {
+      setSelectedVideos(nextSelected)
+      if (onSelectionChange) {
+        onSelectionChange(new Set(nextSelected))
+      }
+    },
+    [onSelectionChange]
+  )
+
   // Initialize video states only once
   useEffect(() => {
     const key = videos.map((video) => video.id).join(',')
@@ -67,16 +77,9 @@ export default function ArtistVideoTable({
     const newVideoIds = videos
       .filter((v) => !v.already_exists)
       .map((v) => v.id)
-    setSelectedVideos(new Set(newVideoIds))
+    syncSelectedVideos(new Set(newVideoIds))
     setCurrentEnrichingIndex(0)
-  }, [videos])
-
-  // Notify parent of selection changes
-  useEffect(() => {
-    if (onSelectionChange) {
-      onSelectionChange(selectedVideos)
-    }
-  }, [selectedVideos, onSelectionChange])
+  }, [videos, syncSelectedVideos])
 
   // Enrichment mutation
   const enrichMutation = useMutation({
@@ -87,10 +90,10 @@ export default function ArtistVideoTable({
         const newStates = new Map(prev)
         const currentState = newStates.get(videoId)
         if (currentState) {
-          // Consider it success if enrichment completed (even if partial/not_found)
+          const status = data.enrichment_status === 'not_found' ? 'no_match' : 'success'
           newStates.set(videoId, {
             ...currentState,
-            enrichmentStatus: 'success',
+            enrichmentStatus: status,
             enrichmentData: data,
           })
         }
@@ -127,21 +130,44 @@ export default function ArtistVideoTable({
 
   // Start enrichment when index changes
   useEffect(() => {
+    // Wait for initial state setup
+    if (videoStates.size === 0) {
+      return
+    }
+
+    // Don't start a new enrichment while one is in flight
+    if (enrichMutation.isPending) {
+      return
+    }
+
     if (currentEnrichingIndex >= videos.length) {
       return
     }
 
     const video = videos[currentEnrichingIndex]
-    
-    // Skip if already exists
+    const currentState = videoStates.get(video.id)
+
+    // Skip videos already in the library
     if (video.already_exists) {
+      setVideoStates((prev) => {
+        const newStates = new Map(prev)
+        const state = newStates.get(video.id)
+        if (state) {
+          newStates.set(video.id, {
+            ...state,
+            enrichmentStatus: 'success',
+            selected: false,
+          })
+        }
+        return newStates
+      })
       setCurrentEnrichingIndex((prev) => prev + 1)
       return
     }
 
-    // Check if already loading or done
-    const currentState = videoStates.get(video.id)
-    if (currentState && (currentState.enrichmentStatus === 'loading' || currentState.enrichmentStatus === 'success')) {
+    if (!currentState || currentState.enrichmentStatus !== 'pending') {
+      // Skip if already processed
+      setCurrentEnrichingIndex((prev) => prev + 1)
       return
     }
 
@@ -167,19 +193,17 @@ export default function ArtistVideoTable({
       thumbnail_url: video.thumbnail_url,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEnrichingIndex])
+  }, [currentEnrichingIndex, videos, videoStates.size])
 
   // Handle selection toggle
   const handleToggleSelection = (videoId: number, selected: boolean) => {
-    setSelectedVideos((prev) => {
-      const newSet = new Set(prev)
-      if (selected) {
-        newSet.add(videoId)
-      } else {
-        newSet.delete(videoId)
-      }
-      return newSet
-    })
+    const newSet = new Set(selectedVideos)
+    if (selected) {
+      newSet.add(videoId)
+    } else {
+      newSet.delete(videoId)
+    }
+    syncSelectedVideos(newSet)
 
     setVideoStates((prev) => {
       const newStates = new Map(prev)
@@ -217,30 +241,34 @@ export default function ArtistVideoTable({
     })
   }
 
-  const enrichedCount = Array.from(videoStates.values()).filter(
-    (s) => s.enrichmentStatus === 'success' || s.enrichmentStatus === 'error'
-  ).length
-  const allEnriched = enrichedCount >= videos.filter(v => !v.already_exists).length
+  const enrichedCount = videos.filter((video) => {
+    const state = videoStates.get(video.id)
+    return state && state.enrichmentStatus !== 'pending' && state.enrichmentStatus !== 'loading'
+  }).length
+  const allEnriched = enrichedCount >= videos.length
+
+  const allSelected =
+    videos.filter((v) => !v.already_exists).length === selectedVideos.size && selectedVideos.size > 0
 
   return (
-    <div className="spotifyTrackTable">
+    <div className="importTrackTable">
       {!allEnriched && (
-        <div className="spotifyTrackTableProgress">
-          Enriching {enrichedCount} / {videos.filter(v => !v.already_exists).length} videos...
+        <div className="importTrackTableProgress">
+          Enriching {enrichedCount} / {videos.length} videos...
         </div>
       )}
 
-      <div className="spotifyTrackTableHeader">
-        <div className="spotifyTrackTableHeaderCheckbox">
+      <div className="importTrackTableHeader">
+        <div className="importTrackTableHeaderCheckbox">
           <input
             type="checkbox"
-            checked={selectedVideos.size === videos.filter(v => !v.already_exists).length}
+            checked={allSelected}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
               const newSelected = new Set<number>()
               if (e.target.checked) {
                 videos.filter(v => !v.already_exists).forEach(v => newSelected.add(v.id))
               }
-              setSelectedVideos(newSelected)
+              syncSelectedVideos(newSelected)
               
               setVideoStates((prev) => {
                 const newStates = new Map(prev)
@@ -259,13 +287,13 @@ export default function ArtistVideoTable({
             disabled={videos.filter(v => !v.already_exists).length === 0}
           />
         </div>
-        <div className="spotifyTrackTableHeaderLabel">Track Info</div>
-        <div className="spotifyTrackTableHeaderLabel">Match Status</div>
-        <div className="spotifyTrackTableHeaderLabel">YouTube</div>
-        <div className="spotifyTrackTableHeaderLabel">Actions</div>
+        <div className="importTrackTableHeaderLabel">Track Info</div>
+        <div className="importTrackTableHeaderLabel">Match Status</div>
+        <div className="importTrackTableHeaderLabel">YouTube</div>
+        <div className="importTrackTableHeaderLabel">Actions</div>
       </div>
 
-      <div className="spotifyTrackTableBody">
+      <div className="importTrackTableBody">
         {videos.map((video) => {
           const state = videoStates.get(video.id) || {
             enrichmentStatus: 'pending' as const,

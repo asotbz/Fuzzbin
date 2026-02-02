@@ -1,5 +1,5 @@
-/* Spotify Track Table Container */
-.spotifyTrackTable {
+/* Import Track Table Container */
+.importTrackTable {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -10,7 +10,7 @@
 }
 
 /* Progress indicator */
-.spotifyTrackTableProgress {
+.importTrackTableProgress {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -25,7 +25,7 @@
 }
 
 /* Table Header */
-.spotifyTrackTableHeader {
+.importTrackTableHeader {
   display: grid;
   grid-template-columns: 40px 2fr 1.5fr 1fr 180px;
   gap: var(--space-4);
@@ -41,26 +41,26 @@
   border: 2px solid var(--bg-surface-light);
 }
 
-.spotifyTrackTableHeaderCheckbox {
+.importTrackTableHeaderCheckbox {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.spotifyTrackTableHeaderLabel {
+.importTrackTableHeaderLabel {
   display: flex;
   align-items: center;
 }
 
 /* Table Body */
-.spotifyTrackTableBody {
+.importTrackTableBody {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
 /* Table Footer */
-.spotifyTrackTableFooter {
+.importTrackTableFooter {
   padding: var(--space-4);
   background: var(--bg-surface);
   border-radius: var(--radius-md);
@@ -71,7 +71,7 @@
   border: 2px solid var(--bg-surface-light);
 }
 
-.spotifyTrackTableSelection {
+.importTrackTableSelection {
   color: var(--channel-import);
 }
 
