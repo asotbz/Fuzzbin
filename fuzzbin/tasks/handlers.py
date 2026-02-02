@@ -96,14 +96,25 @@ async def _download_video_by_id(
         )
         return Path(file_path)
 
-    # Create temp directory for download
+    # Create temp directory for download on same filesystem as library
+    # This avoids expensive cross-filesystem copies during organization
+    config = fuzzbin.get_config()
+    library_dir = config.library_dir
+    if library_dir is None:
+        from fuzzbin.common.config import _get_default_library_dir
+
+        library_dir = _get_default_library_dir()
+
+    # Create .downloads directory in library root
+    downloads_dir = library_dir / ".downloads"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+
     import tempfile
 
-    temp_dir = Path(tempfile.mkdtemp(prefix="fuzzbin_download_"))
+    temp_dir = Path(tempfile.mkdtemp(prefix="fuzzbin_download_", dir=str(downloads_dir)))
     youtube_id = video.get("youtube_id") or "video"
     temp_file = temp_dir / f"{youtube_id}.mp4"
 
-    config = fuzzbin.get_config()
     ytdlp_config = config.ytdlp or YTDLPConfig()
 
     # Update video status to downloading

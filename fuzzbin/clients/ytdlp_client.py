@@ -529,11 +529,19 @@ class YTDLPClient:
             DownloadCancelledError: If download is cancelled via cancellation_token
         """
         # Build command args
+        # Use --paths to specify both home (final) and temp directories
+        # This ensures all download activity happens on the same filesystem
+        # NOTE: --paths is ignored if --output uses an absolute path, so we use
+        # relative filename with --output and specify directory via --paths
         args = [
             "--format",
             format_spec,
+            "--paths",
+            f"home:{output_path.parent}",  # Final destination directory
+            "--paths",
+            f"temp:{output_path.parent}",  # Temp directory (same filesystem)
             "--output",
-            str(output_path),
+            output_path.name,  # Relative filename only
             "--no-playlist",
             "--newline",  # Force newlines for progress updates
             url,
