@@ -49,10 +49,7 @@ prod = [
     # Production dependencies are already in [project.dependencies]
     # This group exists to exclude dev tools when installing in Docker
 ]
-profile = [
-    # Memory profiling dependencies (enabled by FUZZBIN_PROFILE_MEMORY=1)
-    "psutil>=7.0.0",
-]
+
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
