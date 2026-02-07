@@ -14,7 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import type { FacetsResponse, ListVideosQuery, SortOrder, Video } from '../../../lib/api/types'
 import { useFacets } from '../hooks/useFacets'
 import { searchKeys, videosKeys } from '../../../lib/api/queryKeys'
-import { bulkDeleteVideos } from '../../../lib/api/endpoints/videos'
+import { bulkApplyTags, bulkDeleteVideos, setVideoTags } from '../../../lib/api/endpoints/videos'
 import { useJobEvents, type VideoUpdateEvent } from '../../../lib/ws/useJobEvents'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
 import { getApiBaseUrl } from '../../../api/client'
@@ -30,12 +30,32 @@ const YEAR_NONE_SENTINEL = -1
 const LIBRARY_PREFS_KEY = 'library-preferences'
 const LEGACY_VIEW_KEY = 'library-view-mode'
 const SORT_FIELDS = new Set(['created_at', 'title', 'artist', 'year'])
+const STATUS_FILTER_OPTIONS = [
+  { value: '', label: 'Any status' },
+  { value: 'discovered', label: 'Discovered' },
+  { value: 'queued', label: 'Queued' },
+  { value: 'pending_download', label: 'Pending download' },
+  { value: 'downloading', label: 'Downloading' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'downloaded', label: 'Downloaded' },
+  { value: 'organizing', label: 'Organizing' },
+  { value: 'complete', label: 'Complete' },
+  { value: 'imported', label: 'Imported' },
+  { value: 'organized', label: 'Organized' },
+  { value: 'missing', label: 'Missing' },
+  { value: 'download_failed', label: 'Download failed' },
+  { value: 'processing_failed', label: 'Processing failed' },
+  { value: 'organize_failed', label: 'Organize failed' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'archived', label: 'Archived' },
+]
 
 type FacetSelections = {
   tag_name?: string[]
   genre?: string[]
   director?: string
   year?: number[]
+  status?: string
 }
 
 type LibraryPreferences = {
@@ -101,6 +121,12 @@ function normalizeStringList(value: unknown): string[] | undefined {
   return Array.from(new Set(cleaned))
 }
 
+function normalizeStringValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const cleaned = value.trim()
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
 function normalizeNumberList(value: unknown): number[] | undefined {
   if (!Array.isArray(value)) return undefined
   const cleaned = value
@@ -108,6 +134,26 @@ function normalizeNumberList(value: unknown): number[] | undefined {
     .filter((item) => Number.isFinite(item))
   if (cleaned.length === 0) return undefined
   return Array.from(new Set(cleaned))
+}
+
+function normalizeTagList(tags: string[]): string[] {
+  const cleaned = tags
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0)
+  return Array.from(new Set(cleaned))
+}
+
+function getTagNames(video: Video): string[] {
+  const anyVideo = video as Record<string, unknown>
+  const tags = Array.isArray(anyVideo.tags) ? anyVideo.tags : []
+  return tags
+    .map((tag: unknown) => {
+      if (!tag || typeof tag !== 'object') return null
+      const tagObj = tag as Record<string, unknown>
+      const label = tagObj.name ?? tagObj.tag_name ?? tagObj.value
+      return typeof label === 'string' && label.trim().length > 0 ? label.trim() : null
+    })
+    .filter((t): t is string => Boolean(t))
 }
 
 function parsePreferences(raw: string | null): LibraryPreferences {
@@ -137,11 +183,13 @@ function parsePreferences(raw: string | null): LibraryPreferences {
       const tag_name = normalizeStringList(filtersObj.tag_name)
       const genre = normalizeStringList(filtersObj.genre)
       const year = normalizeNumberList(filtersObj.year)
+      const status = normalizeStringValue(filtersObj.status)
       const filters: FacetSelections = {}
 
       if (tag_name) filters.tag_name = tag_name
       if (genre) filters.genre = genre
       if (year) filters.year = year
+      if (status) filters.status = status
 
       if (Object.keys(filters).length > 0) prefs.filters = filters
     }
@@ -258,6 +306,7 @@ export default function LibraryPage() {
       ...(filters.tag_name?.length ? { tag_name: filters.tag_name } : {}),
       ...(filters.genre?.length ? { genre: filters.genre } : {}),
       ...(filters.year?.length ? { year: filters.year } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
     }
     const preferences: LibraryPreferences = {
       viewMode,
@@ -285,7 +334,7 @@ export default function LibraryPage() {
   // Clear selection on filter/sort/search changes
   useEffect(() => {
     setSelectedVideoIds(new Set())
-  }, [debouncedSearch, sortBy, sortOrder, filters.tag_name, filters.genre, filters.year])
+  }, [debouncedSearch, sortBy, sortOrder, filters.tag_name, filters.genre, filters.year, filters.status])
 
   useEffect(() => {
     if (!openFacet) return
@@ -324,6 +373,7 @@ export default function LibraryPage() {
     if (filters.genre && filters.genre.length > 0) query.genre = filters.genre
     if (filters.director) query.director = filters.director
     if (filters.year && filters.year.length > 0) query.year = filters.year
+    if (filters.status) query.status = filters.status
 
     return query as ListVideosQuery
   }, [pageSize, sortBy, sortOrder, debouncedSearch, filters])
@@ -345,6 +395,11 @@ export default function LibraryPage() {
     const pages = videosQuery.data?.pages ?? []
     const merged = pages.flatMap((page) => (page.items as unknown as Video[] | undefined) ?? [])
     return merged
+  }, [videosQuery.data?.pages])
+
+  const totalVideos = useMemo(() => {
+    const firstPage = videosQuery.data?.pages?.[0] as { total?: number } | undefined
+    return typeof firstPage?.total === 'number' ? firstPage.total : null
   }, [videosQuery.data?.pages])
 
   // Extract video IDs from loaded items for WebSocket subscription
@@ -436,19 +491,68 @@ export default function LibraryPage() {
 
   // Bulk operation handlers
   async function handleBulkTags(addTags: string[], removeTags: string[]) {
-    try {
-      // TODO: Replace with actual API call when endpoint is available
-      // await bulkUpdateTags(Array.from(selectedVideoIds), addTags, removeTags)
+    const selectedIds = Array.from(selectedVideoIds)
+    if (selectedIds.length === 0) return
 
-      toast.success(
-        `Tags updated for ${selectedVideoIds.size} video${selectedVideoIds.size !== 1 ? 's' : ''}`,
-        {
-          description: `Added: ${addTags.join(', ') || 'none'} | Removed: ${removeTags.join(', ') || 'none'}`,
+    const tagsToAdd = normalizeTagList(addTags)
+    const tagsToRemove = normalizeTagList(removeTags)
+
+    try {
+      if (tagsToRemove.length === 0) {
+        if (tagsToAdd.length > 0) {
+          const result = await bulkApplyTags(selectedIds, tagsToAdd, false)
+          if (result.failed_count > 0) {
+            toast.warning('Some tags failed to apply', {
+              description: `Updated ${result.success_count} of ${result.total} videos`,
+            })
+          } else {
+            toast.success(
+              `Tags updated for ${selectedIds.length} video${selectedIds.length !== 1 ? 's' : ''}`,
+              {
+                description: `Added: ${tagsToAdd.join(', ') || 'none'}`,
+              }
+            )
+          }
         }
-      )
+      } else {
+        const itemsById = new Map<number, Video>()
+        items.forEach((video) => {
+          const id = (video as Record<string, unknown>).id
+          if (typeof id === 'number') itemsById.set(id, video)
+        })
+
+        const updates = selectedIds.map((videoId) => {
+          const video = itemsById.get(videoId)
+          if (!video) return null
+          const currentTags = getTagNames(video)
+          const nextTags = new Set<string>(currentTags)
+          tagsToAdd.forEach((tag) => nextTags.add(tag))
+          tagsToRemove.forEach((tag) => nextTags.delete(tag))
+          return { videoId, tags: Array.from(nextTags) }
+        }).filter((update): update is { videoId: number; tags: string[] } => Boolean(update))
+
+        const results = await Promise.allSettled(
+          updates.map((update) => setVideoTags(update.videoId, update.tags))
+        )
+        const failedCount = results.filter((result) => result.status === 'rejected').length
+
+        if (failedCount > 0) {
+          toast.warning('Some tags failed to update', {
+            description: `Updated ${updates.length - failedCount} of ${updates.length} videos`,
+          })
+        } else {
+          toast.success(
+            `Tags updated for ${updates.length} video${updates.length !== 1 ? 's' : ''}`,
+            {
+              description: `Added: ${tagsToAdd.join(', ') || 'none'} | Removed: ${tagsToRemove.join(', ') || 'none'}`,
+            }
+          )
+        }
+      }
 
       // Invalidate queries to refresh the video list
       await queryClient.invalidateQueries({ queryKey: videosKeys.all })
+      await queryClient.invalidateQueries({ queryKey: searchKeys.all })
 
       setBulkTagModalOpen(false)
       clearSelection()
@@ -669,8 +773,14 @@ export default function LibraryPage() {
   const hasActiveFilters = Boolean(
     (filters.tag_name?.length ?? 0) > 0 ||
     (filters.genre?.length ?? 0) > 0 ||
-    (filters.year?.length ?? 0) > 0
+    (filters.year?.length ?? 0) > 0 ||
+    Boolean(filters.status)
   )
+
+  const totalCountLabel =
+    totalVideos === null
+      ? 'Total: —'
+      : `Total: ${totalVideos.toLocaleString()} video${totalVideos === 1 ? '' : 's'}`
 
   return (
     <div className="libraryPage">
@@ -808,6 +918,28 @@ export default function LibraryPage() {
               )}
             </div>
 
+            <label className="libraryStatusControl">
+              <span className="libraryStatusLabel">Status</span>
+              <select
+                className="select libraryStatusSelect"
+                value={filters.status ?? ''}
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  setFilters((prev) => ({
+                    ...prev,
+                    status: nextValue ? nextValue : undefined,
+                  }))
+                }}
+                aria-label="Filter by status"
+              >
+                {STATUS_FILTER_OPTIONS.map((option) => (
+                  <option key={`status:${option.value || 'any'}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             {viewMode === 'table' && (
               <label className="libraryColumnsControl">
                 <span className="libraryColumnsLabel">Columns</span>
@@ -824,9 +956,14 @@ export default function LibraryPage() {
               </label>
             )}
 
-            <div className="libraryFacetsBarStatus">
-              {facetsQuery.isLoading ? <span className="statusLine">Loading filters…</span> : null}
-              {facetsQuery.isError ? <span className="statusLine">Filters unavailable</span> : null}
+            <div className="libraryFacetsBarMeta">
+              <div className="libraryFacetsBarStatus">
+                {facetsQuery.isLoading ? <span className="statusLine">Loading filters…</span> : null}
+                {facetsQuery.isError ? <span className="statusLine">Filters unavailable</span> : null}
+              </div>
+              <div className="libraryTotalCount" aria-live="polite">
+                {totalCountLabel}
+              </div>
             </div>
           </div>
         </section>

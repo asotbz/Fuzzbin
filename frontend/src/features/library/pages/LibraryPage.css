@@ -251,7 +251,31 @@
   flex-shrink: 0;
 }
 
+.libraryFacetsBarMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.libraryTotalCount {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
 .libraryColumnsControl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.libraryStatusControl {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -267,10 +291,25 @@
   color: var(--text-secondary);
 }
 
+.libraryStatusLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
 .libraryColumnsSelect {
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-xs);
   min-width: 200px;
+}
+
+.libraryStatusSelect {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  min-width: 170px;
 }
 
 .facetClearButton {
