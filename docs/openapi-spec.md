@@ -54,6 +54,24 @@ authentication tokens.
 Unlike /auth/password, this endpoint does not require prior authentication
 and is specifically for users who cannot log in due to password rotation
 requirements.
+- `GET` `/auth/oidc/config` — Get OIDC configuration
+  - Return whether OIDC login is enabled and provider display name.
+
+This is a public endpoint — the frontend calls it on load to decide
+whether to show the OIDC login button.
+- `POST` `/auth/oidc/start` — Start OIDC login flow
+  - Create OIDC authorization request (state, nonce, PKCE) and return the auth URL.
+
+The frontend should redirect the user to ``auth_url``. After IdP
+authentication the user is redirected back to ``oidc_redirect_uri``
+with ``code`` and ``state`` query params.
+- `POST` `/auth/oidc/exchange` — Exchange OIDC authorization code for local tokens
+  - Validate the OIDC callback, exchange the code, validate the ID token,
+enforce identity binding, and issue local JWT tokens.
+
+The frontend calls this after the IdP redirects back with ``code`` and
+``state``.  On success the response is identical to ``POST /auth/login``:
+access token in the body, refresh token as httpOnly cookie.
 
 ## Videos
 Video CRUD operations and metadata management

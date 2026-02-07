@@ -159,6 +159,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/oidc/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get OIDC configuration
+         * @description Return whether OIDC login is enabled and provider display name.
+         *
+         *     This is a public endpoint — the frontend calls it on load to decide
+         *     whether to show the OIDC login button.
+         */
+        get: operations["oidc_config_auth_oidc_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start OIDC login flow
+         * @description Create OIDC authorization request (state, nonce, PKCE) and return the auth URL.
+         *
+         *     The frontend should redirect the user to ``auth_url``. After IdP
+         *     authentication the user is redirected back to ``oidc_redirect_uri``
+         *     with ``code`` and ``state`` query params.
+         */
+        post: operations["oidc_start_auth_oidc_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange OIDC authorization code for local tokens
+         * @description Validate the OIDC callback, exchange the code, validate the ID token,
+         *     enforce identity binding, and issue local JWT tokens.
+         *
+         *     The frontend calls this after the IdP redirects back with ``code`` and
+         *     ``state``.  On success the response is identical to ``POST /auth/login``:
+         *     access token in the body, refresh token as httpOnly cookie.
+         */
+        post: operations["oidc_exchange_auth_oidc_exchange_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/videos/{video_id}/stream": {
         parameters: {
             query?: never;
@@ -6540,6 +6612,55 @@ export interface components {
             status: string;
         };
         /**
+         * OIDCConfigResponse
+         * @description Public OIDC configuration for the frontend.
+         */
+        OIDCConfigResponse: {
+            /**
+             * Enabled
+             * @description Whether OIDC login is available
+             */
+            enabled: boolean;
+            /**
+             * Provider Name
+             * @description Display label for the login button
+             * @default SSO
+             */
+            provider_name: string;
+        };
+        /**
+         * OIDCExchangeRequest
+         * @description Request body for /auth/oidc/exchange.
+         */
+        OIDCExchangeRequest: {
+            /**
+             * Code
+             * @description Authorization code from the IdP callback
+             */
+            code: string;
+            /**
+             * State
+             * @description State value from the original auth request
+             */
+            state: string;
+        };
+        /**
+         * OIDCStartResponse
+         * @description Response from /auth/oidc/start with the authorization URL.
+         */
+        OIDCStartResponse: {
+            /**
+             * Auth Url
+             * @description URL to redirect the user to for IdP login
+             */
+            auth_url: string;
+            /**
+             * State
+             * @description Opaque state value for CSRF verification
+             */
+            state: string;
+        };
+        /**
          * OrganizeRequest
          * @description Request body for organizing a video.
          */
@@ -8835,6 +8956,114 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    oidc_config_auth_oidc_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OIDC availability and display label */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCConfigResponse"];
+                };
+            };
+        };
+    };
+    oidc_start_auth_oidc_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorization URL and state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCStartResponse"];
+                };
+            };
+            /** @description OIDC is not enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OIDC discovery or configuration error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidc_exchange_auth_oidc_exchange_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OIDCExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Local JWT issued (refresh token set as httpOnly cookie) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessTokenResponse"];
+                };
+            };
+            /** @description Invalid state, expired transaction, or token exchange error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Identity binding mismatch or missing required group */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OIDC is not enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

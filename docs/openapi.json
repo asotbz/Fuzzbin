@@ -3,7 +3,7 @@
   "info": {
     "title": "Fuzzbin API",
     "description": "Music video library management API.\nProvides CRUD operations for videos, artists, collections, and tags,\nwith full-text search and filtering capabilities.\n\n## Authentication\n\nWhen authentication is enabled (`FUZZBIN_API_AUTH_ENABLED=true`), protected endpoints require\na Bearer token in the `Authorization` header:\n\n```\nAuthorization: Bearer <your-jwt-token>\n```\n\nObtain a token via `POST /auth/login` with username/password credentials.\n\n## WebSocket API\n\n### Real-time Job Progress: `/ws/jobs/{job_id}`\n\nConnect to receive live progress updates for background jobs.\n\n**Connection:**\n```\nws://localhost:8000/ws/jobs/{job_id}\n```\n\n**Message Format (JSON):**\n```json\n{\n  \"job_id\": \"uuid-string\",\n  \"status\": \"running\",\n  \"progress\": 0.45,\n  \"message\": \"Processing file 45 of 100\",\n  \"result\": null\n}\n```\n\n**Fields:**\n- `job_id`: Job identifier\n- `status`: One of `pending`, `running`, `completed`, `failed`, `cancelled`\n- `progress`: Float 0.0-1.0 indicating completion percentage\n- `message`: Human-readable status message\n- `result`: Job result data (populated on completion)\n\n**Close Codes:**\n- `1008` (Policy Violation): Invalid or unknown job ID\n- `1011` (Internal Error): Server error during progress streaming\n",
-    "version": "0.3.1"
+    "version": "0.3.3"
   },
   "paths": {
     "/health": {
@@ -248,6 +248,107 @@
           },
           "429": {
             "description": "Too many failed attempts"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/oidc/config": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get OIDC configuration",
+        "description": "Return whether OIDC login is enabled and provider display name.\n\nThis is a public endpoint \u2014 the frontend calls it on load to decide\nwhether to show the OIDC login button.",
+        "operationId": "oidc_config_auth_oidc_config_get",
+        "responses": {
+          "200": {
+            "description": "OIDC availability and display label",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/oidc/start": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Start OIDC login flow",
+        "description": "Create OIDC authorization request (state, nonce, PKCE) and return the auth URL.\n\nThe frontend should redirect the user to ``auth_url``. After IdP\nauthentication the user is redirected back to ``oidc_redirect_uri``\nwith ``code`` and ``state`` query params.",
+        "operationId": "oidc_start_auth_oidc_start_post",
+        "responses": {
+          "200": {
+            "description": "Authorization URL and state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCStartResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "OIDC is not enabled"
+          },
+          "500": {
+            "description": "OIDC discovery or configuration error"
+          }
+        }
+      }
+    },
+    "/auth/oidc/exchange": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Exchange OIDC authorization code for local tokens",
+        "description": "Validate the OIDC callback, exchange the code, validate the ID token,\nenforce identity binding, and issue local JWT tokens.\n\nThe frontend calls this after the IdP redirects back with ``code`` and\n``state``.  On success the response is identical to ``POST /auth/login``:\naccess token in the body, refresh token as httpOnly cookie.",
+        "operationId": "oidc_exchange_auth_oidc_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OIDCExchangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Local JWT issued (refresh token set as httpOnly cookie)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state, expired transaction, or token exchange error"
+          },
+          "403": {
+            "description": "Identity binding mismatch or missing required group"
+          },
+          "404": {
+            "description": "OIDC is not enabled"
           },
           "422": {
             "description": "Validation Error",
@@ -16960,6 +17061,71 @@
         ],
         "title": "NFOScanResponse",
         "description": "Response after submitting an NFO scan job via /add.\n\nThis mirrors the /scan endpoint behavior but lives under /add for UI cohesion."
+      },
+      "OIDCConfigResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether OIDC login is available"
+          },
+          "provider_name": {
+            "type": "string",
+            "title": "Provider Name",
+            "description": "Display label for the login button",
+            "default": "SSO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "OIDCConfigResponse",
+        "description": "Public OIDC configuration for the frontend."
+      },
+      "OIDCExchangeRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Code",
+            "description": "Authorization code from the IdP callback"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "title": "State",
+            "description": "State value from the original auth request"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "state"
+        ],
+        "title": "OIDCExchangeRequest",
+        "description": "Request body for /auth/oidc/exchange."
+      },
+      "OIDCStartResponse": {
+        "properties": {
+          "auth_url": {
+            "type": "string",
+            "title": "Auth Url",
+            "description": "URL to redirect the user to for IdP login"
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "description": "Opaque state value for CSRF verification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "auth_url",
+          "state"
+        ],
+        "title": "OIDCStartResponse",
+        "description": "Response from /auth/oidc/start with the authorization URL."
       },
       "OrganizeRequest": {
         "properties": {
