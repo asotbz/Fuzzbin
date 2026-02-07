@@ -25,6 +25,47 @@ export interface BulkDeleteResult {
   failed_count: number
 }
 
+export interface BulkOperationResult {
+  success_ids: number[]
+  failed_ids: number[]
+  errors: Record<string, string>
+  file_errors: string[]
+  total: number
+  success_count: number
+  failed_count: number
+}
+
+export async function bulkApplyTags(
+  videoIds: number[],
+  tagNames: string[],
+  replace: boolean = false
+): Promise<BulkOperationResult> {
+  return apiJson<BulkOperationResult>({
+    method: 'POST',
+    path: '/videos/bulk/tags',
+    body: {
+      video_ids: videoIds,
+      tag_names: tagNames,
+      replace,
+    },
+  })
+}
+
+export async function setVideoTags(
+  videoId: number,
+  tags: string[],
+  source: 'manual' | 'auto' = 'manual'
+): Promise<unknown> {
+  return apiJson<unknown>({
+    method: 'POST',
+    path: `/tags/videos/${videoId}/set`,
+    body: {
+      tags,
+      source,
+    },
+  })
+}
+
 /**
  * Bulk delete videos.
  * @param videoIds - IDs of videos to delete

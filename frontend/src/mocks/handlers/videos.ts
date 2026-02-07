@@ -111,6 +111,33 @@ export const videosHandlers = [
     })
   }),
 
+  // Bulk apply tags
+  http.post(`${BASE_URL}/videos/bulk/tags`, async ({ request }) => {
+    const body = await request.json() as {
+      video_ids: number[]
+      tag_names: string[]
+      replace?: boolean
+    }
+
+    const successIds = body.video_ids.filter(id => mockVideos.some(v => v.id === id))
+    const failedIds = body.video_ids.filter(id => !mockVideos.some(v => v.id === id))
+
+    return HttpResponse.json({
+      success_ids: successIds,
+      failed_ids: failedIds,
+      errors: {},
+      file_errors: [],
+      total: body.video_ids.length,
+      success_count: successIds.length,
+      failed_count: failedIds.length,
+    })
+  }),
+
+  // Set video tags
+  http.post(`${BASE_URL}/tags/videos/:id/set`, async () => {
+    return HttpResponse.json([])
+  }),
+
   // List trash
   http.get(`${BASE_URL}/files/trash`, ({ request }) => {
     const url = new URL(request.url)
