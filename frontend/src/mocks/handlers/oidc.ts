@@ -19,6 +19,13 @@ export const oidcHandlers = [
     })
   }),
 
+  // OIDC logout URL endpoint
+  http.get(`${BASE_URL}/auth/oidc/logout-url`, () => {
+    return HttpResponse.json({
+      logout_url: null,
+    })
+  }),
+
   // OIDC exchange endpoint
   http.post(`${BASE_URL}/auth/oidc/exchange`, () => {
     return HttpResponse.json({

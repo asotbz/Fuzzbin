@@ -241,6 +241,36 @@ class OIDCProvider:
         query = urlencode(existing_pairs + auth_pairs, doseq=True, quote_via=quote)
         return urlunsplit((split.scheme, split.netloc, split.path, query, split.fragment))
 
+    async def build_logout_url(
+        self, post_logout_redirect_uri: Optional[str] = None
+    ) -> Optional[str]:
+        """Construct the IdP logout URL when the provider supports it.
+
+        Args:
+            post_logout_redirect_uri: Optional URL for the IdP to redirect to after logout.
+
+        Returns:
+            Full end-session URL, or ``None`` when the provider does not expose
+            ``end_session_endpoint`` in discovery metadata.
+        """
+        self._assert_runtime_config()
+        discovery = await self._fetch_discovery()
+        logout_endpoint = discovery.get("end_session_endpoint")
+        if not isinstance(logout_endpoint, str) or not logout_endpoint.strip():
+            return None
+
+        params: dict[str, str] = {}
+        if isinstance(post_logout_redirect_uri, str) and post_logout_redirect_uri.strip():
+            params["post_logout_redirect_uri"] = post_logout_redirect_uri.strip()
+            # Some providers require client_id when post_logout_redirect_uri is present.
+            params["client_id"] = self.client_id
+
+        split = urlsplit(logout_endpoint)
+        existing_pairs = parse_qsl(split.query, keep_blank_values=True)
+        logout_pairs = list(params.items())
+        query = urlencode(existing_pairs + logout_pairs, doseq=True, quote_via=quote)
+        return urlunsplit((split.scheme, split.netloc, split.path, query, split.fragment))
+
     # -----------------------------------------------------------------------
     # Code exchange
     # -----------------------------------------------------------------------

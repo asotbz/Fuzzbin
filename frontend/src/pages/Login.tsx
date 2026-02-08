@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { getApiBaseUrl, scheduleTokenRefresh } from '../api/client'
 import { useOidcConfig } from '../api/useOidcConfig'
 import { startOidcLogin } from '../lib/api/endpoints/oidc'
+import { rememberOidcState } from '../auth/oidcState'
 import { setTokens } from '../auth/tokenStore'
 import { useAuthTokens } from '../auth/useAuthTokens'
 
@@ -109,7 +110,7 @@ export default function LoginPage() {
     setIsOidcStarting(true)
     try {
       const { auth_url, state } = await startOidcLogin()
-      sessionStorage.setItem('oidc_state', state)
+      rememberOidcState(state)
       window.location.href = auth_url
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start OIDC login')

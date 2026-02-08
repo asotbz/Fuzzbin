@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { scheduleTokenRefresh } from '../api/client'
 import { exchangeOidcCode } from '../lib/api/endpoints/oidc'
+import { consumeOidcState } from '../auth/oidcState'
 import { setTokens } from '../auth/tokenStore'
 
 type Phase = 'exchanging' | 'error'
@@ -11,8 +12,14 @@ export default function OidcCallbackPage() {
   const [params] = useSearchParams()
   const [phase, setPhase] = useState<Phase>('exchanging')
   const [error, setError] = useState<string | null>(null)
+  const exchangeStarted = useRef(false)
 
   useEffect(() => {
+    // React StrictMode runs effects twice in development; guard to ensure
+    // we only consume OIDC state and start exchange once.
+    if (exchangeStarted.current) return
+    exchangeStarted.current = true
+
     const code = params.get('code')
     const returnedState = params.get('state')
     const idpError = params.get('error')
@@ -31,38 +38,30 @@ export default function OidcCallbackPage() {
       return
     }
 
-    // Client-side CSRF check: compare returned state with what we stored
-    const savedState = sessionStorage.getItem('oidc_state')
-    sessionStorage.removeItem('oidc_state')
-
-    if (savedState !== returnedState) {
+    // Client-side CSRF check against pending in-browser OIDC states.
+    if (!consumeOidcState(returnedState)) {
       setPhase('error')
-      setError('State mismatch — possible CSRF attack. Please try logging in again.')
+      setError(
+        'State mismatch — possible CSRF attack. Please try logging in again. ' +
+          'If running locally, ensure login starts and callback both use the same origin.'
+      )
       return
     }
-
-    let cancelled = false
 
     async function doExchange() {
       try {
         const data = await exchangeOidcCode(code!, returnedState!)
-        if (cancelled) return
 
         setTokens({ accessToken: data.access_token })
         scheduleTokenRefresh(data.access_token)
         navigate('/library', { replace: true })
       } catch (err) {
-        if (cancelled) return
         setPhase('error')
         setError(err instanceof Error ? err.message : 'OIDC login failed')
       }
     }
 
     doExchange()
-
-    return () => {
-      cancelled = true
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -25,6 +26,23 @@ function renderCallback(searchParams: string = '') {
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
+  )
+}
+
+function renderCallbackStrictMode(searchParams: string = '') {
+  const qc = createQueryClient()
+  return render(
+    <StrictMode>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[`/oidc/callback${searchParams}`]}>
+          <Routes>
+            <Route path="/oidc/callback" element={<OidcCallbackPage />} />
+            <Route path="/library" element={<div>Library Page</div>} />
+            <Route path="/login" element={<div>Login Page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </StrictMode>
   )
 }
 
@@ -60,6 +78,29 @@ describe('OidcCallbackPage', () => {
     expect(screen.getByText(/State mismatch/)).toBeInTheDocument()
   })
 
+  it('accepts a state from pending state list', async () => {
+    sessionStorage.removeItem('oidc_state')
+    sessionStorage.setItem('oidc_pending_states', JSON.stringify(['state-a', 'state-b']))
+
+    server.use(
+      http.post(`${BASE_URL}/auth/oidc/exchange`, () => {
+        return HttpResponse.json({
+          access_token: 'oidc-access-token-list',
+          token_type: 'bearer',
+          expires_in: 1800,
+        })
+      })
+    )
+
+    renderCallback('?code=auth-code&state=state-b')
+
+    await waitFor(() => {
+      expect(screen.getByText('Library Page')).toBeInTheDocument()
+    })
+
+    expect(getTokens().accessToken).toBe('oidc-access-token-list')
+  })
+
   it('shows error on IdP error', () => {
     renderCallback('?error=access_denied&error_description=User+denied+consent')
 
@@ -84,6 +125,26 @@ describe('OidcCallbackPage', () => {
     })
 
     expect(getTokens().accessToken).toBe('oidc-access-token')
+  })
+
+  it('handles callback correctly under React StrictMode', async () => {
+    server.use(
+      http.post(`${BASE_URL}/auth/oidc/exchange`, () => {
+        return HttpResponse.json({
+          access_token: 'oidc-access-token-strict',
+          token_type: 'bearer',
+          expires_in: 1800,
+        })
+      })
+    )
+
+    renderCallbackStrictMode('?code=auth-code&state=valid-state')
+
+    await waitFor(() => {
+      expect(screen.getByText('Library Page')).toBeInTheDocument()
+    })
+
+    expect(getTokens().accessToken).toBe('oidc-access-token-strict')
   })
 
   it('shows error on exchange failure', async () => {

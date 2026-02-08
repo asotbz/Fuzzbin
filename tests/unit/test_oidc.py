@@ -326,6 +326,33 @@ class TestOIDCProviderDiscovery:
         assert qs["client_id"] == ["fuzzbin"]
         assert qs["response_type"] == ["code"]
 
+    async def test_build_logout_url_with_post_logout_redirect(
+        self, provider, discovery_doc, respx_mock
+    ):
+        discovery_doc["end_session_endpoint"] = "https://auth.example.com/logout?foo=bar"
+        respx_mock.get("https://auth.example.com/.well-known/openid-configuration").respond(
+            json=discovery_doc
+        )
+
+        post_logout_redirect_uri = "https://fuzzbin.example.com/login?local=1"
+        url = await provider.build_logout_url(post_logout_redirect_uri=post_logout_redirect_uri)
+        assert url is not None
+
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query, strict_parsing=True)
+        assert qs["foo"] == ["bar"]
+        assert qs["post_logout_redirect_uri"] == [post_logout_redirect_uri]
+        assert qs["client_id"] == ["fuzzbin"]
+
+    async def test_build_logout_url_returns_none_without_end_session_endpoint(
+        self, provider, discovery_doc, respx_mock
+    ):
+        respx_mock.get("https://auth.example.com/.well-known/openid-configuration").respond(
+            json=discovery_doc
+        )
+
+        assert await provider.build_logout_url() is None
+
     async def test_clear_cache(self, provider, discovery_doc, respx_mock):
         route = respx_mock.get("https://auth.example.com/.well-known/openid-configuration").respond(
             json=discovery_doc

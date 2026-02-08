@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import PageHeader from '../../../components/layout/PageHeader'
@@ -17,8 +17,9 @@ import { searchKeys, videosKeys } from '../../../lib/api/queryKeys'
 import { bulkApplyTags, bulkDeleteVideos, setVideoTags } from '../../../lib/api/endpoints/videos'
 import { useJobEvents, type VideoUpdateEvent } from '../../../lib/ws/useJobEvents'
 import { useAuthTokens } from '../../../auth/useAuthTokens'
-import { getApiBaseUrl } from '../../../api/client'
+import { getApiBaseUrl, logout as logoutUser } from '../../../api/client'
 import { listVideos } from '../../../lib/api/endpoints/videos'
+import { getOidcLogoutUrl } from '../../../lib/api/endpoints/oidc'
 import './LibraryPage.css'
 
 type FacetItem = { value: string; count: number }
@@ -220,8 +221,43 @@ function getFacetDisplay(values: string[]): string | null {
   return `${values.length} selected`
 }
 
+function LogoutIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M15 3H6.75C5.7835 3 5 3.7835 5 4.75V19.25C5 20.2165 5.7835 21 6.75 21H15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 12H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 9L20 12L17 15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export default function LibraryPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const initialPreferences = useMemo(() => getInitialPreferences(), [])
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -259,8 +295,41 @@ export default function LibraryPage() {
   const [playerVideo, setPlayerVideo] = useState<Video | null>(null)
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const queryClient = useQueryClient()
+
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+
+    let oidcLogoutUrl: string | null = null
+
+    try {
+      const postLogoutRedirectUri =
+        typeof window !== 'undefined' ? `${window.location.origin}/login?local=1` : undefined
+      const logoutResponse = await getOidcLogoutUrl(postLogoutRedirectUri)
+      oidcLogoutUrl = logoutResponse.logout_url
+    } catch {
+      // OIDC disabled or provider/logout endpoint unavailable.
+    }
+
+    await logoutUser()
+
+    try {
+      sessionStorage.removeItem('oidc_state')
+      sessionStorage.removeItem('oidc_pending_states')
+    } catch {
+      // Ignore storage errors
+    }
+
+    if (oidcLogoutUrl) {
+      window.location.href = oidcLogoutUrl
+      return
+    }
+
+    navigate('/login?local=1', { replace: true })
+  }, [isLoggingOut, navigate])
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
@@ -835,6 +904,17 @@ export default function LibraryPage() {
                 Table
               </button>
             </div>
+
+            <button
+              className="logoutIconButton"
+              type="button"
+              aria-label="Log out"
+              title="Log out"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              <LogoutIcon className="logoutIcon" />
+            </button>
           </div>
         }
         navItems={[

@@ -14,6 +14,10 @@ export type OIDCStartResponse = {
   state: string
 }
 
+export type OIDCLogoutURLResponse = {
+  logout_url: string | null
+}
+
 export type OIDCExchangeResponse = {
   access_token: string
   token_type: string
@@ -39,6 +43,22 @@ export async function startOidcLogin(): Promise<OIDCStartResponse> {
   return apiJson<OIDCStartResponse>({
     method: 'POST',
     path: '/auth/oidc/start',
+    auth: 'none',
+  })
+}
+
+/**
+ * Get the provider logout URL (if available).
+ */
+export async function getOidcLogoutUrl(
+  postLogoutRedirectUri?: string
+): Promise<OIDCLogoutURLResponse> {
+  const query = postLogoutRedirectUri
+    ? `?post_logout_redirect_uri=${encodeURIComponent(postLogoutRedirectUri)}`
+    : ''
+
+  return apiJson<OIDCLogoutURLResponse>({
+    path: `/auth/oidc/logout-url${query}`,
     auth: 'none',
   })
 }

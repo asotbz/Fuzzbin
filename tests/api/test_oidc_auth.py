@@ -9,6 +9,7 @@ Tests the full request lifecycle through FastAPI test client:
 from pathlib import Path
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 import pytest_asyncio
@@ -191,6 +192,67 @@ class TestOIDCConfigEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["enabled"] is False
+
+
+# ---------------------------------------------------------------------------
+# GET /auth/oidc/logout-url
+# ---------------------------------------------------------------------------
+
+
+class TestOIDCLogoutURLEndpoint:
+    """Tests for GET /auth/oidc/logout-url."""
+
+    def test_logout_url_returns_404_when_disabled(
+        self, oidc_test_repository, oidc_settings, oidc_disabled_config
+    ):
+        client = _make_test_app(oidc_test_repository, oidc_settings, oidc_disabled_config)
+        resp = client.get("/auth/oidc/logout-url")
+        assert resp.status_code == 404
+
+    def test_logout_url_returns_url_when_provider_supports_end_session(
+        self, oidc_test_repository, oidc_settings, oidc_config, respx_mock
+    ):
+        discovery = {
+            "issuer": TEST_ISSUER,
+            "authorization_endpoint": f"{TEST_ISSUER}/authorize",
+            "token_endpoint": f"{TEST_ISSUER}/token",
+            "jwks_uri": f"{TEST_ISSUER}/.well-known/jwks.json",
+            "end_session_endpoint": f"{TEST_ISSUER}/logout?foo=bar",
+        }
+        respx_mock.get(f"{TEST_ISSUER}/.well-known/openid-configuration").respond(json=discovery)
+
+        client = _make_test_app(oidc_test_repository, oidc_settings, oidc_config)
+        post_logout_redirect_uri = "https://fuzzbin.example.com/login?local=1"
+        resp = client.get(
+            "/auth/oidc/logout-url",
+            params={"post_logout_redirect_uri": post_logout_redirect_uri},
+        )
+        assert resp.status_code == 200
+
+        logout_url = resp.json()["logout_url"]
+        assert isinstance(logout_url, str)
+
+        parsed = urlparse(logout_url)
+        qs = parse_qs(parsed.query, strict_parsing=True)
+        assert qs["foo"] == ["bar"]
+        assert qs["post_logout_redirect_uri"] == [post_logout_redirect_uri]
+        assert qs["client_id"] == [TEST_CLIENT_ID]
+
+    def test_logout_url_returns_null_when_end_session_not_supported(
+        self, oidc_test_repository, oidc_settings, oidc_config, respx_mock
+    ):
+        discovery = {
+            "issuer": TEST_ISSUER,
+            "authorization_endpoint": f"{TEST_ISSUER}/authorize",
+            "token_endpoint": f"{TEST_ISSUER}/token",
+            "jwks_uri": f"{TEST_ISSUER}/.well-known/jwks.json",
+        }
+        respx_mock.get(f"{TEST_ISSUER}/.well-known/openid-configuration").respond(json=discovery)
+
+        client = _make_test_app(oidc_test_repository, oidc_settings, oidc_config)
+        resp = client.get("/auth/oidc/logout-url")
+        assert resp.status_code == 200
+        assert resp.json()["logout_url"] is None
 
 
 # ---------------------------------------------------------------------------

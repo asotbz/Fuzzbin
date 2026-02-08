@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
@@ -596,6 +596,15 @@ class OIDCConfigResponse(BaseModel):
     provider_name: str = Field(default="SSO", description="Display label for the login button")
 
 
+class OIDCLogoutURLResponse(BaseModel):
+    """Response from /auth/oidc/logout-url."""
+
+    logout_url: Optional[str] = Field(
+        default=None,
+        description="OIDC end-session URL, or null when provider logout is unavailable",
+    )
+
+
 class OIDCStartRequest(BaseModel):
     """(Empty body — may carry optional fields in future.)"""
 
@@ -636,6 +645,59 @@ async def oidc_config() -> OIDCConfigResponse:
         enabled=oidc_cfg.enabled,
         provider_name=oidc_cfg.provider_name if oidc_cfg.enabled else "SSO",
     )
+
+
+@router.get(
+    "/oidc/logout-url",
+    response_model=OIDCLogoutURLResponse,
+    summary="Get OIDC logout URL",
+    responses={
+        200: {
+            "description": "OIDC logout URL (or null if provider does not support RP-initiated logout)"
+        },
+        404: {"description": "OIDC is not enabled"},
+        500: {"description": "OIDC discovery or configuration error"},
+    },
+)
+async def oidc_logout_url(
+    post_logout_redirect_uri: Optional[str] = Query(
+        default=None,
+        description="Optional URL for IdP post-logout redirect",
+    ),
+) -> OIDCLogoutURLResponse:
+    """Return the IdP end-session URL for browser redirect after local logout."""
+    oidc_cfg = fuzzbin_app.get_config().oidc
+    if not oidc_cfg.enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OIDC is not enabled")
+
+    try:
+        provider = get_oidc_provider(oidc_cfg)
+        logout_url = await provider.build_logout_url(
+            post_logout_redirect_uri=post_logout_redirect_uri,
+        )
+        return OIDCLogoutURLResponse(logout_url=logout_url)
+    except OIDCConfigError as exc:
+        logger.error(
+            "oidc_logout_url_config_error",
+            error=str(exc),
+            oidc=_oidc_debug_context(oidc_cfg),
+            hint="Check config.oidc required fields and restart.",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OIDC configuration error: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "oidc_logout_url_unexpected_error",
+            error=str(exc),
+            oidc=_oidc_debug_context(oidc_cfg),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to build OIDC logout URL. Check server logs for details.",
+        ) from exc
 
 
 @router.post(
