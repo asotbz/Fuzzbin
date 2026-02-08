@@ -59,6 +59,8 @@ requirements.
 
 This is a public endpoint — the frontend calls it on load to decide
 whether to show the OIDC login button.
+- `GET` `/auth/oidc/logout-url` — Get OIDC logout URL
+  - Return the IdP end-session URL for browser redirect after local logout.
 - `POST` `/auth/oidc/start` — Start OIDC login flow
   - Create OIDC authorization request (state, nonce, PKCE) and return the auth URL.
 

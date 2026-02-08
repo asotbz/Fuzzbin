@@ -182,6 +182,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/oidc/logout-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get OIDC logout URL
+         * @description Return the IdP end-session URL for browser redirect after local logout.
+         */
+        get: operations["oidc_logout_url_auth_oidc_logout_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/oidc/start": {
         parameters: {
             query?: never;
@@ -6645,6 +6665,17 @@ export interface components {
             state: string;
         };
         /**
+         * OIDCLogoutURLResponse
+         * @description Response from /auth/oidc/logout-url.
+         */
+        OIDCLogoutURLResponse: {
+            /**
+             * Logout Url
+             * @description OIDC end-session URL, or null when provider logout is unavailable
+             */
+            logout_url?: string | null;
+        };
+        /**
          * OIDCStartResponse
          * @description Response from /auth/oidc/start with the authorization URL.
          */
@@ -8979,6 +9010,52 @@ export interface operations {
             };
         };
     };
+    oidc_logout_url_auth_oidc_logout_url_get: {
+        parameters: {
+            query?: {
+                /** @description Optional URL for IdP post-logout redirect */
+                post_logout_redirect_uri?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OIDC logout URL (or null if provider does not support RP-initiated logout) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCLogoutURLResponse"];
+                };
+            };
+            /** @description OIDC is not enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description OIDC discovery or configuration error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     oidc_start_auth_oidc_start_post: {
         parameters: {
             query?: never;
@@ -9064,6 +9141,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description OIDC configuration or server-side lookup error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
