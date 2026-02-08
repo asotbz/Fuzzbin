@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { server } from '../../mocks/server'
 import { http, HttpResponse } from 'msw'
 import LoginPage from '../Login'
@@ -9,16 +10,23 @@ import { clearTokens, getTokens, setTokens } from '../../auth/tokenStore'
 
 const BASE_URL = 'http://localhost:8000'
 
-// Wrapper with router
+function createQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+// Wrapper with router + query client (needed for useOidcConfig hook)
 function renderLogin(initialEntries: string[] = ['/login']) {
+  const qc = createQueryClient()
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/library" element={<div>Library Page</div>} />
-        <Route path="/set-initial-password" element={<div>Set Password Page</div>} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/library" element={<div>Library Page</div>} />
+          <Route path="/set-initial-password" element={<div>Set Password Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -250,5 +258,80 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Library Page')).toBeInTheDocument()
     })
+  })
+
+  it('auto-redirects to OIDC provider when OIDC is enabled', async () => {
+    const originalLocation = window.location.href
+    // Mock window.location.href setter
+    const hrefSetter = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, href: originalLocation },
+      writable: true,
+    })
+    Object.defineProperty(window.location, 'href', {
+      set: hrefSetter,
+      get: () => originalLocation,
+    })
+
+    server.use(
+      http.get(`${BASE_URL}/auth/oidc/config`, () => {
+        return HttpResponse.json({ enabled: true, provider_name: 'Keycloak' })
+      })
+    )
+
+    renderLogin()
+
+    await waitFor(() => {
+      expect(hrefSetter).toHaveBeenCalledWith(
+        expect.stringContaining('https://auth.example.com/authorize')
+      )
+    })
+  })
+
+  it('shows redirecting message when OIDC is enabled', async () => {
+    server.use(
+      http.get(`${BASE_URL}/auth/oidc/config`, () => {
+        return HttpResponse.json({ enabled: true, provider_name: 'Keycloak' })
+      }),
+      // Make start hang so we can see the redirecting state
+      http.post(`${BASE_URL}/auth/oidc/start`, async () => {
+        await new Promise(() => {}) // never resolves
+        return HttpResponse.json({ auth_url: '', state: '' })
+      })
+    )
+
+    renderLogin()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Redirecting to Keycloak/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows login form with OIDC button when ?local=1 is set', async () => {
+    server.use(
+      http.get(`${BASE_URL}/auth/oidc/config`, () => {
+        return HttpResponse.json({ enabled: true, provider_name: 'Keycloak' })
+      })
+    )
+
+    renderLogin(['/login?local=1'])
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Username')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('Password')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Continue with Keycloak/ })).toBeInTheDocument()
+    })
+  })
+
+  it('does not show OIDC button when OIDC is disabled', async () => {
+    // Default mock returns enabled: false
+    renderLogin()
+
+    // Wait for the config query to settle
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: /Continue with/ })).not.toBeInTheDocument()
   })
 })

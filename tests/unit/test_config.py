@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from fuzzbin.common.config import (
     Config,
+    OIDCConfig,
     RetryConfig,
     LoggingConfig,
     BackupConfig,
@@ -140,6 +141,70 @@ backup:
         assert config.backup.retention_count == 20
         assert config.backup.output_dir == "backups"  # Default value
         assert config.logging.level == "INFO"  # Default value
+
+
+class TestOIDCConfig:
+    """Tests for OIDCConfig validation."""
+
+    def test_enabled_requires_issuer_url(self):
+        with pytest.raises(ValidationError) as exc_info:
+            OIDCConfig(
+                enabled=True,
+                client_id="fuzzbin",
+                redirect_uri="https://fuzzbin.example.com/oidc/callback",
+            )
+
+        assert "oidc.issuer_url is required" in str(exc_info.value)
+
+    def test_enabled_requires_client_id(self):
+        with pytest.raises(ValidationError) as exc_info:
+            OIDCConfig(
+                enabled=True,
+                issuer_url="https://auth.example.com",
+                redirect_uri="https://fuzzbin.example.com/oidc/callback",
+            )
+
+        assert "oidc.client_id is required" in str(exc_info.value)
+
+    def test_enabled_requires_redirect_uri(self):
+        with pytest.raises(ValidationError) as exc_info:
+            OIDCConfig(
+                enabled=True,
+                issuer_url="https://auth.example.com",
+                client_id="fuzzbin",
+            )
+
+        assert "oidc.redirect_uri is required" in str(exc_info.value)
+
+    def test_enabled_requires_openid_scope(self):
+        with pytest.raises(ValidationError) as exc_info:
+            OIDCConfig(
+                enabled=True,
+                issuer_url="https://auth.example.com",
+                client_id="fuzzbin",
+                redirect_uri="https://fuzzbin.example.com/oidc/callback",
+                scopes="email profile",
+            )
+
+        assert "must include 'openid'" in str(exc_info.value)
+
+    def test_rejects_invalid_urls(self):
+        with pytest.raises(ValidationError) as exc_info:
+            OIDCConfig(issuer_url="not-a-url")
+        assert "valid absolute http(s) URL" in str(exc_info.value)
+
+        with pytest.raises(ValidationError) as exc_info:
+            OIDCConfig(redirect_uri="ftp://example.com/callback")
+        assert "valid absolute http(s) URL" in str(exc_info.value)
+
+    def test_normalizes_optional_blank_strings(self):
+        cfg = OIDCConfig(client_secret="   ", allowed_subject="  ")
+        assert cfg.client_secret is None
+        assert cfg.allowed_subject is None
+
+    def test_normalizes_issuer_trailing_slash(self):
+        cfg = OIDCConfig(issuer_url="https://auth.example.com/")
+        assert cfg.issuer_url == "https://auth.example.com"
 
 
 class TestNFOConfig:

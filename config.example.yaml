@@ -191,3 +191,41 @@ nfo_export:
   
   # Include soft-deleted videos in export (default: false)
   include_deleted: false
+
+# OpenID Connect (OIDC) single sign-on
+# =====================================
+# Enables Authorization Code + PKCE flow against an external identity provider.
+# The authenticated identity is bound to a single local user account.
+oidc:
+  # Enable OIDC login (default: false)
+  enabled: false
+
+  # OIDC issuer URL (required when enabled)
+  # issuer_url: https://auth.example.com/realms/main
+
+  # Client ID registered with the identity provider (required when enabled)
+  # client_id: fuzzbin
+
+  # Client secret (only needed for confidential clients)
+  # client_secret:
+
+  # Redirect URI for the OIDC callback (required when enabled)
+  # redirect_uri: https://fuzzbin.example.com/oidc/callback
+
+  # Space-separated OIDC scopes to request (default: "openid email profile")
+  # scopes: openid email profile
+
+  # Local user account to map OIDC logins to (default: "admin")
+  # target_username: admin
+
+  # Lock to a specific IdP subject claim value (optional)
+  # allowed_subject:
+
+  # Gate access on an IdP group membership (optional)
+  # required_group:
+
+  # Claim name containing group memberships (default: "groups")
+  # groups_claim: groups
+
+  # Display label for the OIDC login button (default: "SSO")
+  # provider_name: SSO

@@ -1,7 +1,7 @@
 """Authentication routes for login, logout, password change, and token refresh."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
@@ -26,7 +26,17 @@ from fuzzbin.auth import (
     set_refresh_cookie,
     clear_refresh_cookie,
 )
+from fuzzbin.auth.oidc import (
+    OIDCError,
+    OIDCConfigError,
+    OIDCValidationError,
+    OIDCProvider,
+    get_oidc_provider,
+    get_oidc_transaction_store,
+)
 from fuzzbin.core.db import VideoRepository
+
+import fuzzbin as fuzzbin_app
 
 from ..dependencies import get_repository, get_api_settings, require_auth
 from ..settings import APISettings
@@ -55,6 +65,67 @@ class PasswordRotationRequiredResponse(BaseModel):
     detail: str = "Password change required"
     redirect_to: str = "/auth/set-initial-password"
     message: str = "Your account requires a password change before you can log in."
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+async def _issue_tokens(
+    user_id: int,
+    username: str,
+    settings: APISettings,
+    response: Response,
+    repo: VideoRepository,
+) -> AccessTokenResponse:
+    """Create access + refresh tokens, set the refresh cookie, and update last_login_at.
+
+    This is the single code-path used by both password login and OIDC login.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    await repo._connection.execute(
+        "UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?",
+        (now, now, user_id),
+    )
+    await repo._connection.commit()
+
+    token_data = {"sub": username, "user_id": user_id}
+
+    access_token = create_access_token(
+        data=token_data,
+        secret_key=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        expires_minutes=settings.jwt_expires_minutes,
+    )
+
+    refresh_token = create_refresh_token(
+        data=token_data,
+        secret_key=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        expires_minutes=settings.refresh_token_expires_minutes,
+    )
+
+    set_refresh_cookie(response, refresh_token, settings)
+
+    return AccessTokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.jwt_expires_minutes * 60,
+    )
+
+
+def _oidc_debug_context(oidc_cfg: Any) -> dict[str, Any]:
+    """Build sanitized OIDC diagnostics for logs and errors."""
+    return {
+        "enabled": bool(getattr(oidc_cfg, "enabled", False)),
+        "issuer_url": getattr(oidc_cfg, "issuer_url", None),
+        "client_id": getattr(oidc_cfg, "client_id", None),
+        "redirect_uri": getattr(oidc_cfg, "redirect_uri", None),
+        "target_username": getattr(oidc_cfg, "target_username", None),
+        "scopes": getattr(oidc_cfg, "scopes", None),
+        "client_secret_set": bool(getattr(oidc_cfg, "client_secret", None)),
+    }
 
 
 def get_client_ip(request: Request, settings: APISettings = None) -> str:
@@ -163,42 +234,12 @@ async def login(
             headers={"X-Password-Change-Required": "true"},
         )
 
-    # Successful login - clear throttle and update last_login_at
+    # Successful login - clear throttle and issue tokens
     throttle.clear(client_ip)
-
-    await repo._connection.execute(
-        "UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?",
-        (datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), user_id),
-    )
-    await repo._connection.commit()
-
-    # Create tokens
-    token_data = {"sub": username, "user_id": user_id}
-
-    access_token = create_access_token(
-        data=token_data,
-        secret_key=settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
-        expires_minutes=settings.jwt_expires_minutes,
-    )
-
-    refresh_token = create_refresh_token(
-        data=token_data,
-        secret_key=settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
-        expires_minutes=settings.refresh_token_expires_minutes,
-    )
 
     logger.info("login_successful", username=username, user_id=user_id, ip=client_ip)
 
-    # Set refresh token as httpOnly cookie
-    set_refresh_cookie(response, refresh_token, settings)
-
-    return AccessTokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.jwt_expires_minutes * 60,  # Convert to seconds
-    )
+    return await _issue_tokens(user_id, username, settings, response, repo)
 
 
 @router.post(
@@ -538,30 +579,288 @@ async def set_initial_password(
     # Clear throttle on success
     throttle.clear(client_ip)
 
-    # Create tokens for immediate login
-    token_data = {"sub": username, "user_id": user_id}
-
-    access_token = create_access_token(
-        data=token_data,
-        secret_key=settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
-        expires_minutes=settings.jwt_expires_minutes,
-    )
-
-    refresh_token = create_refresh_token(
-        data=token_data,
-        secret_key=settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
-        expires_minutes=settings.refresh_token_expires_minutes,
-    )
-
     logger.info("initial_password_set", username=username, user_id=user_id, ip=client_ip)
 
-    # Set refresh token as httpOnly cookie
-    set_refresh_cookie(response, refresh_token, settings)
+    return await _issue_tokens(user_id, username, settings, response, repo)
 
-    return AccessTokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.jwt_expires_minutes * 60,
+
+# ---------------------------------------------------------------------------
+# OIDC schemas
+# ---------------------------------------------------------------------------
+
+
+class OIDCConfigResponse(BaseModel):
+    """Public OIDC configuration for the frontend."""
+
+    enabled: bool = Field(..., description="Whether OIDC login is available")
+    provider_name: str = Field(default="SSO", description="Display label for the login button")
+
+
+class OIDCStartRequest(BaseModel):
+    """(Empty body — may carry optional fields in future.)"""
+
+
+class OIDCStartResponse(BaseModel):
+    """Response from /auth/oidc/start with the authorization URL."""
+
+    auth_url: str = Field(..., description="URL to redirect the user to for IdP login")
+    state: str = Field(..., description="Opaque state value for CSRF verification")
+
+
+class OIDCExchangeRequest(BaseModel):
+    """Request body for /auth/oidc/exchange."""
+
+    code: str = Field(..., min_length=1, description="Authorization code from the IdP callback")
+    state: str = Field(..., min_length=1, description="State value from the original auth request")
+
+
+# ---------------------------------------------------------------------------
+# OIDC endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/oidc/config",
+    response_model=OIDCConfigResponse,
+    summary="Get OIDC configuration",
+    responses={200: {"description": "OIDC availability and display label"}},
+)
+async def oidc_config() -> OIDCConfigResponse:
+    """Return whether OIDC login is enabled and provider display name.
+
+    This is a public endpoint — the frontend calls it on load to decide
+    whether to show the OIDC login button.
+    """
+    oidc_cfg = fuzzbin_app.get_config().oidc
+    return OIDCConfigResponse(
+        enabled=oidc_cfg.enabled,
+        provider_name=oidc_cfg.provider_name if oidc_cfg.enabled else "SSO",
     )
+
+
+@router.post(
+    "/oidc/start",
+    response_model=OIDCStartResponse,
+    summary="Start OIDC login flow",
+    responses={
+        200: {"description": "Authorization URL and state"},
+        404: {"description": "OIDC is not enabled"},
+        500: {"description": "OIDC discovery or configuration error"},
+    },
+)
+async def oidc_start() -> OIDCStartResponse:
+    """Create OIDC authorization request (state, nonce, PKCE) and return the auth URL.
+
+    The frontend should redirect the user to ``auth_url``. After IdP
+    authentication the user is redirected back to ``oidc_redirect_uri``
+    with ``code`` and ``state`` query params.
+    """
+    oidc_cfg = fuzzbin_app.get_config().oidc
+    if not oidc_cfg.enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OIDC is not enabled")
+
+    try:
+        provider = get_oidc_provider(oidc_cfg)
+        store = get_oidc_transaction_store()
+
+        state, nonce, code_verifier = store.create()
+        auth_url = await provider.build_auth_url(state, nonce, code_verifier)
+
+        logger.info("oidc_auth_started", state=state[:8] + "…")
+        return OIDCStartResponse(auth_url=auth_url, state=state)
+    except OIDCConfigError as exc:
+        logger.error(
+            "oidc_start_config_error",
+            error=str(exc),
+            oidc=_oidc_debug_context(oidc_cfg),
+            hint="Check config.oidc required fields and restart.",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OIDC configuration error: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "oidc_start_unexpected_error",
+            error=str(exc),
+            oidc=_oidc_debug_context(oidc_cfg),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start OIDC login. Check server logs for details.",
+        ) from exc
+
+
+@router.post(
+    "/oidc/exchange",
+    response_model=AccessTokenResponse,
+    summary="Exchange OIDC authorization code for local tokens",
+    responses={
+        200: {"description": "Local JWT issued (refresh token set as httpOnly cookie)"},
+        400: {"description": "Invalid state, expired transaction, or token exchange error"},
+        403: {"description": "Identity binding mismatch or missing required group"},
+        404: {"description": "OIDC is not enabled"},
+        500: {"description": "OIDC configuration or server-side lookup error"},
+    },
+)
+async def oidc_exchange(
+    response: Response,
+    exchange_request: OIDCExchangeRequest,
+    repo: VideoRepository = Depends(get_repository),
+    settings: APISettings = Depends(get_api_settings),
+) -> AccessTokenResponse:
+    """Validate the OIDC callback, exchange the code, validate the ID token,
+    enforce identity binding, and issue local JWT tokens.
+
+    The frontend calls this after the IdP redirects back with ``code`` and
+    ``state``.  On success the response is identical to ``POST /auth/login``:
+    access token in the body, refresh token as httpOnly cookie.
+    """
+    oidc_cfg = fuzzbin_app.get_config().oidc
+    if not oidc_cfg.enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OIDC is not enabled")
+
+    # --- 1. Consume the transaction (state → nonce + code_verifier) ----------
+    store = get_oidc_transaction_store()
+    consumed = store.consume(exchange_request.state)
+    if consumed is None:
+        logger.warning("oidc_exchange_invalid_state", state=exchange_request.state[:8] + "…")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OIDC state. Please restart the login flow.",
+        )
+
+    nonce, code_verifier = consumed
+
+    try:
+        provider = get_oidc_provider(oidc_cfg)
+
+        # --- 2. Exchange authorization code -----------------------------------
+        token_response = await provider.exchange_code(exchange_request.code, code_verifier)
+        id_token_str = token_response.get("id_token")
+        if not id_token_str:
+            raise OIDCError("Token response missing id_token")
+
+        # --- 3. Validate ID token ---------------------------------------------
+        claims = await provider.validate_id_token(id_token_str, nonce)
+
+        # --- 4. Optional group gating -----------------------------------------
+        OIDCProvider.check_group_claim(
+            claims,
+            required_group=oidc_cfg.required_group,
+            groups_claim=oidc_cfg.groups_claim,
+        )
+
+        # --- 5. Optional allowed_subject check --------------------------------
+        if oidc_cfg.allowed_subject and claims["sub"] != oidc_cfg.allowed_subject:
+            logger.warning(
+                "oidc_exchange_subject_denied",
+                sub=claims["sub"],
+                allowed=oidc_cfg.allowed_subject,
+            )
+            raise OIDCValidationError("Your identity is not authorized to log in to this instance.")
+
+    except OIDCValidationError as exc:
+        logger.warning("oidc_exchange_validation_failed", error=str(exc))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except OIDCConfigError as exc:
+        logger.error(
+            "oidc_exchange_config_error",
+            error=str(exc),
+            oidc=_oidc_debug_context(oidc_cfg),
+            hint="Check config.oidc required fields and restart.",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OIDC configuration error: {exc}",
+        ) from exc
+    except OIDCError as exc:
+        logger.warning("oidc_exchange_error", error=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    # --- 6. Resolve target local user -----------------------------------------
+    oidc_iss = claims["iss"]
+    oidc_sub = claims["sub"]
+
+    if repo._connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection not initialized",
+        )
+
+    try:
+        cursor = await repo._connection.execute(
+            "SELECT id, username, is_active, oidc_issuer, oidc_subject FROM users WHERE username = ?",
+            (oidc_cfg.target_username,),
+        )
+        row = await cursor.fetchone()
+    except Exception as exc:
+        logger.error(
+            "oidc_exchange_user_lookup_failed",
+            error=str(exc),
+            oidc=_oidc_debug_context(oidc_cfg),
+            hint=(
+                "Ensure migration 004_oidc_identity.sql is applied and oidc.target_username exists."
+            ),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                "OIDC user binding lookup failed. Ensure migration "
+                "004_oidc_identity.sql is applied and target user exists."
+            ),
+        ) from exc
+
+    if not row:
+        logger.warning("oidc_exchange_target_user_missing", target=oidc_cfg.target_username)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Target local user does not exist.",
+        )
+
+    user_id, username, is_active, existing_iss, existing_sub = row
+
+    if not is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Target local user account is disabled.",
+        )
+
+    # --- 7. Identity binding --------------------------------------------------
+    if existing_iss is None and existing_sub is None:
+        # First-time bind
+        await repo._connection.execute(
+            "UPDATE users SET oidc_issuer = ?, oidc_subject = ?, updated_at = ? WHERE id = ?",
+            (oidc_iss, oidc_sub, datetime.now(timezone.utc).isoformat(), user_id),
+        )
+        await repo._connection.commit()
+        logger.info(
+            "oidc_identity_bound",
+            user_id=user_id,
+            username=username,
+            iss=oidc_iss,
+            sub=oidc_sub,
+        )
+    else:
+        # Verify existing binding
+        if existing_iss != oidc_iss or existing_sub != oidc_sub:
+            logger.warning(
+                "oidc_exchange_identity_mismatch",
+                user_id=user_id,
+                expected_iss=existing_iss,
+                expected_sub=existing_sub,
+                actual_iss=oidc_iss,
+                actual_sub=oidc_sub,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="OIDC identity does not match the bound identity for this user.",
+            )
+
+    # --- 8. Issue local tokens ------------------------------------------------
+    logger.info(
+        "oidc_login_successful", user_id=user_id, username=username, iss=oidc_iss, sub=oidc_sub
+    )
+    return await _issue_tokens(user_id, username, settings, response, repo)

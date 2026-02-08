@@ -1,4 +1,5 @@
 import { authHandlers } from './auth'
+import { oidcHandlers } from './oidc'
 import { videosHandlers } from './videos'
 import { searchHandlers } from './search'
 import { addHandlers } from './add'
@@ -9,6 +10,7 @@ import { spotifyHandlers } from './spotify'
 // Combine all handlers - these are the default happy-path handlers
 export const handlers = [
   ...authHandlers,
+  ...oidcHandlers,
   ...videosHandlers,
   ...searchHandlers,
   ...addHandlers,
@@ -19,6 +21,7 @@ export const handlers = [
 
 // Re-export individual handler groups for selective use in tests
 export { authHandlers } from './auth'
+export { oidcHandlers } from './oidc'
 export { videosHandlers } from './videos'
 export { searchHandlers } from './search'
 export { addHandlers } from './add'

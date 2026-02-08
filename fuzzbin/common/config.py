@@ -5,10 +5,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict, List, Any, ClassVar
 import string
+from urllib.parse import urlparse
 
 import yaml
 from ruamel.yaml import YAML
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -525,6 +526,170 @@ class JobHistoryConfig(BaseModel):
     )
 
 
+class OIDCConfig(BaseModel):
+    """OpenID Connect (OIDC) single sign-on configuration.
+
+    Enables Authorization Code + PKCE flow against an external identity provider.
+    The authenticated identity is bound to a single local user account.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable OIDC login",
+    )
+    issuer_url: Optional[str] = Field(
+        default=None,
+        description="OIDC issuer URL (e.g. https://auth.example.com/realms/main)",
+    )
+    client_id: Optional[str] = Field(
+        default=None,
+        description="OIDC client ID registered with the identity provider",
+    )
+    client_secret: Optional[str] = Field(
+        default=None,
+        description="OIDC client secret (only needed for confidential clients)",
+    )
+    redirect_uri: Optional[str] = Field(
+        default=None,
+        description="Redirect URI for the OIDC callback (e.g. http://localhost:5173/oidc/callback)",
+    )
+    scopes: str = Field(
+        default="openid email profile",
+        description="Space-separated OIDC scopes to request",
+    )
+    target_username: str = Field(
+        default="admin",
+        description="Local user account to map OIDC logins to",
+    )
+    allowed_subject: Optional[str] = Field(
+        default=None,
+        description="If set, only this IdP subject (sub claim) is accepted",
+    )
+    required_group: Optional[str] = Field(
+        default=None,
+        description="If set, the ID token must contain this group value",
+    )
+    groups_claim: str = Field(
+        default="groups",
+        description="Name of the claim containing group memberships",
+    )
+    provider_name: str = Field(
+        default="SSO",
+        description="Display label for the OIDC login button in the frontend",
+    )
+
+    @field_validator(
+        "issuer_url",
+        "client_id",
+        "client_secret",
+        "redirect_uri",
+        "allowed_subject",
+        "required_group",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_strings(cls, v: Any) -> Optional[str]:
+        """Normalize optional string fields by stripping whitespace.
+
+        Empty strings are converted to None to keep "unset" semantics.
+        """
+        if v is None:
+            return None
+        if isinstance(v, str):
+            value = v.strip()
+            return value if value else None
+        return v
+
+    @field_validator("scopes", "target_username", "groups_claim", "provider_name", mode="before")
+    @classmethod
+    def normalize_required_strings(cls, v: Any, info: ValidationInfo) -> str:
+        """Normalize required string fields and reject empty values."""
+        if not isinstance(v, str):
+            raise ValueError(f"oidc.{info.field_name} must be a string")
+        value = v.strip()
+        if not value:
+            raise ValueError(f"oidc.{info.field_name} cannot be empty")
+        return value
+
+    @field_validator("issuer_url", "redirect_uri")
+    @classmethod
+    def validate_urls(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        """Validate URL format and conditional requiredness for enabled OIDC."""
+        enabled = bool(info.data.get("enabled", False))
+
+        if enabled and not v:
+            raise ValueError(f"oidc.{info.field_name} is required when oidc.enabled=true")
+
+        if v is None:
+            return None
+
+        parsed = urlparse(v)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError(f"oidc.{info.field_name} must be a valid absolute http(s) URL")
+
+        # Normalize issuer URL to avoid slash mismatch in string comparisons.
+        if info.field_name == "issuer_url":
+            return v.rstrip("/")
+        return v
+
+    @field_validator("client_id")
+    @classmethod
+    def validate_client_id(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        """Validate client_id requiredness and formatting."""
+        enabled = bool(info.data.get("enabled", False))
+        if enabled and not v:
+            raise ValueError("oidc.client_id is required when oidc.enabled=true")
+        if v and any(ch.isspace() for ch in v):
+            raise ValueError("oidc.client_id must not contain whitespace")
+        return v
+
+    @field_validator("scopes")
+    @classmethod
+    def validate_scopes(cls, v: str, info: ValidationInfo) -> str:
+        """Validate scopes format and required openid scope."""
+        normalized = " ".join(v.split())
+        if not normalized:
+            raise ValueError("oidc.scopes cannot be empty")
+
+        enabled = bool(info.data.get("enabled", False))
+        if enabled and "openid" not in normalized.split(" "):
+            raise ValueError("oidc.scopes must include 'openid' when oidc.enabled=true")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_enabled_requirements(self) -> "OIDCConfig":
+        """Enforce required OIDC fields when OIDC is enabled.
+
+        Field validators can be skipped for omitted optional fields that use
+        defaults. This model-level validator guarantees the required-on-enabled
+        checks always run.
+        """
+        if not self.enabled:
+            return self
+
+        missing: list[str] = []
+        if not self.issuer_url:
+            missing.append("oidc.issuer_url")
+        if not self.client_id:
+            missing.append("oidc.client_id")
+        if not self.redirect_uri:
+            missing.append("oidc.redirect_uri")
+
+        if missing:
+            if len(missing) == 1:
+                raise ValueError(f"{missing[0]} is required when oidc.enabled=true")
+            raise ValueError(
+                "Required OIDC fields are missing when oidc.enabled=true: " + ", ".join(missing)
+            )
+
+        # Defense-in-depth: ensure scopes still include openid in enabled mode.
+        scopes = " ".join(self.scopes.split())
+        if "openid" not in scopes.split(" "):
+            raise ValueError("oidc.scopes must include 'openid' when oidc.enabled=true")
+
+        return self
+
+
 class NFOExportConfig(BaseModel):
     """Configuration for automatic NFO file export.
 
@@ -681,6 +846,10 @@ class Config(BaseModel):
     nfo_export: NFOExportConfig = Field(
         default_factory=NFOExportConfig,
         description="Automatic NFO file export configuration",
+    )
+    oidc: OIDCConfig = Field(
+        default_factory=OIDCConfig,
+        description="OpenID Connect (OIDC) single sign-on configuration",
     )
 
     def resolve_paths(self, create_dirs: bool = True) -> "Config":
@@ -1033,6 +1202,8 @@ FIELD_SAFETY_MAP: Dict[str, ConfigSafetyLevel] = {
     "nfo_export.schedule": ConfigSafetyLevel.SAFE,
     "nfo_export.incremental": ConfigSafetyLevel.SAFE,
     "nfo_export.include_deleted": ConfigSafetyLevel.SAFE,
+    # OIDC settings - require reload because singleton provider must be recreated
+    "oidc.*": ConfigSafetyLevel.REQUIRES_RELOAD,
     # API auth - safe because ConfigManager auto-reloads clients with rollback on failure
     "apis.*.auth.*": ConfigSafetyLevel.SAFE,
     # Affects state - changes persistent files/connections

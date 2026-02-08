@@ -10,6 +10,7 @@ import SpotifyImport from '../pages/add/SpotifyImport'
 import ArtistImport from '../pages/add/ArtistImport'
 import NFOImport from '../pages/add/NFOImport'
 import LoginPage from '../pages/Login'
+import OidcCallbackPage from '../pages/OidcCallback'
 import SetInitialPasswordPage from '../pages/SetInitialPassword'
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -22,6 +23,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/oidc/callback" element={<OidcCallbackPage />} />
       <Route path="/set-initial-password" element={<SetInitialPasswordPage />} />
 
       <Route

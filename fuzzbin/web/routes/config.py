@@ -187,6 +187,14 @@ def _get_required_actions(path: str, safety_level: ConfigSafetyLevel) -> List[Re
                     description="Restart cache system to apply changes",
                 )
             )
+        elif path.startswith("oidc."):
+            actions.append(
+                RequiredAction(
+                    action_type="reload_oidc",
+                    target="oidc",
+                    description="Restart application to apply OIDC changes",
+                )
+            )
 
     elif safety_level == ConfigSafetyLevel.AFFECTS_STATE:
         if path in ("config_dir", "library_dir"):

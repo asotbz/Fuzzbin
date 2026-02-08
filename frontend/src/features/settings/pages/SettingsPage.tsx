@@ -5,6 +5,7 @@ import APISettings from '../components/sections/APISettings'
 import MediaSettings from '../components/sections/MediaSettings'
 import LibrarySettings from '../components/sections/LibrarySettings'
 import AdvancedSettings from '../components/sections/AdvancedSettings'
+import OIDCSettings from '../components/sections/OIDCSettings'
 import AboutSettings from '../components/sections/AboutSettings'
 import PageHeader from '../../../components/layout/PageHeader'
 import './SettingsPage.css'
@@ -20,6 +21,9 @@ const CONFIG_SECTIONS: ConfigSection[] = [
   { id: 'about', title: 'About', group: 'System' },
   { id: 'logging', title: 'Logging', group: 'System' },
   { id: 'backup', title: 'Backup', group: 'System' },
+
+  // Authentication
+  { id: 'oidc', title: 'OIDC / SSO', group: 'Authentication' },
 
   // API Integrations
   { id: 'api-imvdb', title: 'IMVDb', group: 'API Integrations' },
@@ -147,6 +151,9 @@ export default function SettingsPage() {
                 {activeSection === 'about' && <AboutSettings />}
                 {activeSection === 'logging' && <LoggingSettings config={activeConfig} />}
                 {activeSection === 'backup' && <AdvancedSettings config={activeConfig} section="backup" />}
+
+                {/* Authentication */}
+                {activeSection === 'oidc' && <OIDCSettings config={activeConfig} />}
 
                 {/* API Integrations */}
                 {activeSection === 'api-imvdb' && <APISettings config={activeConfig} apiName="imvdb" />}
