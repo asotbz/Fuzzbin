@@ -38,6 +38,7 @@ dependencies = [
     "cachetools>=5.0.0",
     "rapidfuzz>=3.10.0",
     "yt-dlp>=2026.01.29",
+    "authlib>=1.6.7",
 ]
 
 [project.scripts]
