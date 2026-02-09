@@ -139,6 +139,70 @@ class TestVideoList:
         assert data["total"] == 1
         assert data["items"][0]["genre"] == "Grunge"
 
+    def test_list_videos_filter_by_complete_status(
+        self,
+        test_app: TestClient,
+        sample_video_data: dict,
+        sample_video_data_2: dict,
+    ) -> None:
+        """Test filtering videos by complete status."""
+        create_response_1 = test_app.post("/videos", json=sample_video_data)
+        create_response_2 = test_app.post("/videos", json=sample_video_data_2)
+        video_id_1 = create_response_1.json()["id"]
+        video_id_2 = create_response_2.json()["id"]
+
+        status_response_1 = test_app.patch(
+            f"/videos/{video_id_1}/status",
+            json={"status": "complete", "reason": "Workflow finished"},
+        )
+        status_response_2 = test_app.patch(
+            f"/videos/{video_id_2}/status",
+            json={"status": "downloaded", "reason": "Downloaded only"},
+        )
+        assert status_response_1.status_code == 200
+        assert status_response_2.status_code == 200
+
+        response = test_app.get("/videos", params={"status": "complete"})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == video_id_1
+        assert data["items"][0]["status"] == "complete"
+
+    def test_list_videos_filter_by_download_failed_status(
+        self,
+        test_app: TestClient,
+        sample_video_data: dict,
+        sample_video_data_2: dict,
+    ) -> None:
+        """Test filtering videos by download_failed status."""
+        create_response_1 = test_app.post("/videos", json=sample_video_data)
+        create_response_2 = test_app.post("/videos", json=sample_video_data_2)
+        video_id_1 = create_response_1.json()["id"]
+        video_id_2 = create_response_2.json()["id"]
+
+        status_response_1 = test_app.patch(
+            f"/videos/{video_id_1}/status",
+            json={"status": "download_failed", "reason": "Network error"},
+        )
+        status_response_2 = test_app.patch(
+            f"/videos/{video_id_2}/status",
+            json={"status": "downloaded", "reason": "Downloaded successfully"},
+        )
+        assert status_response_1.status_code == 200
+        assert status_response_2.status_code == 200
+
+        response = test_app.get("/videos", params={"status": "download_failed"})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == video_id_1
+        assert data["items"][0]["status"] == "download_failed"
+
     def test_list_videos_sort_by_title(
         self,
         test_app: TestClient,
@@ -435,6 +499,44 @@ class TestVideoStatusUpdate:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "downloaded"
+
+    def test_update_status_complete(self, test_app: TestClient, sample_video_data: dict) -> None:
+        """Test updating video status to complete."""
+        create_response = test_app.post("/videos", json=sample_video_data)
+        video_id = create_response.json()["id"]
+
+        response = test_app.patch(
+            f"/videos/{video_id}/status",
+            json={
+                "status": "complete",
+                "reason": "Pipeline completed",
+                "changed_by": "test_user",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "complete"
+
+    def test_update_status_download_failed(
+        self, test_app: TestClient, sample_video_data: dict
+    ) -> None:
+        """Test updating video status to download_failed."""
+        create_response = test_app.post("/videos", json=sample_video_data)
+        video_id = create_response.json()["id"]
+
+        response = test_app.patch(
+            f"/videos/{video_id}/status",
+            json={
+                "status": "download_failed",
+                "reason": "Download aborted",
+                "changed_by": "test_user",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "download_failed"
 
     def test_status_history(self, test_app: TestClient, sample_video_data: dict) -> None:
         """Test getting video status history."""

@@ -3,7 +3,7 @@
   "info": {
     "title": "Fuzzbin API",
     "description": "Music video library management API.\nProvides CRUD operations for videos, artists, collections, and tags,\nwith full-text search and filtering capabilities.\n\n## Authentication\n\nWhen authentication is enabled (`FUZZBIN_API_AUTH_ENABLED=true`), protected endpoints require\na Bearer token in the `Authorization` header:\n\n```\nAuthorization: Bearer <your-jwt-token>\n```\n\nObtain a token via `POST /auth/login` with username/password credentials.\n\n## WebSocket API\n\n### Real-time Job Progress: `/ws/jobs/{job_id}`\n\nConnect to receive live progress updates for background jobs.\n\n**Connection:**\n```\nws://localhost:8000/ws/jobs/{job_id}\n```\n\n**Message Format (JSON):**\n```json\n{\n  \"job_id\": \"uuid-string\",\n  \"status\": \"running\",\n  \"progress\": 0.45,\n  \"message\": \"Processing file 45 of 100\",\n  \"result\": null\n}\n```\n\n**Fields:**\n- `job_id`: Job identifier\n- `status`: One of `pending`, `running`, `completed`, `failed`, `cancelled`\n- `progress`: Float 0.0-1.0 indicating completion percentage\n- `message`: Human-readable status message\n- `result`: Job result data (populated on completion)\n\n**Close Codes:**\n- `1008` (Policy Violation): Invalid or unknown job ID\n- `1011` (Internal Error): Server error during progress streaming\n",
-    "version": "0.3.3"
+    "version": "0.4.0"
   },
   "paths": {
     "/health": {
@@ -20452,8 +20452,10 @@
               "queued",
               "downloading",
               "downloaded",
+              "download_failed",
               "imported",
               "organized",
+              "complete",
               "missing",
               "failed",
               "archived"

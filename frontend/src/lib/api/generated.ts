@@ -8431,7 +8431,7 @@ export interface components {
              * @description New video status
              * @enum {string}
              */
-            status: "discovered" | "queued" | "downloading" | "downloaded" | "imported" | "organized" | "missing" | "failed" | "archived";
+            status: "discovered" | "queued" | "downloading" | "downloaded" | "download_failed" | "imported" | "organized" | "complete" | "missing" | "failed" | "archived";
             /**
              * Reason
              * @description Reason for status change
