@@ -6318,7 +6318,7 @@ export interface components {
          * @description Job type enumeration.
          * @enum {string}
          */
-        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_pipeline" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "cleanup_job_history" | "sync_decade_tags" | "export_nfo";
+        JobType: "import_nfo" | "import_spotify" | "import_spotify_batch" | "import_imvdb_artist" | "import_add_single" | "import_pipeline" | "import_download" | "import_organize" | "import_nfo_generate" | "video_post_process" | "download_youtube" | "file_organize" | "file_duplicate_resolve" | "metadata_enrich" | "metadata_refresh" | "library_scan" | "import" | "backup" | "trash_cleanup" | "cleanup_job_history" | "sync_decade_tags" | "export_nfo" | "export_nfo_selective";
         /**
          * JobTypeMetricsResponse
          * @description Metrics for a specific job type.
