@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 import fuzzbin
 from fuzzbin.core.db import VideoRepository
+from fuzzbin.services import TagService
 
-from ..dependencies import get_repository
+from ..dependencies import get_repository, get_tag_service
 from ..schemas.common import (
     AUTH_ERROR_RESPONSES,
     COMMON_ERROR_RESPONSES,
@@ -178,13 +179,14 @@ async def set_video_tags(
     video_id: int,
     tags_set: TagsSet,
     repo: VideoRepository = Depends(get_repository),
+    tag_service: TagService = Depends(get_tag_service),
 ) -> List[TagResponse]:
     """Set (replace) all tags on a video."""
     # Verify video exists
     await repo.get_video_by_id(video_id)
 
-    # Set tags (creates if needed, replaces existing)
-    await repo.set_video_tags(
+    # Set tags via service (handles NFO sync)
+    video_tags = await tag_service.set_video_tags(
         video_id,
         tags_set.tags,
         source=tags_set.source,
@@ -192,7 +194,6 @@ async def set_video_tags(
     )
 
     # Return updated tags
-    video_tags = await repo.get_video_tags(video_id)
     return [
         TagResponse(
             id=t["id"],
@@ -215,13 +216,14 @@ async def add_video_tags(
     video_id: int,
     tags_set: TagsSet,
     repo: VideoRepository = Depends(get_repository),
+    tag_service: TagService = Depends(get_tag_service),
 ) -> List[TagResponse]:
     """Add tags to a video (keeps existing)."""
     # Verify video exists
     await repo.get_video_by_id(video_id)
 
-    # Add tags (creates if needed, keeps existing)
-    await repo.set_video_tags(
+    # Add tags via service (handles NFO sync)
+    video_tags = await tag_service.set_video_tags(
         video_id,
         tags_set.tags,
         source=tags_set.source,
@@ -229,7 +231,6 @@ async def add_video_tags(
     )
 
     # Return updated tags
-    video_tags = await repo.get_video_tags(video_id)
     return [
         TagResponse(
             id=t["id"],
@@ -252,10 +253,11 @@ async def remove_video_tag(
     video_id: int,
     tag_id: int,
     repo: VideoRepository = Depends(get_repository),
+    tag_service: TagService = Depends(get_tag_service),
 ) -> None:
     """Remove a tag from a video."""
     # Verify both exist
     await repo.get_video_by_id(video_id)
     await repo.get_tag_by_id(tag_id)
 
-    await repo.remove_video_tag(video_id, tag_id)
+    await tag_service.remove_video_tag(video_id, tag_id)

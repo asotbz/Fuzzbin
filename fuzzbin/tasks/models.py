@@ -36,6 +36,7 @@ class JobType(str, Enum):
     CLEANUP_JOB_HISTORY = "cleanup_job_history"  # Purge old completed/failed jobs
     SYNC_DECADE_TAGS = "sync_decade_tags"  # Synchronize auto-decade tags across library
     EXPORT_NFO = "export_nfo"  # Export all NFO files to disk from database
+    EXPORT_NFO_SELECTIVE = "export_nfo_selective"  # Export NFO files for specific video IDs
 
 
 class JobStatus(str, Enum):

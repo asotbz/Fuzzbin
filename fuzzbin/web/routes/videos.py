@@ -16,8 +16,15 @@ from fuzzbin.common.path_security import PathSecurityError, validate_contained_p
 from fuzzbin.core.db import VideoRepository
 from fuzzbin.services import VideoService
 from fuzzbin.services.base import NotFoundError, ServiceError, ValidationError
+from fuzzbin.services.tag_service import TagService
 
-from ..dependencies import get_imvdb_client, get_repository, get_video_service, require_auth
+from ..dependencies import (
+    get_imvdb_client,
+    get_repository,
+    get_tag_service,
+    get_video_service,
+    require_auth,
+)
 from ..settings import get_settings
 from ..schemas.common import (
     AUTH_ERROR_RESPONSES,
@@ -259,6 +266,7 @@ async def update_video(
     video_id: int,
     video: VideoUpdate,
     repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> VideoResponse:
     """Update a video's metadata."""
     from fuzzbin.tasks.models import Job, JobType, JobPriority
@@ -279,10 +287,11 @@ async def update_video(
         if video.nfo_file_path is not None:
             video.nfo_file_path = validated_nfo_path
 
-    # Update with provided fields
+    # Update with provided fields via VideoService
+    # This handles decade tag updates, WebSocket events, and NFO re-export
     updates = video.to_repo_kwargs()
     if updates:
-        await repo.update_video(video_id, **updates)
+        await video_service.update(video_id, **updates)
 
     # Check if artist or title changed - queue file reorganization if so
     # Only reorganize if there's an existing video file
@@ -387,12 +396,13 @@ async def add_video_tag(
     video_id: int,
     tag_id: int,
     repo: VideoRepository = Depends(get_repository),
+    tag_service: TagService = Depends(get_tag_service),
 ) -> None:
     """Add a tag to a video."""
     # Verify video and tag exist
     await repo.get_video_by_id(video_id)
     await repo.get_tag_by_id(tag_id)
-    await repo.add_video_tag(video_id, tag_id)
+    await tag_service.add_video_tag(video_id, tag_id)
 
 
 @router.delete(
@@ -406,12 +416,13 @@ async def remove_video_tag(
     video_id: int,
     tag_id: int,
     repo: VideoRepository = Depends(get_repository),
+    tag_service: TagService = Depends(get_tag_service),
 ) -> None:
     """Remove a tag from a video."""
     # Verify video and tag exist
     await repo.get_video_by_id(video_id)
     await repo.get_tag_by_id(tag_id)
-    await repo.remove_video_tag(video_id, tag_id)
+    await tag_service.remove_video_tag(video_id, tag_id)
 
 
 @router.post(

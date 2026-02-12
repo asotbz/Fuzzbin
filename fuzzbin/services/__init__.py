@@ -35,6 +35,7 @@ from .musicbrainz_enrichment import (
     MusicBrainzEnrichmentService,
     MusicBrainzEnrichmentResult,
 )
+from .tag_service import TagService
 
 __all__ = [
     # Base classes and utilities
@@ -50,6 +51,7 @@ __all__ = [
     "ImportService",
     "SearchService",
     "BackupService",
+    "TagService",
     "DiscogsEnrichmentService",
     "DiscogsEnrichmentResult",
     "DiscogsTrackMatch",

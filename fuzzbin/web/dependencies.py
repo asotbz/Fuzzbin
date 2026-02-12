@@ -13,7 +13,7 @@ from fuzzbin.api.musicbrainz_client import MusicBrainzClient
 from fuzzbin.api.spotify_client import SpotifyClient
 from fuzzbin.auth import check_token_revoked_in_db, decode_token, UserInfo
 from fuzzbin.core.db import VideoRepository
-from fuzzbin.services import ImportService, SearchService, VideoService
+from fuzzbin.services import ImportService, SearchService, TagService, VideoService
 
 from .settings import APISettings, get_settings
 
@@ -283,6 +283,24 @@ async def get_search_service(
             return await search_service.search_videos(q)
     """
     return SearchService(repository=repo)
+
+
+async def get_tag_service(
+    repo: VideoRepository = Depends(get_repository),
+) -> TagService:
+    """
+    Dependency that provides a TagService instance.
+
+    The service is created per-request with the repository dependency.
+    Tag mutations through this service automatically sync NFO files.
+
+    Args:
+        repo: VideoRepository from get_repository dependency
+
+    Returns:
+        TagService instance
+    """
+    return TagService(repository=repo)
 
 
 # ==================== External API Client Dependencies ====================

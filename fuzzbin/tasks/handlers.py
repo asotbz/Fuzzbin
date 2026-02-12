@@ -4752,6 +4752,76 @@ async def handle_export_nfo(job: Job) -> None:
     )
 
 
+async def handle_export_nfo_selective(job: Job) -> None:
+    """Export NFO files for a specific set of video IDs.
+
+    This handler is used after bulk tag operations to re-export only the
+    affected videos' NFO files rather than the entire library.
+
+    Metadata:
+        video_ids (list[int]): Video IDs to export NFOs for
+    """
+    video_ids: list[int] = job.metadata.get("video_ids", [])
+    if not video_ids:
+        job.mark_completed({"exported": 0, "skipped": 0, "failed": 0})
+        return
+
+    repo = await fuzzbin.get_repository()
+
+    from fuzzbin.core.db.exporter import NFOExporter
+
+    exporter = NFOExporter(repo)
+
+    total = len(video_ids)
+    exported = 0
+    failed = 0
+    skipped = 0
+
+    job.update_progress(0, total, f"Exporting NFO files for {total} videos...")
+
+    for i, video_id in enumerate(video_ids):
+        if job.status == JobStatus.CANCELLED:
+            logger.info("selective_nfo_export_cancelled", job_id=job.id, progress=i)
+            return
+
+        try:
+            video = await repo.get_video_by_id(video_id)
+            nfo_path = video.get("nfo_file_path")
+            if not nfo_path:
+                video_file = video.get("video_file_path")
+                if video_file:
+                    nfo_path = str(Path(video_file).with_suffix(".nfo"))
+                else:
+                    skipped += 1
+                    continue
+
+            _, was_written = await exporter.export_video_to_nfo(video_id, nfo_path=Path(nfo_path))
+            if was_written:
+                exported += 1
+            else:
+                skipped += 1
+        except Exception as e:
+            failed += 1
+            logger.warning(
+                "selective_nfo_export_video_failed",
+                job_id=job.id,
+                video_id=video_id,
+                error=str(e),
+            )
+
+        if (i + 1) % 10 == 0 or i + 1 == total:
+            job.update_progress(i + 1, total, f"Exported {exported} NFOs ({failed} failed)...")
+
+    result = {
+        "exported": exported,
+        "skipped": skipped,
+        "failed": failed,
+        "total": total,
+    }
+    job.mark_completed(result)
+    logger.info("selective_nfo_export_completed", job_id=job.id, **result)
+
+
 def register_all_handlers(queue: JobQueue) -> None:
     """Register all job handlers with the queue.
 
@@ -4784,6 +4854,7 @@ def register_all_handlers(queue: JobQueue) -> None:
     queue.register_handler(JobType.CLEANUP_JOB_HISTORY, handle_cleanup_job_history)
     queue.register_handler(JobType.SYNC_DECADE_TAGS, handle_sync_decade_tags)
     queue.register_handler(JobType.EXPORT_NFO, handle_export_nfo)
+    queue.register_handler(JobType.EXPORT_NFO_SELECTIVE, handle_export_nfo_selective)
 
     logger.info(
         "job_handlers_registered",
@@ -4810,5 +4881,6 @@ def register_all_handlers(queue: JobQueue) -> None:
             JobType.CLEANUP_JOB_HISTORY.value,
             JobType.SYNC_DECADE_TAGS.value,
             JobType.EXPORT_NFO.value,
+            JobType.EXPORT_NFO_SELECTIVE.value,
         ],
     )

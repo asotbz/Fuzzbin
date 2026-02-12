@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 
 from fuzzbin.auth.schemas import UserInfo
 from fuzzbin.core.db import VideoRepository
-from fuzzbin.services import VideoService
+from fuzzbin.services import TagService, VideoService
 
-from ..dependencies import get_repository, get_video_service, require_auth
+from ..dependencies import get_repository, get_tag_service, get_video_service, require_auth
 from ..schemas.common import AUTH_ERROR_RESPONSES, COMMON_ERROR_RESPONSES, BulkOperationResponse
 
 logger = structlog.get_logger(__name__)
@@ -150,26 +150,50 @@ def _validate_bulk_limit(count: int, max_items: int) -> None:
 async def bulk_update_videos(
     request: BulkUpdateRequest,
     current_user: Annotated[UserInfo, Depends(require_auth)],
-    repo: VideoRepository = Depends(get_repository),
+    video_service: VideoService = Depends(get_video_service),
 ) -> BulkOperationResult:
-    """Bulk update videos with same field values."""
+    """Bulk update videos with same field values.
+
+    Uses VideoService.update() per video to ensure decade tag updates,
+    WebSocket events, and NFO re-export are triggered when year changes.
+    """
     max_items = await _get_max_bulk_items()
     _validate_bulk_limit(len(request.video_ids), max_items)
 
-    result = await repo.bulk_update_videos(
-        video_ids=request.video_ids,
-        updates=request.updates,
-    )
+    success_ids: List[int] = []
+    failed_ids: List[int] = []
+    errors: dict = {}
+
+    for video_id in request.video_ids:
+        try:
+            await video_service.update(video_id, **request.updates)
+            success_ids.append(video_id)
+        except Exception as e:
+            failed_ids.append(video_id)
+            errors[str(video_id)] = str(e)
+            logger.warning(
+                "bulk_update_video_failed",
+                video_id=video_id,
+                error=str(e),
+            )
 
     logger.info(
         "bulk_update_completed",
         user=current_user.username if current_user else "anonymous",
         total=len(request.video_ids),
-        success=len(result["success_ids"]),
-        failed=len(result["failed_ids"]),
+        success=len(success_ids),
+        failed=len(failed_ids),
     )
 
-    return BulkOperationResult.from_repo_result(result)
+    return BulkOperationResult(
+        success_ids=success_ids,
+        failed_ids=failed_ids,
+        errors=errors,
+        file_errors=[],
+        total=len(request.video_ids),
+        success_count=len(success_ids),
+        failed_count=len(failed_ids),
+    )
 
 
 @router.post(
@@ -276,13 +300,17 @@ async def bulk_update_status(
 async def bulk_apply_tags(
     request: BulkTagsRequest,
     current_user: Annotated[UserInfo, Depends(require_auth)],
-    repo: VideoRepository = Depends(get_repository),
+    tag_service: TagService = Depends(get_tag_service),
 ) -> BulkOperationResult:
-    """Bulk apply tags to videos."""
+    """Bulk apply tags to videos.
+
+    Uses TagService which queues a background NFO export job for
+    successfully tagged videos.
+    """
     max_items = await _get_max_bulk_items()
     _validate_bulk_limit(len(request.video_ids), max_items)
 
-    result = await repo.bulk_apply_tags(
+    result = await tag_service.bulk_apply_tags(
         video_ids=request.video_ids,
         tag_names=request.tag_names,
         replace=request.replace,
@@ -292,8 +320,8 @@ async def bulk_apply_tags(
         "bulk_tags_applied",
         user=current_user.username if current_user else None,
         total=len(request.video_ids),
-        success=len(result["success_ids"]),
-        failed=len(result["failed_ids"]),
+        success=len(result.get("success_ids", [])),
+        failed=len(result.get("failed_ids", [])),
         tags=request.tag_names,
         replace=request.replace,
     )
