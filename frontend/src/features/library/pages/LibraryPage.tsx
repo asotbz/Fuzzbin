@@ -626,10 +626,46 @@ export default function LibraryPage() {
     }
   }
 
-  function handleBulkWriteNFO() {
-    // TODO: Implement bulk NFO write
-    toast.info(`Writing NFO files for ${selectedVideoIds.size} videos...`)
-    console.log('Write NFO for', selectedVideoIds.size, 'videos')
+  async function handleBulkWriteNFO() {
+    const selectedIds = Array.from(selectedVideoIds)
+
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/exports/nfo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens.accessToken && { Authorization: `Bearer ${tokens.accessToken}` }),
+        },
+        body: JSON.stringify({
+          video_ids: selectedIds,
+          overwrite_existing: true,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to export NFO files')
+      }
+
+      const result = await response.json()
+
+      if (result.failed_count > 0) {
+        toast.warning(
+          `Exported ${result.exported_count} NFO file(s), ${result.failed_count} failed, ${result.skipped_count} skipped`
+        )
+      } else if (result.skipped_count > 0) {
+        toast.success(
+          `Exported ${result.exported_count} NFO file(s), ${result.skipped_count} skipped`
+        )
+      } else {
+        toast.success(`Exported ${result.exported_count} NFO file(s)`)
+      }
+
+      clearSelection()
+    } catch (error) {
+      toast.error('NFO export failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
   }
 
   function handleBulkOrganize() {
