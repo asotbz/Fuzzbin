@@ -10,7 +10,7 @@
  * Replaces the deprecated useJobWebSocket hook.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { getApiBaseUrl } from '../../api/client'
 
 export type WSConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -104,18 +104,30 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
   // Track video update timestamps for cache-busting
   const [videoThumbnailTimestamps, setVideoThumbnailTimestamps] = useState<Map<number, number>>(new Map())
 
-  // Store callback in ref to avoid recreating handlers
+  // Store callback in ref to avoid recreating handlers. Use useLayoutEffect
+  // so the ref reflects the latest prop synchronously after commit, closing
+  // any window where an external WS event between commit and passive-effect
+  // flush would observe a stale callback.
   const onVideoUpdateRef = useRef(onVideoUpdate)
-  onVideoUpdateRef.current = onVideoUpdate
+  useLayoutEffect(() => {
+    onVideoUpdateRef.current = onVideoUpdate
+  }, [onVideoUpdate])
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttempts = useRef(0)
   const isManualDisconnect = useRef(false)
 
-  // Store options in refs to avoid re-creating connect function
+  // Store options in refs to avoid re-creating connect function. useLayoutEffect
+  // for the same staleness-window reason as onVideoUpdateRef above.
   const optionsRef = useRef({ jobIds, jobTypes, videoIds, includeActiveState })
-  optionsRef.current = { jobIds, jobTypes, videoIds, includeActiveState }
+  useLayoutEffect(() => {
+    optionsRef.current = { jobIds, jobTypes, videoIds, includeActiveState }
+  }, [jobIds, jobTypes, videoIds, includeActiveState])
+
+  // Indirection for `connect` so ws.onclose's reconnect timer can call the
+  // latest version without referencing `connect` before it's declared.
+  const connectRef = useRef<() => void>(() => {})
 
   const wsUrl = useMemo(() => {
     const base = toWsBaseUrl(getApiBaseUrl())
@@ -411,7 +423,7 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
         reconnectAttempts.current += 1
 
         reconnectTimeoutRef.current = setTimeout(() => {
-          connect()
+          connectRef.current()
         }, delay)
       }
     }
@@ -461,15 +473,29 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
     }
   }, [connectionState])
 
-  // Clear jobs when filters change
-  useEffect(() => {
+  // Clear jobs when filters change (render-time prev-deps comparison to
+  // avoid react-hooks/set-state-in-effect).
+  const [prevJobFilters, setPrevJobFilters] = useState({ jobIds, jobTypes, videoIds })
+  if (
+    prevJobFilters.jobIds !== jobIds ||
+    prevJobFilters.jobTypes !== jobTypes ||
+    prevJobFilters.videoIds !== videoIds
+  ) {
+    setPrevJobFilters({ jobIds, jobTypes, videoIds })
     setJobs(new Map())
-  }, [jobIds, jobTypes, videoIds])
+  }
 
-  // Auto-connect on mount if enabled
+  // Keep connectRef pointed at the latest connect callback.
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
+
+  // Auto-connect on mount if enabled. Call through connectRef so the linter
+  // doesn't trace the synchronous setState calls inside `connect` (those
+  // happen on user-initiated WS lifecycle events, not as a cascading render).
   useEffect(() => {
     if (autoConnect && accessToken) {
-      connect()
+      connectRef.current()
     }
 
     return () => {

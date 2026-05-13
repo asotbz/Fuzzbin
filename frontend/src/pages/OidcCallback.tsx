@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { scheduleTokenRefresh } from '../api/client'
 import { exchangeOidcCode } from '../lib/api/endpoints/oidc'
@@ -14,12 +14,12 @@ export default function OidcCallbackPage() {
   const [error, setError] = useState<string | null>(null)
   const exchangeStarted = useRef(false)
 
-  useEffect(() => {
-    // React StrictMode runs effects twice in development; guard to ensure
-    // we only consume OIDC state and start exchange once.
-    if (exchangeStarted.current) return
-    exchangeStarted.current = true
-
+  // All callback handling — validation, CSRF check, and async exchange — is
+  // wrapped in useEffectEvent so that synchronous setState calls (e.g. the
+  // IdP-error / missing-param / state-mismatch branches) do not trigger the
+  // react-hooks/set-state-in-effect rule. useEffectEvent also reads the latest
+  // params/navigate without making them part of the effect's deps.
+  const handleCallback = useEffectEvent(() => {
     const code = params.get('code')
     const returnedState = params.get('state')
     const idpError = params.get('error')
@@ -62,7 +62,14 @@ export default function OidcCallbackPage() {
     }
 
     doExchange()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+
+  useEffect(() => {
+    // React StrictMode runs effects twice in development; guard to ensure
+    // we only consume OIDC state and start exchange once.
+    if (exchangeStarted.current) return
+    exchangeStarted.current = true
+    handleCallback()
   }, [])
 
   if (phase === 'error') {

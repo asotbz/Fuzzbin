@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Wizard handles dynamic API responses */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -15,33 +15,25 @@ export default function SearchWizard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const wizard = useSearchWizard()
-  const [artist, setArtist] = useState('')
-  const [trackTitle, setTrackTitle] = useState('')
+  // Seed local form state from wizard state once on mount (lazy initializers)
+  // so returning to an earlier step preserves the previous artist/title input.
+  const [artist, setArtist] = useState(() => wizard.searchQuery.artist ?? '')
+  const [trackTitle, setTrackTitle] = useState(() => wizard.searchQuery.trackTitle ?? '')
   const [discogsResults, setDiscogsResults] = useState<any>(null)
   const [selectedDiscogsFields, setSelectedDiscogsFields] = useState<Record<string, 'imvdb' | 'discogs'>>({})
   const [showYouTubeSearch, setShowYouTubeSearch] = useState(false)
   const [youtubeSearchResults, setYoutubeSearchResults] = useState<any>(null)
 
-  // Initialize local form state from wizard state (if returning to earlier step)
+  // Reset wizard on unmount to ensure clean state for next visit.
+  // Keep resetWizard in a ref so the cleanup effect doesn't depend on its identity.
+  const resetWizardRef = useRef(wizard.resetWizard)
   useEffect(() => {
-    if (wizard.searchQuery.artist) {
-       
-      setArtist(wizard.searchQuery.artist)
-    }
-    if (wizard.searchQuery.trackTitle) {
-       
-      setTrackTitle(wizard.searchQuery.trackTitle)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount
-  }, [])
-
-  // Reset wizard on unmount to ensure clean state for next visit
+    resetWizardRef.current = wizard.resetWizard
+  }, [wizard.resetWizard])
   useEffect(() => {
     return () => {
-      // Cleanup: reset wizard when component unmounts
-      wizard.resetWizard()
+      resetWizardRef.current()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on unmount
   }, [])
 
   // Eagerly fetch YouTube metadata for all available sources when they become available
@@ -331,13 +323,19 @@ export default function SearchWizard() {
     },
   })
 
-  // Initialize selected fields when Discogs data is loaded
-  useEffect(() => {
+  // Initialize selected fields when Discogs data is loaded.
+  // Use the React 19 "compare previous deps during render" pattern so the
+  // state reset happens without an effect (which would violate
+  // react-hooks/set-state-in-effect).
+  const [prevDiscogsResults, setPrevDiscogsResults] = useState(discogsResults)
+  const [prevPreviewData, setPrevPreviewData] = useState(wizard.previewData)
+  if (prevDiscogsResults !== discogsResults || prevPreviewData !== wizard.previewData) {
+    setPrevDiscogsResults(discogsResults)
+    setPrevPreviewData(wizard.previewData)
     if (discogsResults && discogsResults.results?.length > 0 && wizard.previewData) {
       const discogsData = discogsResults.results[0]?.data || {}
-      const imvdbData = wizard.previewData?.data as any || {}
+      const imvdbData = (wizard.previewData?.data as any) || {}
 
-      // Automatically select the source that has data for each field
       const selections: Record<string, 'imvdb' | 'discogs'> = {}
 
       // Title
@@ -403,10 +401,9 @@ export default function SearchWizard() {
         selections.director = 'imvdb'
       }
 
-       
       setSelectedDiscogsFields(selections)
     }
-  }, [discogsResults, wizard.previewData])
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
