@@ -1,6 +1,170 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":timezone(America/Los_Angeles)",
+    "schedule:weeklyNonOfficeHours"
+  ],
+  "configMigration": true,
+  "rebaseWhen": "behind-base-branch",
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 10,
+  "labels": ["dependencies"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "automerge": true,
+    "minimumReleaseAge": "0 days",
+    "schedule": ["at any time"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "npm": {
+    "postUpdateOptions": ["npmDedupe"]
+  },
+  "packageRules": [
+    {
+      "description": "Group Vite with its React plugin (plugin-react v6 has peer vite ^8; the pair must move together — see PRs #23/#27).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "vite",
+        "@vitejs/plugin-react",
+        "@vitejs/plugin-react-swc"
+      ],
+      "groupName": "vite"
+    },
+    {
+      "description": "Group Vitest with its coverage and UI providers (versions must match).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["/^vitest$/", "/^@vitest\\//"],
+      "groupName": "vitest"
+    },
+    {
+      "description": "Group TypeScript with typescript-eslint and ts-api-utils (peer ranges are coupled — see PR #26 where typescript-eslint needed bumping for TS 6).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "typescript",
+        "typescript-eslint",
+        "/^@typescript-eslint\\//",
+        "ts-api-utils"
+      ],
+      "groupName": "typescript"
+    },
+    {
+      "description": "Group React core with its DOM bindings and @types stubs.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ],
+      "groupName": "react"
+    },
+    {
+      "description": "Group the ESLint ecosystem.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "eslint",
+        "globals",
+        "/^@eslint\\//",
+        "/^eslint-/"
+      ],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group Testing Library packages.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["/^@testing-library\\//"],
+      "groupName": "testing-library"
+    },
+    {
+      "description": "Group Playwright (CLI binary and bindings must match).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["playwright", "/^@playwright\\//"],
+      "groupName": "playwright"
+    },
+    {
+      "description": "Group TanStack packages (Query family ships together).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["/^@tanstack\\//"],
+      "groupName": "tanstack"
+    },
+    {
+      "description": "Group React Router family.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["react-router", "react-router-dom"],
+      "groupName": "react-router"
+    },
+    {
+      "description": "Group Python type stubs together.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["/^types-/"],
+      "groupName": "python type stubs"
+    },
+    {
+      "description": "Group pytest core + plugins.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["pytest", "/^pytest-/"],
+      "groupName": "pytest"
+    },
+    {
+      "description": "Group Pydantic core + settings.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["pydantic", "pydantic-settings"],
+      "groupName": "pydantic"
+    },
+    {
+      "description": "Group FastAPI + Starlette + Uvicorn (web stack moves together).",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["fastapi", "starlette", "uvicorn"],
+      "groupName": "fastapi"
+    },
+    {
+      "description": "yt-dlp ships almost daily on a calver schedule. Batch updates to weekly to avoid PR storms.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["yt-dlp"],
+      "schedule": ["before 5am on monday"],
+      "groupName": "yt-dlp"
+    },
+    {
+      "description": "Group all GitHub Actions updates into a single weekly PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "schedule": ["before 5am on monday"]
+    },
+    {
+      "description": "Group Dockerfile and docker-compose base image updates.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "docker base images"
+    },
+    {
+      "description": "Require manual approval (via the Dependency Dashboard) for major bumps of runtime production dependencies — avoids surprise breaking PRs for shipping code.",
+      "matchManagers": ["npm", "pep621"],
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Auto-merge low-risk devDependency patch/minor updates after CI passes.",
+      "matchManagers": ["npm", "pep621"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Auto-merge GitHub Actions non-major updates (low risk, scoped to CI).",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor", "digest"],
+      "automerge": true,
+      "platformAutomerge": true
+    }
   ]
 }
