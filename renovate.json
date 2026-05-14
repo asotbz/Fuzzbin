@@ -5,7 +5,7 @@
     ":dependencyDashboard",
     ":semanticCommits",
     ":timezone(America/Los_Angeles)",
-    "schedule:weeklyNonOfficeHours"
+    "schedule:weekly"
   ],
   "configMigration": true,
   "rebaseWhen": "behind-base-branch",
