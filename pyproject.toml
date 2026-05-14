@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -9,8 +9,11 @@ include = ["fuzzbin*"]
 [tool.setuptools.package-data]
 fuzzbin = ["py.typed", "core/db/migrations/*.sql"]
 
-[tool.setuptools.dynamic]
-version = {file = "VERSION"}
+[tool.setuptools_scm]
+# Version is derived from the latest `vX.Y.Z` git tag.
+# For builds without git history (e.g. Docker), set
+# SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FUZZBIN to override.
+fallback_version = "0.0.0+unknown"
 
 [project]
 name = "fuzzbin"

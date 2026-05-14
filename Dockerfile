@@ -42,12 +42,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy VERSION file and Python project files
-COPY VERSION pyproject.toml README.md ./
+# Copy Python project files
+COPY pyproject.toml README.md ./
 COPY fuzzbin/ ./fuzzbin/
 
-# Set version environment variable
+# Set version environment variable and let setuptools-scm use it at build time
 ENV FUZZBIN_VERSION=${VERSION}
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FUZZBIN=${VERSION}
 
 # Install Python dependencies (production only)
 RUN pip install --no-cache-dir ".[prod]"

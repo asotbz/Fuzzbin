@@ -146,24 +146,23 @@ from .workflows import (
 
 
 def _get_version() -> str:
-    """Read version from VERSION file or fall back to default."""
+    """Return the package version.
+
+    Order of precedence:
+    1. FUZZBIN_VERSION environment variable (e.g. set in Docker builds).
+    2. Installed package metadata (populated by setuptools-scm at build time).
+    3. Fallback for uninstalled/unknown environments.
+    """
     import os
+    from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
-    # Check for VERSION file in multiple locations
-    possible_paths = [
-        Path(__file__).parent.parent / "VERSION",  # Development: repo root
-        Path("/app/VERSION"),  # Docker container
-    ]
-
-    for version_file in possible_paths:
-        if version_file.exists():
-            return version_file.read_text().strip()
-
-    # Check environment variable (set during Docker build)
     if env_version := os.environ.get("FUZZBIN_VERSION"):
         return env_version
 
-    return "0.0.0-dev"
+    try:
+        return _pkg_version("fuzzbin")
+    except PackageNotFoundError:
+        return "0.0.0-dev"
 
 
 __version__ = _get_version()
