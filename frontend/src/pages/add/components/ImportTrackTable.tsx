@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useEffectEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { enrichSpotifyTrack } from '../../../lib/api/endpoints/spotify'
@@ -40,30 +40,49 @@ export default function ImportTrackTable({
   onSearchYouTube,
   onSelectionChange,
 }: ImportTrackTableProps) {
-  // Track states map
-  const [trackStates, setTrackStates] = useState<Map<string, TrackRowState>>(new Map())
-  const [currentEnrichingIndex, setCurrentEnrichingIndex] = useState(0)
-  const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
-  const [retryingTrack, setRetryingTrack] = useState<BatchPreviewItem | null>(null)
-
-  // Initialize track states
-  useEffect(() => {
-    const initialStates = new Map<string, TrackRowState>()
-    tracks.forEach((track) => {
+  // Build initial track-state maps from the incoming `tracks` prop. Used both
+  // for the lazy initializers below and for the render-time prev-deps reset
+  // block further down (when `tracks` changes after mount).
+  const buildInitialState = (
+    items: BatchPreviewItem[]
+  ): { states: Map<string, TrackRowState>; selected: Set<string> } => {
+    const states = new Map<string, TrackRowState>()
+    const selected = new Set<string>()
+    items.forEach((track) => {
       const trackId = track.spotify_track_id || `${track.artist}-${track.title}`
-      initialStates.set(trackId, {
+      states.set(trackId, {
         enrichmentStatus: 'pending',
         selected: !track.already_exists, // Auto-select new tracks
       })
+      if (!track.already_exists) {
+        selected.add(trackId)
+      }
     })
-    setTrackStates(initialStates)
+    return { states, selected }
+  }
 
-    // Auto-select new tracks
-    const newTrackIds = tracks
-      .filter((t) => !t.already_exists)
-      .map((t) => t.spotify_track_id || `${t.artist}-${t.title}`)
-    setSelectedTracks(new Set(newTrackIds))
-  }, [tracks])
+  // Track states map — seed from `tracks` on mount so first-render enrichment
+  // kick-off has a populated state map (otherwise `trackStates.size === 0`
+  // would permanently short-circuit `advanceEnrichment`).
+  const [trackStates, setTrackStates] = useState<Map<string, TrackRowState>>(
+    () => buildInitialState(tracks).states
+  )
+  const [currentEnrichingIndex, setCurrentEnrichingIndex] = useState(0)
+  const [selectedTracks, setSelectedTracks] = useState<Set<string>>(
+    () => buildInitialState(tracks).selected
+  )
+  const [retryingTrack, setRetryingTrack] = useState<BatchPreviewItem | null>(null)
+
+  // Re-initialize when the `tracks` prop changes after mount, using the
+  // render-time prev-deps comparison (avoids react-hooks/set-state-in-effect).
+  const [prevTracks, setPrevTracks] = useState(tracks)
+  if (prevTracks !== tracks) {
+    setPrevTracks(tracks)
+    const { states, selected } = buildInitialState(tracks)
+    setTrackStates(states)
+    setSelectedTracks(selected)
+    setCurrentEnrichingIndex(0)
+  }
 
   // Notify parent of selection changes
   useEffect(() => {
@@ -124,8 +143,12 @@ export default function ImportTrackTable({
     },
   })
 
-  // Sequential enrichment effect
-  useEffect(() => {
+  // Sequential enrichment is a deliberate state machine: the effect kicks
+  // off the next track whenever `currentEnrichingIndex` advances. The setState
+  // calls inside (skip already_exists, skip non-pending, mark loading) are
+  // intentional cascading transitions, so we wrap the body in useEffectEvent
+  // to satisfy react-hooks/set-state-in-effect without changing behavior.
+  const advanceEnrichment = useEffectEvent(() => {
     // Wait for track states to be initialized
     if (trackStates.size === 0) {
       return
@@ -191,8 +214,19 @@ export default function ImportTrackTable({
       album: track.album || undefined,
       artist_genres: track.artist_genres || undefined,
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEnrichingIndex, tracks, trackStates.size])
+  })
+
+  // Mount-only kickoff; subsequent enrichments are chained via the mutation
+  // onSuccess/onError callbacks (which advance `currentEnrichingIndex`) and
+  // via the `tracks`-change prev-deps reset block above. This is a
+  // deliberately cascading sequential state machine with a bounded
+  // termination (`currentEnrichingIndex >= tracks.length`), exactly the case
+  // the rule's "derived event pattern" suggestion does not cleanly apply to
+  // (skip-walk over already_exists rows must be synchronous).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    advanceEnrichment()
+  }, [currentEnrichingIndex, tracks, trackStates.size, enrichMutation.isPending])
 
   // Selection handlers
   const handleSelectTrack = (trackId: string, selected: boolean) => {

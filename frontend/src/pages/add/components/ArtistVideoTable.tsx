@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useEffectEvent, useRef, useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { enrichImvdbVideo } from '../../../lib/api/endpoints/add'
@@ -128,8 +128,10 @@ export default function ArtistVideoTable({
     },
   })
 
-  // Start enrichment when index changes
-  useEffect(() => {
+  // Sequential enrichment state machine — wrapped in useEffectEvent so the
+  // intentional cascading setState transitions (skip already_exists, skip
+  // non-pending, mark loading) don't violate react-hooks/set-state-in-effect.
+  const advanceEnrichment = useEffectEvent(() => {
     // Wait for initial state setup
     if (videoStates.size === 0) {
       return
@@ -192,8 +194,17 @@ export default function ArtistVideoTable({
       year: video.year,
       thumbnail_url: video.thumbnail_url,
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEnrichingIndex, videos, videoStates.size])
+  })
+
+  // See companion comment in ImportTrackTable: this is a deliberately cascading
+  // sequential state machine with bounded termination
+  // (`currentEnrichingIndex >= videos.length`). The rule's "derived event"
+  // suggestion does not cleanly apply to the synchronous skip-walk over
+  // already_exists rows.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    advanceEnrichment()
+  }, [currentEnrichingIndex, videos, videoStates.size, enrichMutation.isPending])
 
   // Handle selection toggle
   const handleToggleSelection = (videoId: number, selected: boolean) => {

@@ -253,8 +253,24 @@ export default function LibraryPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const initialPreferences = useMemo(() => getInitialPreferences(), [])
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Seed search from the URL ?search= param on mount; subsequent URL changes
+  // are reflected via a render-time prev-deps comparison further below
+  // (instead of a useEffect that would call setState in an effect).
+  const initialUrlSearch = useMemo(() => {
+    return (new URLSearchParams(location.search).get('search') ?? '').trim()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only seed
+  }, [])
+  const [search, setSearch] = useState(initialUrlSearch)
+  const [debouncedSearch, setDebouncedSearch] = useState(initialUrlSearch)
+  const [prevUrlSearch, setPrevUrlSearch] = useState(location.search)
+  if (prevUrlSearch !== location.search) {
+    setPrevUrlSearch(location.search)
+    const next = (new URLSearchParams(location.search).get('search') ?? '').trim()
+    if (next) {
+      setSearch(next)
+      setDebouncedSearch(next)
+    }
+  }
 
   const [sortBy, setSortBy] = useState<string>(() => initialPreferences.sortBy ?? 'artist')
   const [sortOrder, setSortOrder] = useState<SortOrder>(() => initialPreferences.sortOrder ?? 'asc')
@@ -348,15 +364,6 @@ export default function LibraryPage() {
   })
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const urlSearch = (params.get('search') ?? '').trim()
-    if (!urlSearch) return
-
-    setSearch(urlSearch)
-    setDebouncedSearch(urlSearch)
-  }, [location.search])
-
-  useEffect(() => {
     const t = window.setTimeout(() => {
       setDebouncedSearch(search)
     }, 300)
@@ -394,10 +401,37 @@ export default function LibraryPage() {
     return () => window.removeEventListener('resize', handleResize)
   }, [viewMode])
 
-  // Clear selection on filter/sort/search changes
-  useEffect(() => {
+  // Clear selection on filter/sort/search changes via render-time prev-deps
+  // comparison (avoids react-hooks/set-state-in-effect).
+  const [prevSelectionDeps, setPrevSelectionDeps] = useState({
+    debouncedSearch,
+    sortBy,
+    sortOrder,
+    tag_name: filters.tag_name,
+    genre: filters.genre,
+    year: filters.year,
+    status: filters.status,
+  })
+  if (
+    prevSelectionDeps.debouncedSearch !== debouncedSearch ||
+    prevSelectionDeps.sortBy !== sortBy ||
+    prevSelectionDeps.sortOrder !== sortOrder ||
+    prevSelectionDeps.tag_name !== filters.tag_name ||
+    prevSelectionDeps.genre !== filters.genre ||
+    prevSelectionDeps.year !== filters.year ||
+    prevSelectionDeps.status !== filters.status
+  ) {
+    setPrevSelectionDeps({
+      debouncedSearch,
+      sortBy,
+      sortOrder,
+      tag_name: filters.tag_name,
+      genre: filters.genre,
+      year: filters.year,
+      status: filters.status,
+    })
     setSelectedVideoIds(new Set())
-  }, [debouncedSearch, sortBy, sortOrder, filters.tag_name, filters.genre, filters.year, filters.status])
+  }
 
   useEffect(() => {
     if (!openFacet) return

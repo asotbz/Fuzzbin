@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { getYouTubeMetadata } from '../../../lib/api/endpoints/spotify'
+import { useYouTubeMetadata } from '../../../api/useYouTubeMetadata'
 import {
   getDisplayTrackTitle,
   getDisplayAlbumTitle,
@@ -9,7 +8,6 @@ import {
 import type {
   BatchPreviewItem,
   SpotifyTrackEnrichResponse,
-  YouTubeMetadataResponse,
 } from '../../../lib/api/types'
 
 export interface TrackRowState {
@@ -61,32 +59,10 @@ export default function TrackRow({
       ? enrichmentData.youtube_ids[0]
       : null)
 
-  // YouTube metadata state
-  const [youtubeMetadata, setYoutubeMetadata] = useState<YouTubeMetadataResponse | null>(null)
-  const [metadataLoading, setMetadataLoading] = useState(false)
-
-  // Fetch YouTube metadata when YouTube ID is available
-  useEffect(() => {
-    if (!youtubeId) {
-      setYoutubeMetadata(null)
-      return
-    }
-
-    const fetchMetadata = async () => {
-      setMetadataLoading(true)
-      try {
-        const metadata = await getYouTubeMetadata({ youtube_id: youtubeId })
-        setYoutubeMetadata(metadata)
-      } catch (error) {
-        console.error('Failed to fetch YouTube metadata:', error)
-        setYoutubeMetadata(null)
-      } finally {
-        setMetadataLoading(false)
-      }
-    }
-
-    fetchMetadata()
-  }, [youtubeId])
+  // YouTube metadata via TanStack Query (replaces the previous useEffect that
+  // called getYouTubeMetadata + setState — see eslint-plugin-react-hooks 7.1
+  // react-hooks/set-state-in-effect rule).
+  const { data: youtubeMetadata, isLoading: metadataLoading } = useYouTubeMetadata(youtubeId)
 
   // Format duration from seconds to MM:SS
   const formatDuration = (seconds: number | null | undefined): string => {
