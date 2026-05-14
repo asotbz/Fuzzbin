@@ -11,7 +11,7 @@ ARG VERSION=0.0.0
 WORKDIR /app/frontend
 
 # Copy package files first for better caching
-COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 
 # Install dependencies
 RUN npm ci
