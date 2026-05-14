@@ -114,7 +114,7 @@ export function useJobEvents(accessToken: string | null, options: UseJobEventsOp
   }, [onVideoUpdate])
 
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttempts = useRef(0)
   const isManualDisconnect = useRef(false)
 
