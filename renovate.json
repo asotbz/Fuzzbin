@@ -12,10 +12,13 @@
   "prHourlyLimit": 4,
   "prConcurrentLimit": 10,
   "labels": ["dependencies"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
     "labels": ["dependencies", "security"],
     "automerge": true,
+    "minimumReleaseAge": "0 days",
     "schedule": ["at any time"]
   },
   "lockFileMaintenance": {
