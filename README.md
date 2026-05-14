@@ -129,7 +129,6 @@ Open http://localhost:8000 and log in with username `admin` and password `change
   ```bash
   pytest          # with coverage flags from pyproject
   ruff check .    # lint
-  mypy fuzzbin    # type checks
   ```
 - Frontend:
   ```bash

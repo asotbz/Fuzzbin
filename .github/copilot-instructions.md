@@ -1,223 +1,86 @@
-# Fuzzbin AI Coding Agent Instructions
+# Copilot Instructions for Fuzzbin
 
-## Project Overview
-Fuzzbin is a music video library manager with a FastAPI backend, async job queue, SQLite database, and React frontend. It provides API integrations (Discogs, IMVDb, Spotify), file organization, NFO import/export, and real-time WebSocket updates.
+Fuzzbin is a full-stack music video library organizer: a Python 3.9+ / FastAPI backend (`fuzzbin/`) plus a React 19 + TypeScript + Vite frontend (`frontend/`). The two communicate over REST (OpenAPI at `/openapi.json`) and a WebSocket event bus at `/ws/events`.
 
-## Architecture
+## Build, test, lint
 
-### Five-Layer Design
-```
-fuzzbin/
-├── common/       # HTTP client, rate limiting, config, logging (shared utilities)
-├── api/          # External API clients (Discogs, IMVDb, Spotify)
-├── core/         # Database (SQLite/aiosqlite), event bus, file manager, organizer
-├── services/     # Business logic (VideoService, SearchService, ImportService)
-├── tasks/        # Background job queue with handlers for async operations
-├── web/          # FastAPI routes, middleware, WebSocket, schemas
-└── workflows/    # High-level orchestration (NFOImporter, SpotifyImporter)
-```
+Backend (run from repo root, inside the `.venv`):
 
-### Key Data Flow
-1. **Web → Services**: Routes delegate to services for business logic
-2. **Services → Repository**: Services use `VideoRepository` for all DB operations
-3. **Background Jobs**: Long operations use `JobQueue` → handlers → services
-4. **Real-time Updates**: `EventBus` emits events → WebSocket `ConnectionManager` → clients
-
-### Critical Components
-- **VideoRepository** ([fuzzbin/core/db/](fuzzbin/core/db/)): Async SQLite with FTS5 search, soft delete, fluent query builder
-- **JobQueue** ([fuzzbin/tasks/queue.py](fuzzbin/tasks/queue.py)): Priority heap with cron scheduling, max_workers concurrency
-- **EventBus** ([fuzzbin/core/event_bus.py](fuzzbin/core/event_bus.py)): Debounced progress events (250ms) for WebSocket broadcast
-- **RateLimitedAPIClient** ([fuzzbin/api/base_client.py](fuzzbin/api/base_client.py)): Token bucket + semaphore + Hishel caching
-
-## Configuration
-
-### Two Root Directories
-- **config_dir**: Database, caches, thumbnails, backups (default: `~/Fuzzbin/config`)
-- **library_dir**: Video files, NFO metadata, trash (default: `~/Fuzzbin/music_videos`)
-
-### Environment Variables
 ```bash
-FUZZBIN_CONFIG_DIR=/custom/config    # Override config_dir
-FUZZBIN_LIBRARY_DIR=/custom/videos   # Override library_dir
-FUZZBIN_DOCKER=1                     # Use Docker defaults (/config, /music_videos)
-IMVDB_APP_KEY=xxx                    # API keys override config.yaml
-DISCOGS_API_KEY=xxx / DISCOGS_API_SECRET=xxx
-SPOTIFY_CLIENT_ID=xxx / SPOTIFY_CLIENT_SECRET=xxx
+pip install -e ".[dev]"
+
+# Lint + format check (what CI runs — see .github/workflows/backend.yml)
+ruff check fuzzbin tests
+ruff format --check fuzzbin tests
+
+# Full test suite (coverage flags come from pyproject.toml addopts)
+pytest
+
+# Single test / module / marker
+pytest tests/unit/test_database.py
+pytest tests/unit/test_database.py::TestSomething::test_case
+pytest -m "not slow and not live"   # markers: slow, integration, unit, live, database
 ```
 
-## Development Workflows
+CI deselects two `live`/network tests (`tests/integration/test_live_workflow.py::test_minimal_state_machine_workflow`, `tests/integration/test_ytdlp_integration.py::TestYTDLPIntegration::test_download_real` and `test_search_then_download`); skip them locally too unless you have credentials and network.
 
-### Setup
+`pytest-asyncio` is in `auto` mode — do not decorate async tests with `@pytest.mark.asyncio`.
+
+Setting `FUZZBIN_API_JWT_SECRET=test-secret-key-for-ci` is required for tests that boot the API.
+
+Frontend (run from `frontend/`):
+
 ```bash
-python -m venv .venv                 # Create virtual environment
-source .venv/bin/activate            # Activate venv (fish: source .venv/bin/activate.fish)
-pip install -e ".[dev]"              # Install with dev dependencies
+npm ci
+npm run lint              # ESLint
+npm run type-check        # tsc -b
+npm test                  # Vitest watch
+npm run test:run          # Vitest single run
+npm run test:run -- src/lib/__tests__/foo.test.ts   # single file
+npm run test:e2e          # Playwright — needs backend on :8000 and frontend on :5173
+npm run build             # tsc -b && vite build
+npm run generate-types    # regenerate src/lib/api/generated.ts from ../docs/openapi.json
 ```
 
-### Running
-```bash
-fuzzbin-api                          # Start FastAPI server (uvicorn)
-pytest                               # Run tests with coverage
-pytest tests/unit/test_discogs_client.py  # Run specific test
-pytest -k "test_rate_limiter"        # Pattern matching
-```
+After changing backend request/response schemas, re-run `npm run generate-types`; the frontend imports from `src/lib/api/generated.ts`.
 
-### Test Structure
-- **Fixtures**: Shared in [tests/conftest.py](tests/conftest.py), module-specific in `tests/unit/conftest.py`
-- **Mock HTTP**: Use `respx` library for httpx mocking
-- **Async Tests**: `asyncio_mode = "auto"` in pyproject.toml (no decorator needed)
-- **Database Tests**: Use `test_db` fixture which provides isolated VideoRepository
+## High-level architecture
 
-### Critical Test Pattern for API Clients
-```python
-@pytest.fixture(autouse=True)
-def clear_api_env_vars(monkeypatch):
-    """REQUIRED: Clear env vars to prevent real credentials interfering with mocks."""
-    monkeypatch.delenv("DISCOGS_API_KEY", raising=False)
-    monkeypatch.delenv("DISCOGS_API_SECRET", raising=False)
-```
+- **Backend entry point** is `fuzzbin.web.main:run` (installed as the `fuzzbin-api` console script). It builds the FastAPI app, initializes the event bus (`fuzzbin/core/event_bus.py`), the job queue (`fuzzbin/tasks/queue.py`), registers job handlers (`fuzzbin/tasks/handlers.py`), and mounts routes from `fuzzbin/web/routes/`.
+- **Async-first**: SQLite via `aiosqlite` (`fuzzbin/core/db/`), HTTP via `httpx` + `hishel` caching (`fuzzbin/common/http_client.py`), and `asyncio` throughout. There is no sync code path — repositories, services, and handlers are all `async def`.
+- **Layering** (top → bottom):
+  - `fuzzbin/web/routes/` — thin FastAPI routers; depend on `fuzzbin/web/dependencies.py` for auth/config/repo injection. Pydantic schemas live in `fuzzbin/web/schemas/`.
+  - `fuzzbin/services/` — business logic (videos, search, imports, enrichment, backups, tags). Routes should call services, not repositories directly.
+  - `fuzzbin/workflows/` — multi-step orchestrations (e.g., NFO and Spotify importers) typically invoked as background jobs.
+  - `fuzzbin/tasks/` — job queue, `Job` / `JobType` models, handlers, and metrics. Long-running work (downloads, scans, imports, backups, exports) **must** go through the job queue so it surfaces on `/ws/events`.
+  - `fuzzbin/clients/` — process-spawning clients (`ytdlp_client`, `ffprobe_client`, `ffmpeg_client`).
+  - `fuzzbin/api/` — outbound API clients (IMVDb, Discogs, MusicBrainz, Spotify, plus `base_client` and `spotify_auth`).
+  - `fuzzbin/parsers/` — parsers for client responses and NFO files.
+  - `fuzzbin/core/` — DB, event bus, file manager, organizer, exceptions.
+  - `fuzzbin/auth/` — JWT, OIDC, password hashing, throttle.
+  - `fuzzbin/common/` — config, config manager, HTTP client, rate/concurrency limiters, string utils, logging setup.
+- **Real-time updates**: emit job state changes through the singleton event bus (`get_event_bus()` / `init_event_bus()`). Progress events are debounced (~250 ms); terminal events (completed/failed/cancelled) bypass debouncing. WebSocket clients connect to `/ws/events` (first-message auth — see `docs/websocket-spec.md`).
+- **Configuration** is two-tier: a `Config` Pydantic model loaded from `config.yaml` plus a runtime `ConfigManager` (in `fuzzbin/common/config_manager.py`) that handles PATCH `/config`, history, undo/redo, and reloading API clients. Every config field has a `ConfigSafetyLevel` (`safe`, `requires_reload`, `affects_state`) — when adding fields, register the appropriate safety level via `get_safety_level`.
+- **Paths** resolve from `config_dir` (config, `fuzzbin.db`, caches, thumbnails, backups) and `library_dir` (media, NFO, `.trash`). Defaults: `~/Fuzzbin/{config,music_videos}`, or `/config` and `/music_videos` when `FUZZBIN_DOCKER=1`. Override with `FUZZBIN_CONFIG_DIR` / `FUZZBIN_LIBRARY_DIR`.
+- **Frontend** uses TanStack Query for server state, a WebSocket hook for live job activity, generated OpenAPI types, and feature folders under `src/features/{library,activity,settings}` plus shared `components/`, `hooks/`, `lib/`, `auth/`, `routes/`.
 
-## Critical Patterns
+## Conventions specific to this codebase
 
-### Service Layer Pattern
-Services extend `BaseService` and receive `VideoRepository`:
-```python
-class VideoService(BaseService):
-    def __init__(self, repository: VideoRepository, callback: Optional[ServiceCallback] = None):
-        super().__init__(repository, callback)
-```
-- Services raise `NotFoundError`, `ValidationError`, `ConflictError` (mapped to HTTP status by routes)
-- Use `ServiceCallback` protocol for progress/failure hooks in long operations
+- **Public package surface**: anything intended to be importable from outside its module is re-exported from `fuzzbin/__init__.py`. Prefer `from fuzzbin import X` in app/test code over deep imports when the symbol is re-exported.
+- **DB access**: use `await fuzzbin.get_repository()` (or the injected repo dependency in routes) — do not open raw connections. Migrations are SQL files in `fuzzbin/core/db/migrations/` and run by `fuzzbin/core/db/migrator.py`.
+- **Background work** belongs in `fuzzbin/tasks/handlers.py` keyed by `JobType`. Enqueue via the job queue so progress is broadcast and persisted; do not `asyncio.create_task` long-running work from a request handler.
+- **Outbound HTTP**: go through `fuzzbin/common/http_client.py` (cached via `hishel`) and respect `RateLimiter` / `ConcurrencyLimiter` configured per API client. New API clients should subclass / mirror `fuzzbin/api/base_client.py`.
+- **Logging**: `structlog.get_logger(__name__)`. Pass structured kwargs (`logger.info("event", video_id=..., status=...)`); do not f-string into the message.
+- **Errors**: raise the typed exceptions in `fuzzbin/core/exceptions.py` / `fuzzbin/common/config_manager.py` rather than bare `Exception`. The web layer maps them to HTTP responses in `fuzzbin/web/middleware.py`.
+- **Auth**: protect new routes with the `require_auth` dependency from `fuzzbin/web/dependencies.py`. The seeded `admin/changeme` user has `password_must_change=1` until rotated.
+- **Search**: full-text search uses SQLite FTS5 with a custom query grammar (AND/OR/NOT, phrases) — go through `services/search_service.py`, not raw SQL, so facets and saved searches stay consistent.
+- **Style**: Ruff (line length 100, target `py39`) is the source of truth — `ruff format` is enforced in CI. Mypy is configured with `disallow_untyped_defs = true`; add type hints on all defs.
+- **Test layout**: `tests/unit/` (fast, isolated, default), `tests/integration/` (cross-module, may hit subprocess clients), `tests/api/` (FastAPI TestClient against routes). Use existing fixtures in the nearest `conftest.py`; `respx` mocks outbound `httpx` traffic. Mark slow tests with `@pytest.mark.slow` and network tests with `@pytest.mark.live`.
+- **Versioning**: `setuptools-scm` derives the version from the latest `vX.Y.Z` git tag. For Docker / no-git builds set `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FUZZBIN`.
 
-### Background Job Handler Pattern
-Handlers in [fuzzbin/tasks/handlers.py](fuzzbin/tasks/handlers.py) follow this contract:
-```python
-async def handle_xxx(job: Job) -> None:
-    """
-    1. Read params from job.metadata
-    2. Call job.update_progress(current, total, message) periodically
-    3. Check job.status for cancellation
-    4. Call job.mark_completed(result) on success
-    5. Raise exception on failure (queue calls job.mark_failed())
-    """
-```
+## Useful references in-repo
 
-### API Client Creation Pattern
-All API clients extend `RateLimitedAPIClient`:
-```python
-class DiscogsClient(RateLimitedAPIClient):
-    @classmethod
-    def from_config(cls, config: APIClientConfig) -> "DiscogsClient":
-        # 1. Check env vars first (DISCOGS_API_KEY, DISCOGS_API_SECRET)
-        # 2. Fall back to config.custom dict
-        # 3. Pass auth_headers to parent __init__
-```
-
-### Request Flow Through Limiters
-```python
-# Rate limiter → Concurrency limiter → HTTP retry → Cache
-async with client.rate_limiter:           # Token bucket
-    async with client.concurrency_limiter: # Semaphore
-        response = await client._request(...)  # Tenacity retries + Hishel cache
-```
-
-## Job Types Reference
-Key job types in `JobType` enum ([fuzzbin/tasks/models.py](fuzzbin/tasks/models.py)):
-- `IMPORT_NFO`: Import from NFO files with IMVDb/Discogs enrichment
-- `IMPORT_SPOTIFY`: Import from Spotify playlist
-- `DOWNLOAD_YOUTUBE`: Download video via yt-dlp
-- `VIDEO_POST_PROCESS`: FFProbe analysis, thumbnail generation, organize
-- `BACKUP`: Scheduled database backup
-- `TRASH_CLEANUP`: Automatic trash cleanup
-
-## Adding New Features
-
-### New API Integration
-1. Create `fuzzbin/api/{service}_client.py` extending `RateLimitedAPIClient`
-2. Implement `from_config()` with env var priority
-3. Add config section to `config.example.yaml` under `apis.{service}`
-4. Create parser in `fuzzbin/parsers/` for response models
-5. Add tests in `tests/unit/test_{service}_client.py`
-6. Export in `fuzzbin/__init__.py`
-
-### New Background Job
-1. Add to `JobType` enum in [fuzzbin/tasks/models.py](fuzzbin/tasks/models.py)
-2. Create handler function in [fuzzbin/tasks/handlers.py](fuzzbin/tasks/handlers.py)
-3. Register in `register_all_handlers()` function
-4. Add API endpoint in appropriate route file to submit jobs
-
-### New Service
-1. Create `fuzzbin/services/{name}_service.py` extending `BaseService`
-2. Inject via FastAPI dependency in `fuzzbin/web/dependencies.py`
-3. Use in routes, never call repository directly from routes
-
-## Frontend (React/TypeScript)
-
-### Stack
-- **Vite** build system with React 19
-- **TanStack Query** for server state management
-- **React Router** v7 for routing
-- **Vitest** + Testing Library for unit tests, **Playwright** for E2E
-
-### Commands
-```bash
-cd frontend
-npm run dev              # Start dev server (HMR)
-npm run build            # Type-check + production build
-npm run test             # Run Vitest in watch mode
-npm run test:e2e         # Run Playwright E2E tests
-npm run generate-types   # Generate API types from OpenAPI spec
-```
-
-### Type Generation
-API types are generated from [docs/openapi.json](docs/openapi.json):
-```bash
-./utils/generate_openapi_docs.sh  # Regenerate OpenAPI spec from FastAPI app
-npm run generate-types            # Creates src/lib/api/generated.ts
-```
-
-### Structure
-```
-frontend/src/
-├── api/          # API client hooks (TanStack Query)
-├── components/   # Reusable UI components
-├── features/     # Feature-specific components
-├── hooks/        # Custom React hooks
-├── lib/          # Utilities and generated types
-├── pages/        # Route page components
-└── mocks/        # MSW handlers for testing
-```
-
-## CLI Tools
-
-### Password Reset
-```bash
-fuzzbin-user set-password -u admin       # Interactive password prompt
-fuzzbin-user set-password -u admin -p newpass  # Direct password set
-fuzzbin-user list                        # List all users
-```
-
-## Database Migrations
-
-Migrations are in [fuzzbin/core/db/migrations/](fuzzbin/core/db/migrations/) as numbered SQL files:
-- `001_initial_schema.sql` - Complete schema including all tables, indexes, triggers, FTS5 full-text search, and seed data
-- Migrations run automatically on startup
-
-## WebSocket Events
-
-Real-time job progress uses WebSocket. See [docs/websocket-spec.md](docs/websocket-spec.md) for:
-- Connection endpoint and authentication
-- Event types (`job.progress`, `job.completed`, `job.failed`)
-- Message payload schemas
-
-## Logging Standards
-- Logger: `logger = structlog.get_logger(__name__)`
-- Events: `snake_case` (e.g., `"job_started"`, `"request_complete"`)
-- Context binding: `logger.bind(job_id=job.id, video_id=123)`
-
-## Common Pitfalls
-- **Clear env vars in tests**: API client tests MUST clear credential env vars
-- **Unique cache databases**: Each API needs separate SQLite file in `.cache/`
-- **Don't retry auth errors**: Exclude 401/403/404 from `retry.status_codes`
-- **Async context managers**: Both `rate_limiter` and `concurrency_limiter` require `async with`
-- **Repository via fuzzbin module**: Use `await fuzzbin.get_repository()`, not direct instantiation
+- `docs/openapi-spec.md`, `docs/openapi.json` — REST surface.
+- `docs/websocket-spec.md` — WS message shapes and close codes.
+- `docs/advanced-config.md` — per-API caching/rate limits, organizer patterns, schedules.
+- `config.example.yaml` — every supported config key with comments.
